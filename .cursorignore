@@ -1,0 +1,3 @@
+# Allow editing .env.example despite global ignores
+!.env.example 
+!.env.local

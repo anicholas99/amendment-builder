@@ -1,0 +1,63 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Ensures proper tenant context handling in frontend-to-API communication
+globs: src/features/**/*.ts, src/features/**/*.tsx, src/lib/api/**/*.ts
+alwaysApply: true
+---
+
+# Tenant Context Handling for API Requests
+
+- **Requirement:** All API requests originating from the frontend (components, hooks, services) **must** include the current tenant context.
+
+- **Mechanism:** Tenant context is provided via the `x-tenant-slug` HTTP header on every API request.
+
+- **Implementation:** To ensure consistency and prevent errors, **all API calls must use the centralized `apiFetch` wrapper** located in `[apiClient.ts](mdc:src/lib/api/apiClient.ts)`.
+
+- **`apiFetch` Wrapper:**
+  - Automatically retrieves the current tenant slug using `[addTenantToHeaders](mdc:src/utils/tenant.ts)`. See `[tenant.ts](mdc:src/utils/tenant.ts)` for slug retrieval logic (currently uses URL path).
+  - Adds the `x-tenant-slug` header to the request.
+  - Handles basic response error checking (throws on non-ok status).
+  - Should be used in place of the native `fetch` for all calls to `/api/` routes.
+
+- **Backend Expectation:**
+  - The backend middleware (`[withTenantValidation](mdc:src/middleware/tenant.ts)`) expects the `x-tenant-slug` header.
+  - If the header is missing or invalid, the middleware will typically return a 403 Forbidden error.
+
+## Examples
+
+```typescript
+// ✅ DO: Use the apiFetch wrapper for all API calls
+import { apiFetch } from '@/lib/api/apiClient';
+
+async function loadData() {
+  try {
+    const response = await apiFetch('/api/projects'); // Tenant header is added automatically
+    const data = await response.json();
+    // ... process data
+  } catch (error) { // apiFetch throws on non-ok status
+    console.error("Failed to load projects:", error);
+  }
+}
+```
+
+```typescript
+// ❌ DON'T: Use native fetch directly for API calls
+async function loadDataIncorrectly() {
+  // This call will likely fail with a 403 Forbidden error
+  // because the x-tenant-slug header is missing.
+  const response = await fetch('/api/projects');
+  // ...
+}
+```
+
+- **Key Files:**
+  - Wrapper Implementation: `[apiClient.ts](mdc:src/lib/api/apiClient.ts)`
+  - Tenant Slug Logic: `[tenant.ts](mdc:src/utils/tenant.ts)`
+  - Backend Middleware: `[tenant.ts](mdc:src/middleware/tenant.ts)`
+
+- **Related Rules:**
+  - `[db-access-consistency.mdc](mdc:.cursor/rules/db-access-consistency.mdc)`

@@ -1,0 +1,178 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Navigation Optimization Guidelines
+
+- **Core Principle: Prefetch on Intent, Cache Aggressively**
+  - All navigation links should prefetch data on hover
+  - Views should share cached data to minimize loading states
+  - React Query should be configured for instant cache-first display
+
+- **Navigation Components**
+  - Use `NavigationButton` for button-style navigation with prefetching
+  - Use `NavigationLink` for link-style navigation with prefetching
+  - Both components automatically handle hover prefetching based on view type
+
+- **Implementation Pattern**
+  ```typescript
+  // ✅ DO: Use NavigationButton with prefetching
+  <NavigationButton
+    href={`/${tenant}/projects/${projectId}/claim-refinement`}
+    viewType="claim-refinement"
+    projectId={projectId}
+    rightIcon={<Icon as={FiChevronRight} />}
+    variant="ghost"
+    size="sm"
+  >
+    Go to Claim Refinement
+  </NavigationButton>
+  
+  // ❌ DON'T: Use regular buttons with router.push
+  <Button onClick={() => router.push('/path')}>Navigate</Button>
+  ```
+
+- **Prefetching Strategy**
+  - Technology Details: Prefetches invention data
+  - Claim Refinement: Prefetches claims + invention data
+  - Patent Application: Prefetches latest version + invention data
+  - All prefetching happens in parallel for maximum efficiency
+
+- **React Query Configuration**
+  - `refetchOnWindowFocus: false` - Prevents unnecessary refetches
+  - `refetchOnMount: 'always'` - Uses cached data if fresh
+  - `networkMode: 'offlineFirst'` - Shows cached data immediately
+  - `staleTime: STALE_TIME.DEFAULT` - 5 minutes default cache freshness
+
+- **View Transition Hook**
+  - Use `useViewTransition()` to auto-prefetch all views when project changes
+  - Ensures all views are cached when switching projects
+
+- **Performance Guidelines**
+  - Shared data (like invention data) is cached across views
+  - Views should extract projectId early to enable prefetching
+  - Navigation components handle all prefetch errors silently
+  - Use lazy loading for view components to optimize bundle size
+
+- **Migration Checklist**
+  - Replace all navigation buttons with NavigationButton
+  - Remove manual router.push() calls
+  - Remove handleGoTo* functions
+  - Add viewType and projectId props to navigation components
+  - Test hover prefetching in browser DevTools Network tab
+
+- **References**
+  - Navigation components: [NavigationButton.tsx](mdc:src/components/common/NavigationButton.tsx), [NavigationLink.tsx](mdc:src/components/common/NavigationLink.tsx)
+  - Prefetch hook: [usePrefetchViewData.ts](mdc:src/hooks/navigation/usePrefetchViewData.ts)
+  - View transition hook: [useViewTransition.ts](mdc:src/hooks/navigation/useViewTransition.ts)
+  - Query client config: [queryClient.ts](mdc:src/lib/api/queryClient.ts)
+
+# Navigation Optimization Patterns
+
+## Overview
+This rule ensures smooth, instant navigation between views while maintaining data consistency through smart caching across all views (Technology Details, Claim Refinement, and Patent Application).
+
+## Key Components
+
+### 1. Smart Cache Management
+- React Query configured with `networkMode: 'offlineFirst'`
+- Cache is trusted over network fetches when navigating
+- `refetchOnMount: false` prevents unnecessary data fetching
+- Optimistic updates remain visible when switching views
+- Applied to all data queries: invention, claims, versions, documents
+
+### 2. Hover Prefetching
+- **NavigationButton** and **NavigationLink** components prefetch data on hover
+- 150ms delay prevents unnecessary prefetches on quick hover
+- Prefetched data respects cache - won't overwrite recent edits
+
+### 3. Optimized Autosave
+- Reduced debounce delays for responsive saves:
+  - Text fields: 200ms (Technology Details)
+  - Patent documents: 300-500ms (Patent Application)
+  - Claims: 500-1000ms (Claim Refinement)
+- Background invalidation after 3 seconds ensures eventual consistency
+
+### 4. Seamless User Experience
+- Edits are immediately visible (optimistic updates)
+- Navigation is instant - no waiting for saves
+- Cache preserves edits when switching views
+- Background sync ensures data consistency
+
+## Implementation Example
+
+```typescript
+// NavigationButton usage
+<NavigationButton
+  href="/projects/[id]/technology-details"
+  viewType="technology"
+  projectId={projectId}
+>
+  Technology Details
+</NavigationButton>
+```
+
+## How It Works
+
+1. **User edits a field** → Optimistic update shows immediately in UI
+2. **Mutation runs in background** → Saves to server (200-500ms)
+3. **User navigates away** → No waiting, instant navigation
+4. **New view loads** → Uses cached data (including optimistic updates)
+5. **Background sync** → Cache marked stale after 3s for eventual consistency
+
+## Applied To All Views
+
+### Technology Details
+- `useInventionQuery`: `refetchOnMount: false`
+- `useUpdateInventionMutation`: Delayed cache invalidation
+- Field saves: 200-800ms debounce
+
+### Patent Application
+- `useLatestVersionQuery`: `refetchOnMount: false`
+- `useBatchUpdateDocumentsMutation`: Delayed cache invalidation
+- Document saves: 300-500ms debounce
+
+### Claim Refinement
+- Claims queries: Cache-first approach
+- Claim updates: Optimistic with background sync
+- Claim saves: 500-1000ms debounce
+
+## Best Practices
+
+1. **Always use NavigationButton/NavigationLink** for view switching
+2. **Trust the cache** - React Query handles consistency
+3. **Keep debounce delays short** for responsive saves
+4. **Let mutations complete in background** - don't block the UI
+
+## Technical Details
+
+### Query Client Configuration
+```typescript
+queries: {
+  refetchOnWindowFocus: false,
+  refetchOnMount: false,      // Trust cache on mount
+  networkMode: 'offlineFirst', // Prefer cache over network
+}
+mutations: {
+  networkMode: 'offlineFirst', // Continue saves in background
+}
+```
+
+### Mutation Pattern
+```typescript
+// Optimistic update applied immediately
+// Background invalidation after success
+onSuccess: (data, variables) => {
+  queryClient.setQueryData(queryKey, data);
+  setTimeout(() => {
+    queryClient.invalidateQueries({ queryKey });
+  }, 3000); // 3s delay
+}
+```
+
+## Performance Characteristics
+- Navigation: Instant (no network wait)
+- Edit visibility: Immediate (optimistic updates)
+- Save completion: 200-500ms (background)
+- Cache sync: 3s after save (background)

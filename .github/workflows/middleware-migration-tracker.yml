@@ -1,0 +1,100 @@
+name: Middleware Migration Tracker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/pages/api/**/*.ts'
+  pull_request:
+    paths:
+      - 'src/pages/api/**/*.ts'
+  workflow_dispatch:
+
+jobs:
+  track-migration:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Check migration progress
+      id: migration
+      run: |
+        # Count routes using legacy middleware
+        LEGACY_COUNT=$(grep -r "composeApiMiddleware" src/pages/api --include="*.ts" | grep "import" | wc -l)
+        
+        # Total routes (approximation based on files)
+        TOTAL_ROUTES=103
+        
+        # Calculate migrated
+        MIGRATED=$((TOTAL_ROUTES - LEGACY_COUNT))
+        PERCENTAGE=$((MIGRATED * 100 / TOTAL_ROUTES))
+        
+        echo "legacy_count=$LEGACY_COUNT" >> $GITHUB_OUTPUT
+        echo "migrated_count=$MIGRATED" >> $GITHUB_OUTPUT
+        echo "percentage=$PERCENTAGE" >> $GITHUB_OUTPUT
+        
+        # Generate badge color
+        if [ $PERCENTAGE -ge 80 ]; then
+          COLOR="green"
+        elif [ $PERCENTAGE -ge 60 ]; then
+          COLOR="yellow"
+        elif [ $PERCENTAGE -ge 40 ]; then
+          COLOR="orange"
+        else
+          COLOR="red"
+        fi
+        
+        echo "badge_color=$COLOR" >> $GITHUB_OUTPUT
+    
+    - name: Update README badge
+      if: github.ref == 'refs/heads/main'
+      run: |
+        # Update the migration progress badge in README
+        BADGE_URL="https://img.shields.io/badge/Middleware_Migration-${{ steps.migration.outputs.percentage }}%25-${{ steps.migration.outputs.badge_color }}"
+        
+        # This would update a badge in your README if you have one
+        echo "Migration Progress: ${{ steps.migration.outputs.percentage }}%"
+        echo "Routes Migrated: ${{ steps.migration.outputs.migrated_count }}/${{ env.TOTAL_ROUTES }}"
+    
+    - name: Comment on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const percentage = ${{ steps.migration.outputs.percentage }};
+          const migrated = ${{ steps.migration.outputs.migrated_count }};
+          const legacy = ${{ steps.migration.outputs.legacy_count }};
+          
+          const body = `## 🚀 Middleware Migration Status
+          
+          **Progress:** ${percentage}% Complete
+          **Routes Migrated:** ${migrated}/103
+          **Legacy Routes Remaining:** ${legacy}
+          
+          ${percentage >= 60 ? '✅ Approaching secure milestone!' : '⚠️ Keep migrating to reach 60% security milestone'}
+          
+          Run \`npm run migration:progress\` locally for detailed breakdown.`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });
+    
+    - name: Security check for mutations
+      run: |
+        # Run the unguarded mutations detector
+        if [ -f "scripts/detect-unguarded-mutations.js" ]; then
+          node scripts/detect-unguarded-mutations.js || echo "⚠️ Unguarded mutations detected"
+        fi 

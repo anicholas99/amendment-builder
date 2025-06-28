@@ -1,0 +1,162 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# SOC 2 API Security Requirements
+
+## 🔒 Mandatory Security Patterns
+
+### 1. **Always Use composeApiMiddleware**
+Every API endpoint MUST use the `composeApiMiddleware` helper from [compose.ts](mdc:src/middleware/compose.ts):
+
+```typescript
+// ✅ CORRECT: Using composeApiMiddleware
+import { composeApiMiddleware } from '@/middleware/compose';
+
+export default composeApiMiddleware(handler, {
+  requiredRole: 'USER', // Required for all authenticated endpoints
+  // other options...
+});
+
+// ❌ WRONG: Direct export without security middleware
+export default handler; // NEVER do this!
+```
+
+### 2. **Repository Pattern is MANDATORY**
+**NEVER** access the database directly in API routes:
+
+```typescript
+// ❌ WRONG: Direct Prisma usage in API
+import { getPrismaClient } from '@/lib/prisma';
+const prisma = getPrismaClient();
+const project = await prisma.project.findUnique({ where: { id } });
+
+// ✅ CORRECT: Using repository functions
+import { findProjectById } from '@/repositories/projectRepository';
+const project = await findProjectById(id, tenantId);
+```
+
+### 3. **Tenant Guards for ALL Mutations**
+Every POST, PUT, PATCH, DELETE endpoint MUST implement tenant isolation:
+
+```typescript
+// For project-based resources
+const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+  const { projectId } = req.query;
+  const project = await getProjectTenantId(String(projectId));
+  return project?.tenantId || null;
+};
+
+export default composeApiMiddleware(handler, {
+  resolveTenantId, // This is REQUIRED for mutations
+  requiredRole: 'USER',
+});
+```
+
+### 4. **RBAC on ALL Authenticated Endpoints**
+Every endpoint (except public auth flows) MUST specify role requirements:
+
+```typescript
+// Standard user endpoints
+export default composeApiMiddleware(handler, {
+  requiredRole: 'USER', // or 'ADMIN' for admin endpoints
+  roleCheckMethods: ['POST', 'DELETE'], // Optional: only check specific methods
+});
+
+// Public endpoints must be explicitly documented
+export default composeApiMiddleware(handler, {
+  requireTenant: false, // Explicitly mark as public
+  // Add comment explaining why this is public
+});
+```
+
+### 5. **Error Handling Without Exposures**
+NEVER expose error details to clients:
+
+```typescript
+// ❌ WRONG: Exposing error details
+catch (error) {
+  return res.status(500).json({ 
+    error: error.message, // NEVER expose error.message
+    stack: error.stack    // NEVER expose stack traces
+  });
+}
+
+// ✅ CORRECT: Safe error responses
+catch (error) {
+  logger.error('Operation failed', { error, userId, projectId });
+  return res.status(500).json({ 
+    error: 'Operation failed',
+    message: 'An error occurred processing your request'
+  });
+}
+```
+
+## 📋 Endpoint Security Checklist
+
+For EVERY new API endpoint, verify:
+
+- [ ] Uses `composeApiMiddleware` wrapper
+- [ ] Specifies `requiredRole` (or documents why public)
+- [ ] Implements `resolveTenantId` for mutations
+- [ ] Uses repository functions (no direct Prisma)
+- [ ] Has safe error handling (no exposures)
+- [ ] Includes rate limiting configuration
+- [ ] Has proper TypeScript types
+
+## 🎯 Common Patterns
+
+### GET Endpoints (Read-Only)
+```typescript
+export default composeApiMiddleware(handler, {
+  requiredRole: 'USER',
+  rateLimit: 'read', // Use read rate limit
+});
+```
+
+### Mutation Endpoints (POST/PUT/PATCH/DELETE)
+```typescript
+const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+  // Implement tenant resolution logic
+};
+
+export default composeApiMiddleware(handler, {
+  resolveTenantId, // REQUIRED for mutations
+  requiredRole: 'USER',
+  schema: requestBodySchema, // Add Zod validation
+  rateLimit: 'api',
+});
+```
+
+### Admin Endpoints
+```typescript
+export default composeApiMiddleware(handler, {
+  requiredRole: 'ADMIN',
+  roleCheckMethods: ['POST', 'DELETE'], // Only admins can mutate
+  resolveTenantId, // Still need tenant isolation
+});
+```
+
+## 🚨 Security Violations to Avoid
+
+1. **Direct database access** - Always use repositories
+2. **Missing tenant guards** - All mutations need tenant isolation
+3. **Exposed error messages** - Never leak internal details
+4. **Missing RBAC** - Every endpoint needs role specification
+5. **Skipping middleware** - Always use composeApiMiddleware
+
+## 🔍 Verification
+
+Run these commands regularly:
+```bash
+# Check all security patterns
+bash scripts/verify-soc2-readiness.sh
+
+# Individual checks
+npx tsx scripts/verify-repository-pattern.ts
+npx tsx scripts/verify-tenant-guards.ts
+npx tsx scripts/verify-rbac.ts
+```
+
+Remember: **Security is not optional**. Every endpoint contributes to our SOC 2 compliance.

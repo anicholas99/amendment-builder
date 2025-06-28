@@ -1,0 +1,139 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+---
+description: Enforces Zod validation for all API route query and body parameters
+globs: src/pages/api/**/*.ts
+alwaysApply: true
+---
+
+# API Route Input Validation
+
+- **Requirement: ALL API routes MUST validate input data using Zod schemas**
+  - Every API endpoint must validate query parameters and request bodies using Zod
+  - Validation schemas must be passed to `composeApiMiddleware` via `querySchema` and/or `schema` properties
+  - Never access `req.query` or `req.body` without proper validation
+
+- **Implementation Pattern**
+  ```typescript
+  import { z } from 'zod';
+  import { composeApiMiddleware } from '@/middleware/compose';
+  
+  // Define validation schemas
+  const querySchema = z.object({
+    id: z.string().uuid(),
+    limit: z.coerce.number().min(1).max(100).optional()
+  });
+  
+  const bodySchema = z.object({
+    name: z.string().min(1).max(100),
+    email: z.string().email(),
+    tags: z.array(z.string()).optional()
+  });
+  
+  // Define types from schemas
+  type QueryParams = z.infer<typeof querySchema>;
+  type RequestBody = z.infer<typeof bodySchema>;
+  
+  async function handler(
+    req: CustomApiRequest<RequestBody>,
+    res: NextApiResponse
+  ) {
+    // Access validated data - middleware ensures these are safe
+    const { id, limit } = req.query as QueryParams;
+    const { name, email, tags } = req.body;
+    
+    // Business logic here...
+  }
+  
+  // Apply validation via middleware
+  export default composeApiMiddleware(handler, {
+    querySchema,  // For GET parameters
+    schema: bodySchema,  // For request body
+    resolveTenantId  // If needed
+  });
+  ```
+
+- **Common Validation Patterns**
+  - **UUID validation**: `z.string().uuid()`
+  - **Numeric query params**: `z.coerce.number()` (converts string to number)
+  - **Boolean query params**: `z.coerce.boolean()` (converts "true"/"false" to boolean)
+  - **Optional fields**: Add `.optional()` to any schema
+  - **Arrays**: `z.array(z.string())` or with constraints: `.min(1)`
+  - **Enums**: `z.enum(['active', 'pending', 'done'])`
+  - **Dates**: `z.string().datetime()` or `z.coerce.date()`
+  - **Custom validation**: `.refine(val => customCheck(val), "Error message")`
+
+- **File Upload Validation**
+  - For multipart/form-data endpoints, validate after parsing:
+    ```typescript
+    const form = formidable({ maxFileSize: MAX_FILE_SIZE });
+    const [fields, files] = await form.parse(req);
+    
+    // Validate parsed fields
+    const validatedFields = await bodySchema.parseAsync(fields);
+    ```
+
+- **Anti-Patterns to Avoid**
+  ```typescript
+  // ❌ DON'T: Manual type checking
+  if (typeof req.query.id !== 'string') {
+    return res.status(400).json({ error: 'Invalid ID' });
+  }
+  
+  // ❌ DON'T: Direct type casting without validation
+  const { projectId } = req.query as { projectId: string };
+  
+  // ❌ DON'T: Manual array checks
+  if (!Array.isArray(req.body.items)) {
+    return res.status(400).json({ error: 'Items must be an array' });
+  }
+  
+  // ❌ DON'T: Accessing req.body without schema
+  export default composeApiMiddleware(handler, { resolveTenantId });
+  ```
+
+- **Correct Patterns**
+  ```typescript
+  // ✅ DO: Define schemas for all inputs
+  const querySchema = z.object({
+    projectId: z.string().uuid()
+  });
+  
+  // ✅ DO: Use validated types
+  const { projectId } = req.query as z.infer<typeof querySchema>;
+  
+  // ✅ DO: Pass schemas to middleware
+  export default composeApiMiddleware(handler, {
+    querySchema,
+    schema: bodySchema,
+    resolveTenantId
+  });
+  ```
+
+- **Testing Validation**
+  - Invalid inputs should return 400 Bad Request with validation error details
+  - The middleware automatically handles validation errors with proper error messages
+  - Test edge cases: empty strings, null values, wrong types, missing required fields
+
+- **Migration Checklist**
+  - Remove all manual `typeof` checks
+  - Remove all `Array.isArray()` checks on request data  
+  - Replace type assertions with validated types: `as z.infer<typeof schema>`
+  - Ensure all routes use `composeApiMiddleware` (except Auth0's `handleAuth`)
+  - Add `querySchema` for routes with query parameters
+  - Add `schema` for routes with request bodies
+
+- **Critical Security Note**
+  - **NEVER** skip validation even for "simple" endpoints
+  - Unvalidated input is the #1 source of security vulnerabilities
+  - The performance cost of validation is negligible compared to the security risk
+  - If you think an endpoint doesn't need validation, you're probably wrong
+
+- **References**
+  - Middleware implementation: [compose.ts](mdc:src/middleware/compose.ts)
+  - Example with query validation: [citation-matches/by-search/[id].ts](mdc:src/pages/api/citation-matches/by-search/[id].ts)
+  - Example with body validation: [projects/index.ts](mdc:src/pages/api/projects/index.ts)
+  - Example with both: [search-history/[id]/exclude-reference.ts](mdc:src/pages/api/search-history/[id]/exclude-reference.ts)

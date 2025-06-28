@@ -1,0 +1,351 @@
+/* Common utility styles to replace inline styles */
+
+/* Position utilities */
+.relative {
+  position: relative;
+}
+
+.absolute {
+  position: absolute;
+}
+
+.fixed {
+  position: fixed;
+}
+
+/* Positioning utilities */
+.top-0 {
+  top: 0;
+}
+
+.left-0 {
+  left: 0;
+}
+
+.top-1 {
+  top: 4px;
+}
+
+.right-1 {
+  right: 4px;
+}
+
+.opacity-80 {
+  opacity: 0.8;
+}
+
+/* Z-index utilities */
+.z-0 {
+  z-index: 0;
+}
+
+.z-1 {
+  z-index: 1;
+}
+
+.z-2 {
+  z-index: 2;
+}
+
+.z-10 {
+  z-index: 10;
+}
+
+.z-50 {
+  z-index: 50;
+}
+
+/* Display utilities */
+.hidden {
+  display: none;
+}
+
+.block {
+  display: block;
+}
+
+.flex {
+  display: flex;
+}
+
+.inline-flex {
+  display: inline-flex;
+}
+
+/* Spacing utilities */
+.mt-1 {
+  margin-top: 4px;
+}
+
+.mt-2 {
+  margin-top: 8px;
+}
+
+.mt-4 {
+  margin-top: 16px;
+}
+
+.mt-6 {
+  margin-top: 24px;
+}
+
+/* Negative margin utilities */
+.-mt-px {
+  margin-top: -2px;
+}
+
+.mb-1 {
+  margin-bottom: 4px;
+}
+
+.mb-4 {
+  margin-bottom: 16px;
+}
+
+.mb-1 {
+  margin-bottom: 4px;
+}
+
+.mb-6 {
+  margin-bottom: 24px;
+}
+
+.my-4 {
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+
+.mr-1 {
+  margin-right: 4px;
+}
+
+.mr-2 {
+  margin-right: 8px;
+}
+
+.mx-px {
+  margin-left: 2px;
+  margin-right: 2px;
+}
+
+.p-20 {
+  padding: 80px 16px;
+}
+
+/* Text alignment */
+.text-center {
+  text-align: center;
+}
+
+/* Input utilities */
+.input-reset {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: center;
+  outline: none;
+}
+
+.input-clean {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+}
+
+/* Width utilities */
+.w-full {
+  width: 100%;
+}
+
+.max-w-full {
+  max-width: 100%;
+}
+
+.w-5 {
+  width: 20px;
+}
+
+.h-5 {
+  height: 20px;
+}
+
+.w-9 {
+  width: 36px;
+}
+
+.h-9 {
+  height: 36px;
+}
+
+.w-12 {
+  width: 50px;
+}
+
+.h-12 {
+  height: 50px;
+}
+
+.w-16 {
+  width: 64px;
+}
+
+.h-16 {
+  height: 64px;
+}
+
+.w-25 {
+  width: 100px;
+}
+
+.max-w-30 {
+  max-width: 120px;
+}
+
+/* Min width utilities */
+.min-w-45 {
+  min-width: 180px;
+}
+
+/* Cursor utilities */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.cursor-default {
+  cursor: default;
+}
+
+/* Background utilities */
+.bg-transparent {
+  background-color: transparent;
+}
+
+.bg-black {
+  background-color: #000;
+}
+
+/* Flex positioning */
+.flex-1 {
+  flex: 1;
+}
+
+/* Text color utilities */
+.text-gray-500 {
+  color: #9ca3af;
+}
+
+/* Border radius utilities */
+.rounded-sm {
+  border-radius: 6px;
+}
+
+/* Border style utilities */
+.border-dashed {
+  border-style: dashed;
+}
+
+/* Transition utilities */
+.transition-color {
+  transition: color 0.15s ease-out;
+}
+
+.transition-bg {
+  transition: background-color 0.2s ease-out;
+}
+
+/* Pointer events */
+.pointer-events-none {
+  pointer-events: none;
+}
+
+/* Text utilities */
+.whitespace-nowrap {
+  white-space: nowrap;
+}
+
+.text-base {
+  font-size: 16px;
+}
+
+.text-sm {
+  font-size: 14px;
+}
+
+.text-xs {
+  font-size: 12px;
+}
+
+/* Font style */
+.font-mono {
+  font-family: monospace;
+}
+
+.italic {
+  font-style: italic;
+}
+
+/* Custom dot styles for flowchart handles */
+.flow-handle {
+  background: #000;
+  width: 8px;
+  height: 8px;
+}
+
+.flow-handle-bg {
+  background: #000;
+}
+
+/* Icon spacing */
+.icon-mr-2 {
+  margin-right: 8px;
+}
+
+/* Flex utilities */
+.flex-center {
+  display: flex;
+  align-items: center;
+}
+
+.flex-start {
+  display: flex;
+  align-items: flex-start;
+}
+
+.gap-2 {
+  gap: 8px;
+}
+
+/* Min height utilities */
+.min-h-50 {
+  min-height: 200px;
+}
+
+/* Zoom utilities for editor */
+.zoom-75 {
+  zoom: 75%;
+}
+
+.zoom-85 {
+  zoom: 85%;
+}
+
+.zoom-90 {
+  zoom: 90%;
+}
+
+.zoom-100 {
+  zoom: 100%;
+}
+
+.zoom-110 {
+  zoom: 110%;
+}
+
+.zoom-125 {
+  zoom: 125%;
+}
+
+.zoom-150 {
+  zoom: 150%;
+} 

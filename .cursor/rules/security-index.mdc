@@ -1,0 +1,93 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Security Rules Index
+
+This index provides quick access to all security-related rules in the codebase. Review these rules before implementing any API endpoints or handling user data.
+
+## Core Security Rules
+
+### 🔐 Authentication & Authorization
+- [tenant-security.mdc](mdc:.cursor/rules/tenant-security.mdc) - Tenant access control for multi-tenant data
+- [tenant-guard.mdc](mdc:.cursor/rules/tenant-guard.mdc) - Implementation guide for tenant guards
+- [tenant-context.mdc](mdc:.cursor/rules/tenant-context.mdc) - Frontend tenant context handling
+- [rbac-fixed.mdc](mdc:.cursor/rules/rbac-fixed.mdc) - Role-based access control patterns
+
+### 🛡️ Input Validation & Data Security
+- [input-validation-security.mdc](mdc:.cursor/rules/input-validation-security.mdc) - **Comprehensive input validation with Zod**
+- [json-parsing-security.mdc](mdc:.cursor/rules/json-parsing-security.mdc) - **Safe JSON parsing patterns**
+- [api-validation.mdc](mdc:.cursor/rules/api-validation.mdc) - API request validation requirements
+- [file-upload-security](mdc:.cursor/rules/input-validation-security.mdc#file-upload-validation) - File upload validation patterns
+
+### 🌐 API Security
+- [api-security-best-practices.mdc](mdc:.cursor/rules/api-security-best-practices.mdc) - **Comprehensive API security guide**
+- [api-endpoint-security.mdc](mdc:.cursor/rules/api-endpoint-security.mdc) - Endpoint-specific security
+- [secure-api-calls.mdc](mdc:.cursor/rules/secure-api-calls.mdc) - Frontend API call security
+- [security-fixed.mdc](mdc:.cursor/rules/security-fixed.mdc) - Core security requirements (CSRF, CSP, etc.)
+
+### 🗄️ Database Security
+- [db-access-consistency.mdc](mdc:.cursor/rules/db-access-consistency.mdc) - Repository pattern enforcement
+- [prisma-sql-security.mdc](mdc:.cursor/rules/prisma-sql-security.mdc) - SQL injection prevention
+- [raw-sql-fixed.mdc](mdc:.cursor/rules/raw-sql-fixed.mdc) - Safe raw SQL patterns
+
+### 🔍 Debugging & Monitoring
+- [logger-usage.mdc](mdc:.cursor/rules/logger-usage.mdc) - Secure logging practices
+- [debug-tools-guard.mdc](mdc:.cursor/rules/debug-tools-guard.mdc) - Debug endpoint security
+
+## Quick Reference Checklist
+
+### When Creating a New API Endpoint:
+1. ✅ Use `composeApiMiddleware` for consistent security
+2. ✅ Define Zod schemas for body and query validation
+3. ✅ Implement `resolveTenantId` for tenant security
+4. ✅ Use `safeJsonParse` for all JSON parsing
+5. ✅ Apply appropriate authentication middleware
+6. ✅ Handle errors without exposing internal details
+7. ✅ Log actions with sanitized data only
+8. ✅ Return appropriate HTTP status codes
+
+### When Handling User Input:
+1. ✅ Validate with Zod schemas (never use `z.any()` without justification)
+2. ✅ Limit array sizes to prevent DoS
+3. ✅ Use allowlists for validation, not denylists
+4. ✅ Sanitize file uploads with `fileGuard`
+5. ✅ Validate MIME types and file extensions
+
+### When Working with External APIs:
+1. ✅ Set appropriate timeouts (30s default)
+2. ✅ Use `safeJsonParse` for responses
+3. ✅ Handle errors gracefully
+4. ✅ Never expose API keys in logs
+5. ✅ Validate response data structure
+
+### When Handling Sensitive Data:
+1. ✅ Never log passwords, API keys, or PII
+2. ✅ Use DTOs to shape API responses
+3. ✅ Select only required fields from database
+4. ✅ Apply field-level authorization where needed
+5. ✅ Implement audit trails for data changes
+
+## Security Tools & Utilities
+
+- **JSON Parsing**: [`safeJsonParse`](mdc:src/utils/json-utils.ts)
+- **File Validation**: [`fileGuard`](mdc:src/lib/middleware/fileGuard.ts)
+- **CSRF Protection**: [`withCsrf`](mdc:src/lib/security/csrf.ts)
+- **Tenant Guard**: [`withTenantGuard`](mdc:src/middleware/authorization.ts)
+- **API Composition**: [`composeApiMiddleware`](mdc:src/middleware/compose.ts)
+- **Error Handling**: [`createApiError`](mdc:src/utils/errorHandler.ts)
+- **Secure Fetch**: [`secureFetch`](mdc:src/utils/security.ts)
+
+## Recent Security Enhancements
+
+- **2025-01-27**: Added comprehensive JSON parsing security, input validation patterns, and API security best practices
+- **2025-05-12**: Initial security hardening with CSRF, CSP, and file upload protections
+
+## Additional Resources
+
+- [OWASP API Security Top 10](https://owasp.org/www-project-api-security/)
+- [Node.js Security Best Practices](https://nodejs.org/en/docs/guides/security/)
+- [Zod Documentation](https://zod.dev)
+
+> 🚨 **Security is everyone's responsibility.** When in doubt, ask for a security review before deploying sensitive changes.

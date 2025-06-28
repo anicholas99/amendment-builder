@@ -1,0 +1,179 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# API Route Development Guidelines
+
+## Standard Pattern: Use composeApiMiddleware
+
+All API routes **must** use the standardized middleware composition pattern from [compose.ts](mdc:src/middleware/compose.ts):
+
+```typescript
+import { composeApiMiddleware } from '@/middleware/compose';
+import { z } from 'zod';
+
+// Define request body schema
+const bodySchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+});
+
+// Handler function
+async function handler(req: CustomApiRequest<z.infer<typeof bodySchema>>, res: NextApiResponse) {
+  // Your handler logic here
+  // req.body is now typed and validated!
+}
+
+// Export with middleware
+export default composeApiMiddleware(handler, {
+  schema: bodySchema,           // Validates POST/PUT/PATCH bodies
+  resolveTenantId,             // Custom tenant resolver
+  rateLimit: {                 // Optional rate limiting
+    requests: 30,
+    windowMs: 60 * 1000
+  },
+  cache: 'project'             // Optional caching
+});
+```
+
+## Middleware Options
+
+### Schema Validation (Required for mutations)
+```typescript
+{
+  schema: z.object({
+    // Your Zod schema here
+  })
+}
+```
+
+### Tenant Resolution (Required for data access)
+```typescript
+{
+  resolveTenantId: async (req) => {
+    // Return tenant ID based on request
+    const { projectId } = req.query;
+    const project = await prisma.project.findUnique({
+      where: { id: String(projectId) },
+      select: { tenantId: true }
+    });
+    return project?.tenantId || null;
+  }
+}
+```
+
+### Rate Limiting
+```typescript
+{
+  rateLimit: {
+    requests: 10,      // Number of requests
+    windowMs: 60000    // Time window in ms
+  }
+}
+```
+
+### Caching
+```typescript
+{
+  cache: 'project' | 'tenant' | 'user' | false
+}
+```
+
+## Security Requirements
+
+1. **All mutations (POST/PUT/PATCH/DELETE) MUST have:**
+   - Zod schema validation
+   - Tenant guard (unless user-scoped)
+   - Appropriate rate limiting
+
+2. **All routes MUST:**
+   - Use `composeApiMiddleware` (no exceptions for new code)
+   - Have proper error handling (included by default)
+   - Be authenticated (included by default)
+
+## Route Analysis
+
+Before deploying, run the route analyzer to verify compliance:
+
+```bash
+# Analyze specific route
+npm run analyze:route src/pages/api/your-route.ts
+
+# Analyze all routes
+npm run analyze:routes
+```
+
+The analyzer checks for:
+- Middleware usage patterns
+- Security compliance
+- Missing validations
+- Performance optimizations
+
+## Common Patterns
+
+### Project-scoped endpoints
+```typescript
+const resolveTenantId = async (req: AuthenticatedRequest): Promise<string | null> => {
+  const { projectId } = req.query;
+  if (!projectId) return null;
+  
+  const project = await prisma.project.findUnique({
+    where: { id: String(projectId) },
+    select: { tenantId: true }
+  });
+  
+  return project?.tenantId || null;
+};
+```
+
+### User uploads
+```typescript
+const resolveTenantId = async (req: AuthenticatedRequest): Promise<string | null> => {
+  return req.user?.tenantId || null;
+};
+```
+
+### Search/Citation flows
+```typescript
+const resolveTenantId = async (req: AuthenticatedRequest): Promise<string | null> => {
+  const { searchHistoryId } = req.query;
+  const searchHistory = await prisma.searchHistory.findUnique({
+    where: { id: String(searchHistoryId) },
+    select: { project: { select: { tenantId: true } } }
+  });
+  
+  return searchHistory?.project?.tenantId || null;
+};
+```
+
+## Migration from Legacy Patterns
+
+If you see these patterns, migrate them:
+
+```typescript
+// ❌ OLD: Manual middleware composition
+export default withAuth(withErrorHandling(handler));
+
+// ✅ NEW: Use composeApiMiddleware
+export default composeApiMiddleware(handler);
+```
+
+```typescript
+// ❌ OLD: Separate rate limiting
+export default withRateLimit(composeApiMiddleware(handler), 30, 60000);
+
+// ✅ NEW: Integrated options
+export default composeApiMiddleware(handler, {
+  rateLimit: { requests: 30, windowMs: 60000 }
+});
+```
+
+## References
+
+- Middleware composition: [compose.ts](mdc:src/middleware/compose.ts)
+- Route analyzer: [route-analyzer.ts](mdc:src/lib/dev/route-analyzer.ts)
+- Example implementations:
+  - [projects/index.ts](mdc:src/pages/api/projects/index.ts)
+  - [projects/[projectId].ts](mdc:src/pages/api/projects/[projectId].ts)
+  - [generate-claim1.ts](mdc:src/pages/api/generate-claim1.ts)

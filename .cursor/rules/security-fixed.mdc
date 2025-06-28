@@ -1,0 +1,52 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+- **Use crypto-secure randomness for security-relevant identifiers**
+  - Never call `Math.random()` when producing tokens or IDs that can be guessed by an attacker
+  - Use `crypto.randomUUID()`, `crypto.getRandomValues()` (browser) or `crypto.randomBytes()` (Node)
+  - The ESLint rule in [.eslintrc.js](mdc:.eslintrc.js) already warns on `Math.random` – fix warnings, don't ignore them
+
+- **CSRF protection is completely server-side**
+  - The CSRF token is generated in [`src/lib/security/csrf.ts`](mdc:src/lib/security/csrf.ts) and stored in an **http-only** cookie
+  - Front-end code must retrieve the token using `secureFetch()` from [`src/utils/security.ts`](mdc:src/utils/security.ts) – never read/write the `csrf-token` cookie directly
+  - If you need the token for a non-fetch use-case, call `getCsrfToken()` from the same module
+
+- **Always use `secureFetch` for authenticated API requests from the browser**
+  - It lazily obtains the token via [`/api/csrf-token`](mdc:src/pages/api/csrf-token.ts) and auto-attaches it to every request
+  - Do **not** hand-roll `fetch` calls with manual `x-csrf-token` headers
+
+- **Validate uploads with `fileGuard` before processing**
+  - Import `fileGuard` from [`src/lib/security/fileGuard.ts`](mdc:src/lib/security/fileGuard.ts)
+  - Pass the `acceptedTypes` array and `maxSize` (bytes)
+  - `await fileGuard(file, opts)` must happen *before* reading / parsing user files
+
+- **Content-Security-Policy**
+  - Inline scripts are disallowed (`script-src 'self'`) in [`src/config/security.ts`](mdc:src/config/security.ts)
+  - If you must inject inline JS, add a nonce in the middleware and include it in the CSP header instead of relaxing the policy
+
+## Additional Security Requirements
+
+- **JSON Parsing Security**
+  - Never use `JSON.parse()` directly - always use `safeJsonParse` from [`src/utils/json-utils.ts`](mdc:src/utils/json-utils.ts)
+  - See detailed implementation patterns in [json-parsing-security.mdc](mdc:.cursor/rules/json-parsing-security.mdc)
+
+- **Input Validation**
+  - All API routes must validate inputs using Zod schemas with `composeApiMiddleware`
+  - Never trust `req.body`, `req.query`, or `req.params` without validation
+  - See comprehensive patterns in [input-validation-security.mdc](mdc:.cursor/rules/input-validation-security.mdc)
+
+- **API Security Best Practices**
+  - Follow middleware composition patterns for authentication, tenant validation, and CSRF
+  - Implement proper error handling without exposing internal details
+  - Apply rate limiting and pagination to prevent DoS attacks
+  - See full guidelines in [api-security-best-practices.mdc](mdc:.cursor/rules/api-security-best-practices.mdc)
+
+- **Tenant Security**
+  - All data-modifying endpoints must implement tenant access control
+  - Use `withTenantGuard` middleware with proper tenant resolution
+  - See implementation details in [tenant-security.mdc](mdc:.cursor/rules/tenant-security.mdc)
+
+> Following these rules guarantees new code meets the hardened security posture established on 2025-05-12 and enhanced on 2025-01-27.
+

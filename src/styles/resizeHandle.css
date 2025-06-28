@@ -1,0 +1,18 @@
+/* Resize Handle Styles */
+/* Styles for resizable panel handles */
+
+.resize-handle-right {
+  position: absolute;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.resize-handle-right:hover,
+.resize-handle-right:active {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.react-resizable-resizing .resize-handle-right {
+  background: rgba(66, 153, 225, 0.3);
+} 

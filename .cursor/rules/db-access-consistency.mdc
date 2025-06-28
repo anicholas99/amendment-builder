@@ -1,0 +1,135 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Enforces consistent database access via repository layer
+alwaysApply: true
+---
+# Database Access Consistency Rule
+
+- **Core Principle: API Routes Must Use Repository Layer**
+  - API endpoints **must never** access the database directly via Prisma/ORM
+  - All database operations must go through dedicated repository functions
+  - This pattern ensures consistent error handling, security checks, and data transformation
+
+- **Repository Layer Structure**
+  - Each domain area should have a dedicated repository (e.g., `projectRepository`, `searchRepository`)
+  - Repository functions should:
+    - Accept minimal, typed parameters needed for the specific operation
+    - Return domain objects or clearly typed DTOs, not HTTP responses
+    - Handle database-specific errors and throw application-specific exceptions
+    - Encapsulate all query composition and optimization logic
+    - Manage data serialization/deserialization (especially for JSON fields)
+
+- **API Handler Implementation**
+  - API handlers should:
+    - Import and use repository functions for all data operations
+    - Apply proper authentication and tenant context validation
+    - Map repository results to appropriate HTTP responses
+    - Use consistent error handling patterns via middleware or utility functions
+    - Apply correct HTTP status codes (200, 201, 400, 401, 403, 404, 500)
+    - Log all errors with sufficient context for debugging
+
+- **Critical Security Requirements**
+  - Validate tenant context for all data access (see [tenant-security.mdc](mdc:.cursor/rules/tenant-security.mdc))
+  - Verify project ownership before performing any operations
+  - Never leak database errors directly to API response payloads
+  - Include transaction support for multi-step operations
+
+## Implementation Examples
+
+```typescript
+// ✅ DO: Repository function with proper error handling
+// src/repositories/projectRepository.ts
+export async function findProjectById(
+  id: string,
+  includeDetails: boolean = false
+): Promise<Project | null> {
+  try {
+    return await prisma.project.findUnique({
+      where: { id },
+      include: includeDetails ? {
+        claimSets: true,
+        citations: true
+      } : undefined
+    });
+  } catch (error) {
+    logger.error(`Database error finding project ${id}:`, error);
+    throw new DatabaseError(`Failed to retrieve project: ${error.message}`);
+  }
+}
+```
+
+```typescript
+// ✅ DO: API handler using repository
+// src/pages/api/projects/[id].ts
+import { findProjectById } from '@/repositories/projectRepository';
+import { withTenantGuard } from '@/middleware/authorization';
+
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { id } = req.query;
+  
+  try {
+    const project = await findProjectById(id as string);
+    
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    return res.status(200).json(project);
+  } catch (error) {
+    if (error instanceof DatabaseError) {
+      return res.status(500).json({ 
+        error: 'Database operation failed',
+        message: 'An error occurred while retrieving the project'
+      });
+    }
+    
+    logger.error(`Unhandled error in project API:`, error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// Resolve tenantId for security check
+const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+  const { id } = req.query;
+  const project = await prisma.project.findUnique({
+    where: { id: String(id) },
+    select: { tenantId: true }
+  });
+  return project?.tenantId || null;
+};
+
+export default withAuth(withTenantGuard(resolveTenantId)(handler));
+```
+
+```typescript
+// ❌ DON'T: Direct database access in API handler
+// src/pages/api/projects/[id].ts - BAD EXAMPLE
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { id } = req.query;
+  
+  try {
+    // WRONG: Direct Prisma usage in API handler
+    const project = await prisma.project.findUnique({
+      where: { id: String(id) }
+    });
+    
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    return res.status(200).json(project);
+  } catch (error) {
+    // WRONG: Leaking database errors to client
+    return res.status(500).json({ error: error.message });
+  }
+}
+```
+
+- **References**
+  - Repository implementations: [projectRepository.ts](mdc:src/repositories/projectRepository.ts), [searchRepository.ts](mdc:src/repositories/searchRepository.ts)
+  - Security middleware: [authorization.ts](mdc:src/middleware/authorization.ts)
+  - Related rules: [tenant-security.mdc](mdc:.cursor/rules/tenant-security.mdc), [api-validation.mdc](mdc:.cursor/rules/api-validation.mdc)

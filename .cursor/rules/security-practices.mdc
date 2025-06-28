@@ -1,0 +1,224 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Security Best Practices
+
+## Input Validation - MANDATORY
+
+### API Request Validation
+
+**Every mutation endpoint (POST/PUT/PATCH/DELETE) MUST validate request bodies using Zod:**
+
+```typescript
+import { z } from 'zod';
+import { composeApiMiddleware } from '@/middleware/compose';
+
+const bodySchema = z.object({
+  title: z.string().min(1).max(100),
+  email: z.string().email(),
+  age: z.number().int().positive().max(150),
+  role: z.enum(['admin', 'user', 'guest']),
+  metadata: z.record(z.string()).optional(),
+});
+
+export default composeApiMiddleware(handler, {
+  schema: bodySchema, // Required for mutations!
+});
+```
+
+### JSON Parsing Safety
+
+**NEVER use raw JSON.parse without validation:**
+
+```typescript
+// ❌ DANGEROUS - Can throw or return unexpected types
+const data = JSON.parse(jsonString);
+
+// ✅ SAFE - Validates structure
+import { safeJsonParse, isStructuredData } from '@/utils/type-guards';
+
+const data = safeJsonParse(jsonString, isStructuredData);
+if (!data) {
+  throw new Error('Invalid JSON structure');
+}
+```
+
+## Tenant Isolation - CRITICAL
+
+### All Data Access Must Be Tenant-Scoped
+
+**Every API route that accesses project data MUST implement tenant validation:**
+
+```typescript
+const resolveTenantId = async (req: AuthenticatedRequest): Promise<string | null> => {
+  const { projectId } = req.query;
+  const project = await prisma.project.findUnique({
+    where: { id: String(projectId) },
+    select: { tenantId: true }
+  });
+  return project?.tenantId || null;
+};
+
+export default composeApiMiddleware(handler, {
+  schema: bodySchema,
+  resolveTenantId, // REQUIRED for project data access
+});
+```
+
+### Frontend Tenant Context
+
+**All API calls from frontend MUST include tenant context:**
+
+```typescript
+// Always use apiFetch wrapper, never raw fetch
+import { apiFetch } from '@/lib/api/apiClient';
+
+// ✅ Includes x-tenant-slug header automatically
+const response = await apiFetch('/api/projects');
+
+// ❌ NEVER use raw fetch for API calls
+const response = await fetch('/api/projects');
+```
+
+## Authentication & Authorization
+
+### All Routes Must Be Protected
+
+The `composeApiMiddleware` automatically applies authentication. Never expose unprotected endpoints:
+
+```typescript
+// ✅ Protected by default
+export default composeApiMiddleware(handler);
+
+// ❌ NEVER export raw handlers
+export default handler;
+```
+
+### Role-Based Access
+
+For admin-only endpoints:
+```typescript
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+  if (req.user?.role !== 'admin') {
+    throw createApiError(ErrorCode.FORBIDDEN, 'Admin access required');
+  }
+  // Admin-only logic
+}
+```
+
+## Rate Limiting
+
+Apply appropriate rate limits based on endpoint risk:
+
+```typescript
+// High-risk endpoints (auth, payments)
+export default composeApiMiddleware(handler, {
+  rateLimit: { requests: 5, windowMs: 60 * 1000 } // 5/min
+});
+
+// Standard mutations
+export default composeApiMiddleware(handler, {
+  rateLimit: { requests: 30, windowMs: 60 * 1000 } // 30/min
+});
+
+// Read endpoints
+export default composeApiMiddleware(handler, {
+  rateLimit: { requests: 100, windowMs: 60 * 1000 } // 100/min
+});
+```
+
+## Error Handling
+
+### Never Expose Internal Details
+
+```typescript
+// ❌ Exposes database structure
+catch (error) {
+  res.status(500).json({ error: error.message });
+}
+
+// ✅ Safe error response
+catch (error) {
+  logger.error('Database operation failed', { error });
+  throw createApiError(
+    ErrorCode.INTERNAL_ERROR,
+    'Operation failed',
+    process.env.NODE_ENV === 'development' ? { debug: error.message } : undefined
+  );
+}
+```
+
+## File Upload Security
+
+For file uploads, always validate:
+
+```typescript
+const uploadSchema = z.object({
+  filename: z.string().regex(/^[\w\-. ]+$/), // Sanitized filename
+  mimetype: z.enum(['image/png', 'image/jpeg', 'application/pdf']),
+  size: z.number().max(10 * 1024 * 1024), // 10MB max
+});
+
+// Validate file metadata
+const fileData = uploadSchema.parse({
+  filename: file.originalFilename,
+  mimetype: file.mimetype,
+  size: file.size,
+});
+```
+
+## Database Security
+
+### Use Parameterized Queries
+
+```typescript
+// ✅ Safe - Uses parameterized query
+const user = await prisma.user.findFirst({
+  where: { email: userInput }
+});
+
+// ❌ NEVER build raw SQL with user input
+const query = `SELECT * FROM users WHERE email = '${userInput}'`;
+```
+
+### Repository Pattern
+
+Access data only through repository functions that enforce security:
+
+```typescript
+// Repository enforces tenant isolation
+export async function findProjectById(
+  projectId: string,
+  tenantId: string
+): Promise<Project | null> {
+  return prisma.project.findFirst({
+    where: { 
+      id: projectId,
+      tenantId // Always filter by tenant
+    }
+  });
+}
+```
+
+## Security Checklist
+
+Before deploying any API endpoint:
+
+- [ ] Request validation with Zod schema
+- [ ] Tenant isolation implemented
+- [ ] Authentication applied via middleware
+- [ ] Rate limiting configured
+- [ ] Error messages don't leak internals
+- [ ] File uploads validated and sanitized
+- [ ] No direct database access in handlers
+- [ ] Audit logging for sensitive operations
+
+## References
+
+- Validation patterns: [api-validation.mdc](mdc:.cursor/rules/api-validation.mdc)
+- Tenant security: [tenant-security.mdc](mdc:.cursor/rules/tenant-security.mdc)
+- Middleware security: [compose.ts](mdc:src/middleware/compose.ts)
+- Type guards: [type-guards.ts](mdc:src/utils/type-guards.ts)
+- Security audit results: [PHASE1_SECURITY_AUDIT_LOG.md](mdc:PHASE1_SECURITY_AUDIT_LOG.md)

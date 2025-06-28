@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+azurite-data
+azurite-debug.log
+
+# Node
+node_modules
+npm-debug.log
+*.log
+
+# Next.js build cache
+.next/cache
+
+# Environment variables (should be passed at runtime)
+.env*
+!.env.example
+!.env.production # Optional: Include if needed for build-time vars ONLY
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Other
+README.md
+# Add any other specific files/folders to ignore 

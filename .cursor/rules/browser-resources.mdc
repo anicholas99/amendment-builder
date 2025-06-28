@@ -1,0 +1,57 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Browser-Accessed Resources Pattern
+
+- **Understanding the Multi-Tenant Challenge**
+  - Regular API calls include `x-tenant-slug` header via `apiFetch`
+  - Browser requests (images, downloads) cannot send custom headers
+  - Without the header, auth middleware cannot determine the active tenant
+  - This causes tenant mismatch errors even when user has legitimate access
+
+- **Use `SecurePresets.browserAccessible` for:**
+  - Image downloads (`<img src="/api/...">`)
+  - File downloads triggered by browser
+  - Any resource loaded directly by browser (not via JavaScript)
+  - Resources where user needs access but not necessarily active tenant
+
+- **Use `SecurePresets.tenantProtected` for:**
+  - All regular API endpoints called via `apiFetch`
+  - Data mutations (POST, PUT, PATCH, DELETE)
+  - Resources that require active tenant context
+  - Most standard API operations
+
+## Implementation Example
+
+```typescript
+// ✅ DO: Use browserAccessible for image/file downloads
+export default SecurePresets.browserAccessible(
+  TenantResolvers.fromProject,
+  handler,
+  { validate: { query: querySchema } }
+);
+
+// ✅ DO: Use tenantProtected for regular API calls
+export default SecurePresets.tenantProtected(
+  TenantResolvers.fromProject,
+  handler,
+  { validate: { body: updateSchema } }
+);
+```
+
+## How It Works
+
+- **tenantProtected**: Requires user's active tenant to match resource tenant
+- **browserAccessible**: Only requires user has access to resource tenant
+- Both ensure proper security, just different validation approaches
+
+## Common Use Cases
+
+- **Figure/Image Downloads**: Use `browserAccessible`
+- **Document Downloads**: Use `browserAccessible`
+- **Data Fetching**: Use `tenantProtected`
+- **CRUD Operations**: Use `tenantProtected`
+
+**Remember**: This pattern prevents confusing 403 errors when users legitimately access resources in their authorized tenants.

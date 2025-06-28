@@ -1,0 +1,52 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Framework-Agnostic UI Components
+
+- **Use Direct Chakra UI Imports**
+  - Import UI components directly from `@chakra-ui/react`
+  - This provides better documentation, community support, and type safety
+  - Example: `import { Box, Text, Button, Flex, VStack, IconButton } from '@chakra-ui/react'`
+
+- **Component Usage Patterns**
+  - Use semantic HTML elements when possible
+  - Apply consistent spacing, colors, and typography
+  - Follow Chakra UI's prop naming conventions (e.g., `isLoading`, `isDisabled`)
+
+- **Styling Approach**
+  - Use Chakra UI's style props for consistent styling
+  - Leverage the theme system for colors, spacing, and typography
+  - Use `useColorModeValue` for dark mode support
+
+- **Icon Usage**
+  - Prefer `react-icons` for consistent icon usage
+  - Use Chakra UI's Icon component to wrap external icons
+  - Create abstracted icon components when needed for reusability
+
+- **Examples**
+
+```tsx
+// ✅ DO: Use direct Chakra UI imports
+import { VStack, Text, Button, useColorModeValue } from '@chakra-ui/react';
+import { FiSave } from 'react-icons/fi';
+
+const MyComponent = () => {
+  const bgColor = useColorModeValue('white', 'gray.800');
+  
+  return (
+    <VStack spacing={4} bg={bgColor} p={4}>
+      <Text fontSize="lg" fontWeight="bold">Title</Text>
+      <Button leftIcon={<FiSave />} colorScheme="blue">
+        Save
+      </Button>
+    </VStack>
+  );
+};
+```
+
+- **Migration Notes**
+  - The custom `@/ui/atoms` abstraction layer has been removed
+  - All components now use direct Chakra UI imports for better maintainability
+  - Follow Chakra UI's documentation and best practices

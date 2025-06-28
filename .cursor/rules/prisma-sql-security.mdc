@@ -1,0 +1,55 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: Establishes security practices for database access via Prisma
+globs: src/**/*.ts
+alwaysApply: true
+---
+
+- **Prefer the Prisma query-builder APIs**
+  - Use `prisma.table.create / update / findMany` when the ORM can express the query.
+  - These functions are automatically parameterised and type-safe.
+
+- **If raw SQL is required, use the _tagged-template_ helpers**
+  - `prisma.$executeRaw` / `prisma.$queryRaw` _with back-tick templates_ automatically bind every `${value}` as a parameter.
+  - ✅ **DO**
+    ```typescript
+    await prisma.$executeRaw`
+      UPDATE search_history
+      SET suggestionStatus = ${status}
+      WHERE id = ${searchId}
+    `;
+    ```
+  - ❌ **DON'T** build the SQL string with concatenation:
+    ```typescript
+    // ❌ vulnerable
+    const sql = `UPDATE search_history SET suggestionStatus = '${status}' WHERE id = '${searchId}'`;
+    await prisma.$executeRawUnsafe(sql);
+    ```
+
+- **Never use `$executeRawUnsafe` / `$queryRawUnsafe` in production code**
+  - These helpers _skip_ parameterisation entirely.
+  - If you must, wrap them in a repository helper that validates/escapes all inputs and add a clear comment explaining why.
+
+- **Avoid string concatenation _inside_ the template**
+  - Putting `${Prisma.join(ids)}` inside the template is acceptable because `Prisma.join()` parameterises each element.
+  - Any other manual interpolation of user strings is disallowed.
+
+- **Linting guidance**
+  - Flag any line that matches `\.\$executeRawUnsafe` or `\.\$queryRawUnsafe`.
+  - Flag any use of `$executeRaw` / `$queryRaw` where the first argument is a plain string (`'...'` or `` `...${var}` ``) rather than a tagged template literal.
+
+- **Examples from the codebase**
+  - Safe usage: see [searchRepository.ts](mdc:src/repositories/searchRepository.ts) lines 240-250 for a correctly parameterised update.
+  - Unsafe pattern to avoid (hypothetical):
+    ```typescript
+    const malicious = req.query.id;
+    await prisma.$executeRawUnsafe(`DELETE FROM users WHERE id = ${malicious}`);
+    ```
+
+- **Migration policy**
+  - Any new code that requires raw SQL must go through code-review with a reviewer confirming parameterisation.
+  - Consider adding unit tests that pass strings like `"' OR 1=1 --"` to ensure the query stays safe.

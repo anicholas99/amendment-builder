@@ -1,0 +1,67 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# API Tenant Security Requirements
+
+- **CRITICAL SECURITY REQUIREMENT: All API routes accessing tenant-specific data MUST apply tenant security to ALL HTTP methods**
+  - This includes GET, POST, PUT, PATCH, and DELETE requests
+  - Never assume GET requests don't need tenant isolation
+  - Data leakage through GET requests is a critical security vulnerability
+
+- **Default Behavior**
+  - When using `composeApiMiddleware` with `tenantSecurity`, it automatically protects ALL methods
+  - The default is now `['GET', 'POST', 'PUT', 'PATCH', 'DELETE']`
+  - This is a security-first approach to prevent accidental data exposure
+
+- **Implementation Pattern**
+  ```typescript
+  // ✅ DO: Apply tenant security for routes accessing tenant data
+  export default composeApiMiddleware(handler, {
+    tenantSecurity: {
+      resolver: TenantResolvers.fromProject
+    }
+    // No need to specify methods - all are protected by default
+  });
+  ```
+
+  ```typescript
+  // ❌ DON'T: Limit tenant security to only mutations
+  export default composeApiMiddleware(handler, {
+    tenantSecurity: {
+      resolver: TenantResolvers.fromProject,
+      methods: ['POST', 'DELETE'] // WRONG - leaves GET vulnerable!
+    }
+  });
+  ```
+
+- **When to Apply Tenant Security**
+  - Any route that accesses project data
+  - Any route that accesses user-specific data within a tenant
+  - Any route that queries tenant-scoped resources
+  - When in doubt, apply tenant security
+
+- **Exceptions (Rare)**
+  - Public endpoints (health checks, auth endpoints)
+  - System-wide admin endpoints that intentionally cross tenants
+  - These should be clearly documented with a comment explaining why
+
+- **Security Audit Checklist**
+  - [ ] Does this route access any tenant-specific data?
+  - [ ] Is tenant security applied via `composeApiMiddleware`?
+  - [ ] Are ALL methods protected (not just mutations)?
+  - [ ] Is the correct resolver used for the resource type?
+
+- **Common Resolvers**
+  - `TenantResolvers.fromProject` - For project-based resources
+  - `TenantResolvers.fromUser` - For user-scoped resources
+  - `TenantResolvers.fromSearchHistory` - For search-related resources
+  - `TenantResolvers.fromCitationJob` - For citation processing
+
+- **Testing Tenant Isolation**
+  - Always test that users from one tenant cannot access another tenant's data
+  - Test GET requests specifically - they're often overlooked
+  - Use different test users from different tenants
+
+**Remember:** Tenant isolation is not just about preventing writes - unauthorized reads are equally dangerous and can lead to data breaches.

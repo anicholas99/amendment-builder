@@ -1,0 +1,46 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Mandates tenant access control on data-modifying API endpoints
+globs: src/pages/api/**/*.ts
+alwaysApply: true
+---
+
+# Tenant Guard Implementation
+
+- **Enforce `withTenantGuard` on every API route that performs a mutation (POST, PUT, PATCH, DELETE)**
+  - The guard *must* wrap the core handler before authentication wrappers (compose as `withAuth( withTenantGuard(...) )`).
+  - This guarantees that an authenticated user only accesses resources within their active tenant.
+
+- **Resolver Requirements**
+  - Provide a `resolveTenantId` helper in-file that maps the incoming request to the owning tenant:
+    - **Project-scoped routes**: fetch tenant via `projectId` param → `prisma.project.findUnique({ select: { tenantId } })`.
+    - **SearchHistory / Citation flows**: traverse `citationMatch` / `searchHistory` → `project` → `tenantId`.
+    - **User-centric uploads** (e.g. `upload-figure`, `upload-invention`): simply return `req.user?.tenantId`.
+  - Return `null` when the resource cannot be located – the guard will emit a 404.
+
+- **Composition Order**
+  ```typescript
+  // ✅ DO
+  const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+    // ...logic...
+  };
+  const guardedHandler = withTenantGuard(resolveTenantId)(baseHandler);
+  export default withAuth(withCsrf(guardedHandler as any));
+  ```
+
+  ```typescript
+  // ❌ DON'T – missing tenant guard
+  export default withAuth(baseHandler);
+  ```
+
+- **Scope**
+  - Applies to *all* files matched by `src/pages/api/**/*.ts` that expose mutating HTTP methods.
+  - Read-only GET handlers *may* omit the guard if the data is tenant-neutral; prefer adding it regardless.
+
+- **References**
+  - Guard implementation: [authorization.ts](mdc:src/middleware/authorization.ts)
+  - Example migration: [prior-art.ts](mdc:src/pages/api/projects/[projectId]/prior-art.ts)

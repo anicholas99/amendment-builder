@@ -1,0 +1,62 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Auth0 User ID Validation
+
+- **User ID Format**: Auth0 user IDs follow the pattern `provider|id` (e.g., `auth0|123abc`, `google-oauth2|456def`)
+  - This is NOT a UUID format, so standard UUID validation will fail
+  - The provider part indicates the authentication source
+  - The ID part is provider-specific
+
+- **Validation Schemas**: Use the centralized auth validation schemas from `@/lib/validation/schemas/auth`
+  - `auth0UserIdSchema` - Validates Auth0 ID format strictly
+  - `userIdSchema` - Accepts both UUID and Auth0 formats (flexible)
+  - `optionalUserIdSchema` - Same as userIdSchema but allows undefined
+
+## Implementation Examples
+
+```typescript
+// ✅ DO: Use proper Auth0 validation for user IDs from auth context
+import { auth0UserIdSchema } from '@/lib/validation/schemas/auth';
+
+const schema = z.object({
+  userId: auth0UserIdSchema.optional(), // Injected by middleware
+  // ... other fields
+});
+```
+
+```typescript
+// ❌ DON'T: Use UUID validation for Auth0 user IDs
+const schema = z.object({
+  userId: z.string().uuid(), // This will fail for Auth0 IDs!
+});
+```
+
+```typescript
+// ✅ DO: Use the flexible schema when ID could be either format
+import { userIdSchema } from '@/lib/validation/schemas/auth';
+
+const schema = z.object({
+  ownerId: userIdSchema, // Could be Auth0 ID or database UUID
+});
+```
+
+- **Middleware Context**: The authentication middleware injects `req.user.id` which is always an Auth0 ID
+  - This is defined in `AuthenticatedRequest` interface
+  - The format is validated during auth token verification
+
+- **Security Considerations**:
+  - Never trust user IDs from client requests - always use middleware-injected values
+  - The optional userId in request schemas is for middleware injection only
+  - Always validate the format to prevent injection attacks
+
+- **Helper Functions**:
+  - Use `parseAuth0UserId()` to extract provider and ID parts when needed
+  - This is useful for provider-specific logic or debugging
+
+## References
+- Auth validation schemas: [auth.ts](mdc:src/lib/validation/schemas/auth.ts)
+- Middleware types: [middleware.d.ts](mdc:src/types/middleware.d.ts)
+- Example usage: [citations.ts](mdc:src/types/api/citations.ts)

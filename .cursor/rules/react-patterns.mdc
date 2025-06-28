@@ -1,0 +1,250 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+---
+description: React patterns and best practices for consistent component development
+globs: src/**/*.tsx, src/**/*.ts
+alwaysApply: true
+---
+
+# React Patterns & Best Practices
+
+- **Component Structure**
+  ```typescript
+  // Use functional components with TypeScript
+  interface ProjectCardProps {
+    project: Project;
+    onEdit?: (id: string) => void;
+    isLoading?: boolean;
+  }
+  
+  export const ProjectCard: React.FC<ProjectCardProps> = ({ 
+    project, 
+    onEdit,
+    isLoading = false 
+  }) => {
+    // Hooks at the top
+    const [isExpanded, setIsExpanded] = useState(false);
+    const { user } = useAuth();
+    
+    // Derived state
+    const canEdit = user?.role === 'ADMIN' || project.ownerId === user?.id;
+    
+    // Event handlers
+    const handleEdit = useCallback(() => {
+      if (onEdit && canEdit) {
+        onEdit(project.id);
+      }
+    }, [onEdit, canEdit, project.id]);
+    
+    // Early returns for edge cases
+    if (isLoading) {
+      return <ProjectCardSkeleton />;
+    }
+    
+    // Main render
+    return (
+      <Card onClick={() => setIsExpanded(!isExpanded)}>
+        {/* Component content */}
+      </Card>
+    );
+  };
+  ```
+
+- **Custom Hooks Pattern**
+  ```typescript
+  // Extract complex logic into custom hooks
+  export function useProject(projectId: string) {
+    const queryClient = useQueryClient();
+    
+    const query = useQuery({
+      queryKey: ['project', projectId],
+      queryFn: () => fetchProject(projectId),
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    });
+    
+    const mutation = useMutation({
+      mutationFn: (data: UpdateProjectDto) => updateProject(projectId, data),
+      onSuccess: () => {
+        queryClient.invalidateQueries(['project', projectId]);
+        toast.success('Project updated successfully');
+      },
+      onError: (error) => {
+        toast.error('Failed to update project');
+        console.error('Update failed:', error);
+      }
+    });
+    
+    return {
+      project: query.data,
+      isLoading: query.isLoading,
+      error: query.error,
+      updateProject: mutation.mutate,
+      isUpdating: mutation.isLoading
+    };
+  }
+  ```
+
+- **State Management Best Practices**
+  ```typescript
+  // Use appropriate state management based on scope
+  
+  // 1. Local state for UI-only concerns
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // 2. Context for cross-component state
+  const { currentProject, setCurrentProject } = useProjectContext();
+  
+  // 3. React Query for server state
+  const { data: projects } = useQuery(['projects'], fetchProjects);
+  
+  // 4. URL state for shareable state
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'overview';
+  ```
+
+- **Performance Optimization**
+  ```typescript
+  // 1. Memoize expensive computations
+  const sortedProjects = useMemo(() => 
+    projects?.sort((a, b) => b.updatedAt - a.updatedAt),
+    [projects]
+  );
+  
+  // 2. Memoize callbacks passed to children
+  const handleSearch = useCallback((query: string) => {
+    setSearchParams({ q: query });
+  }, [setSearchParams]);
+  
+  // 3. Use React.memo for expensive pure components
+  export const ExpensiveChart = React.memo<ChartProps>(({ data }) => {
+    return <ComplexVisualization data={data} />;
+  });
+  
+  // 4. Lazy load heavy components
+  const PatentEditor = lazy(() => import('./PatentEditor'));
+  ```
+
+- **Form Handling Pattern**
+  ```typescript
+  // Use react-hook-form with Zod validation
+  import { useForm } from 'react-hook-form';
+  import { zodResolver } from '@hookform/resolvers/zod';
+  
+  const projectSchema = z.object({
+    title: z.string().min(1, 'Title is required'),
+    description: z.string().optional(),
+    priority: z.enum(['low', 'medium', 'high'])
+  });
+  
+  type ProjectForm = z.infer<typeof projectSchema>;
+  
+  export function ProjectForm({ onSubmit }: Props) {
+    const { register, handleSubmit, formState: { errors } } = useForm<ProjectForm>({
+      resolver: zodResolver(projectSchema)
+    });
+    
+    return (
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <FormControl isInvalid={!!errors.title}>
+          <FormLabel>Title</FormLabel>
+          <Input {...register('title')} />
+          <FormErrorMessage>{errors.title?.message}</FormErrorMessage>
+        </FormControl>
+      </form>
+    );
+  }
+  ```
+
+- **Error Boundaries**
+  ```typescript
+  // Implement error boundaries for graceful error handling
+  class ErrorBoundary extends Component<Props, State> {
+    state = { hasError: false };
+    
+    static getDerivedStateFromError(error: Error) {
+      return { hasError: true };
+    }
+    
+    componentDidCatch(error: Error, info: ErrorInfo) {
+      logger.error('React error boundary caught error', { error, info });
+    }
+    
+    render() {
+      if (this.state.hasError) {
+        return <ErrorFallback onReset={() => this.setState({ hasError: false })} />;
+      }
+      return this.props.children;
+    }
+  }
+  ```
+
+- **Accessibility Patterns**
+  ```typescript
+  // Always include proper ARIA attributes
+  <Button
+    onClick={handleSubmit}
+    isLoading={isSubmitting}
+    aria-label="Save project"
+    aria-busy={isSubmitting}
+    aria-disabled={!isValid}
+  >
+    Save
+  </Button>
+  
+  // Keyboard navigation support
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') closeModal();
+    if (e.key === 'Enter' && e.ctrlKey) handleSubmit();
+  };
+  ```
+
+- **Testing Patterns**
+  ```typescript
+  // Test user interactions, not implementation
+  it('should update project when form is submitted', async () => {
+    const onSubmit = jest.fn();
+    const { getByLabelText, getByRole } = render(
+      <ProjectForm onSubmit={onSubmit} />
+    );
+    
+    await userEvent.type(getByLabelText('Title'), 'New Project');
+    await userEvent.click(getByRole('button', { name: 'Save' }));
+    
+    expect(onSubmit).toHaveBeenCalledWith({
+      title: 'New Project'
+    });
+  });
+  ```
+
+- **Common Anti-Patterns to Avoid**
+  ```typescript
+  // ❌ DON'T: Modify state directly
+  state.items.push(newItem);
+  
+  // ✅ DO: Create new references
+  setState(prev => ({ ...prev, items: [...prev.items, newItem] }));
+  
+  // ❌ DON'T: Use array index as key in dynamic lists
+  items.map((item, index) => <Item key={index} />)
+  
+  // ✅ DO: Use stable, unique IDs
+  items.map(item => <Item key={item.id} />)
+  
+  // ❌ DON'T: Call hooks conditionally
+  if (user) {
+    const data = useQuery(['projects']);
+  }
+  
+  // ✅ DO: Call hooks unconditionally
+  const { data } = useQuery(['projects'], {
+    enabled: !!user
+  });
+  ```
+
+- **References**
+  - Component examples: [src/components](mdc:src/components)
+  - Custom hooks: [src/hooks](mdc:src/hooks)
+  - React Query setup: [src/lib/config/queryClient.ts](mdc:src/lib/config/queryClient.ts)

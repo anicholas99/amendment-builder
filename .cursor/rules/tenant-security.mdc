@@ -1,0 +1,77 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Tenant Security Guard
+
+- **Required Implementation**
+  - All API routes that modify data (POST, PUT, PATCH, DELETE) **must** implement tenant access control
+  - Use the `withTenantGuard` middleware to secure endpoints
+
+- **Implementation Pattern**
+  - Create a `resolveTenantId` function that resolves the appropriate tenant
+  - Apply `withTenantGuard` before other middleware wrappers
+  - Ensure proper middleware composition order
+
+- **Resolution Strategies**
+  - **Project-based routes**: Resolve tenant ID from project
+    ```typescript
+    const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+      const { projectId } = req.query;
+      const project = await prisma.project.findUnique({
+        where: { id: String(projectId) },
+        select: { tenantId: true }
+      });
+      return project?.tenantId || null;
+    };
+    ```
+  
+  - **User uploads**: Use the authenticated user's tenant
+    ```typescript
+    const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+      return req.user?.tenantId || null;
+    };
+    ```
+    
+  - **Related resources**: Traverse relationships to find tenant
+    ```typescript
+    const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+      const { searchHistoryId } = req.query;
+      const searchHistory = await prisma.searchHistory.findUnique({
+        where: { id: String(searchHistoryId) },
+        select: { project: { select: { tenantId: true } } }
+      });
+      return searchHistory?.project?.tenantId || null;
+    };
+    ```
+
+- **Proper Middleware Composition**
+  ```typescript
+  // ✅ DO: Apply tenant guard before auth middleware
+  const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+    // Tenant resolution logic
+  };
+  
+  const baseHandler = async (req: NextApiRequest, res: NextApiResponse) => {
+    // Handler implementation
+  };
+  
+  const guardedHandler = withTenantGuard(resolveTenantId)(baseHandler);
+  export default withAuth(withCsrf(guardedHandler as any));
+  ```
+
+  ```typescript
+  // ❌ DON'T: Missing tenant guard or incorrect order
+  export default withAuth(baseHandler);
+  ```
+
+- **Scope and Exceptions**
+  - Required for all mutation endpoints in `src/pages/api/**/*.ts`
+  - Read-only GET handlers may omit the guard if data is tenant-neutral
+  - When in doubt, always include the tenant guard
+
+- **References**
+  - Guard implementation: [authorization.ts](mdc:src/middleware/authorization.ts)
+  - Example usage: [prior-art.ts](mdc:src/pages/api/projects/[projectId]/prior-art.ts)
+

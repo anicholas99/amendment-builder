@@ -1,0 +1,29 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: Restricts debug tool endpoints to admin users only
+globs: src/pages/api/debug-tools/**/*.ts
+alwaysApply: true
+---
+
+- **Endpoints under `/api/debug-tools/` MUST be protected**
+  - Import and wrap with `requireRole('admin')` (or equivalent) plus `withAuth`.
+  - Example:
+    ```typescript
+    import { requireRole } from '@/middleware/role';
+    import { withAuth } from '@/middleware/auth';
+    
+    async function handler(req: NextApiRequest, res: NextApiResponse) {
+      // admin-only logic
+    }
+    export default withAuth(requireRole('admin')(handler));
+    ```
+
+- **No unauthenticated access**
+  - Always return 403 for non-admin users.
+
+- **Test guidance**
+  - Add integration tests to confirm 403 for regular users and 200 for admins.

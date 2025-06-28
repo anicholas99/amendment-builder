@@ -1,0 +1,179 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Input Validation Security
+
+- **All API routes MUST validate request data using proper schemas**
+  - Use `composeApiMiddleware` with schema validation for body and query parameters
+  - Never trust or directly use `req.body`, `req.query`, or `req.params` without validation
+  - Leverage TypeScript types derived from Zod schemas for type safety
+
+- **Body Validation Pattern**
+  ```typescript
+  import { z } from 'zod';
+  import { composeApiMiddleware } from '@/middleware/compose';
+  import { CustomApiRequest } from '@/types/api';
+  
+  // Define schema
+  const bodySchema = z.object({
+    title: z.string().min(1).max(255),
+    description: z.string().optional(),
+    priority: z.enum(['low', 'medium', 'high']),
+    tags: z.array(z.string()).max(10).optional()
+  });
+  
+  // Derive type from schema
+  type RequestBody = z.infer<typeof bodySchema>;
+  
+  // Handler with typed body
+  async function handler(
+    req: CustomApiRequest<RequestBody>,
+    res: NextApiResponse
+  ) {
+    // req.body is now validated and typed
+    const { title, description, priority } = req.body;
+  }
+  
+  export default composeApiMiddleware(handler, { 
+    schema: bodySchema 
+  });
+  ```
+
+- **Query Parameter Validation**
+  ```typescript
+  import { commonQuerySchemas } from '@/lib/validation/schemas/shared/querySchemas';
+  
+  // Combine multiple query schemas
+  const querySchema = z.object({
+    ...commonQuerySchemas.pagination.shape,
+    ...commonQuerySchemas.sorting.shape,
+    status: z.enum(['active', 'inactive']).optional(),
+    search: z.string().max(100).optional()
+  });
+  
+  export default composeApiMiddleware(handler, {
+    schema: bodySchema,
+    querySchema: querySchema  // Validates req.query
+  });
+  ```
+
+- **File Upload Validation**
+  ```typescript
+  import { fileGuard } from '@/lib/middleware/fileGuard';
+  
+  // ✅ DO: Use fileGuard for centralized validation
+  export default composeApiMiddleware(
+    fileGuard({
+      maxSizeMB: 10,
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
+    })(handler),
+    { resolveTenantId }
+  );
+  
+  // ❌ DON'T: Manual file validation
+  if (!file.mimetype.startsWith('image/')) {
+    // This pattern is forbidden - use fileGuard
+  }
+  ```
+
+- **Common Validation Patterns**
+
+  1. **IDs and References**
+     ```typescript
+     z.string().uuid()  // For UUID validation
+     z.string().cuid()  // For CUID validation
+     z.string().regex(/^[a-zA-Z0-9_-]+$/)  // Custom ID format
+     ```
+
+  2. **Numeric Inputs**
+     ```typescript
+     z.coerce.number()  // Coerces string to number
+     z.number().int().min(1).max(100)  // Integer with range
+     z.number().positive().finite()  // Positive finite number
+     ```
+
+  3. **Optional vs Required**
+     ```typescript
+     // Required field (default)
+     email: z.string().email()
+     
+     // Optional field
+     nickname: z.string().optional()
+     
+     // Optional with default
+     role: z.enum(['user', 'admin']).default('user')
+     ```
+
+- **Avoiding Common Pitfalls**
+
+  1. **Never use `z.any()` without justification**
+     ```typescript
+     // ❌ BAD: Allows any data through
+     data: z.any()
+     
+     // ✅ GOOD: Use specific types or unknown with refinement
+     data: z.unknown().refine(
+       (val) => isValidCustomData(val),
+       'Invalid custom data format'
+     )
+     ```
+
+  2. **Don't use `.passthrough()` on root schemas**
+     ```typescript
+     // ❌ BAD: Allows unexpected fields
+     const schema = z.object({
+       name: z.string()
+     }).passthrough();
+     
+     // ✅ GOOD: Be explicit about allowed fields
+     const schema = z.object({
+       name: z.string(),
+       metadata: z.record(z.unknown()).optional()
+     });
+     ```
+
+  3. **Validate arrays properly**
+     ```typescript
+     // Limit array size to prevent DoS
+     items: z.array(z.string()).max(100)
+     
+     // Validate each item
+     users: z.array(
+       z.object({
+         id: z.string(),
+         name: z.string()
+       })
+     ).min(1).max(50)
+     ```
+
+- **Reusable Schema Patterns**
+  - Create shared schemas in [querySchemas.ts](mdc:src/lib/validation/schemas/shared/querySchemas.ts)
+  - Import domain-specific schemas from appropriate validation files
+  - Compose schemas using spread operator or `.merge()`
+
+- **Error Response Standards**
+  ```typescript
+  // Validation errors automatically return:
+  {
+    "error": "Validation error",
+    "details": {
+      "field": ["Error message"]
+    }
+  }
+  ```
+
+- **Security Considerations**
+  - Input validation prevents SQL injection, XSS, and other attacks
+  - Always validate data type, format, and business rules
+  - Use allowlists over denylists for validation
+  - Sanitize error messages to avoid information leakage
+  - Apply rate limiting on endpoints accepting user input
+
+- **References**
+  - Middleware composition: [compose.ts](mdc:src/middleware/compose.ts)
+  - Shared schemas: [querySchemas.ts](mdc:src/lib/validation/schemas/shared/querySchemas.ts)
+  - File validation: [fileGuard.ts](mdc:src/lib/middleware/fileGuard.ts)
+  - Zod documentation: https://zod.dev

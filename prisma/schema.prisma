@@ -1,0 +1,632 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+// SQL Server doesn't support enums - using string fields with TypeScript constants
+
+model User {
+  id                  String               @id @default(uuid())
+  email               String               @unique
+  name                String?
+  passwordHash        String?
+  salt                String?
+  role                String               @default("USER")
+  avatarUrl           String?
+  isVerified          Boolean              @default(false)
+  verificationToken   String?              @unique
+  resetToken          String?              @unique
+  resetTokenExpiry    DateTime?
+  lastLogin           DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?            // Soft delete field
+  accounts            Account[]
+  applicationVersions ApplicationVersion[]
+  projects            Project[]
+  searchHistory       SearchHistory[]
+  sessions            Session[]
+  preferences         UserPreference[]
+  tenants             UserTenant[]
+  privacy             UserPrivacy?
+  history             ClaimHistory[]
+  uploadedFigures     ProjectFigure[]      // Track who uploaded what
+  combinedAnalyses    CombinedExaminerAnalysis[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Project {
+  id                           String                  @id @default(uuid())
+  name                         String
+  textInput                    String?                 @db.NVarChar(Max)
+  userId                       String
+  tenantId                     String
+  status                       String                  @default("DRAFT")
+  createdAt                    DateTime                @default(now())
+  updatedAt                    DateTime                @updatedAt
+  deletedAt                    DateTime?               // Soft delete field
+  applicationVersions          ApplicationVersion[]
+  priorArtAnalysisCacheEntries PriorArtAnalysisCache[]
+  exclusions                   ProjectExclusion[]
+  projectImages                ProjectImage[]
+  figures                      ProjectFigure[]         // New secure figures relation
+  tenant                       Tenant                  @relation(fields: [tenantId], references: [id])
+  user                         User                    @relation(fields: [userId], references: [id])
+  savedPriorArtItems           SavedPriorArt[]
+  searchHistory                SearchHistory[]
+  chatMessages                 ChatMessage[]
+  invention                    Invention?              // New relation
+  elements                     Element[]               // NEW: Elements relation
+  draftDocuments               DraftDocument[]         // Working draft documents
+
+  @@map("projects")
+}
+
+model UserPreference {
+  id        String   @id @default(uuid())
+  userId    String
+  key       String
+  value     String   @db.NVarChar(Max)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@map("user_preferences")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  token        String   @unique
+  expiresAt    DateTime
+  ipAddress    String?
+  userAgent    String?  @db.NVarChar(Max)
+  lastActivity DateTime @default(now())
+  createdAt    DateTime @default(now())
+  expires      DateTime
+  sessionToken String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+model Tenant {
+  id          String       @id @default(uuid())
+  name        String
+  slug        String       @unique
+  description String?      @db.NVarChar(Max)
+  settings    String?      @db.NVarChar(Max)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime?    // Soft delete field
+  projects    Project[]
+  users       UserTenant[]
+
+  @@map("tenants")
+}
+
+model UserTenant {
+  id        String   @id @default(uuid())
+  userId    String
+  tenantId  String
+  role      String   @default("USER")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@map("user_tenants")
+}
+
+model SearchHistory {
+  id                           String                  @id @default(uuid())
+  query                        String                  @db.NVarChar(Max)
+  timestamp                    DateTime                @default(now())
+  results                      String?                 @db.NVarChar(Max)  // Only search results
+  projectId                    String?
+  userId                       String?
+  citationExtractionStatus     String?
+  suggestions                  AISuggestion[]
+  citations                    CitationJob[]
+  citationMatches              CitationMatch[]
+  patentabilityScores          PatentabilityScore[]
+  priorArtAnalysisCacheEntries PriorArtAnalysisCache[]
+  combinedExaminerAnalyses     CombinedExaminerAnalysis[]
+  project                      Project?                @relation(fields: [projectId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_searchhistory_project")
+  user                         User?                   @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_searchhistory_user")
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([timestamp])
+  @@map("search_history")
+}
+
+model CitationJob {
+  id                   String          @id @default(uuid())
+  searchHistoryId      String
+  status               String          @default("PENDING")
+  externalJobId        Int?
+  referenceNumber      String?
+  createdAt            DateTime        @default(now())
+  startedAt            DateTime?
+  completedAt          DateTime?
+  error                String?         @db.NVarChar(Max)
+  rawResultData        String?         @db.NVarChar(Max)
+  errorMessage         String?         @db.NVarChar(Max)
+  lastCheckedAt        DateTime?
+  deepAnalysisJson     String?         @db.NVarChar(Max)
+  examinerAnalysisJson String?         @db.NVarChar(Max)
+  searchHistory        SearchHistory   @relation(fields: [searchHistoryId], references: [id], onDelete: Cascade)
+  matches              CitationMatch[]
+  results              CitationResult?
+
+  @@index([searchHistoryId])
+  @@index([status])
+  @@map("citation_jobs")
+}
+
+model CitationResult {
+  id            String      @id @default(uuid())
+  citationJobId String      @unique
+  resultsData   String      @db.NVarChar(Max)
+  createdAt     DateTime    @default(now())
+  citationJob   CitationJob @relation(fields: [citationJobId], references: [id], onDelete: Cascade)
+
+  @@map("citation_results")
+}
+
+model ProjectExclusion {
+  id                   String   @id @default(cuid())
+  projectId            String
+  excludedPatentNumber String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  abstract             String?  @db.NVarChar(Max)
+  authors              String?
+  excludedAt           DateTime @default(now())
+  publicationDate      String?
+  title                String?
+  url                  String?
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, excludedPatentNumber])
+  @@index([projectId])
+  @@map("project_exclusions")
+}
+
+model AISuggestion {
+  id              String        @id @default(uuid())
+  searchHistoryId String
+  content         String        @db.NVarChar(Max)
+  status          String        @default("ACTIVE")
+  metadata        String?       @db.NVarChar(Max)
+  feedback        String?       @db.NVarChar(Max)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  searchHistory   SearchHistory @relation(fields: [searchHistoryId], references: [id], onDelete: Cascade)
+
+  @@index([searchHistoryId])
+  @@map("ai_suggestions")
+}
+
+model SavedPriorArt {
+  id                 String   @id @default(uuid())
+  projectId          String
+  patentNumber       String
+  title              String?
+  abstract           String?  @db.NVarChar(Max)
+  url                String?
+  notes              String?  @db.NVarChar(Max)
+  authors            String?
+  publicationDate    String?
+  savedAt            DateTime @default(now())
+  savedCitationsData String?  @db.NVarChar(Max)
+  
+  // Essential fields for patent application generation context
+  claim1             String?  @db.NVarChar(Max)  // Main independent claim - what the prior art actually claims
+  summary            String?  @db.NVarChar(Max)  // Brief summary of the invention - what problem it solves and how
+  
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, patentNumber])
+  @@index([projectId])
+  @@map("saved_prior_art")
+}
+
+model ProjectImage {
+  id        String   @id @default(uuid())
+  projectId String
+  url       String
+  caption   String?
+  order     Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_images")
+}
+
+model ApplicationVersion {
+  id        String     @id @default(uuid())
+  projectId String
+  userId    String
+  name      String?
+  createdAt DateTime   @default(now())
+  deletedAt DateTime?  // Soft delete field
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onUpdate: NoAction)
+  documents Document[]
+
+  @@index([projectId])
+  @@index([userId])
+  @@map("application_versions")
+}
+
+model Document {
+  id                   String             @id @default(uuid())
+  applicationVersionId String
+  type                 String
+  content              String?            @db.NVarChar(Max)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  deletedAt            DateTime?          // Soft delete field
+  applicationVersion   ApplicationVersion @relation(fields: [applicationVersionId], references: [id], onDelete: Cascade)
+
+  @@index([applicationVersionId])
+  @@map("documents")
+}
+
+// Working draft documents - always editable
+model DraftDocument {
+  id        String   @id @default(uuid())
+  projectId String
+  type      String
+  content   String?  @db.NVarChar(Max)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@unique([projectId, type])
+  @@index([projectId])
+  @@map("draft_documents")
+}
+
+model CitationMatch {
+  id                       String          @id @default(uuid())
+  searchHistoryId          String
+  citationJobId            String
+  referenceNumber          String
+  citation                 String          @db.NVarChar(Max)
+  paragraph                String?         @db.NVarChar(Max)
+  score                    Float?
+  elementOrder             Int?            // Order of element in original parsed elements array
+  locationJobId            Int?
+  locationStatus           String?
+  locationData             String?         @db.NVarChar(Max)
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+  locationErrorMessage     String?         @db.NVarChar(Max)
+  parsedElementText        String?         @db.NVarChar(Max)
+  referenceApplicant       String?         @db.NVarChar(Max)
+  referenceAssignee        String?         @db.NVarChar(Max)
+  referencePublicationDate String?
+  referenceTitle           String?         @db.NVarChar(Max)
+  reasoningErrorMessage    String?         @db.NVarChar(Max)
+  reasoningJobId           Int?
+  reasoningScore           Float?
+  reasoningStatus          String?
+  reasoningSummary         String?         @db.NVarChar(Max)
+  
+  // New fields for enhanced citation analysis
+  analysisSource           String          @default("LEGACY_RELEVANCE")  // 'LEGACY_RELEVANCE', 'RAW_EXTRACTION', or 'DEEP_ANALYSIS'
+  isTopResult              Boolean         @default(false)               // true for citations highlighted by deep analysis
+  
+  citationJob              CitationJob     @relation(fields: [citationJobId], references: [id], onUpdate: NoAction)
+  searchHistory            SearchHistory   @relation(fields: [searchHistoryId], references: [id], onDelete: Cascade)
+
+  @@index([searchHistoryId])
+  @@index([citationJobId])
+  @@index([referenceNumber])
+  @@map("citation_matches")
+}
+
+model PriorArtAnalysisCache {
+  id              String        @id @default(cuid())
+  projectId       String
+  searchHistoryId String
+  claim1TextHash  String
+  resultsJson     String        @db.Text
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  searchHistory   SearchHistory @relation(fields: [searchHistoryId], references: [id], onUpdate: NoAction)
+
+  @@unique([projectId, searchHistoryId, claim1TextHash], name: "projectId_searchHistoryId_claim1TextHash")
+  @@index([projectId])
+  @@index([searchHistoryId])
+  @@map("prior_art_analysis_cache")
+}
+
+model PatentabilityScore {
+  id                  String          @id @default(uuid())
+  searchHistoryId     String
+  score               Float
+  elementAnalysisJson String?         @db.NVarChar(Max)
+  overlapMatrixJson   String?         @db.NVarChar(Max)
+  recommendations     String?         @db.NVarChar(Max)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  searchHistory       SearchHistory   @relation(fields: [searchHistoryId], references: [id], onUpdate: NoAction)
+
+  @@unique([searchHistoryId])
+  @@index([searchHistoryId])
+  @@map("patentability_scores")
+}
+
+// Combined Examiner Analysis - stores analysis of multiple references together
+model CombinedExaminerAnalysis {
+  id                String        @id @default(uuid())
+  searchHistoryId   String
+  userId            String?
+  referenceNumbers  String        // JSON array of reference numbers included in this analysis
+  analysisJson      String        @db.NVarChar(Max) // The structured combined analysis result
+  claim1Text        String        @db.NVarChar(Max) // The claim 1 text used for this analysis
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  
+  // Relations
+  searchHistory     SearchHistory @relation(fields: [searchHistoryId], references: [id], onDelete: Cascade)
+  user              User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([searchHistoryId])
+  @@index([userId])
+  @@map("combined_examiner_analyses")
+}
+
+model RefinementSession {
+  id          String   @id @default(uuid())
+  projectId   String   @unique
+  contextJson String   @default("{}") @db.NVarChar(Max)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// Chat message history for project assistant
+model ChatMessage {
+  id           String   @id @default(cuid())
+  projectId    String
+  role         String   // 'user' | 'assistant' | 'system'
+  content      String   @db.NVarChar(MAX)
+  metadata     String?  @db.NVarChar(MAX) // Store tool calls, errors, etc. as JSON string
+  timestamp    DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, timestamp])
+}
+
+// Audit Log for SOC 2 compliance
+model AuditLog {
+  id           String   @id @default(cuid())
+  timestamp    DateTime @default(now())
+  userId       String?
+  tenantId     String?
+  action       String   // e.g., 'user.login', 'project.create', 'claim.update'
+  resourceType String?  // e.g., 'project', 'claim', 'user'
+  resourceId   String?  // ID of the affected resource
+  method       String?  // HTTP method: GET, POST, PUT, DELETE
+  path         String?  // API endpoint path
+  statusCode   Int?     // HTTP response status code
+  duration     Int?     // Request duration in milliseconds
+  ipAddress    String?  // Client IP address
+  userAgent    String?  // Browser/client user agent
+  metadata     String?  @db.NVarChar(MAX) // Additional context (changes, errors, etc.) as JSON string
+  success      Boolean  @default(true)
+  errorMessage String?  @db.NVarChar(MAX)
+
+  // Indexes for efficient querying
+  @@index([userId, timestamp])
+  @@index([tenantId, timestamp])
+  @@index([action, timestamp])
+  @@index([resourceType, resourceId, timestamp])
+  @@index([timestamp])
+}
+
+// Data Privacy - User consent and preferences
+model UserPrivacy {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  dataProcessingConsent Boolean  @default(false)
+  marketingConsent     Boolean  @default(false)
+  consentedAt          DateTime?
+  consentIpAddress     String?
+  dataRetentionDays    Int      @default(365) // Default 1 year
+  lastDataExportAt     DateTime?
+  lastDataDeletionAt   DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// New Invention model
+model Invention {
+  id                  String   @id @default(uuid())
+  projectId           String   @unique
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Basic Information - USED
+  title               String?
+  summary             String?  @db.NVarChar(Max)  // Full multi-paragraph summary
+  abstract            String?  @db.NVarChar(Max)
+  patentCategory      String?  // e.g., "Agricultural Drone Technology"
+  technicalField      String?  @db.NVarChar(Max)
+  
+  // Patent Analysis - USED
+  noveltyStatement    String?  @db.NVarChar(Max)  // What makes it novel
+  
+  // Complex data as JSON - USED
+  backgroundJson      String?  @db.NVarChar(Max)  // Structured background object with technicalField, problemsSolved, existingSolutions
+  advantagesJson      String?  @db.NVarChar(Max)  // Array of Advantage strings ["advantage1", "advantage2"]
+  featuresJson        String?  @db.NVarChar(Max)  // Array of feature strings ["feature1", "feature2"]
+  useCasesJson        String?  @db.NVarChar(Max)  // Array of use case strings ["use case 1", "use case 2"]
+  claimsJson          String?  @db.NVarChar(Max)  // Record<string, string> | string[]  (DEPRECATED; use Claim model)
+  priorArtJson        String?  @db.NVarChar(Max)  // PriorArtReference[]
+  technicalImplementationJson String? @db.NVarChar(Max) // Object with preferred_embodiment, alternative_embodiments, manufacturing_methods
+  processStepsJson    String?  @db.NVarChar(Max)  // Array of process step strings ["Step 1", "Step 2"]
+  definitionsJson     String?  @db.NVarChar(Max)  // Object mapping terms to definitions {"term": "definition"}
+  futureDirectionsJson String? @db.NVarChar(Max)  // Array of future direction strings ["direction 1", "direction 2"]
+  
+  // Claim parsing and search query sync data
+  parsedClaimElementsJson  String?  @db.NVarChar(Max)  // Array of parsed elements from claim 1
+  searchQueriesJson        String?  @db.NVarChar(Max)  // Array of generated search queries
+  claimSyncedAt           DateTime?                     // When claim was last parsed
+  lastSyncedClaim         String?  @db.NVarChar(Max)  // The exact claim text that was synced
+  
+  // Normalized claims relation (NEW)
+  claims               Claim[]
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("inventions")
+}
+
+/// Normalized Claim record linked to Invention (replaces claimsJson for editing workflow)
+model Claim {
+  id          String   @id @default(uuid())
+  inventionId String
+  number      Int
+  text        String   @db.NVarChar(Max)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  history     ClaimHistory[]
+
+  // Relations
+  invention   Invention @relation(fields: [inventionId], references: [id], onDelete: Cascade)
+
+  @@index([inventionId])
+  @@unique([inventionId, number])
+  @@map("claims")
+}
+
+/// Stores the historical changes for a single claim.
+model ClaimHistory {
+  id           String   @id @default(uuid())
+  claimId      String
+  userId       String
+  previousText String   @db.NVarChar(Max)
+  newText      String   @db.NVarChar(Max)
+  timestamp    DateTime @default(now())
+  
+  // Relations
+  claim        Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  
+  @@index([claimId, timestamp])
+  @@index([userId])
+  @@map("claim_history")
+}
+
+model ProjectFigure {
+  id          String   @id @default(uuid())
+  projectId   String
+  status      String   @default("PENDING") // NEW: Track figure state: PENDING | UPLOADED
+  fileName    String?  // Made optional - only set when file is uploaded
+  originalName String? // Made optional - only set when file is uploaded
+  blobName    String?  // Made optional - only set when file is uploaded
+  mimeType    String?  // Made optional - only set when file is uploaded
+  sizeBytes   Int?     // Made optional - only set when file is uploaded
+  figureKey   String?  // e.g., "FIG. 1", "FIG. 2A"
+  title       String?  // NEW: Title for the figure
+  description String?  @db.NVarChar(Max)
+  displayOrder Int     @default(0) // NEW: For sorting figures
+  uploadedBy  String   // User ID who uploaded
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime? // Soft delete for audit trail
+  
+  // Relations with proper cascading
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploader    User     @relation(fields: [uploadedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  
+  // NEW: Relation to figure elements
+  figureElements FigureElement[]
+
+  @@index([projectId])
+  @@index([blobName])
+  @@index([uploadedBy])
+  @@map("project_figures")
+}
+
+// NEW: Element model - represents reference numerals/elements in a project
+model Element {
+  id          String   @id @default(uuid())
+  projectId   String
+  elementKey  String   // e.g., "101", "5", "motor_1"
+  name        String   // General name/description of the element
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  figureElements FigureElement[]
+  
+  @@unique([projectId, elementKey])
+  @@index([projectId])
+  @@map("elements")
+}
+
+// NEW: FigureElement join table - links elements to figures with context-specific descriptions
+model FigureElement {
+  id                String   @id @default(uuid())
+  figureId          String
+  elementId         String
+  calloutDescription String?  @db.NVarChar(Max) // Context-specific description for this element in this figure
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  figure   ProjectFigure @relation(fields: [figureId], references: [id], onDelete: Cascade)
+  element  Element       @relation(fields: [elementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  
+  @@unique([figureId, elementId])
+  @@index([figureId])
+  @@index([elementId])
+  @@map("figure_elements")
+}

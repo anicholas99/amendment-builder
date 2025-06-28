@@ -1,0 +1,24 @@
+BEGIN TRY
+
+BEGIN TRAN;
+
+-- AlterTable
+ALTER TABLE [dbo].[project_exclusions] ADD [abstract] NVARCHAR(max),
+[authors] NVARCHAR(1000),
+[excludedAt] DATETIME2 NOT NULL CONSTRAINT [project_exclusions_excludedAt_df] DEFAULT CURRENT_TIMESTAMP,
+[publicationDate] NVARCHAR(1000),
+[title] NVARCHAR(1000),
+[url] NVARCHAR(1000);
+
+COMMIT TRAN;
+
+END TRY
+BEGIN CATCH
+
+IF @@TRANCOUNT > 0
+BEGIN
+    ROLLBACK TRAN;
+END;
+THROW
+
+END CATCH

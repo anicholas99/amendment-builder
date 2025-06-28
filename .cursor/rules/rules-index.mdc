@@ -1,0 +1,75 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+---
+description: Index of all Cursor rules in the project for easy navigation
+alwaysApply: true
+---
+
+# Cursor Rules Index
+
+## 🔒 Security & Authentication
+- **[api-route-validation.mdc](mdc:.cursor/rules/api-route-validation.mdc)** - Zod validation for all API routes
+- **[api-security-best-practices.mdc](mdc:.cursor/rules/api-security-best-practices.mdc)** - Error handling, logging, rate limiting
+- **[tenant-security.mdc](mdc:.cursor/rules/tenant-security.mdc)** - Multi-tenant isolation requirements
+- **[tenant-guard.mdc](mdc:.cursor/rules/tenant-guard.mdc)** - Tenant guard implementation patterns
+- **[tenant-context.mdc](mdc:.cursor/rules/tenant-context.mdc)** - Frontend tenant context handling
+- **[db-access-consistency.mdc](mdc:.cursor/rules/db-access-consistency.mdc)** - Repository pattern enforcement
+- **[prisma-sql-security.mdc](mdc:.cursor/rules/prisma-sql-security.mdc)** - SQL injection prevention
+
+## 📝 Code Quality & Standards
+- **[code-quality.mdc](mdc:.cursor/rules/code-quality.mdc)** - Pre-commit hooks, type checking, TODOs
+- **[code-style.mdc](mdc:.cursor/rules/code-style.mdc)** - TypeScript/React code style guidelines
+- **[type-safety.mdc](mdc:.cursor/rules/type-safety.mdc)** - TypeScript best practices
+- **[logger-usage.mdc](mdc:.cursor/rules/logger-usage.mdc)** - Proper logging patterns
+- **[no-console.mdc](mdc:.cursor/rules/no-console.mdc)** - Console.log prevention rules
+
+## ⚛️ React & UI Development
+- **[react-patterns.mdc](mdc:.cursor/rules/react-patterns.mdc)** - React component patterns & hooks
+- **[ui-consistency.mdc](mdc:.cursor/rules/ui-consistency.mdc)** - View panel patterns & layout rules
+- **[accessibility.mdc](mdc:.cursor/rules/accessibility.mdc)** - A11y requirements
+- **[performance.mdc](mdc:.cursor/rules/performance.mdc)** - Performance optimization guidelines
+
+## 🧪 Testing & Error Handling
+- **[testing-standards.mdc](mdc:.cursor/rules/testing-standards.mdc)** - Testing patterns & coverage requirements
+- **[error-handling.mdc](mdc:.cursor/rules/error-handling.mdc)** - Consistent error handling patterns
+
+## 🚀 Development Workflow
+- **[dev_workflow.mdc](mdc:.cursor/rules/dev_workflow.mdc)** - Task management with Task Master
+- **[git-workflow.mdc](mdc:.cursor/rules/git-workflow.mdc)** - Git commit and PR conventions
+- **[taskmaster.mdc](mdc:.cursor/rules/taskmaster.mdc)** - Task Master tool reference
+- **[deployment-checklist.mdc](mdc:.cursor/rules/deployment-checklist.mdc)** - Pre-deployment verification
+
+## 📂 Project Structure
+- **[project-structure.mdc](mdc:.cursor/rules/project-structure.mdc)** - File organization conventions
+- **[cursor_rules.mdc](mdc:.cursor/rules/cursor_rules.mdc)** - How to write Cursor rules
+- **[self_improve.mdc](mdc:.cursor/rules/self_improve.mdc)** - Rule improvement process
+
+## 🔧 Debug & Development Tools
+- **[debug-tools-guard.mdc](mdc:.cursor/rules/debug-tools-guard.mdc)** - Debug endpoint security
+
+## 📋 Quick Reference
+
+### Adding a New API Route?
+1. Check [api-route-validation.mdc](mdc:.cursor/rules/api-route-validation.mdc) for Zod schemas
+2. Review [tenant-security.mdc](mdc:.cursor/rules/tenant-security.mdc) for tenant guards
+3. Follow [db-access-consistency.mdc](mdc:.cursor/rules/db-access-consistency.mdc) for data access
+4. Apply [api-security-best-practices.mdc](mdc:.cursor/rules/api-security-best-practices.mdc)
+
+### Building a New Component?
+1. Follow [react-patterns.mdc](mdc:.cursor/rules/react-patterns.mdc) for structure
+2. Apply [ui-consistency.mdc](mdc:.cursor/rules/ui-consistency.mdc) for layout
+3. Check [accessibility.mdc](mdc:.cursor/rules/accessibility.mdc) for a11y
+4. Write tests per [testing-standards.mdc](mdc:.cursor/rules/testing-standards.mdc)
+
+### Before Committing?
+1. Run checks from [code-quality.mdc](mdc:.cursor/rules/code-quality.mdc)
+2. Follow [git-workflow.mdc](mdc:.cursor/rules/git-workflow.mdc)
+3. Update tasks per [dev_workflow.mdc](mdc:.cursor/rules/dev_workflow.mdc)
+
+### Ready to Deploy?
+1. Complete [deployment-checklist.mdc](mdc:.cursor/rules/deployment-checklist.mdc)
+2. Verify security with audit script
+3. Check all environment variables

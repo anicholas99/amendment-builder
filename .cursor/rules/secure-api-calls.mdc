@@ -1,0 +1,109 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Secure API Calls Rule
+
+- **Requirement: Use `apiFetch` for all API calls to internal endpoints**
+  - Never use native `fetch` or `axios` for API calls to `/api/` routes
+  - `apiFetch` automatically handles:
+    - CSRF token validation for mutating requests (POST, PUT, PATCH, DELETE)
+    - Tenant context headers via `x-tenant-slug`
+    - Authentication headers
+    - Error response handling
+  - For external APIs, use native `fetch()`
+
+- **When to Use `apiFetch`:**
+  - All requests to `/api/` endpoints (GET, POST, PUT, PATCH, DELETE)
+  - File upload operations (multipart/form-data)
+  - Any internal API call
+  - Requests that require authentication or tenant context
+
+- **Implementation Patterns:**
+
+  ```typescript
+  // ✅ DO: Use apiFetch for all internal API calls
+  import { apiFetch } from '@/lib/api/apiClient';
+
+  // For JSON requests
+  const response = await apiFetch('/api/projects', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+
+  // For file uploads (multipart/form-data)
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await apiFetch('/api/extract-text', {
+    method: 'POST',
+    body: formData,
+    // Don't set Content-Type for FormData - browser will set it with boundary
+  });
+
+  // For streaming responses
+  const response = await apiFetch('/api/stream-data', {
+    method: 'GET',
+  }, {
+    isStream: true // Enable streaming support
+  });
+  ```
+
+  ```typescript
+  // ❌ DON'T: Use native fetch or axios for internal API calls
+  const response = await fetch('/api/extract-text', {
+    method: 'POST',
+    body: formData,
+  }); // Will fail - missing CSRF token and tenant headers
+
+  // ❌ DON'T: Use axios (deprecated in this codebase)
+  import axios from 'axios';
+  const response = await axios.post('/api/projects', data); // Forbidden by ESLint
+  ```
+
+- **File Upload Specific Requirements:**
+  - Always use `apiFetch` for file uploads to `/api/` routes
+  - Tenant headers are automatically included
+  - Do not set `Content-Type` header manually for multipart uploads
+  - Handle errors appropriately with user-friendly messages
+
+- **Error Handling Pattern:**
+  ```typescript
+  try {
+    const response = await apiFetch('/api/endpoint', options);
+    const result = await response.json();
+    // Handle success
+  } catch (error) {
+    // apiFetch throws on non-ok responses
+    logger.error('API call failed:', error);
+    // Show user-friendly error message
+    if (error.message) {
+      toast({ status: 'error', title: error.message });
+    }
+  }
+  ```
+
+- **Common Mistakes to Avoid:**
+  - Using `fetch` instead of `apiFetch` for internal API calls
+  - Using `axios` (now forbidden by ESLint rules)
+  - Setting Content-Type header for FormData uploads
+  - Not handling errors thrown by apiFetch
+
+- **When to Use Native `fetch()`:**
+  - External API calls (non-`/api/` routes)
+  - Calls to third-party services (OpenAI, Auth0, etc.)
+  - Health check endpoints
+
+- **References:**
+  - apiFetch implementation: [apiClient.ts](mdc:src/lib/api/apiClient.ts)
+  - Data fetching standards: [DATA_FETCHING_STANDARDS.md](mdc:src/lib/api/DATA_FETCHING_STANDARDS.md)
+  - Migration guide: [DATA_FETCHING_MIGRATION_TRACKER.md](mdc:DATA_FETCHING_MIGRATION_TRACKER.md)
+
+- **Related Rules:**
+  - [tenant-context.mdc](mdc:.cursor/rules/tenant-context.mdc) - For tenant header requirements
+  - [api-validation.mdc](mdc:.cursor/rules/api-validation.mdc) - For API endpoint validation
+  - [tenant-guard.mdc](mdc:.cursor/rules/tenant-guard.mdc) - For backend security requirements

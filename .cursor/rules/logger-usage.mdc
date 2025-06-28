@@ -1,0 +1,157 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: Enforces correct logger usage, including imports and error handling context.
+globs: src/**/*.ts, src/**/*.tsx
+alwaysApply: true
+---
+# Logger Usage Guidelines
+
+- **Required Logger Interface Compliance**
+  - All logger calls must follow the interface: `logger.method(message: string, context?: Record<string, any>)`
+  - The second parameter (if provided) **must** be an object, never a primitive value
+
+- **Correct Logger Patterns**
+  ```typescript
+  // ✅ DO: Use context objects for the second parameter
+  logger.log('User logged in:', { userId: user.id });
+  logger.error('Database error:', { error: error.message, table: 'users' });
+  logger.warn('High memory usage:', { usage: memoryUsage, threshold: 80 });
+  logger.debug('Processing data:', { count: items.length, type: 'batch' });
+  
+  // ✅ DO: Single string messages are fine
+  logger.info('Application started successfully');
+  logger.log('Processing complete');
+  
+  // ✅ DO: Complex data in context objects
+  logger.log('API response received:', { 
+    status: response.status, 
+    data: JSON.stringify(response.data) 
+  });
+  ```
+
+- **Incorrect Logger Patterns to Avoid**
+  ```typescript
+  // ❌ DON'T: Pass primitives as second parameter
+  logger.log('User count:', userCount); // number
+  logger.error('Failed operation:', errorMessage); // string
+  logger.warn('Status:', isActive); // boolean
+  logger.debug('Data:', JSON.stringify(data)); // string
+  
+  // ❌ DON'T: Pass multiple arguments
+  logger.log('Processing', itemCount, 'items'); // 3 arguments
+  logger.error('Error in', moduleName, ':', error); // 4 arguments
+  ```
+
+- **Common Fix Patterns**
+  - **Numbers**: `logger.log('Count:', count)` → `logger.log('Count:', { count })`
+  - **Strings**: `logger.log('Message:', text)` → `logger.log('Message:', { text })`
+  - **Booleans**: `logger.log('Status:', isActive)` → `logger.log('Status:', { isActive })`
+  - **JSON strings**: `logger.log('Data:', JSON.stringify(obj))` → `logger.log('Data:', { data: JSON.stringify(obj) })`
+  - **Multiple args**: `logger.log('User', id, 'updated')` → `logger.log('User updated:', { id })`
+
+- **Special Cases**
+  - **Error objects**: Always wrap in context - `logger.error('Failed:', { error })`
+  - **Arrays**: Use context objects - `logger.log('Items:', { items: array.length })`
+  - **Undefined/null**: Wrap safely - `logger.log('Value:', { value: data || 'none' })`
+
+- **Import Requirements**
+  - Always import logger from the monitoring module: `import { logger } from '@/lib/monitoring/logger';`
+  - Never use console.log, console.error, etc. in production code
+
+- **Performance Considerations**
+  - For large objects, consider truncating: `{ data: JSON.stringify(obj).substring(0, 500) + '...' }`
+  - Use appropriate log levels: `debug` for development, `info` for important events, `warn` for issues, `error` for failures
+
+- **Examples by File Type**
+  - **API Routes**: `logger.log('API request:', { method: req.method, path: req.url })`
+  - **React Components**: `logger.log('Component rendered:', { props: Object.keys(props) })`
+  - **Services**: `logger.log('Service call:', { service: 'userService', operation: 'create' })`
+  - **Utilities**: `logger.log('Utility function:', { input: typeof input, output: typeof result })`
+
+- **TypeScript Error Prevention**
+  - The logger interface expects `Record<string, any>` for the context parameter
+  - Always use object literal syntax `{ key: value }` for the second parameter
+  - Use descriptive key names that explain what the value represents
+  - Avoid passing variables directly as the second parameter
+
+- **Code Review Checklist**
+  - [ ] All logger calls have proper context objects
+  - [ ] No primitive values passed as second parameter
+  - [ ] No more than 2 arguments to logger methods
+  - [ ] Appropriate log levels used
+  - [ ] Sensitive data is not logged
+  - [ ] Large objects are truncated if necessary
+
+- **Requirement: Always import the logger explicitly.**
+  - Use the named import: `import { logger, safeStringify } from '@/lib/monitoring/logger';`
+  - **Do not** rely on any global logger instance; it has been removed.
+  - This ensures type safety and prevents runtime errors due to missing imports.
+
+- **Requirement: Use `logger.error` correctly.**
+  - The method signature is `error(message: string, context?: ErrorContext)`.
+  - The `ErrorContext` type requires an `error` property of type `Error`: 
+    `type ErrorContext = { error: Error } & Record<string, any>;`
+  
+  - **Logging `Error` Instances:** 
+    - When you have an actual `Error` object (e.g., from a `catch` block), you **must** pass it in the `context` object using the `error` key.
+    ```typescript
+    // ✅ DO:
+    try {
+      // ... operation that might throw ...
+    } catch (err) {
+      if (err instanceof Error) {
+        logger.error('Operation failed', { 
+          error: err, // Pass the Error instance here
+          operationId: 'xyz-123' 
+        });
+      } else {
+        // Handle non-Error values (see below)
+      }
+    }
+    ```
+
+  - **Handling `unknown` in `catch` blocks:**
+    - The variable in a `catch (e)` block is of type `unknown`.
+    - **Always** use `instanceof Error` to check the type before treating it as an `Error`.
+    ```typescript
+    catch (e) {
+      if (e instanceof Error) {
+        logger.error('Caught known error type', { error: e });
+      } else {
+        // Use safeStringify for unknown types
+        logger.error(`Caught unknown error type: ${safeStringify(e)}`); 
+        // DO NOT pass non-Error value in context: { error: e } -> This will cause a TS error
+      }
+    }
+    ```
+  
+  - **Logging without an `Error` instance:**
+    - If you are logging an error condition but don't have an `Error` object, provide the descriptive message but **do not** provide the second `context` argument, or provide a context *without* the `error` key.
+    ```typescript
+    // ✅ DO:
+    if (!isValid) {
+      logger.error('Validation failed for user input', { userId: 'abc', inputField: 'email' }); 
+      // OR simply:
+      // logger.error('Validation failed for user input');
+    }
+    
+    // ❌ DON'T (Causes TS Error):
+    // logger.error('Validation failed', { details: 'Invalid email format' }); 
+    // --> Missing required 'error: Error' property in context
+    ```
+
+- **Use `safeStringify` for Unknown Values:**
+  - When logging values that might not be simple types (especially from `catch` blocks), use the `safeStringify` helper (imported from the logger module) to prevent logging failures.
+
+- **ESLint Enforcement:**
+  - The `no-undef` rule helps catch usage of `logger` without an import.
+  - A `no-restricted-syntax` rule prevents direct use of `console.*` methods, guiding usage towards the centralized `logger`.
+  - See `[.eslintrc.js](mdc:.eslintrc.js)`
+
+- **References:**
+  - Logger Implementation: `[logger.ts](mdc:src/lib/monitoring/logger.ts)`
+

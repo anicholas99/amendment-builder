@@ -1,0 +1,83 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Invention Data Update Pattern
+
+## Core Rule: Frontend Sends Objects, Service Handles Stringification
+
+- **Frontend components and hooks MUST send objects**, never pre-stringified JSON
+- **Only the service layer** (`inventionDataService.ts`) handles JSON stringification
+- **Use the `UpdateInventionRequest` interface** for type safety
+
+## Implementation Pattern
+
+### ✅ CORRECT: Send Objects
+```typescript
+// In hooks or components
+updateInventionMutation.mutate({
+  projectId,
+  updates: {
+    figures: figuresObject,      // ✅ Object
+    elements: elementsObject,    // ✅ Object
+    advantages: advantagesArray, // ✅ Array
+  }
+});
+```
+
+### ❌ WRONG: Pre-stringified JSON
+```typescript
+// NEVER do this in frontend code
+updateInventionMutation.mutate({
+  projectId,
+  updates: {
+    figuresJson: JSON.stringify(figures),   // ❌ Wrong!
+    elementsJson: JSON.stringify(elements), // ❌ Wrong!
+  }
+});
+```
+
+## Service Layer Responsibility
+
+The `inventionDataService` is the ONLY place that:
+- Converts objects to JSON strings for database storage
+- Maps frontend field names to database column names
+- Handles the `*Json` suffixed fields
+
+## Type Safety
+
+Always import and use the proper types:
+```typescript
+import { UpdateInventionRequest } from '@/types/api/invention';
+```
+
+## Common Fields
+
+| Frontend Field | Type | Database Field |
+|---------------|------|----------------|
+| `figures` | Object | `figuresJson` |
+| `elements` | Object | `elementsJson` |
+| `features` | Array | `featuresJson` |
+| `advantages` | Array | `advantagesJson` |
+| `technicalImplementation` | Object | `technicalImplementationJson` |
+
+## Error Handling
+
+The service layer validates requests and throws clear errors:
+- If pre-stringified JSON is detected, an error is thrown
+- TypeScript compile-time checks prevent most issues
+
+## Benefits
+
+1. **Consistency**: One pattern across the entire codebase
+2. **Type Safety**: TypeScript catches errors at compile time
+3. **Maintainability**: JSON handling isolated to one location
+4. **Testing**: Easy to mock objects in tests
+
+## References
+
+- Type definitions: `src/types/api/invention.ts`
+- Service implementation: `src/services/patent/inventionDataService.ts`
+- Hook example: `src/features/patent-application/hooks/usePatentSidebar.ts`
+- Architecture guide: `src/features/technology-details/FIGURES_ARCHITECTURE.md`

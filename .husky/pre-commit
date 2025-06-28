@@ -1,0 +1,10 @@
+# Run type check on the entire project
+echo "Running type check..."
+npm run type-check
+if [ $? -ne 0 ]; then
+  echo "❌ Type check failed. Please fix TypeScript errors before committing."
+  exit 1
+fi
+
+# Run lint-staged for formatting and linting
+npx lint-staged

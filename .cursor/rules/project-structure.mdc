@@ -1,0 +1,16 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Conventions for organizing files and directories in the project
+alwaysApply: true
+---
+# Project Structure
+
+- Maintain the established project structure.
+- Organize UI components primarily within [src/components](mdc:src/components) (for shared components) and [src/features](mdc:src/features) (for feature-specific components).
+- Group related components, hooks, and contexts within feature-specific directories under [src/features](mdc:src/features).
+- Place shared utilities in the [src/utils](mdc:src/utils) directory.
+- Define shared types in the [src/types](mdc:src/types) directory. Feature-specific types can reside within their respective feature directories.

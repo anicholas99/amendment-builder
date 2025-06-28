@@ -1,0 +1,17 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+- **Write tests for all new functionality**
+  - Unit tests should cover edge cases and expected behaviors
+  - Integration tests should verify component interactions
+  - Use Jest mocks appropriately to isolate functionality
+
+- **Test coverage requirement**
+  - New features require at least 80% test coverage
+  - Critical paths must have 100% coverage
+
+- **Test organization**
+  - Place tests in `__tests__` directories adjacent to implementation
+  - Name test files with `.test.ts` or `.spec.ts` suffix

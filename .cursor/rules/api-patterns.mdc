@@ -1,0 +1,116 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# API Patterns and Data Fetching
+
+- **CRITICAL: Service Layer Architecture is MANDATORY**
+  - All API calls MUST go through service layer in `src/services/api/`
+  - Direct fetch() or apiFetch() calls in components/hooks are FORBIDDEN
+  - Service layer handles validation, error handling, and type safety
+
+- **Response Type System**
+  - Define all API response types in `src/types/api/responses.ts`
+  - Include both TypeScript interfaces AND Zod schemas for validation
+  - Always validate API responses before using them
+  - Example:
+    ```typescript
+    export interface GetDataResponse {
+      data: ProcessedData[];
+      count: number;
+    }
+    
+    export const GetDataResponseSchema = z.object({
+      data: z.array(DataSchema),
+      count: z.number(),
+    });
+    ```
+
+- **Service Layer Pattern**
+  - Create services in `src/services/api/` directory
+  - Services encapsulate API logic and return typed data
+  - Handle errors with ApplicationError and specific error codes
+  - Example:
+    ```typescript
+    export class DataApiService {
+      static async getData(id: string): Promise<ProcessedData[]> {
+        const response = await apiFetch(`/api/data/${id}`);
+        const data = await response.json();
+        const validated = validateApiResponse(data, GetDataResponseSchema);
+        return validated.data;
+      }
+    }
+    ```
+
+- **Hook Layer Pattern**
+  - Create hooks in `src/hooks/api/` directory
+  - Hooks use service layer, NEVER direct API calls
+  - Provide loading, error, and empty states
+  - Use query key factories for consistency
+  - Example:
+    ```typescript
+    export const dataQueryKeys = {
+      all: ['data'] as const,
+      byId: (id: string) => ['data', id] as const,
+    };
+    
+    export function useData(id: string) {
+      return useQuery({
+        queryKey: dataQueryKeys.byId(id),
+        queryFn: () => DataApiService.getData(id),
+        enabled: !!id,
+      });
+    }
+    ```
+
+- **Error Handling**
+  - Use ApplicationError with specific ErrorCodes
+  - Log errors with structured logger, NOT console
+  - Provide user-friendly error messages
+  - Handle errors at appropriate boundaries
+
+- **API Route Constants**
+  - NEVER hardcode API routes as strings
+  - Always use constants from `@/constants/apiRoutes`
+  - Example:
+    ```typescript
+    // ❌ DON'T
+    await apiFetch(`/api/projects/${id}/data`);
+    
+    // ✅ DO
+    await apiFetch(API_ROUTES.PROJECTS.DATA(id));
+    ```
+
+- **Context Best Practices**
+  - Contexts should use hooks, not direct API calls
+  - Provide default values to prevent crashes
+  - Handle loading and error states gracefully
+  - Example:
+    ```typescript
+    const { data = [], isLoading } = useData(projectId);
+    ```
+
+- **Common Anti-Patterns to Avoid**
+  - ❌ useEffect with fetch calls - use React Query
+  - ❌ Direct apiFetch in components - use hooks
+  - ❌ Inline queryFn with API calls - use service layer
+  - ❌ Missing error handling - always handle errors
+  - ❌ No response validation - always validate
+  - ❌ Console.log/error - use structured logger
+
+- **Migration Priority**
+  - Fix components causing crashes first
+  - Migrate contexts to use service layer
+  - Update all hardcoded API routes
+  - Add validation to existing services
+  - Create hooks for repeated patterns
+
+- **Testing Considerations**
+  - Service layer is easy to mock
+  - Hooks can be tested with React Query test utils
+  - Validate error scenarios
+  - Test loading and empty states
+
+**Remember**: Consistency is key. Following these patterns ensures a maintainable, type-safe, and error-resistant codebase.
+

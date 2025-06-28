@@ -1,0 +1,155 @@
+/* Dark mode styles for Patent Drafter UI - ONLY for header and sidebar */
+
+/* Use CSS custom properties for better performance */
+:root {
+  --dark-bg: #1a202c;
+  --dark-border: #2d3748;
+  --dark-text: #cbd5e0;
+  --dark-hover: #2d3748;
+  --dark-active: #2c5282;
+  --dark-active-text: #90cdf4;
+  --transition-fast: 0.15s ease;
+}
+
+/* Target only the sidebar and header elements specifically */
+header[data-theme='dark'],
+.sidebar-wrapper[data-theme='dark'] {
+  background-color: var(--dark-bg);
+  color: white;
+  border-color: var(--dark-border);
+  /* Removed transform: translateZ(0) as it breaks dropdown positioning */
+  will-change: background-color, border-color;
+  /* Reduce transition duration and use more performant properties */
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+/* Scope all other selectors to only apply to header or sidebar */
+header[data-theme='dark'] .document-link,
+.sidebar-wrapper[data-theme='dark'] .document-link {
+  color: var(--dark-text);
+  transition: color var(--transition-fast);
+  will-change: color;
+}
+
+header[data-theme='dark'] .document-link:hover,
+.sidebar-wrapper[data-theme='dark'] .document-link:hover {
+  background-color: var(--dark-hover);
+  transition: background-color var(--transition-fast);
+  will-change: background-color;
+}
+
+header[data-theme='dark'] .document-link.active,
+.sidebar-wrapper[data-theme='dark'] .document-link.active {
+  background-color: var(--dark-active);
+  color: var(--dark-active-text);
+}
+
+/* Use CSS custom properties for consistent colors */
+.sidebar-wrapper[data-theme='dark'] .project-item {
+  color: var(--dark-text);
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast);
+  will-change: color, background-color;
+}
+
+.sidebar-wrapper[data-theme='dark'] .project-item:hover {
+  background-color: var(--dark-hover);
+}
+
+.sidebar-wrapper[data-theme='dark'] .project-item.active {
+  color: var(--dark-active-text);
+}
+
+/* Optimize accordion transitions */
+.sidebar-wrapper[data-theme='dark'] .chakra-accordion__button {
+  color: var(--dark-text);
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast);
+  will-change: color, background-color;
+}
+
+.sidebar-wrapper[data-theme='dark'] .chakra-accordion__button:hover {
+  background-color: var(--dark-hover);
+}
+
+/* Make sure header content is visible */
+header[data-theme='dark'] .patent-drafter-title {
+  color: white;
+  text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+  transition: color var(--transition-fast);
+  will-change: color;
+}
+
+header[data-theme='dark'] .logo-container {
+  background-color: white;
+  border-radius: 4px;
+  padding: 4px;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  transition: box-shadow var(--transition-fast);
+  will-change: box-shadow;
+}
+
+/* Only apply button styles to header and sidebar buttons */
+header[data-theme='dark'] .chakra-button,
+.sidebar-wrapper[data-theme='dark'] .chakra-button {
+  color: white;
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast);
+  will-change: color, background-color;
+}
+
+/* Optimize menu transitions */
+header[data-theme='dark'] .chakra-menu__menuitem,
+.sidebar-wrapper[data-theme='dark'] .chakra-menu__menuitem {
+  color: white;
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast);
+  will-change: color, background-color;
+}
+
+header[data-theme='dark'] .chakra-menu__menuitem:hover,
+.sidebar-wrapper[data-theme='dark'] .chakra-menu__menuitem:hover {
+  background-color: var(--dark-hover);
+}
+
+/* Badge styling in dark mode */
+header[data-theme='dark'] .chakra-badge {
+  background-color: var(--dark-hover);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+  will-change: background-color, color;
+}
+
+header[data-theme='dark'] .chakra-badge[data-colorscheme='blue'] {
+  background-color: rgba(49, 130, 206, 0.2);
+  color: var(--dark-active-text);
+}
+
+header[data-theme='dark'] .chakra-badge[data-colorscheme='purple'] {
+  background-color: rgba(159, 122, 234, 0.2);
+  color: #d6bcfa;
+}
+
+/* Dark mode menus and dropdowns that might appear from header/sidebar actions */
+div[role='menu'][data-theme='dark'],
+div.chakra-menu__menu-list[data-theme='dark'] {
+  background-color: var(--dark-hover);
+  color: white;
+  border-color: var(--dark-border);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+  will-change: background-color, border-color;
+}
+
+div[role='menu'][data-theme='dark'] .chakra-menu__menuitem:hover,
+div.chakra-menu__menu-list[data-theme='dark'] .chakra-menu__menuitem:hover {
+  background-color: var(--dark-active);
+}

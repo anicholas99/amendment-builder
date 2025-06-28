@@ -1,0 +1,175 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# ESLint Async Pattern Rules
+
+## Timer Function Restrictions
+
+### setTimeout/setInterval Prevention
+- **Rule**: `no-restricted-globals` and `no-restricted-syntax`
+- **Purpose**: Prevent re-introduction of setTimeout/setInterval that can cause memory leaks and race conditions
+
+```typescript
+// ❌ FORBIDDEN - Will trigger ESLint error
+setTimeout(() => doSomething(), 1000);
+setInterval(() => poll(), 5000);
+
+// ✅ RECOMMENDED - Use proper React patterns
+import { useTimeout, useDebouncedCallback } from '@/hooks/async';
+
+const MyComponent = () => {
+  const { setTimeout: reactTimeout } = useTimeout();
+  const debouncedSave = useDebouncedCallback(saveData, 500);
+  
+  // For simple delays
+  reactTimeout(() => doSomething(), 1000);
+  
+  // For debounced operations
+  debouncedSave(data);
+};
+```
+
+## Promise Safety Rules
+
+### 1. Promise Constructor Error Handling
+```typescript
+// ❌ BAD - No error handling in Promise constructor
+new Promise((resolve, reject) => {
+  const result = riskyOperation(); // Could throw
+  resolve(result);
+});
+
+// ✅ GOOD - Proper error handling
+new Promise((resolve, reject) => {
+  try {
+    const result = riskyOperation();
+    resolve(result);
+  } catch (error) {
+    reject(error);
+  }
+});
+
+// 🏆 BEST - Use async/await instead
+const betterPattern = async () => {
+  try {
+    return await riskyOperation();
+  } catch (error) {
+    throw error;
+  }
+};
+```
+
+### 2. Promise Chain Error Handling
+```typescript
+// ❌ BAD - Missing .catch()
+fetch('/api/data')
+  .then(response => response.json())
+  .then(data => updateUI(data));
+
+// ✅ GOOD - Include error handling
+fetch('/api/data')
+  .then(response => response.json())
+  .then(data => updateUI(data))
+  .catch(error => handleError(error));
+
+// 🏆 BEST - Use async/await
+const fetchData = async () => {
+  try {
+    const response = await fetch('/api/data');
+    const data = await response.json();
+    updateUI(data);
+  } catch (error) {
+    handleError(error);
+  }
+};
+```
+
+### 3. Fire-and-Forget Promise Prevention
+```typescript
+// ❌ BAD - Fire-and-forget promise
+someAsyncOperation().then(handleResult);
+
+// ✅ GOOD - Explicit handling
+const handleAsync = async () => {
+  try {
+    const result = await someAsyncOperation();
+    handleResult(result);
+  } catch (error) {
+    logger.error('Async operation failed:', error);
+  }
+};
+
+// ✅ ALSO GOOD - Assign to variable for tracking
+const operationPromise = someAsyncOperation()
+  .then(handleResult)
+  .catch(error => logger.error('Operation failed:', error));
+```
+
+## Exceptions and Overrides
+
+### Test Files
+- All async pattern rules are disabled in test files
+- Tests can use setTimeout/setInterval and bare Promises as needed
+
+### Workers and Scripts
+- Timer functions are warnings instead of errors
+- Allow controlled use of intervals in background workers
+
+### React Query Patterns
+```typescript
+// ✅ ALLOWED - React Query invalidations are fire-and-forget by design
+queryClient.invalidateQueries({ queryKey: ['projects'] });
+
+// ✅ ALLOWED - Intentional fire-and-forget with error logging
+updateAndSave(data).catch(error => {
+  logger.error('Save failed:', error);
+  // Don't block UI for background save failures
+});
+```
+
+## Recommended Patterns
+
+### For Delays
+```typescript
+// Use useTimeout hook
+const { setTimeout } = useTimeout();
+setTimeout(() => doSomething(), 1000);
+```
+
+### For Debouncing
+```typescript
+// Use useDebouncedCallback
+const debouncedSave = useDebouncedCallback(saveData, 500);
+```
+
+### For Polling
+```typescript
+// Use React Query with refetchInterval
+const { data } = useQuery({
+  queryKey: ['status'],
+  queryFn: fetchStatus,
+  refetchInterval: 5000,
+});
+```
+
+### For Next Tick Operations
+```typescript
+// Use useNextTick for DOM updates
+const nextTick = useNextTick();
+nextTick(() => focusInput());
+```
+
+## Benefits
+
+- **Memory Leak Prevention**: Proper cleanup of timers
+- **Race Condition Avoidance**: React-aware async operations
+- **Error Visibility**: All promises have error handling
+- **Debugging**: Easier to track async operations
+- **Performance**: React Query optimizations instead of manual polling
+
+## Related Files
+- **Hook implementations**: `src/hooks/async/`
+- **React Query patterns**: `src/lib/queryKeys/`
+- **Async guidelines**: [dev_workflow.mdc](mdc:.cursor/rules/dev_workflow.mdc)

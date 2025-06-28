@@ -1,0 +1,163 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# 🚀 SOC 2 Quick Reference Guide
+
+## 🎯 The 5 Pillars of SOC 2 Compliance
+
+### 1. **API Security** → Use `composeApiMiddleware`
+```typescript
+export default composeApiMiddleware(handler, {
+  requiredRole: 'USER',           // Always specify role
+  resolveTenantId,                // Required for mutations
+  schema: requestSchema,          // Validate input
+  rateLimit: 'api',              // Apply rate limits
+});
+```
+
+### 2. **Database Access** → Use Repository Pattern
+```typescript
+// ❌ NEVER: await prisma.project.findUnique(...)
+// ✅ ALWAYS: await findProjectById(id, tenantId)
+```
+
+### 3. **Frontend API Calls** → Use `apiFetch`
+```typescript
+// ❌ NEVER: fetch('/api/endpoint')
+// ✅ ALWAYS: apiFetch('/api/endpoint')
+```
+
+### 4. **Error Handling** → Log Internal, Expose Generic
+```typescript
+catch (error) {
+  logger.error('Details here', { error, context });
+  return res.status(500).json({ 
+    error: 'Generic message here' 
+  });
+}
+```
+
+### 5. **Tenant Isolation** → Always Include Tenant Checks
+```typescript
+// Every repository query
+where: { id: resourceId, tenantId }
+
+// Every mutation endpoint
+const resolveTenantId = async (req) => {
+  // Return the owning tenant
+};
+```
+
+## 📋 New Endpoint Checklist
+
+```typescript
+// src/pages/api/your-endpoint.ts
+
+import { composeApiMiddleware } from '@/middleware/compose';
+import { z } from 'zod';
+import { createApiLogger } from '@/lib/monitoring/apiLogger';
+// Import from repositories, not prisma!
+import { findResourceById } from '@/repositories/resourceRepository';
+
+const apiLogger = createApiLogger('your-endpoint');
+
+// 1. Define validation schema
+const requestSchema = z.object({
+  name: z.string().min(1),
+  // ... other fields
+});
+
+// 2. Implement handler with proper typing
+async function handler(
+  req: AuthenticatedRequest,
+  res: NextApiResponse
+) {
+  apiLogger.logRequest(req);
+  
+  try {
+    // 3. Use repository functions (no direct prisma!)
+    const resource = await findResourceById(
+      req.query.id,
+      req.user.tenantId // Always include tenant
+    );
+    
+    // 4. Check authorization
+    if (!resource || resource.userId !== req.user.id) {
+      return res.status(403).json({ 
+        error: 'Access denied' 
+      });
+    }
+    
+    // Your logic here...
+    
+    apiLogger.logResponse(200, { success: true });
+    return res.status(200).json(result);
+    
+  } catch (error) {
+    // 5. Safe error handling
+    apiLogger.error('Operation failed', { error, userId: req.user.id });
+    return res.status(500).json({ 
+      error: 'Operation failed',
+      message: 'Please try again' 
+    });
+  }
+}
+
+// 6. Define tenant resolver for mutations
+const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+  const { resourceId } = req.query;
+  const resource = await getResourceTenantId(String(resourceId));
+  return resource?.tenantId || null;
+};
+
+// 7. Export with all security middleware
+export default composeApiMiddleware(handler, {
+  requiredRole: 'USER',        // Always required
+  resolveTenantId,             // Required for POST/PUT/PATCH/DELETE
+  schema: requestSchema,       // Input validation
+  rateLimit: 'api',           // Rate limiting
+});
+```
+
+## 🔍 Quick Verification Commands
+
+```bash
+# Full SOC 2 check
+bash scripts/verify-soc2-readiness.sh
+
+# Individual checks
+npx tsx scripts/verify-repository-pattern.ts    # 100% ✓
+npx tsx scripts/verify-error-handling-100.ts    # 100% ✓
+npx tsx scripts/verify-tenant-guards.ts         # 93%+ ✓
+npx tsx scripts/verify-rbac.ts                  # 97%+ ✓
+```
+
+## 🚨 Red Flags to Avoid
+
+1. **Direct `prisma` imports in API routes**
+2. **`fetch()` instead of `apiFetch()` in frontend**
+3. **`error.message` in API responses**
+4. **Missing `requiredRole` in endpoints**
+5. **Missing `resolveTenantId` for mutations**
+6. **`console.log()` with sensitive data**
+7. **Hardcoded secrets or tenant IDs**
+8. **Skipping input validation**
+
+## 📚 Related Rules
+
+- [SOC 2 API Security](mdc:.cursor/rules/soc2-api-security.mdc)
+- [Repository Pattern](mdc:.cursor/rules/repository-pattern.mdc)
+- [Frontend API Security](mdc:.cursor/rules/frontend-api-security.mdc)
+- [Error Handling Security](mdc:.cursor/rules/error-handling-security.mdc)
+- [Security Best Practices](mdc:.cursor/rules/security-best-practices.mdc)
+
+## 💡 Remember
+
+- **Security is mandatory, not optional**
+- **When in doubt, check the patterns**
+- **Run verification scripts before committing**
+- **Ask for help if unsure about security implications**
+
+Your code maintains **100% SOC 2 readiness**. Keep it that way! 🏆

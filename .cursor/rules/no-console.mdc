@@ -1,0 +1,28 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: Prevents usage of unstructured console logging in production code
+globs: src/**/*.ts, src/**/*.tsx
+alwaysApply: true
+---
+
+- **Prohibit direct `console.log`, `console.warn`, `console.error`, etc.**
+  - Use `createApiLogger` (or `logger` from `@/lib/config/environment`) for structured logging.
+  - Allowed exceptions:
+    - Inside files under `__tests__/` or snapshots.
+    - Temporary debug statements must be removed before merging.
+
+- **Automatic checks**
+  - CI lint step should run `rg -n "console\\.(log|warn|error)" src | grep -v "__tests__"` and fail if matches exist.
+
+- **Examples**
+  ```typescript
+  // ✅ DO
+  apiLogger.info('User created', { userId });
+  
+  // ❌ DON'T
+  console.log('User created', userId);
+  ```

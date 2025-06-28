@@ -1,0 +1,90 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Patent Editor Performance Patterns
+
+- **Optimistic Updates**
+  - Editor updates UI immediately - no debouncing in the editor
+  - Save system handles all debouncing (400ms for auto-save)
+  - UI never freezes or blocks during saves
+  - Visual feedback is non-intrusive and modern
+
+- **Fluid Save System**
+  - Use `useOptimisticPatentSave` hook for all saves
+  - Only saves FULL_CONTENT - no heavy section extraction
+  - Differential updates - only saves when content actually changes
+  - Background saves using native browser APIs
+
+- **Performance Architecture**
+  ```typescript
+  // ✅ DO: Optimistic updates
+  const handleContentChange = (newContent: string) => {
+    // Update UI immediately
+    setContent(newContent);
+    // Queue save in background
+    queueContentUpdate(newContent);
+  };
+  
+  // ❌ DON'T: Block UI during saves
+  // Never do heavy computation in save path
+  // Never extract sections synchronously
+  ```
+
+- **Save Timing**
+  - 400ms debounce for auto-save (optimal for typing)
+  - Immediate UI updates (0ms delay)
+  - Background processing using setTimeout/requestIdleCallback
+  - No blocking operations in the main thread
+
+- **Modern Save Indicator**
+  ```typescript
+  // Minimal, non-intrusive indicator like Google Docs
+  <SaveIndicator 
+    isSaving={isSaving} 
+    hasUnsavedChanges={hasUnsavedChanges} 
+  />
+  ```
+
+- **Key Principles**
+  - **Optimistic UI**: Update immediately, save in background
+  - **Differential Saves**: Only save what changed
+  - **Non-blocking**: All heavy operations off main thread
+  - **Visual Feedback**: Subtle indicators that don't interrupt flow
+
+- **Common Anti-Patterns to Avoid**
+  - ❌ Debouncing in the editor (makes typing feel laggy)
+  - ❌ Section extraction on every save
+  - ❌ Synchronous string operations in save path
+  - ❌ Long debounce times (>500ms)
+  - ❌ Blocking UI during saves
+  - ❌ Toast notifications for every auto-save
+  - ❌ Complex regex/parsing in the save pipeline
+
+- **Implementation Pattern**
+  ```typescript
+  const {
+    queueContentUpdate,
+    forceSave,
+    isSaving,
+    hasUnsavedChanges,
+  } = useOptimisticPatentSave({
+    currentVersion,
+    batchUpdateDocumentsMutation,
+    updateCurrentVersionDocument,
+    projectId,
+  });
+  
+  // Editor updates immediately
+  const handleEditorChange = (content: string) => {
+    queueContentUpdate(content); // 400ms debounce
+  };
+  
+  // User save action
+  const handleSaveButton = async () => {
+    await forceSave(); // Immediate
+  };
+  ```
+
+**Remember**: Modern editors feel fluid because they update the UI immediately and handle saves invisibly in the background. Users should never feel the save process.

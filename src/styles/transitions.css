@@ -1,0 +1,143 @@
+/* Common transition animations for the Patent Drafter AI application */
+
+/* Performance optimized transitions */
+:root {
+  --transition-duration: 150ms;
+  --transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+  --theme-transition-props: background-color, border-color, color;
+}
+
+/* Theme transition - optimized for performance */
+.theme-transition {
+  transition: var(--theme-transition-props) var(--transition-duration)
+    var(--transition-timing);
+  will-change: var(--theme-transition-props);
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  contain: content;
+}
+
+/* Optimized fade-in animation */
+.fade-in {
+  opacity: 0;
+  animation: fadeIn var(--transition-duration) var(--transition-timing) forwards;
+  will-change: opacity;
+  contain: content;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Optimized slide animations */
+.slide-in-right,
+.slide-in-left {
+  opacity: 0;
+  will-change: transform, opacity;
+  contain: content;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.slide-in-right {
+  transform: translateX(30px);
+  animation: slideInRight var(--transition-duration) var(--transition-timing)
+    forwards;
+}
+
+.slide-in-left {
+  transform: translateX(-30px);
+  animation: slideInLeft var(--transition-duration) var(--transition-timing)
+    forwards;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Optimized standard transitions */
+.transition-all {
+  transition: all var(--transition-duration) var(--transition-timing);
+  will-change: contents;
+  contain: content;
+}
+
+.transition-opacity {
+  transition: opacity var(--transition-duration) var(--transition-timing);
+  will-change: opacity;
+  contain: content;
+}
+
+.transition-transform {
+  transition: transform var(--transition-duration) var(--transition-timing);
+  will-change: transform;
+  contain: content;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* Project switching animation - optimized */
+.project-transition {
+  transition:
+    opacity var(--transition-duration) var(--transition-timing),
+    transform var(--transition-duration) var(--transition-timing);
+  will-change: transform, opacity;
+  contain: content;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.project-transition-enter {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.project-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.project-transition-exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.project-transition-exit-active {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* Prevent animation flicker */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Project-wide code-style guidelines for TypeScript/React codebase
+alwaysApply: true
+---
+# Code Style
+
+- Use consistent formatting with 2-space indentation.
+- Follow TypeScript best practices for type safety.
+- Use functional components with hooks instead of class components.
+- Add JSDoc comments for all exported functions and components.

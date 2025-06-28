@@ -1,0 +1,255 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# API Endpoint Security Requirements
+
+## **MANDATORY: All API endpoints MUST implement the security triad**
+
+Every API route in `src/pages/api/**/*.ts` **MUST** implement all three security layers unless explicitly exempted:
+
+### **1. Authentication Layer (`withAuth`)**
+- **Required for ALL endpoints** except public auth/CSRF endpoints
+- Ensures only authenticated users can access the endpoint
+- Provides `req.user` with user details
+
+### **2. Tenant Isolation Layer (`withTenantGuard`)**
+- **Required for ALL data-modifying endpoints** (POST, PUT, PATCH, DELETE)
+- **Recommended for ALL GET endpoints** that access tenant-specific data
+- Prevents cross-tenant data access
+- Requires a `resolveTenantId` function
+
+### **3. Input Validation Layer (`withValidation`)**
+- **Required for ALL endpoints** that accept request bodies
+- Uses Zod schemas for type-safe validation
+- Prevents malformed data from reaching business logic
+
+## **Standard Implementation Pattern**
+
+```typescript
+import { NextApiRequest, NextApiResponse } from 'next';
+import { z } from 'zod';
+import { withAuth } from '@/middleware/auth';
+import { withTenantGuard } from '@/middleware/authorization';
+import { withValidation } from '@/lib/security/validate';
+import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { getPrismaClient } from '@/lib/prisma';
+
+// 1. Define validation schema
+const requestSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().optional(),
+  // Add other fields as needed
+});
+
+const apiLogger = createApiLogger('endpoint-name');
+
+// 2. Implement the handler
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+  apiLogger.logRequest(req);
+  
+  // User is already authenticated via withAuth middleware
+  const userId = req.user?.id;
+  
+  if (req.method === 'POST') {
+    // req.body is already validated via withValidation
+    const { name, description } = req.body;
+    
+    // Business logic here
+    // ...
+    
+    return res.status(201).json({ success: true });
+  }
+  
+  // Handle other methods or return 405
+  return res.status(405).json({ error: 'Method not allowed' });
+}
+
+// 3. Define tenant resolution (for withTenantGuard)
+const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+  // Choose appropriate strategy:
+  
+  // For user-scoped operations:
+  return req.user?.tenantId || null;
+  
+  // For project-scoped operations:
+  // const { projectId } = req.query;
+  // const prisma = getPrismaClient();
+  // const project = await prisma.project.findUnique({
+  //   where: { id: String(projectId) },
+  //   select: { tenantId: true }
+  // });
+  // return project?.tenantId || null;
+};
+
+// 4. Apply security middleware in correct order
+export default withAuth(
+  withTenantGuard(resolveTenantId)(
+    withValidation(requestSchema, handler)
+  ) as any
+);
+```
+
+## **Tenant Resolution Strategies**
+
+### **User-Scoped Operations**
+```typescript
+const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+  return req.user?.tenantId || null;
+};
+```
+
+### **Project-Scoped Operations**
+```typescript
+const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+  const { projectId } = req.query;
+  const prisma = getPrismaClient();
+  const project = await prisma.project.findUnique({
+    where: { id: String(projectId) },
+    select: { tenantId: true }
+  });
+  return project?.tenantId || null;
+};
+```
+
+### **Resource-Scoped Operations**
+```typescript
+const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+  const { searchHistoryId } = req.query;
+  const prisma = getPrismaClient();
+  const searchHistory = await prisma.searchHistory.findUnique({
+    where: { id: String(searchHistoryId) },
+    select: { 
+      project: { 
+        select: { tenantId: true } 
+      } 
+    }
+  });
+  return searchHistory?.project?.tenantId || null;
+};
+```
+
+## **Validation Schema Examples**
+
+### **Basic CRUD Operations**
+```typescript
+// Create/Update
+const createSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().optional(),
+  status: z.enum(['active', 'inactive']).optional(),
+});
+
+// Query parameters
+const querySchema = z.object({
+  page: z.string().transform(Number).optional(),
+  limit: z.string().transform(Number).optional(),
+  search: z.string().optional(),
+});
+```
+
+### **Complex Nested Data**
+```typescript
+const complexSchema = z.object({
+  project: z.object({
+    name: z.string().min(1),
+    settings: z.object({
+      autoSave: z.boolean(),
+      notifications: z.boolean(),
+    }).optional(),
+  }),
+  documents: z.array(z.object({
+    type: z.enum(['TITLE', 'ABSTRACT', 'CLAIMS']),
+    content: z.string(),
+  })).optional(),
+});
+```
+
+## **Required Imports**
+
+Every protected API endpoint must include:
+
+```typescript
+import { NextApiRequest, NextApiResponse } from 'next';
+import { withAuth } from '@/middleware/auth';
+import { withTenantGuard } from '@/middleware/authorization';
+import { withValidation } from '@/lib/security/validate';
+import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { getPrismaClient } from '@/lib/prisma';
+import { z } from 'zod';
+```
+
+## **Exempted Endpoints (Public by Design)**
+
+The following endpoints are **intentionally public** and should NOT have authentication:
+
+- `src/pages/api/auth/login.ts` - Login endpoint
+- `src/pages/api/auth/[...auth0].ts` - Auth0 callback
+- `src/pages/api/csrf-token.ts` - CSRF token provider
+
+## **Error Handling Requirements**
+
+All endpoints must include proper error handling:
+
+```typescript
+try {
+  // Business logic
+} catch (error) {
+  const err = error instanceof Error ? error : new Error(String(error));
+  apiLogger.error('Operation failed', { error: err, userId });
+  return res.status(500).json({ 
+    error: 'Internal server error',
+    message: 'Operation failed' 
+  });
+}
+```
+
+## **Logging Requirements**
+
+All endpoints must include structured logging:
+
+```typescript
+const apiLogger = createApiLogger('endpoint-name');
+
+// Log all requests
+apiLogger.logRequest(req);
+
+// Log important operations
+apiLogger.info('Operation completed', { userId, resourceId });
+
+// Log errors with context
+apiLogger.error('Operation failed', { error: err, userId, context });
+```
+
+## **Middleware Composition Order**
+
+**CRITICAL:** Middleware must be applied in this exact order:
+
+```typescript
+export default withAuth(                    // 1. Authentication (outermost)
+  withTenantGuard(resolveTenantId)(         // 2. Tenant isolation
+    withValidation(schema, handler)         // 3. Input validation (innermost)
+  ) as any
+);
+```
+
+## **Quick Checklist for New Endpoints**
+
+- [ ] Imports all required security middleware
+- [ ] Defines Zod validation schema for request body
+- [ ] Implements proper tenant resolution strategy
+- [ ] Includes structured logging with `createApiLogger`
+- [ ] Applies middleware in correct order
+- [ ] Handles errors with proper logging
+- [ ] Returns consistent JSON responses
+- [ ] Uses repository pattern for database access
+
+## **References**
+
+- Authentication middleware: [auth.ts](mdc:src/middleware/auth.ts)
+- Tenant guard middleware: [authorization.ts](mdc:src/middleware/authorization.ts)
+- Validation middleware: [validate.ts](mdc:src/lib/security/validate.ts)
+- API validation rule: [api-validation.mdc](mdc:.cursor/rules/api-validation.mdc)
+- Tenant security rule: [tenant-security.mdc](mdc:.cursor/rules/tenant-security.mdc)
+- Database access rule: [db-access-consistency.mdc](mdc:.cursor/rules/db-access-consistency.mdc)

@@ -1,0 +1,205 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# API Security Best Practices
+
+- **Middleware Composition Pattern**
+  - All API routes must use `composeApiMiddleware` for consistent security
+  - Always include authentication, tenant validation, and CSRF protection where appropriate
+  - Order matters: auth → tenant guard → validation → handler
+
+  ```typescript
+  export default composeApiMiddleware(handler, {
+    schema: bodySchema,        // Body validation
+    querySchema: querySchema,  // Query validation  
+    resolveTenantId,          // Tenant security
+    cache: 'tenant'           // Optional caching
+  });
+  ```
+
+- **Error Handling Standards**
+
+  1. **Never expose internal errors to clients**
+     ```typescript
+     // ❌ BAD: Exposes internal error details
+     catch (error) {
+       res.status(500).json({ error: error.message });
+     }
+     
+     // ✅ GOOD: Use sanitized error responses
+     catch (error) {
+       apiLogger.error('Operation failed', { error });
+       res.status(500).json({ 
+         error: 'Internal server error',
+         message: 'An error occurred processing your request'
+       });
+     }
+     ```
+
+  2. **Use appropriate HTTP status codes**
+     - 200: Success
+     - 201: Created
+     - 400: Bad Request (validation errors)
+     - 401: Unauthorized (not authenticated)
+     - 403: Forbidden (authenticated but not allowed)
+     - 404: Not Found
+     - 409: Conflict (duplicate resources)
+     - 500: Internal Server Error
+
+- **Logging Security**
+  ```typescript
+  // ✅ DO: Log with context but sanitize sensitive data
+  apiLogger.info('User action performed', {
+    userId: req.user.id,
+    action: 'updateProject',
+    projectId: project.id
+  });
+  
+  // ❌ DON'T: Log sensitive information
+  apiLogger.info('Login attempt', {
+    password: req.body.password,  // NEVER log passwords
+    apiKey: req.headers.apikey,   // NEVER log API keys
+    ssn: user.ssn                 // NEVER log PII
+  });
+  ```
+
+- **Data Exposure Prevention**
+
+  1. **Filter database responses**
+     ```typescript
+     // ❌ BAD: Exposing all fields
+     const user = await prisma.user.findUnique({ where: { id } });
+     res.json(user);  // Might include password hash, etc.
+     
+     // ✅ GOOD: Select only needed fields
+     const user = await prisma.user.findUnique({
+       where: { id },
+       select: {
+         id: true,
+         email: true,
+         name: true,
+         role: true
+         // Explicitly exclude sensitive fields
+       }
+     });
+     ```
+
+  2. **Use DTOs for response shaping**
+     ```typescript
+     interface UserResponseDTO {
+       id: string;
+       email: string;
+       name: string;
+     }
+     
+     function toUserDTO(user: User): UserResponseDTO {
+       return {
+         id: user.id,
+         email: user.email,
+         name: user.name
+       };
+     }
+     ```
+
+- **Rate Limiting & DoS Prevention**
+  - Limit array sizes in input validation
+  - Implement pagination for list endpoints
+  - Add request throttling for expensive operations
+  - Set appropriate timeouts for external API calls
+
+  ```typescript
+  // Paginated response pattern
+  const pageSize = Math.min(req.query.limit || 20, 100); // Max 100
+  const page = Math.max(req.query.page || 1, 1);
+  
+  const items = await prisma.item.findMany({
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+    where: { tenantId: req.user.tenantId }
+  });
+  ```
+
+- **External API Security**
+  ```typescript
+  // ✅ DO: Set timeouts and handle errors
+  const response = await axios.get(url, {
+    timeout: 30000, // 30 second timeout
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'User-Agent': 'MyApp/1.0'
+    }
+  });
+  
+  // ❌ DON'T: Make unbounded requests
+  const response = await fetch(url); // No timeout!
+  ```
+
+- **File Upload Security**
+  - Always validate file types and sizes
+  - Scan for malware when possible
+  - Store files in isolated storage (not web root)
+  - Generate unique filenames to prevent overwrites
+  - Use signed URLs for temporary access
+
+- **SQL Injection Prevention**
+  ```typescript
+  // ✅ GOOD: Parameterized queries (Prisma handles this)
+  await prisma.user.findMany({
+    where: { name: userInput }
+  });
+  
+  // ✅ GOOD: Safe raw queries when needed
+  await prisma.$queryRaw`
+    SELECT * FROM users 
+    WHERE name = ${userInput}
+  `;
+  
+  // ❌ BAD: String concatenation
+  await prisma.$queryRawUnsafe(
+    `SELECT * FROM users WHERE name = '${userInput}'`
+  );
+  ```
+
+- **Security Headers**
+  - Use security middleware for consistent headers
+  - Implement CORS properly for API endpoints
+  - Add CSP headers for web pages
+  - Use HSTS for HTTPS enforcement
+
+- **Audit Trail**
+  - Log all data modifications with user context
+  - Include timestamp, user ID, and changed fields
+  - Store audit logs separately from application logs
+  - Consider legal retention requirements
+
+- **Testing Security**
+  ```typescript
+  // Include security tests in your test suite
+  describe('API Security', () => {
+    it('should reject requests without authentication', async () => {
+      const res = await request(app)
+        .post('/api/projects')
+        .send({ name: 'Test' });
+      
+      expect(res.status).toBe(401);
+    });
+    
+    it('should validate input data', async () => {
+      const res = await request(app)
+        .post('/api/projects')
+        .set('Authorization', 'Bearer token')
+        .send({ name: '' }); // Invalid
+      
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('validation');
+    });
+  });
+  ```
+
+- **References**
+  - OWASP API Security Top 10: https://owasp.org/www-project-api-security/
+  - Security middleware: [compose.ts](mdc:src/middleware/compose.ts)
+  - Tenant security: [tenant-security.mdc](mdc:.cursor/rules/tenant-security.mdc)
+  - Input validation: [input-validation-security.mdc](mdc:.cursor/rules/input-validation-security.mdc)

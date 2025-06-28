@@ -1,0 +1,178 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Documentation Organization Standards
+
+This rule ensures consistent organization and maintenance of project documentation to prevent confusion and duplication.
+
+## Directory Structure
+
+All documentation must be organized into the following directory structure:
+
+```
+docs/
+├── README.md                    # Navigation guide and overview
+├── getting-started/            # Setup and quick start guides
+│   ├── setup.md               # Complete development setup
+│   ├── quick-start.md         # Quick getting started guide
+│   └── environment-variables.md # Environment configuration reference
+├── architecture/              # System design and technical decisions
+│   ├── overview.md           # System architecture overview
+│   ├── database.md           # Database design and migrations
+│   ├── multi-tenant.md       # Multi-tenancy implementation
+│   └── data-flow.md          # Data flow patterns
+├── api/                      # API documentation
+│   ├── security.md           # API security guide
+│   ├── authentication.md     # Auth implementation
+│   ├── error-handling.md     # Error response patterns
+│   └── versioning.md         # API versioning strategy
+├── development/              # Development guidelines
+│   ├── best-practices.md     # Coding standards
+│   ├── type-safety.md        # TypeScript guidelines
+│   ├── code-style-linting.md # Code formatting
+│   └── component-guidelines.md # UI component standards
+├── features/                 # Feature-specific documentation
+│   ├── search.md            # Search functionality
+│   ├── ai-integration.md    # AI services documentation
+│   └── citation-extraction.md # Citation system
+├── deployment/              # Production deployment
+│   ├── docker.md           # Container deployment
+│   ├── azure.md            # Azure-specific setup
+│   ├── production-checklist.md # Pre-deployment checklist
+│   └── monitoring.md       # Logging and monitoring
+├── maintenance/            # Operational procedures
+│   ├── database-migrations.md # Migration procedures
+│   ├── troubleshooting.md    # Common issues and solutions
+│   └── updates.md           # Update procedures
+└── audits/                 # Security and compliance audits
+    └── archive/           # Historical audit records
+```
+
+## Documentation Standards
+
+### File Placement Rules
+
+- **Setup & Configuration**: Place in `getting-started/`
+- **System Design**: Place in `architecture/`
+- **API Documentation**: Place in `api/`
+- **Development Guidelines**: Place in `development/`
+- **Feature Documentation**: Place in `features/`
+- **Deployment Guides**: Place in `deployment/`
+- **Operational Procedures**: Place in `maintenance/`
+
+### Content Guidelines
+
+1. **No Duplicate Documentation**
+   - Before creating a new document, search existing docs
+   - Consolidate related information into single documents
+   - Use cross-references instead of duplicating content
+
+2. **Clear Naming**
+   - Use descriptive, lowercase filenames with hyphens
+   - Avoid generic names like `guide.md` or `documentation.md`
+   - Include the specific topic in the filename
+
+3. **Cross-References**
+   - Link related documentation using relative paths
+   - Example: `See [API Security](../api/security.md)`
+   - Reference cursor rules: `[rule-name.mdc](mdc:.cursor/rules/rule-name.mdc)`
+
+4. **Document Structure**
+   ```markdown
+   # Document Title
+   
+   Brief overview of what this document covers.
+   
+   ## Table of Contents (for long docs)
+   
+   ## Main Sections
+   
+   ### Subsections
+   
+   ## Examples
+   
+   ## Related Documentation
+   - [Link to related doc](../path/to/doc.md)
+   ```
+
+5. **Code Examples**
+   - Include practical, working examples
+   - Reference actual code files when possible
+   - Use language-specific code blocks
+
+## Maintenance Requirements
+
+### Regular Reviews
+
+- **Monthly**: Review for outdated content
+- **On Major Changes**: Update affected documentation
+- **Before Releases**: Verify documentation accuracy
+
+### Documentation Updates
+
+When making code changes:
+1. Check if documentation needs updating
+2. Update in the same PR as code changes
+3. Remove outdated information
+4. Add new examples if needed
+
+### Avoiding Common Issues
+
+- **DON'T**: Create files in docs/ root directory
+- **DON'T**: Duplicate existing documentation
+- **DON'T**: Use vague or generic filenames
+- **DON'T**: Leave empty placeholder files
+- **DON'T**: Mix different types of documentation
+
+- **DO**: Follow the established directory structure
+- **DO**: Search before creating new documents
+- **DO**: Use descriptive filenames
+- **DO**: Keep documentation current
+- **DO**: Cross-reference related docs
+
+## Examples
+
+### Good Documentation Placement
+```
+✅ docs/api/webhook-integration.md - API-specific guide
+✅ docs/features/real-time-updates.md - Feature documentation
+✅ docs/deployment/kubernetes.md - Deployment guide
+```
+
+### Poor Documentation Placement
+```
+❌ docs/webhooks.md - Should be in api/ or features/
+❌ docs/SETUP.md - Should be in getting-started/
+❌ docs/guide.md - Too generic, unclear purpose
+```
+
+## Special Directories
+
+### Archive Directory
+- `docs/audits/archive/` - For historical audit records only
+- Don't use for general outdated documentation
+- Outdated docs should be updated or removed
+
+### No Custom Directories
+- Don't create new top-level directories without team discussion
+- Use existing categories or propose structure changes in team meetings
+
+## Documentation Quality Checklist
+
+Before committing documentation:
+- [ ] Placed in correct directory
+- [ ] No duplicate content exists
+- [ ] Clear, descriptive filename
+- [ ] Includes practical examples
+- [ ] Cross-references related docs
+- [ ] No broken links
+- [ ] Follows markdown best practices
+- [ ] Reviewed for accuracy
+
+## References
+
+- Main documentation hub: [README.md](mdc:docs/README.md)
+- Architecture overview: [overview.md](mdc:docs/architecture/overview.md)
+- Development standards: [best-practices.md](mdc:docs/development/best-practices.md)

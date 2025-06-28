@@ -1,0 +1,135 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+---
+description: Pre-deployment checklist and deployment best practices
+alwaysApply: false
+---
+
+# Deployment Checklist
+
+- **Pre-Deployment Verification**
+  - [ ] Run full test suite: `npm test`
+  - [ ] Type checking passes: `npm run type-check`
+  - [ ] Linting passes: `npm run lint`
+  - [ ] Build succeeds: `npm run build`
+  - [ ] No `console.log` statements in production code
+  - [ ] No `TODO` comments marked as blockers
+  - [ ] API route audit shows 90%+ security coverage
+
+- **Environment Variables**
+  ```bash
+  # Verify all required env vars are set
+  npm run verify:env
+  
+  # Required for production:
+  - DATABASE_URL
+  - AUTH0_SECRET, AUTH0_BASE_URL, AUTH0_ISSUER_BASE_URL
+  - AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET
+  - NEXTAUTH_URL, NEXTAUTH_SECRET
+  - ANTHROPIC_API_KEY
+  - AZURE_STORAGE_CONNECTION_STRING
+  - PERPLEXITY_API_KEY (if using AI features)
+  ```
+
+- **Database Preparation**
+  ```bash
+  # Run migrations
+  npx prisma migrate deploy
+  
+  # Verify database connection
+  npx prisma db pull
+  
+  # Seed initial data if needed
+  npm run db:seed:production
+  ```
+
+- **Security Checklist**
+  - [ ] All API routes use `composeApiMiddleware`
+  - [ ] Tenant guards on mutation endpoints (90%+ coverage)
+  - [ ] Input validation on all endpoints (65%+ coverage)
+  - [ ] CSRF protection enabled
+  - [ ] Rate limiting configured
+  - [ ] Security headers configured
+  - [ ] No exposed sensitive data in logs
+
+- **Performance Optimization**
+  ```bash
+  # Analyze bundle size
+  npm run analyze
+  
+  # Check for:
+  - Bundle size under 500KB for initial load
+  - No unused dependencies
+  - Images optimized and using next/image
+  - API routes with appropriate caching
+  ```
+
+- **Azure Deployment Steps**
+  ```bash
+  # 1. Build Docker image
+  docker build -t patent-drafter:latest .
+  
+  # 2. Tag for Azure Container Registry
+  docker tag patent-drafter:latest myregistry.azurecr.io/patent-drafter:v1.0.0
+  
+  # 3. Push to registry
+  docker push myregistry.azurecr.io/patent-drafter:v1.0.0
+  
+  # 4. Update App Service
+  az webapp config container set \
+    --name patent-drafter-app \
+    --resource-group my-rg \
+    --docker-custom-image-name myregistry.azurecr.io/patent-drafter:v1.0.0
+  ```
+
+- **Post-Deployment Verification**
+  - [ ] Application loads without errors
+  - [ ] Authentication flow works
+  - [ ] Can create/read/update/delete projects
+  - [ ] File uploads working
+  - [ ] Background jobs processing
+  - [ ] Monitoring dashboards showing healthy metrics
+  - [ ] No errors in application logs
+
+- **Rollback Plan**
+  ```bash
+  # Keep previous version tagged
+  docker tag patent-drafter:latest myregistry.azurecr.io/patent-drafter:rollback
+  
+  # Quick rollback command
+  az webapp config container set \
+    --name patent-drafter-app \
+    --resource-group my-rg \
+    --docker-custom-image-name myregistry.azurecr.io/patent-drafter:rollback
+  ```
+
+- **Monitoring Setup**
+  - Application Insights configured
+  - Log Analytics workspace connected
+  - Alerts configured for:
+    - High error rate (>1%)
+    - Slow response times (>2s)
+    - Memory usage (>80%)
+    - Failed authentication attempts
+
+- **Documentation Updates**
+  - [ ] Update version in package.json
+  - [ ] Update CHANGELOG.md
+  - [ ] Update API documentation
+  - [ ] Notify team of new features/changes
+  - [ ] Update runbook with any new procedures
+
+- **Final Checks**
+  - [ ] Backup database before deployment
+  - [ ] Schedule deployment during low-traffic window
+  - [ ] Have on-call engineer available
+  - [ ] Communicate maintenance window to users
+  - [ ] Test rollback procedure in staging
+
+- **References**
+  - Deployment guide: [DEPLOYMENT_CHECKLIST.md](mdc:DEPLOYMENT_CHECKLIST.md)
+  - Infrastructure requirements: [INFRASTRUCTURE_REQUIREMENTS.md](mdc:INFRASTRUCTURE_REQUIREMENTS.md)
+  - Docker configuration: [Dockerfile](mdc:Dockerfile)

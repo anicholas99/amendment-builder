@@ -1,0 +1,248 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Secure Error Handling & Logging
+
+## 🚨 The Golden Rule of Error Handling
+
+**NEVER expose internal error details to API responses**. Log everything internally, expose nothing externally.
+
+## ❌ What NOT to Expose
+
+### 1. Error Messages
+```typescript
+// ❌ WRONG: Exposing error.message
+catch (error) {
+  return res.status(500).json({ 
+    error: error.message // Could contain: "Connection to database server at 192.168.1.100:5432 failed"
+  });
+}
+
+// ✅ CORRECT: Generic message to client, detailed log internally
+catch (error) {
+  logger.error('Database operation failed', { error, userId, operation: 'createProject' });
+  return res.status(500).json({ 
+    error: 'Failed to create project',
+    message: 'An error occurred while processing your request'
+  });
+}
+```
+
+### 2. Stack Traces
+```typescript
+// ❌ WRONG: Never expose stack traces
+return res.status(500).json({ 
+  error: error.stack // Exposes file paths, function names, line numbers
+});
+
+// ✅ CORRECT: Log stack internally only
+logger.error('Operation failed', { 
+  error: error.stack,
+  context: { userId, projectId }
+});
+return res.status(500).json({ error: 'Internal server error' });
+```
+
+### 3. Database Errors
+```typescript
+// ❌ WRONG: Exposing Prisma/database errors
+catch (error) {
+  if (error.code === 'P2002') {
+    return res.status(400).json({ 
+      error: `Unique constraint failed on the fields: ${error.meta.target}` 
+    });
+  }
+}
+
+// ✅ CORRECT: User-friendly messages
+catch (error) {
+  if (error.code === 'P2002') {
+    logger.warn('Duplicate entry attempted', { error, userId });
+    return res.status(400).json({ 
+      error: 'This item already exists',
+      message: 'Please choose a different name'
+    });
+  }
+}
+```
+
+## 📝 Proper Logging Patterns
+
+### API Endpoint Logging
+```typescript
+import { createApiLogger } from '@/lib/monitoring/apiLogger';
+
+const apiLogger = createApiLogger('endpoint-name');
+
+export async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Log request (without sensitive data)
+  apiLogger.logRequest(req);
+  
+  try {
+    // Your logic here
+    const result = await someOperation();
+    
+    // Log successful response
+    apiLogger.logResponse(200, { success: true });
+    return res.status(200).json(result);
+    
+  } catch (error) {
+    // Log error with context
+    apiLogger.error('Operation failed', {
+      error,
+      userId: req.user?.id,
+      projectId: req.query.projectId,
+      // Add relevant context but no sensitive data
+    });
+    
+    // Return safe error
+    return res.status(500).json({
+      error: 'Operation failed',
+      message: 'Please try again later'
+    });
+  }
+}
+```
+
+### Repository Logging
+```typescript
+import { logger } from '@/lib/monitoring/logger';
+
+export async function createProject(data: CreateProjectInput, tenantId: string) {
+  try {
+    logger.debug('Creating project', { 
+      tenantId, 
+      projectName: data.name // OK to log non-sensitive data
+    });
+    
+    const project = await prisma.project.create({ data });
+    
+    logger.info('Project created successfully', { 
+      projectId: project.id,
+      tenantId 
+    });
+    
+    return project;
+  } catch (error) {
+    logger.error('Failed to create project', {
+      error,
+      tenantId,
+      operation: 'createProject',
+      // Don't log sensitive input data
+    });
+    throw new DatabaseError('Failed to create project');
+  }
+}
+```
+
+## 🔐 Sensitive Data Rules
+
+### Never Log These
+- Passwords, tokens, API keys
+- Credit card numbers
+- Social Security Numbers
+- Personal health information
+- Full request/response bodies with sensitive data
+
+### Safe to Log
+- User IDs (not emails)
+- Resource IDs
+- Tenant IDs
+- Operation names
+- HTTP status codes
+- Timestamps
+
+## 🎯 Error Response Patterns
+
+### Standard Error Format
+```typescript
+interface ApiError {
+  error: string;      // Generic error type
+  message?: string;   // User-friendly message
+  code?: string;      // Application error code (not database codes)
+  requestId?: string; // For support correlation
+}
+```
+
+### Common Error Responses
+```typescript
+// 400 Bad Request
+res.status(400).json({
+  error: 'Validation failed',
+  message: 'Please check your input and try again'
+});
+
+// 401 Unauthorized
+res.status(401).json({
+  error: 'Authentication required',
+  message: 'Please log in to continue'
+});
+
+// 403 Forbidden
+res.status(403).json({
+  error: 'Access denied',
+  message: 'You do not have permission to perform this action'
+});
+
+// 404 Not Found
+res.status(404).json({
+  error: 'Resource not found',
+  message: 'The requested item could not be found'
+});
+
+// 500 Internal Server Error
+res.status(500).json({
+  error: 'Internal server error',
+  message: 'An unexpected error occurred. Please try again later'
+});
+```
+
+## 🛡️ Security Middleware Integration
+
+Use the error handling middleware for consistency:
+
+```typescript
+import { withErrorHandling } from '@/utils/errorHandler';
+import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+
+// In your API handler
+try {
+  // Your logic
+} catch (error) {
+  sendSafeErrorResponse(res, error, 500, 'Operation failed');
+}
+```
+
+## 📋 Error Handling Checklist
+
+For every catch block:
+- [ ] Log error details internally with context
+- [ ] Return generic error message to client
+- [ ] Include appropriate HTTP status code
+- [ ] No stack traces in response
+- [ ] No database error details in response
+- [ ] No file paths or internal IPs in response
+- [ ] Use consistent error format
+
+## 🔍 Verification
+
+Run the error handling verification:
+```bash
+npx tsx scripts/verify-error-handling-100.ts
+```
+
+Common violations to search for:
+```bash
+# Find exposed error.message
+grep -r "error\.message" src/pages/api --include="*.ts"
+
+# Find exposed stack traces
+grep -r "error\.stack" src/pages/api --include="*.ts"
+
+# Find console.error in production code
+grep -r "console\.error" src/pages/api --include="*.ts"
+```
+
+Remember: **Log everything, expose nothing**. This is critical for SOC 2 compliance and security.

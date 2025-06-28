@@ -1,0 +1,61 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+---
+description: Enforces dark mode best practices using semantic color tokens
+globs: src/**/*.tsx, src/**/*.ts
+alwaysApply: true
+---
+# Dark Mode Implementation
+
+- **Always use semantic color tokens** - Never hard-code colors like "white", "gray.700", "#E0E1E2", etc.
+  - Use `bg.primary`, `bg.card`, `text.primary`, `border.primary` etc. from the theme
+  - These tokens automatically adapt to light/dark mode
+
+- **Available Semantic Tokens:**
+  - **Backgrounds:** `bg.primary`, `bg.secondary`, `bg.card`, `bg.hover`, `bg.selected`
+  - **Text:** `text.primary`, `text.secondary`, `text.tertiary`
+  - **Borders:** `border.primary`, `border.light`
+
+- **Component Implementation:**
+  ```typescript
+  // ✅ DO: Use semantic tokens
+  <Box bg="bg.card" borderColor="border.primary">
+    <Text color="text.primary">Title</Text>
+    <Text color="text.secondary">Description</Text>
+  </Box>
+  
+  // ❌ DON'T: Use hard-coded colors
+  <Box bg="white" borderColor="gray.200">
+    <Text color="gray.700">Title</Text>
+  </Box>
+  ```
+
+- **Use Pre-built Dark Mode Components:**
+  ```typescript
+  import { 
+    DarkModeCard, 
+    DarkModeSectionHeader,
+    DarkModeText 
+  } from '@/components/common/DarkModeComponents';
+  ```
+
+- **Only use `useColorModeValue` for special cases** where semantic tokens don't apply:
+  - Custom shadows
+  - Gradients
+  - Special effects
+  - External library overrides
+
+- **Testing Requirements:**
+  - Always test components in both light and dark modes
+  - Verify text contrast meets WCAG AA standards
+  - Check hover and focus states
+  - Ensure no "flash" of wrong colors on mode switch
+
+- **References:**
+  - Best Practices: [DARK_MODE_BEST_PRACTICES.md](mdc:docs/development/DARK_MODE_BEST_PRACTICES.md)
+  - Migration Guide: [DARK_MODE_MIGRATION_GUIDE.md](mdc:docs/development/DARK_MODE_MIGRATION_GUIDE.md)
+  - Theme Config: [colors.ts](mdc:src/theme/foundations/colors.ts)
+  - Type Definitions: [types.ts](mdc:src/theme/types.ts)

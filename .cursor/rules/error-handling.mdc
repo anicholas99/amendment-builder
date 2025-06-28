@@ -1,0 +1,164 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+---
+description: Consistent error handling patterns across the application
+globs: src/**/*.ts, src/**/*.tsx
+alwaysApply: true
+---
+
+# Error Handling Standards
+
+- **API Error Handling Pattern**
+  ```typescript
+  import { createApiError, ErrorCode } from '@/utils/apiErrorHandler';
+  import { createApiLogger } from '@/lib/monitoring/apiLogger';
+  
+  const apiLogger = createApiLogger('route-name');
+  
+  try {
+    // Business logic
+  } catch (error) {
+    // Log the full error internally
+    apiLogger.error('Operation failed', { 
+      error,
+      userId: req.user?.id,
+      operation: 'specificOperation'
+    });
+    
+    // Return sanitized error to client
+    if (error instanceof AppError) {
+      return res.status(error.statusCode).json({
+        error: error.message,
+        code: error.code
+      });
+    }
+    
+    // Generic error response
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: 'An error occurred processing your request'
+    });
+  }
+  ```
+
+- **Custom Error Types**
+  ```typescript
+  // Define domain-specific errors
+  export class ValidationError extends AppError {
+    constructor(message: string, details?: any) {
+      super(ErrorCode.VALIDATION_ERROR, message, 400, details);
+    }
+  }
+  
+  export class NotFoundError extends AppError {
+    constructor(resource: string, id: string) {
+      super(ErrorCode.NOT_FOUND, `${resource} not found`, 404, { resource, id });
+    }
+  }
+  
+  export class UnauthorizedError extends AppError {
+    constructor(message = 'Unauthorized') {
+      super(ErrorCode.UNAUTHORIZED, message, 401);
+    }
+  }
+  ```
+
+- **Repository Error Handling**
+  ```typescript
+  export async function findProjectById(id: string): Promise<Project | null> {
+    try {
+      return await prisma.project.findUnique({ where: { id } });
+    } catch (error) {
+      logger.error('Database error finding project', { error, projectId: id });
+      throw new DatabaseError(`Failed to retrieve project: ${error.message}`);
+    }
+  }
+  ```
+
+- **Frontend Error Handling**
+  ```typescript
+  // Use error boundaries for React components
+  import { ErrorBoundary } from '@/components/ErrorBoundary';
+  
+  <ErrorBoundary fallback={<ErrorFallback />}>
+    <YourComponent />
+  </ErrorBoundary>
+  
+  // Handle async errors in hooks
+  const { data, error, isLoading } = useQuery({
+    queryKey: ['project', id],
+    queryFn: () => fetchProject(id),
+    onError: (error) => {
+      toast.error('Failed to load project');
+      logger.error('Project fetch failed', { error });
+    }
+  });
+  ```
+
+- **Error Response Standards**
+  - **400 Bad Request**: Validation errors, include field details
+  - **401 Unauthorized**: No valid authentication
+  - **403 Forbidden**: Valid auth but insufficient permissions
+  - **404 Not Found**: Resource doesn't exist
+  - **409 Conflict**: Duplicate resource or state conflict
+  - **422 Unprocessable Entity**: Business rule violation
+  - **500 Internal Server Error**: Unexpected errors
+
+- **Error Logging Best Practices**
+  ```typescript
+  // ✅ DO: Log with context
+  logger.error('Operation failed', {
+    error,
+    userId: req.user?.id,
+    projectId: project.id,
+    operation: 'updateProject',
+    timestamp: new Date().toISOString()
+  });
+  
+  // ❌ DON'T: Log sensitive data
+  logger.error('Login failed', {
+    password: req.body.password,  // NEVER
+    apiKey: req.headers.apikey    // NEVER
+  });
+  ```
+
+- **Async Error Handling**
+  ```typescript
+  // Handle Promise rejections
+  process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Promise Rejection', { reason });
+  });
+  
+  // Handle uncaught exceptions
+  process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception', { error });
+    process.exit(1);
+  });
+  ```
+
+- **Error Recovery Strategies**
+  - Implement retry logic for transient failures
+  - Use circuit breakers for external services
+  - Provide fallback behavior where possible
+  - Queue failed operations for later retry
+
+- **Testing Error Scenarios**
+  ```typescript
+  it('should handle database errors gracefully', async () => {
+    jest.spyOn(prisma.project, 'findUnique').mockRejectedValue(new Error('DB Error'));
+    
+    const res = await request(app).get('/api/projects/123');
+    
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Internal server error');
+    expect(res.body.password).toBeUndefined(); // No sensitive data
+  });
+  ```
+
+- **References**
+  - Error types: [apiErrorHandler.ts](mdc:src/utils/apiErrorHandler.ts)
+  - Logger setup: [logger.ts](mdc:src/lib/monitoring/logger.ts)
+  - Error boundary: [ErrorBoundary.tsx](mdc:src/components/ErrorBoundary.tsx)

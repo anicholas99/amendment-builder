@@ -1,0 +1,257 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Security Best Practices for SOC 2 Compliance
+
+## 🔐 Environment Variables
+
+### Never Commit Secrets
+```bash
+# ✅ CORRECT: .env files in .gitignore
+.env
+.env.local
+.env.production
+
+# ❌ WRONG: Never commit actual env files
+# Check with: git ls-files | grep -E "\.env"
+```
+
+### Environment Variable Patterns
+```typescript
+// ❌ WRONG: Hardcoded fallbacks for sensitive values
+const apiKey = process.env.API_KEY || 'sk-1234567890'; // Never hardcode secrets!
+
+// ✅ CORRECT: Fail fast for required secrets
+const apiKey = process.env.API_KEY;
+if (!apiKey) {
+  throw new Error('API_KEY environment variable is required');
+}
+
+// ✅ CORRECT: Safe defaults for non-sensitive values
+const port = process.env.PORT || '3000';
+const nodeEnv = process.env.NODE_ENV || 'development';
+```
+
+### Future Enhancement: Type-Safe Environment
+```typescript
+// TODO: Implement src/utils/env-utils.ts
+import { z } from 'zod';
+
+const envSchema = z.object({
+  DATABASE_URL: z.string(),
+  NEXTAUTH_SECRET: z.string(),
+  NODE_ENV: z.enum(['development', 'production', 'test']),
+  // ... other variables
+});
+
+export const env = envSchema.parse(process.env);
+```
+
+## 🛡️ Authentication & Authorization
+
+### Always Check Authentication
+```typescript
+// In every protected API route
+if (!req.user || !req.user.id) {
+  return res.status(401).json({ error: 'Authentication required' });
+}
+```
+
+### Verify Resource Ownership
+```typescript
+// Don't just check if user is logged in, verify they own the resource
+const project = await findProjectById(projectId, req.user.tenantId);
+if (!project || project.userId !== req.user.id) {
+  return res.status(403).json({ error: 'Access denied' });
+}
+```
+
+## 🔒 Input Validation
+
+### Always Validate Input
+```typescript
+import { z } from 'zod';
+
+// Define schema
+const createProjectSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  tags: z.array(z.string()).max(10).optional(),
+});
+
+// Use in handler
+export default composeApiMiddleware(handler, {
+  schema: createProjectSchema, // Automatic validation
+  requiredRole: 'USER',
+});
+```
+
+### Sanitize User Input
+```typescript
+// ❌ WRONG: Direct use of user input
+const query = `SELECT * FROM users WHERE name = '${req.body.name}'`;
+
+// ✅ CORRECT: Use parameterized queries (Prisma does this automatically)
+const user = await prisma.user.findFirst({
+  where: { name: req.body.name }
+});
+```
+
+## 🚀 Performance & Security
+
+### Rate Limiting
+```typescript
+// Apply appropriate rate limits
+export default composeApiMiddleware(handler, {
+  rateLimit: 'api',        // Standard API rate limit
+  // or
+  rateLimit: 'read',       // Higher limit for read operations
+  // or
+  rateLimit: 'search',     // Lower limit for expensive operations
+  // or
+  rateLimit: {
+    requests: 5,           // Custom limits
+    windowMs: 60 * 1000    // per minute
+  }
+});
+```
+
+### Prevent Resource Exhaustion
+```typescript
+// Limit query results
+const MAX_RESULTS = 100;
+const results = await prisma.project.findMany({
+  where: { tenantId },
+  take: Math.min(limit || 20, MAX_RESULTS), // Cap at MAX_RESULTS
+});
+
+// Add timeouts for long operations
+const OPERATION_TIMEOUT = 30000; // 30 seconds
+const results = await Promise.race([
+  performExpensiveOperation(),
+  new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('Operation timeout')), OPERATION_TIMEOUT)
+  )
+]);
+```
+
+## 🔍 Security Headers
+
+### Configure Security Headers (in middleware.ts)
+```typescript
+// Essential security headers
+response.headers.set('X-Content-Type-Options', 'nosniff');
+response.headers.set('X-Frame-Options', 'DENY');
+response.headers.set('X-XSS-Protection', '1; mode=block');
+response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+```
+
+## 📊 Audit Logging
+
+### Log Security-Relevant Events
+```typescript
+// Log authentication events
+logger.info('User login successful', { 
+  userId: user.id, 
+  tenantId: user.tenantId,
+  timestamp: new Date().toISOString()
+});
+
+// Log authorization failures
+logger.warn('Unauthorized access attempt', {
+  userId: req.user?.id,
+  resource: 'project',
+  resourceId: projectId,
+  action: 'update',
+  timestamp: new Date().toISOString()
+});
+
+// Log data modifications
+logger.info('Resource modified', {
+  userId: req.user.id,
+  resource: 'project',
+  resourceId: project.id,
+  action: 'update',
+  changes: Object.keys(updateData), // Log what changed, not the values
+  timestamp: new Date().toISOString()
+});
+```
+
+## 🚫 Common Security Anti-Patterns
+
+### 1. Trusting Client Data
+```typescript
+// ❌ WRONG: Trusting client-provided IDs
+const userId = req.body.userId; // Client could send any ID!
+
+// ✅ CORRECT: Use authenticated user context
+const userId = req.user.id; // From authentication middleware
+```
+
+### 2. Exposing Internal IDs
+```typescript
+// ❌ WRONG: Sequential numeric IDs in URLs
+/api/users/12345 // Easy to enumerate
+
+// ✅ CORRECT: Use UUIDs
+/api/users/550e8400-e29b-41d4-a716-446655440000
+```
+
+### 3. Insufficient Access Control
+```typescript
+// ❌ WRONG: Only checking authentication
+if (req.user) {
+  // User can access any resource!
+}
+
+// ✅ CORRECT: Check authentication AND authorization
+if (req.user && resource.userId === req.user.id && resource.tenantId === req.user.tenantId) {
+  // User can only access their own resources in their tenant
+}
+```
+
+## 📋 Security Checklist for New Features
+
+Before deploying any new feature:
+
+- [ ] All API endpoints use `composeApiMiddleware`
+- [ ] Input validation with Zod schemas
+- [ ] Tenant isolation implemented
+- [ ] RBAC configured appropriately
+- [ ] No sensitive data in logs
+- [ ] No error details exposed to clients
+- [ ] Rate limiting applied
+- [ ] Repository pattern used for DB access
+- [ ] Frontend uses `apiFetch` for API calls
+- [ ] Security headers configured
+- [ ] Audit logging for important actions
+
+## 🔧 Continuous Security
+
+### Regular Security Checks
+```bash
+# Run weekly
+bash scripts/verify-soc2-readiness.sh
+
+# Before each deployment
+npm run security:check
+
+# In CI/CD pipeline
+- name: Security Verification
+  run: |
+    npx tsx scripts/verify-repository-pattern.ts
+    npx tsx scripts/verify-tenant-guards.ts
+    npx tsx scripts/verify-rbac.ts
+    npx tsx scripts/verify-error-handling-100.ts
+```
+
+### Stay Updated
+- Review and update dependencies regularly
+- Monitor security advisories
+- Conduct periodic security reviews
+- Update security rules as patterns evolve
+
+Remember: **Security is a continuous process, not a one-time achievement**. These practices ensure you maintain SOC 2 compliance as your application grows.

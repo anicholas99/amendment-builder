@@ -1,0 +1,177 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+---
+description: Enforces type safety standards and patterns across the codebase
+alwaysApply: true
+---
+
+# Type Safety Standards
+
+- **No `as any` without justification**
+  - Every `as any` must have an ESLint disable comment with explanation
+  - Valid reasons: External libraries, Prisma JSON fields, test mocks
+  - Example: `// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON field`
+
+- **Enhanced Types for UI State**
+  - Create enhanced types that extend base types with UI-specific properties
+  - Example: `EnhancedCitationJob` extends `CitationJob` with optimistic update flags
+  - Keep these types in `src/types/ui-types.ts`
+
+- **API Response Type Alignment**
+  - Ensure types match actual API responses (e.g., dates as strings, not Date objects)
+  - Use DTOs to transform API responses to internal types when needed
+  - Repository functions should return properly typed data
+
+- **Type Casting at Component Boundaries**
+  - Cast types explicitly when passing between components with different type expectations
+  - Document why the cast is safe with a comment if not obvious
+  - Example: `citationJobs={combinedJobData as CitationJob[]}`
+
+- **Logger Usage Patterns**
+  - Wrap objects/arrays in curly braces as second parameter: `logger.debug('Message', { data })`
+  - Never pass arrays or objects directly as second parameter
+  - Use structured logging for better debugging
+
+- **Required vs Optional Fields**
+  - Match Prisma schema exactly - don't make required fields optional
+  - Use `Type | null` for nullable database fields, not `Type | undefined`
+  - Optional fields from API responses should use `field?: Type`
+
+- **Type Guards**
+  - Create type guards for runtime validation in `ui-types.ts`
+  - Use them when parsing JSON or handling unknown data
+  - Example: `isEnhancedCitationJob(value): value is EnhancedCitationJob`
+
+- **Middleware Type Composition**
+  - Use `AuthenticatedRequest` for requests that have been through auth middleware
+  - Ensure middleware composition order matches type expectations
+  - Use `composeApiMiddleware` for consistent type-safe middleware
+
+## Common Patterns
+
+```typescript
+// ✅ DO: Enhanced types for UI state
+export type EnhancedCitationJob = {
+  // Base required fields
+  id: string;
+  status: string;
+  // UI-specific flags
+  isOptimistic?: boolean;
+  wasOptimistic?: boolean;
+  // API response fields
+  createdAt: string; // Not Date!
+} & Partial<Omit<CitationJob, 'id' | 'status' | 'createdAt'>>;
+
+// ✅ DO: Proper logger usage
+logger.debug('Citation jobs loaded', { 
+  jobs: citationJobs,
+  count: citationJobs.length 
+});
+
+// ❌ DON'T: Direct any usage
+const data = response as any; // No justification
+
+// ✅ DO: Justified any usage
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- External library type
+const langchainResult = await chain.call(input as any);
+```
+
+## References
+- Type definitions: [ui-types.ts](mdc:src/types/ui-types.ts)
+- Safe type helpers: [safe-type-helpers.ts](mdc:src/types/safe-type-helpers.ts)
+- API validation: [api-validation.mdc](mdc:.cursor/rules/api-validation.mdc)
+
+# Type Safety Guidelines
+
+## Use Type Guards for Runtime Validation
+
+- **Always use type guards from [type-guards.ts](mdc:src/utils/type-guards.ts) instead of custom validation**
+- Never trust external data without validation
+- Prefer type narrowing over type assertions
+
+## Common Type Guard Usage
+
+### Validating API Request Data
+```typescript
+import { isStructuredData, isNonEmptyString, safeJsonParse } from '@/utils/type-guards';
+
+// Validate structured data from requests
+if (!isStructuredData(req.body.data)) {
+  return res.status(400).json({ error: 'Invalid structured data format' });
+}
+
+// Safe JSON parsing
+const parsed = safeJsonParse(jsonString, isStructuredData);
+if (!parsed) {
+  return res.status(400).json({ error: 'Invalid JSON data' });
+}
+```
+
+### String and Email Validation
+```typescript
+import { isNonEmptyString, isEmail } from '@/utils/type-guards';
+
+// Validate required strings
+if (!isNonEmptyString(input.title)) {
+  throw new Error('Title is required');
+}
+
+// Validate email format
+if (!isEmail(input.email)) {
+  throw new Error('Invalid email address');
+}
+```
+
+### Prisma JSON Field Validation
+```typescript
+import { isPrismaJson } from '@/utils/type-guards';
+
+// Validate before saving to Prisma JSON fields
+if (!isPrismaJson(data)) {
+  throw new Error('Data contains non-serializable values');
+}
+```
+
+## Type Assertion Guidelines
+
+- **NEVER use `as any`** - Pre-commit hooks will block this
+- **NEVER use `@ts-ignore`** - Fix the underlying type issue instead
+- Use `assertType` for runtime type assertions with proper error messages:
+
+```typescript
+import { assertType, isObject } from '@/utils/type-guards';
+
+function processConfig(config: unknown) {
+  assertType(config, isObject, 'Configuration must be an object');
+  // config is now typed as Record<string, unknown>
+}
+```
+
+## Available Type Guards
+
+The [type-guards.ts](mdc:src/utils/type-guards.ts) utility provides 20+ type predicates:
+
+- **Basic types**: `isObject`, `isNonEmptyString`, `isPositiveInteger`
+- **Validation**: `isEmail`, `isUrl`, `isUuid`, `isDate`
+- **Domain-specific**: `isStructuredData`, `isPatentReference`, `isPrismaJson`
+- **Arrays**: `isArrayOf` - Check arrays of specific types
+- **Enums**: `isOneOf` - Check string literal unions
+- **HTTP**: `isHttpMethod` - Validate HTTP method strings
+- **Errors**: `isError`, `isApiError` - Type-safe error handling
+- **Utilities**: `safeJsonParse`, `assertType`, `hasProperty`
+
+## Best Practices
+
+1. **Validate at boundaries**: Always validate data entering your system (API requests, database queries, external APIs)
+2. **Use Zod for complex schemas**: For request validation, combine Zod schemas with type guards
+3. **Fail fast**: Use `assertType` early in functions to catch type errors immediately
+4. **Document assumptions**: When using type guards, comment why the validation is necessary
+
+## References
+
+- Type guards implementation: [type-guards.ts](mdc:src/utils/type-guards.ts)
+- Example usage in APIs: [projects/[projectId].ts](mdc:src/pages/api/projects/[projectId].ts)
+- Related rules: [api-validation.mdc](mdc:.cursor/rules/api-validation.mdc)

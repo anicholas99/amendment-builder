@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Accessibility guidelines to ensure UI components meet a11y standards
+alwaysApply: true
+---
+# Accessibility
+
+- Ensure all UI components are accessible.
+- Use semantic HTML elements.
+- Provide proper `aria` attributes for custom components.
+- Ensure sufficient color contrast for text.

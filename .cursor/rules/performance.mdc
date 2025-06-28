@@ -1,0 +1,14 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Performance best practices for React components and hooks
+alwaysApply: true
+---
+# Performance
+
+- Avoid unnecessary re-renders by using `React.memo` and `useCallback` where appropriate.
+- Keep component state as local as possible.
+- Use proper dependency arrays in `useEffect` and other hooks.

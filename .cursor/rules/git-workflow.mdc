@@ -1,0 +1,25 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Standard git workflow guidelines for committing and creating PRs
+alwaysApply: true
+---
+# Git Workflow
+
+## Committing Changes
+
+1. Check status: `git status`
+2. Add changes: `git add .` (or specific files)
+3. Commit: `git commit -m "Brief description"` (commit per file or single commit for minor changes)
+
+## Creating a Pull Request (PR)
+
+1. Ensure changes are committed (see above).
+2. Push changes: `git push` (if needed).
+3. Check current branch: `git branch`
+4. Log branch changes vs main: `git log main..[current branch]`
+5. Check file diff vs main: `git diff --name-status main`
+6. Create PR using GitHub CLI: `gh pr create --title "Title" --body "Single line body description..."` (Assume CLI is authenticated).

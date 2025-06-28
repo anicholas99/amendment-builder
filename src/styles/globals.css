@@ -1,0 +1,363 @@
+/* Import custom utility styles for CSP compliance */
+@import './scrollbar.css';
+@import './utilities.css';
+
+/* Global styles */
+:root {
+  /* Layout dimensions - Single source of truth */
+  --header-height: 50px;
+  --sidebar-width: 220px;
+  --sidebar-collapsed-width: 60px;
+  --content-top-offset: 50px;
+  --content-bottom-padding: 40px;
+
+  /* Default theme colors and variables */
+  --max-width: 1100px;
+  --border-radius: 12px;
+  --font-mono:
+    ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono',
+    'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro',
+    'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace;
+}
+
+/* Base styles */
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  height: 100%;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: #fff;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Dark mode preferences */
+@media (prefers-color-scheme: dark) {
+  html {
+    color-scheme: dark;
+  }
+}
+
+/* Ensure proper scrolling */
+.scrollable-content {
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100%;
+}
+
+/* Fix scrollbar behavior */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  width: 10px;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 24px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Base styling for editor components */
+.DraftEditor-root {
+  background: white;
+  min-height: 1000px;
+  padding: 1rem;
+}
+
+.DraftEditor-editorContainer {
+  min-height: 1000px;
+}
+
+.public-DraftStyleDefault-block {
+  margin: 0.25em 0;
+}
+
+/* Text alignment classes */
+.align-left {
+  text-align: left;
+}
+
+.align-center {
+  text-align: center;
+}
+
+.align-right {
+  text-align: right;
+}
+
+/* Root layout configuration */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-body);
+}
+
+/* Force full-height flex layout */
+#__next,
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Default scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 24px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Ensure proper scrolling */
+[role='tabpanel'] > div {
+  min-width: 100%;
+  min-height: min-content;
+  padding-bottom: 8px;
+}
+
+/* Fix scrollbar behavior */
+[role='tabpanel'] {
+  overflow-y: auto !important;
+  min-height: 0;
+}
+
+.chakra-tabs__tabpanel {
+  min-height: 0;
+  overflow-y: auto !important;
+}
+
+/* Standard scrollbars for any element with auto or scroll overflow */
+*[style*='overflow: auto'],
+*[style*='overflow: scroll'],
+*[style*='overflow-y: auto'],
+*[style*='overflow-y: scroll'] {
+  scrollbar-width: thin;
+  -ms-overflow-style: auto;
+}
+
+/* Hide default scrollbars except where needed */
+.view-layout-wrapper,
+[role='main'],
+[data-chakra-component='Grid'] {
+  /* overflow: hidden !important; */ /* Commented out to allow shadow visibility */
+}
+
+/* Remove unwanted scrollbars on main views */
+/* [data-page='claim-refinement'] {
+  overflow: hidden !important;
+} */
+
+/* Ensure the header is above the sidebar */
+.app-header {
+  z-index: 100 !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+/* Fix dark mode sidebar-header connection issue */
+.chakra-ui-dark .app-header {
+  background-color: var(--chakra-colors-gray-800) !important;
+}
+
+/* Add to fix sidebar position */
+.sidebar-wrapper {
+  z-index: 15;
+  background-color: var(--chakra-colors-gray-800) !important;
+  margin-top: 0 !important;
+  border-top: none !important;
+}
+
+/* Remove all gap-causing elements */
+body::after,
+body::before,
+.header-container::before,
+.header-container::after,
+header::before,
+header::after {
+  display: none !important;
+}
+
+/* Ensure main content always stays in light mode */
+.main-content {
+  background-color: white !important;
+  color: initial !important;
+}
+
+/* Ensure icons in main content area are visible */
+.main-content svg {
+  color: inherit;
+}
+
+/* Make sure action buttons are visible */
+.main-content [aria-label*='edit'] svg,
+.main-content [aria-label*='delete'] svg,
+.main-content [aria-label*='Edit'] svg,
+.main-content [aria-label*='Delete'] svg,
+.main-content [aria-label*='add'] svg,
+.main-content [aria-label*='trash'] svg {
+  color: inherit !important;
+}
+
+/* Ensure our Generate Claim 1 button has the correct styling */
+.main-content button[data-testid='generate-claim1-button'] {
+  background-color: #5b83d9 !important;
+  color: white !important;
+  border: none !important;
+}
+
+/* Ensure the SVG inside our button is white */
+.main-content button[data-testid='generate-claim1-button'] svg path {
+  stroke: white !important;
+  fill: none !important;
+}
+
+/* Fix specifically for generate buttons */
+.main-content
+  button:has(.chakra-button__icon):not([data-testid='generate-claim1-button']),
+.main-content
+  [role='button']:has(svg):not([data-testid='generate-claim1-button']) {
+  display: inline-flex;
+  align-items: center;
+  outline: revert !important;
+  border-style: revert !important;
+}
+
+/* Ensure main Generate buttons have proper styling */
+.main-content button:has(svg[data-icon='refresh']),
+.main-content button:has(svg[data-icon='generate']) {
+  /* Force standard button appearance */
+  background-color: var(--chakra-colors-blue-500) !important;
+  color: white !important;
+  border-radius: var(--chakra-radii-md) !important;
+  padding: var(--chakra-space-2) var(--chakra-space-4) !important;
+}
+
+/* Main content Generate buttons should have blue style */
+button[data-icon='refresh'],
+button[data-icon='refresh'] svg,
+.chakra-button:has(svg[data-icon='refresh']),
+button[aria-label*='Generate'],
+button[aria-label*='generate'] {
+  background-color: var(--chakra-colors-blue-500) !important;
+  color: white !important;
+  border-radius: var(--chakra-radii-md) !important;
+  border: none !important;
+  padding: 8px 16px !important;
+  cursor: pointer !important;
+}
+
+/* Base styling */
+:root {
+  --font-body: var(--chakra-fonts-body);
+  --font-heading: var(--chakra-fonts-heading);
+  --font-patent: var(--chakra-fonts-patent);
+}
+
+/* Fix user profile elements alignment in header */
+header .chakra-avatar,
+header .chakra-avatar + div,
+header .chakra-avatar + span,
+header [data-testid='user-menu'],
+header
+  [data-testid='user-menu']
+  > *:not([role='menu']):not(.chakra-menu__menu-list) {
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: middle !important;
+}
+
+/* Allow dropdown menus to position correctly */
+header [data-testid='user-menu'] [role='menu'],
+header [data-testid='user-menu'] .chakra-menu__menu-list {
+  display: block !important;
+  position: fixed !important;
+}
+
+/* Specific fix for the user email display next to avatar */
+header .chakra-avatar + div,
+header .chakra-avatar ~ span,
+header [aria-label*='user'] + div,
+header span:has(+ .chakra-avatar),
+header [data-testid='user-email'],
+header [data-testid='user-name'] {
+  line-height: 1 !important;
+  height: 28px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: middle !important;
+  margin-left: 8px !important;
+}
+
+/* Fix the email dropdown button */
+header [aria-label*='user'] button,
+header .chakra-menu__menu-button:has(+ [role='menu']),
+header button:has([aria-label*='user']),
+header button:has(.chakra-avatar) {
+  display: inline-flex !important;
+  align-items: center !important;
+  height: 36px !important;
+  padding: 0 8px !important;
+  gap: 8px !important;
+}
+
+/* Ensure the AN circle and text are aligned */
+header .chakra-avatar {
+  margin: 0 !important;
+  vertical-align: middle !important;
+}
+
+/* Set consistent sizing for user elements */
+header .chakra-avatar {
+  width: 32px !important;
+  height: 32px !important;
+  font-size: 14px !important;
+}
+
+/* Create proper container for user elements */
+header > div > div:last-child,
+header [role='navigation'] > div:last-child {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  height: 36px !important;
+}

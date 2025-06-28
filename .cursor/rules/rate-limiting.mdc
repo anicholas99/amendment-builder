@@ -1,0 +1,97 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Rate Limiting Strategy
+
+- **Problem Prevention**: Application was experiencing 429 (Too Many Requests) errors on page refresh due to burst requests sharing the same rate limit bucket
+
+- **Rate Limit Buckets**: Different endpoint types use different rate limit configurations:
+  - **critical-auth** (200 req/15min): For CSRF token and auth session endpoints - double the standard limit but still secure
+  - **resource** (300 req/15min): For browser-accessible resources like images and file downloads
+  - **api** (300 req/15min): Standard API endpoints for data mutations - increased from 100 to prevent false positives
+  - **read** (500 req/15min): Read-only data endpoints - increased from 200 for better UX
+  - **auth** (10 req/hour): Authentication endpoints (login, register, password reset)
+  - **ai** (20 req/hour): AI/ML processing endpoints
+  - **upload** (30 req/hour): File upload endpoints
+  - **polling** (20 req/minute): Status polling endpoints
+
+- **Implementation Guidelines**:
+  - Critical endpoints (`/api/csrf-token`, `/api/auth/session`) must use `critical-auth` rate limit
+  - Browser-accessible resources (images, downloads) should use `resource` rate limit
+  - Apply appropriate rate limits in `SecurePresets`:
+    ```typescript
+    // For critical auth endpoints
+    export default SecurePresets.public(handler, { rateLimit: 'critical-auth' });
+    
+    // For browser resources
+    export default SecurePresets.browserAccessible(resolver, handler, {
+      rateLimit: 'resource'
+    });
+    
+    // For standard mutations
+    export default SecurePresets.tenantProtected(resolver, handler, {
+      rateLimit: 'api'
+    });
+    
+    // For read-only endpoints
+    export default SecurePresets.tenantProtected(resolver, handler, {
+      rateLimit: 'read'
+    });
+    ```
+
+- **Batch Operations**:
+  - When multiple similar requests would fire simultaneously (e.g., fetching history for multiple items)
+  - Create batch endpoints to reduce request count
+  - Example: `/api/claims/history/batch` instead of N individual requests
+  - Batch endpoints still count as 1 request against rate limits
+
+- **Client-Side Best Practices**:
+  - **Request Deduplication**: `requestManager` automatically deduplicates GET requests
+  - **Retry Logic**: `apiFetch` automatically retries 429 errors with exponential backoff (built-in)
+  - **Staggered Loading**: Use `useStaggeredLoading` hook for loading multiple resources:
+    ```typescript
+    const { visibleItems } = useStaggeredLoading(figures, {
+      staggerDelay: 150, // 150ms between loads
+      maxConcurrent: 3,  // Max 3 concurrent loads
+    });
+    ```
+  - **Caching**: Critical requests are pre-warmed and cached by `requestManager`
+
+- **Error Handling**:
+  - All 429 errors are automatically retried up to 3 times by `apiFetch` with exponential backoff
+  - Retry delays respect server's `Retry-After` header if provided
+  - Failed requests after retries throw `ErrorCode.RATE_LIMIT_EXCEEDED`
+
+- **Rate Limit Headers**:
+  - `X-RateLimit-Limit`: Total requests allowed
+  - `X-RateLimit-Remaining`: Requests remaining  
+  - `X-RateLimit-Reset`: When the window resets (ISO timestamp)
+  - `Retry-After`: Seconds to wait when rate limited
+
+- **Security Considerations**:
+  - Rate limits are designed to prevent abuse while allowing legitimate usage
+  - Critical auth endpoints have higher limits to prevent app crashes but remain secure
+  - Resource limits allow for multiple figure loads without compromising security
+  - All rate limits are per IP address (or IP + user ID for authenticated requests)
+
+- **Monitoring**:
+  - Use `getRateLimitMetrics()` to monitor rate limit usage in development
+  - Rate limit headers (`X-RateLimit-*`) are included in all responses
+  - Log warnings when approaching rate limits (80% usage)
+
+- **Configuration Files**:
+  - Rate limit configs: [rate-limit-config.ts](mdc:src/middleware/rate-limit-config.ts)
+  - Constants: [limits.ts](mdc:src/constants/limits.ts), [time.ts](mdc:src/constants/time.ts)
+  - Built-in retry logic: [apiClient.ts](mdc:src/lib/api/apiClient.ts) (lines 180-210)
+
+- **Testing Considerations**:
+  - Rate limiting is automatically disabled in test environment via `environment.isTest`
+  - Mock rate limit responses for integration tests
+  - Test batch endpoints to ensure they properly reduce request count
+
+- **IMPORTANT Architecture Note**:
+  - API endpoints use the Express-based rate limiter via `SecurePresets` and middleware
+  - The NextJS edge runtime rate limiter in `src/lib/security/rateLimit.ts` is NOT used for API routes
+  - Always use `SecurePresets` with appropriate rate limit preset for API endpoints

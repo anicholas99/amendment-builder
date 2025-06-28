@@ -1,0 +1,92 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Workspace API Pattern
+
+- **Purpose**: Reduce the number of API calls when loading a project from ~10 to 1
+- **Pattern**: Create aggregated endpoints that return all necessary data in a single response
+
+## Implementation Guidelines
+
+- **Use the `/api/projects/[projectId]/workspace` endpoint** when loading a project page
+  - Returns: project, invention, claims, figures, chat, priorArt, latestVersion
+  - All data is fetched in parallel on the server for optimal performance
+  - Gracefully handles missing data with fallbacks
+
+- **Client-side Usage**:
+  ```typescript
+  // Use the workspace hook instead of multiple individual hooks
+  import { useProjectWorkspace } from '@/hooks/api/useProjectWorkspace';
+  
+  const { data, isLoading, error } = useProjectWorkspace(projectId);
+  
+  // Access all data from single response
+  const { project, invention, claims, figures, chat, priorArt } = data || {};
+  ```
+
+- **Benefits**:
+  - Single HTTP request instead of 10+
+  - Reduced latency and better performance
+  - Simplified error handling
+  - Better caching with React Query
+  - Consistent data snapshot
+
+- **When to Use**:
+  - Initial page loads where multiple data types are needed
+  - Dashboard views that aggregate multiple resources
+  - Any scenario where you're making 3+ related API calls
+
+- **When NOT to Use**:
+  - Single resource updates (use specific endpoints)
+  - Real-time features (use WebSockets/SSE)
+  - Large data sets that need pagination
+
+## Creating New Workspace Endpoints
+
+When creating similar aggregated endpoints:
+
+1. **Follow the Pattern**:
+   ```typescript
+   // In API route
+   const [resource1, resource2, resource3] = await Promise.all([
+     fetchResource1().catch(() => null),
+     fetchResource2().catch(() => []),
+     fetchResource3().catch(() => defaultValue),
+   ]);
+   ```
+
+2. **Use Proper Error Handling**:
+   - Each resource fetch should have `.catch()` with appropriate fallback
+   - Don't let one failed resource break the entire response
+
+3. **Add Performance Logging**:
+   ```typescript
+   const startTime = performance.now();
+   // ... fetch data ...
+   const endTime = performance.now();
+   logger.info('[workspace] Data fetched', {
+     duration: `${Math.round(endTime - startTime)}ms`
+   });
+   ```
+
+4. **Create Corresponding Service & Hook**:
+   - Service in `src/services/api/`
+   - Hook in `src/hooks/api/`
+   - Response types in `src/types/api/responses.ts`
+
+## Migration Strategy
+
+When migrating existing code to use workspace pattern:
+
+1. Identify pages making multiple API calls on load
+2. Create workspace endpoint that aggregates those calls
+3. Replace individual hooks with single workspace hook
+4. Remove loading states for individual resources
+5. Update error handling to use single error state
+
+## Related Patterns
+
+- See [api-patterns.mdc](mdc:.cursor/rules/api-patterns.mdc) for service layer requirements
+- See [performance.mdc](mdc:.cursor/rules/performance.mdc) for React Query optimization

@@ -1,0 +1,171 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Code Quality Standards
+
+## Pre-commit Checks
+
+**All commits are automatically checked for:**
+- ❌ `as any` usage - BLOCKED
+- ❌ `@ts-ignore` comments - BLOCKED  
+- ❌ TypeScript type errors - BLOCKED
+
+To set up pre-commit hooks:
+```bash
+npm run setup:precommit
+```
+
+## Type Checking
+
+Run type checking before committing:
+```bash
+npm run type-check
+```
+
+This is automatically enforced by pre-commit hooks.
+
+## TODO/FIXME Management
+
+### Structured TODO Format
+
+Use this format for new TODOs:
+```typescript
+// TODO(category): [TICKET-123] Brief description
+// TODO(security): [SEC-456] Validate user input before processing
+// TODO(performance): [PERF-789] Optimize database query
+```
+
+Categories:
+- `security` - Security-related tasks
+- `performance` - Performance optimizations
+- `feature` - Feature implementations
+- `bug` - Bug fixes
+- `refactor` - Code refactoring needs
+- `test` - Testing requirements
+
+### Current TODO Status
+
+View the TODO triage report: [TODO_TRIAGE_REPORT.md](mdc:TODO_TRIAGE_REPORT.md)
+
+- ✅ Security TODOs: 7/7 resolved
+- 📋 Implementation TODOs: 10 remaining
+- 🔒 Blocked TODOs: 2 (documented)
+- 🌐 External dependencies: 8 (IPD integration)
+
+## Developer Tools
+
+### Route Analyzer
+
+Analyze API routes for security and best practices:
+
+```bash
+# Analyze all routes
+npm run analyze:routes
+
+# Analyze specific route
+npm run analyze:route src/pages/api/my-route.ts
+```
+
+The analyzer checks:
+- Middleware usage compliance
+- Security patterns
+- Validation presence
+- Performance optimizations
+
+### Type Guards
+
+Always use the centralized type guards from [type-guards.ts](mdc:src/utils/type-guards.ts):
+
+```typescript
+import { isNonEmptyString, isEmail, safeJsonParse } from '@/utils/type-guards';
+
+// Don't write custom validation
+// ❌ DON'T
+if (typeof value === 'string' && value.length > 0) { }
+
+// ✅ DO
+if (isNonEmptyString(value)) { }
+```
+
+## Code Review Checklist
+
+Before submitting a PR, ensure:
+
+- [ ] No `as any` or `@ts-ignore` in the code
+- [ ] Type checking passes (`npm run type-check`)
+- [ ] API routes use `composeApiMiddleware`
+- [ ] Mutations have Zod validation schemas
+- [ ] Complex types use type guards for validation
+- [ ] TODOs follow structured format with ticket numbers
+- [ ] Route analyzer shows no critical warnings
+
+## Repository Structure Best Practices
+
+### Large File Prevention
+
+If a repository file exceeds 1000 lines, consider splitting:
+
+```
+// Before: citationRepository.ts (2554 lines)
+
+// After:
+citationRepository.ts      // Main file with complex operations
+citationJobRepository.ts   // Job-specific operations  
+citationMatchRepository.ts // Match-specific operations
+```
+
+### Function Organization
+
+Group related functions together and export them logically:
+
+```typescript
+// Export related functions together
+export {
+  createCitationJob,
+  updateCitationJob,
+  getCitationJobById,
+} from './citationJobRepository';
+```
+
+## Performance Considerations
+
+### Use Caching Where Appropriate
+
+For GET endpoints with stable data:
+```typescript
+export default composeApiMiddleware(handler, {
+  cache: 'project', // or 'tenant' or 'user'
+});
+```
+
+### Rate Limiting
+
+Apply rate limits based on endpoint sensitivity:
+- Authentication endpoints: 5 requests/minute
+- Data mutations: 30 requests/minute  
+- Read endpoints: 100 requests/minute
+
+## Error Handling
+
+All errors are automatically caught and formatted by `composeApiMiddleware`. Use proper error types:
+
+```typescript
+import { createApiError, ErrorCode } from '@/utils/apiErrorHandler';
+
+// Throw typed errors
+throw createApiError(
+  ErrorCode.VALIDATION_ERROR,
+  'Invalid project data',
+  { field: 'title', reason: 'Too short' }
+);
+```
+
+## References
+
+- Pre-commit setup: [setup-precommit-hooks.js](mdc:scripts/setup-precommit-hooks.js)
+- Route analyzer: [route-analyzer.ts](mdc:src/lib/dev/route-analyzer.ts)
+- Type guards: [type-guards.ts](mdc:src/utils/type-guards.ts)
+- TODO triage: [TODO_TRIAGE_REPORT.md](mdc:TODO_TRIAGE_REPORT.md)
+- Phase 4 improvements: [PHASE4_DEVELOPER_EXCELLENCE_LOG.md](mdc:PHASE4_DEVELOPER_EXCELLENCE_LOG.md)

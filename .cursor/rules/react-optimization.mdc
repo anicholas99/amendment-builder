@@ -1,0 +1,57 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# React Optimization Rules
+
+- **Prevent Infinite Render Loops**
+  - Always memoize array and object props before passing to hooks
+  - Never create arrays/objects inline in hook dependencies
+  - Use `useMemo` for derived data that depends on arrays/objects
+
+- **Stable References Pattern**
+  ```typescript
+  // At the top of component, stabilize all non-primitive props
+  const stableSearchHistory = useMemo(() => searchHistory, [searchHistory]);
+  const stableConfig = useMemo(() => ({ ...config }), [config]);
+  const stableElements = useMemo(() => elements || [], [elements]);
+  ```
+
+- **Hook Dependency Rules**
+  - Only use primitive values or memoized references in dependencies
+  - Never use `||` with arrays/objects in render (creates new reference)
+  - Extract specific values from objects instead of whole object
+
+- **Common Anti-Patterns to Avoid**
+  ```typescript
+  // ❌ DON'T - Creates new array every render
+  const data = apiResponse || [];
+  
+  // ✅ DO - Stable reference
+  const data = useMemo(() => apiResponse || [], [apiResponse]);
+  
+  // ❌ DON'T - Object in dependency
+  useEffect(() => {}, [{ id: userId }]);
+  
+  // ✅ DO - Primitive in dependency
+  useEffect(() => {}, [userId]);
+  ```
+
+- **Component Architecture**
+  1. Stabilize props first (useMemo)
+  2. Fetch/compute data with stable deps
+  3. Derive display state last
+  4. Keep hooks in consistent order
+
+- **Debug Render Issues**
+  - Add logging to track renders
+  - Use React DevTools Profiler
+  - Check for components rendering >10 times/second
+  - Monitor dependency arrays for reference changes
+
+- **Performance Patterns**
+  - Memoize expensive computations
+  - Use React.memo for pure components
+  - Split large components into smaller ones
+  - Centralize state management to reduce prop drilling

@@ -1,0 +1,199 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Code Quality Standards
+
+This rule documents the established patterns and standards for maintaining high code quality in the Patent Drafter AI codebase.
+
+## 🔒 Security Patterns
+
+### Environment Variable Access
+- **Never use fallback values** for environment variables in production code
+- **Always use** the secure utility: [env-utils.ts](mdc:src/lib/config/env-utils.ts)
+- **Pattern**:
+  ```typescript
+  import { getRequiredEnvVar, getOptionalEnvVar } from '@/lib/config/env-utils';
+  
+  // ✅ DO: Use the utility functions
+  const apiKey = getRequiredEnvVar('API_KEY', 'API key for external service');
+  const debugMode = getOptionalEnvVar('DEBUG', 'false');
+  
+  // ❌ DON'T: Use fallback values
+  const badApiKey = process.env.API_KEY || 'default-key';
+  ```
+
+### Error Response Handling
+- **Never expose sensitive error details** to API responses
+- **Always use** the secure error utility: [secure-error-response.ts](mdc:src/utils/secure-error-response.ts)
+- **Pattern**:
+  ```typescript
+  import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+  
+  // ✅ DO: Use safe error responses
+  try {
+    // ... operation
+  } catch (error) {
+    return sendSafeErrorResponse(res, error, 500, 'Operation failed');
+  }
+  
+  // ❌ DON'T: Expose error details
+  catch (error) {
+    res.status(500).json({ error: error.message }); // Leaks sensitive info!
+  }
+  ```
+
+### API Security
+- **All mutating endpoints** (POST, PUT, DELETE) must use CSRF protection
+- **Pattern**: See [projects/[projectId].ts](mdc:src/pages/api/projects/[projectId].ts) for example
+  ```typescript
+  import { withCsrf } from '@/lib/security/csrf';
+  
+  export default withAuth(withCsrf(handler as any));
+  ```
+
+## 🏗️ Architecture Patterns
+
+### Repository Pattern
+- **All database access** must go through repository functions
+- **Never use Prisma directly** in API routes
+- **Reference**: [projectRepository.ts](mdc:src/repositories/projectRepository.ts)
+- **Pattern**:
+  ```typescript
+  // ✅ DO: Use repository functions
+  import { findProjectById } from '@/repositories/projectRepository';
+  const project = await findProjectById(id);
+  
+  // ❌ DON'T: Direct Prisma usage in API routes
+  const project = await prisma.project.findUnique({ where: { id } });
+  ```
+
+### Multi-Tenant Security
+- **All data-modifying endpoints** must use tenant guards
+- **Pattern**: Apply `withTenantGuard` before other middleware
+  ```typescript
+  const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
+    const { projectId } = req.query;
+    const project = await prisma.project.findUnique({
+      where: { id: String(projectId) },
+      select: { tenantId: true }
+    });
+    return project?.tenantId || null;
+  };
+  
+  export default withAuth(withTenantGuard(resolveTenantId)(handler));
+  ```
+
+## ⚛️ React Best Practices
+
+### Component Standards
+- **All components** must have proper React imports
+- **All React.memo components** must have display names
+- **Pattern**:
+  ```typescript
+  import React from 'react'; // Always import React when using JSX
+  
+  const MyComponent = React.memo(() => {
+    return <div>Content</div>;
+  });
+  
+  MyComponent.displayName = 'MyComponent'; // Required for React.memo
+  ```
+
+### Hooks Rules
+- **Never call hooks conditionally** or inside callbacks
+- **Always call hooks** at the top level of components
+- **Pattern**:
+  ```typescript
+  // ✅ DO: Call hooks at top level
+  const MyComponent = () => {
+    const theme = useColorModeValue('light', 'dark');
+    const [state, setState] = useState(false);
+    
+    // ❌ DON'T: Call hooks conditionally
+    if (someCondition) {
+      const value = useColorModeValue('light', 'dark'); // ERROR!
+    }
+  ```
+
+## 📝 Logging Standards
+
+### Console Usage
+- **Never use console.log** in production code
+- **Always use** the structured logger: [logger.ts](mdc:src/lib/monitoring/logger.ts)
+- **Pattern**:
+  ```typescript
+  import { logger } from '@/lib/monitoring/logger';
+  
+  // ✅ DO: Use structured logging
+  logger.info('Operation completed', { userId, action: 'update' });
+  logger.error('Operation failed', error);
+  
+  // ❌ DON'T: Use console directly
+  console.log('Debug info'); // Will fail ESLint!
+  ```
+
+## 🎨 UI Component Guidelines
+
+### Framework Usage
+- **Prefer abstracted UI components** from `@/ui` over direct Chakra imports
+- **Keep UI framework-specific code** isolated to the `src/ui` directory
+- **Pattern**:
+  ```typescript
+  // ✅ DO: Use direct Chakra UI imports with proper imports
+  import { Button, Text, Box } from '@chakra-ui/react';
+  
+  const MyComponent = () => (
+    <Box p={4}>
+      <Text fontSize="lg" fontWeight="bold">Clean Code</Text>
+      <Button colorScheme="blue" onClick={handleAction}>
+        Action
+      </Button>
+    </Box>
+  );
+  
+  // ❌ DON'T: Mix different import sources
+  import { Box } from 'some-other-ui-lib';
+  import { Button } from '@chakra-ui/react';
+  ```
+
+## 📐 Type Safety
+
+### Type Definitions
+- **Prefer `unknown` over `any`** with proper type guards
+- **Never use `{}`** as a type (means "any non-nullish value")
+- **Pattern**:
+  ```typescript
+  // ✅ DO: Use proper types or unknown with guards
+  function processData(data: unknown) {
+    if (isValidData(data)) {
+      // data is now properly typed
+    }
+  }
+  
+  // ❌ DON'T: Use any or {}
+  function badProcess(data: any) { } // Too permissive
+  function alsoBad(data: {}) { } // Misleading type
+  ```
+
+## 🔧 Development Workflow
+
+### Pre-commit Standards
+- All code must pass ESLint before committing
+- Husky pre-commit hooks enforce code quality
+- Run `npm run lint` to check for issues
+- Run `npm run prettier:fix` to fix formatting
+
+### Import Standards
+- Use ES6 imports, not require statements
+- Maintain consistent import ordering
+- Use absolute imports with `@/` prefix
+
+## 📚 References
+
+- Security utilities: [env-utils.ts](mdc:src/lib/config/env-utils.ts), [secure-error-response.ts](mdc:src/utils/secure-error-response.ts)
+- Repository examples: [projectRepository.ts](mdc:src/repositories/projectRepository.ts)
+- Middleware: [authorization.ts](mdc:src/middleware/authorization.ts), [csrf.ts](mdc:src/lib/security/csrf.ts)
+- Technical debt tracking: [TECHNICAL_DEBT.md](mdc:TECHNICAL_DEBT.md)
+- Code improvements: [CODE_QUALITY_IMPROVEMENTS.md](mdc:CODE_QUALITY_IMPROVEMENTS.md)

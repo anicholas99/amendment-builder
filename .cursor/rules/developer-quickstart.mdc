@@ -1,0 +1,181 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Developer Quick Reference
+
+## 🚀 Essential Commands
+
+### Daily Development
+```bash
+npm run dev              # Start development server
+npm run type-check       # Check TypeScript types
+npm run lint:fix         # Fix linting issues
+npm run format           # Format code with Prettier
+```
+
+### Code Quality Checks
+```bash
+npm run setup:precommit  # Install pre-commit hooks (run once)
+npm run analyze:routes   # Analyze all API routes
+npm run analyze:route <path>  # Analyze specific route
+npm run audit:chakra     # Audit Chakra UI usage
+```
+
+### Database
+```bash
+npm run db:generate      # Generate Prisma client
+npm run db:migrate-dev   # Run migrations
+npm run db:push          # Push schema changes
+```
+
+## 🛡️ Security Checklist
+
+For **EVERY** new API endpoint:
+
+1. **Use standardized middleware:**
+   ```typescript
+   export default composeApiMiddleware(handler, {
+     schema: zodSchema,      // Required for mutations
+     resolveTenantId,       // Required for data access
+     rateLimit: { ... }     // Recommended
+   });
+   ```
+
+2. **Validate all inputs:**
+   ```typescript
+   const schema = z.object({
+     email: z.string().email(),
+     age: z.number().positive()
+   });
+   ```
+
+3. **Use type guards for runtime checks:**
+   ```typescript
+   import { isNonEmptyString, safeJsonParse } from '@/utils/type-guards';
+   ```
+
+## 📁 Key Files & Utilities
+
+### Type Safety
+- **Type Guards**: [type-guards.ts](mdc:src/utils/type-guards.ts)
+  - 20+ reusable type predicates
+  - Safe JSON parsing
+  - Runtime type assertions
+
+### API Development
+- **Middleware Composition**: [compose.ts](mdc:src/middleware/compose.ts)
+  - Standardized API middleware
+  - Built-in auth, validation, error handling
+  
+- **Route Analyzer**: [route-analyzer.ts](mdc:src/lib/dev/route-analyzer.ts)
+  - Validates API route compliance
+  - Security pattern checking
+
+### Frontend API Calls
+- **API Client**: [apiClient.ts](mdc:src/lib/api/apiClient.ts)
+  - Always use `apiFetch()` not `fetch()`
+  - Automatic tenant context
+
+## 🔍 Common Patterns
+
+### Project-Scoped API
+```typescript
+const resolveTenantId = async (req) => {
+  const { projectId } = req.query;
+  const project = await prisma.project.findUnique({
+    where: { id: String(projectId) },
+    select: { tenantId: true }
+  });
+  return project?.tenantId || null;
+};
+```
+
+### User-Scoped API
+```typescript
+const resolveTenantId = async (req) => {
+  return req.user?.tenantId || null;
+};
+```
+
+### Repository Pattern
+```typescript
+// Always access data through repositories
+import { findProjectById } from '@/repositories/projectRepository';
+
+const project = await findProjectById(id, tenantId);
+```
+
+## ⚠️ Common Mistakes to Avoid
+
+### ❌ DON'T Do This:
+```typescript
+// Direct database access in handler
+const project = await prisma.project.findUnique(...);
+
+// Raw JSON.parse
+const data = JSON.parse(req.body.jsonData);
+
+// Manual middleware composition
+export default withAuth(withErrorHandling(handler));
+
+// Using 'as any'
+const result = response as any;
+
+// Raw fetch in frontend
+await fetch('/api/endpoint');
+```
+
+### ✅ DO This Instead:
+```typescript
+// Use repository
+const project = await findProjectById(id, tenantId);
+
+// Safe JSON parse
+const data = safeJsonParse(req.body.jsonData, isMyType);
+
+// Standard composition
+export default composeApiMiddleware(handler);
+
+// Proper typing
+const result = response as MyResponseType;
+
+// Use apiFetch
+await apiFetch('/api/endpoint');
+```
+
+## 📊 TODO Management
+
+Current TODO status: [TODO_TRIAGE_REPORT.md](mdc:TODO_TRIAGE_REPORT.md)
+
+New TODO format:
+```typescript
+// TODO(category): [TICKET-123] Description
+// TODO(security): [SEC-456] Add rate limiting
+// TODO(performance): [PERF-789] Optimize query
+```
+
+## 🎯 Quick Wins
+
+1. **Set up pre-commit hooks**: `npm run setup:precommit`
+2. **Run type check before commits**: `npm run type-check`
+3. **Use type guards**: Import from `@/utils/type-guards`
+4. **Analyze your routes**: `npm run analyze:routes`
+5. **Fix all linting**: `npm run fix:all`
+
+## 📚 Documentation
+
+- **Security practices**: [security-practices.mdc](mdc:.cursor/rules/security-practices.mdc)
+- **API development**: [api-route-development.mdc](mdc:.cursor/rules/api-route-development.mdc)
+- **Type safety**: [type-safety.mdc](mdc:.cursor/rules/type-safety.mdc)
+- **Code quality**: [code-quality.mdc](mdc:.cursor/rules/code-quality.mdc)
+- **Phase 4 improvements**: [PHASE4_DEVELOPER_EXCELLENCE_LOG.md](mdc:PHASE4_DEVELOPER_EXCELLENCE_LOG.md)
+
+## 🆘 Getting Help
+
+1. Check the route analyzer for API issues
+2. Review type guard examples in tests
+3. Look at existing implementations in similar files
+4. Check the TODO triage report for known issues
+5. Run `npm run type-check` for type errors

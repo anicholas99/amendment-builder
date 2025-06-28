@@ -1,0 +1,676 @@
+/* Ultra dark mode styles - VS Code dark theme */
+body[data-ultra-dark='true'] {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+  --chakra-colors-white: #1e1e1e !important;
+  --chakra-colors-gray-50: #1e1e1e !important;
+  --chakra-colors-gray-100: #1e1e1e !important;
+}
+
+/* Header and sidebar */
+body[data-ultra-dark='true'] header,
+body[data-ultra-dark='true'] .app-header,
+body[data-ultra-dark='true'] [role='banner'],
+body[data-ultra-dark='true'] nav {
+  background-color: #1e1e1e !important;
+  border-color: #333333 !important;
+  z-index: 9999 !important;
+}
+
+/* Target every possible header layer */
+body[data-ultra-dark='true'] .app-header > *,
+body[data-ultra-dark='true'] .app-header > div,
+body[data-ultra-dark='true'] .app-header nav,
+body[data-ultra-dark='true'] .app-header [role='banner'],
+body[data-ultra-dark='true'] .app-header .chakra-container,
+body[data-ultra-dark='true'] .app-header .chakra-stack {
+  background-color: #1e1e1e !important;
+  border-color: #333333 !important;
+  color: #ffffff !important;
+}
+
+/* Force CSS custom properties */
+body[data-ultra-dark='true'] .app-header,
+body[data-ultra-dark='true'] .app-header > div {
+  --header-bg: #1e1e1e !important;
+  --header-border: #333333 !important;
+  --header-text: #ffffff !important;
+}
+
+/* Sidebar background - comprehensive targeting */
+body[data-ultra-dark='true'] .sidebar-wrapper,
+body[data-ultra-dark='true'] nav,
+body[data-ultra-dark='true'] [role='navigation'],
+body[data-ultra-dark='true'] [class*='project-list'],
+body[data-ultra-dark='true'] .chakra-stack[role='navigation'],
+body[data-ultra-dark='true'] aside,
+body[data-ultra-dark='true'] aside > div,
+body[data-ultra-dark='true'] [role='navigation'] > div,
+body[data-ultra-dark='true'] .sidebar-wrapper > div,
+body[data-ultra-dark='true'] nav > div,
+body[data-ultra-dark='true'] [class*='project-list'] > div,
+body[data-ultra-dark='true'] [class*='view-all-projects'],
+body[data-ultra-dark='true'] [class*='project-navigation'],
+body[data-ultra-dark='true'] [class*='project-sidebar'] {
+  background-color: #1e1e1e !important;
+}
+
+/* Ensure expanded items and bottom area have same background */
+body[data-ultra-dark='true'] [role='navigation'] [aria-expanded='true'],
+body[data-ultra-dark='true'] .sidebar-wrapper [aria-expanded='true'],
+body[data-ultra-dark='true'] [role='navigation'] > *:last-child,
+body[data-ultra-dark='true'] .sidebar-wrapper > *:last-child {
+  background-color: #1e1e1e !important;
+}
+
+/* Main content areas */
+body[data-ultra-dark='true'] .chakra-container,
+body[data-ultra-dark='true'] [role='main'],
+body[data-ultra-dark='true'] .main-content,
+body[data-ultra-dark='true'] .content-area,
+body[data-ultra-dark='true'] [data-testid*='panel'],
+body[data-ultra-dark='true'] [data-testid*='content'],
+body[data-ultra-dark='true'] .chakra-stack > div,
+body[data-ultra-dark='true'] [role='tabpanel'],
+body[data-ultra-dark='true'] .chakra-modal__content,
+body[data-ultra-dark='true'] .chakra-card,
+body[data-ultra-dark='true'] .paper,
+body[data-ultra-dark='true'] [role='article'],
+body[data-ultra-dark='true'] [data-testid='claim-card'],
+body[data-ultra-dark='true'] [data-testid='claim-container'],
+body[data-ultra-dark='true'] .claim-card,
+body[data-ultra-dark='true'] .claim-container,
+body[data-ultra-dark='true'] .main-panel,
+body[data-ultra-dark='true'] .content-panel {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+}
+
+/* Main panel and content area */
+body[data-ultra-dark='true'] [role='main'] div,
+body[data-ultra-dark='true'] .chakra-container div,
+body[data-ultra-dark='true'] [data-testid*='panel'] div,
+body[data-testid*='content'] div,
+body[data-ultra-dark='true'] .main-panel div,
+body[data-ultra-dark='true'] .content-panel div {
+  background-color: #1e1e1e !important;
+}
+
+/* Ensure white backgrounds are covered */
+body[data-ultra-dark='true'] [class*='bg-white'],
+body[data-ultra-dark='true'] [style*='background-color: white'],
+body[data-ultra-dark='true'] [style*='background: white'] {
+  background-color: #1e1e1e !important;
+}
+
+/* Page title */
+body[data-ultra-dark='true'] .chakra-heading {
+  color: #ffffff !important;
+  opacity: 1 !important;
+  background-color: #1e1e1e !important;
+  padding: 1rem !important;
+  border-bottom: 1px solid #333333 !important;
+  margin: 0 !important;
+}
+
+/* Page title container */
+body[data-ultra-dark='true'] [role='banner'],
+body[data-ultra-dark='true'] header,
+body[data-ultra-dark='true'] .page-header {
+  background-color: #1e1e1e !important;
+  border-bottom: 1px solid #333333 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Main container and layout elements */
+body[data-ultra-dark='true'] .chakra-stack,
+body[data-ultra-dark='true'] [data-page],
+body[data-ultra-dark='true'] .chakra-panel {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+  border-color: #333333 !important;
+}
+
+/* Navigation and tab bar */
+body[data-ultra-dark='true'] .chakra-tabs__tablist,
+body[data-ultra-dark='true'] [role='tablist'] {
+  background-color: #1e1e1e !important;
+  border-bottom: 1px solid #333333 !important;
+}
+
+/* Navigation items and tabs */
+body[data-ultra-dark='true'] .chakra-tabs__tab {
+  color: #888888 !important;
+  background-color: transparent !important;
+}
+
+body[data-ultra-dark='true'] .chakra-tabs__tab[aria-selected='true'] {
+  color: #ffffff !important;
+  border-color: #0078d4 !important;
+}
+
+/* Scrollbars - more specific targeting */
+body[data-ultra-dark='true'] *::-webkit-scrollbar,
+body[data-ultra-dark='true'] *::-webkit-scrollbar-track,
+body[data-ultra-dark='true'] *::-webkit-scrollbar-thumb {
+  background-color: #1e1e1e !important;
+}
+
+body[data-ultra-dark='true'] *::-webkit-scrollbar {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+body[data-ultra-dark='true'] *::-webkit-scrollbar-track {
+  background: #1e1e1e !important;
+  border: none !important;
+}
+
+body[data-ultra-dark='true'] *::-webkit-scrollbar-thumb {
+  background-color: #424242 !important;
+  border: 3px solid #1e1e1e !important;
+  border-radius: 6px !important;
+  min-height: 40px !important;
+}
+
+body[data-ultra-dark='true'] *::-webkit-scrollbar-thumb:hover {
+  background-color: #4f4f4f !important;
+}
+
+body[data-ultra-dark='true'] *::-webkit-scrollbar-corner {
+  background-color: #1e1e1e !important;
+}
+
+/* Firefox scrollbar */
+body[data-ultra-dark='true'] * {
+  scrollbar-color: #424242 #1e1e1e !important;
+  scrollbar-width: thin !important;
+}
+
+/* Selection */
+body[data-ultra-dark='true'] ::selection {
+  background-color: #264f78 !important;
+  color: #ffffff !important;
+}
+
+/* Dropdowns and menus */
+body[data-ultra-dark='true'] .chakra-menu__menu-list {
+  background-color: #252526 !important;
+  border-color: #333333 !important;
+  color: #ffffff !important;
+}
+
+body[data-ultra-dark='true'] .chakra-menu__menuitem:hover {
+  background-color: #333333 !important;
+  color: #ffffff !important;
+}
+
+/* Form elements */
+body[data-ultra-dark='true'] .chakra-form-control label {
+  color: #ffffff !important;
+}
+
+/* Badges */
+body[data-ultra-dark='true'] .chakra-badge {
+  background-color: #333333 !important;
+  color: #ffffff !important;
+}
+
+/* Tooltips */
+body[data-ultra-dark='true'] .chakra-tooltip {
+  background-color: #252526 !important;
+  color: #ffffff !important;
+  border-color: #333333 !important;
+}
+
+/* Reference numerals table */
+body[data-ultra-dark='true'] [data-testid='reference-numerals-table'] {
+  background-color: #252526 !important;
+  border: 1px solid #333333 !important;
+}
+
+body[data-ultra-dark='true'] [data-testid='reference-numerals-table'] th {
+  background-color: #333333 !important;
+  color: #ffffff !important;
+}
+
+/* Ensure smooth transitions */
+body[data-ultra-dark='true'] * {
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease !important;
+}
+
+/* Force dark background on ALL content areas */
+body[data-ultra-dark='true'] {
+  --chakra-colors-white: #1e1e1e !important;
+  --chakra-colors-gray-50: #1e1e1e !important;
+  --chakra-colors-gray-100: #1e1e1e !important;
+}
+
+/* Target main panel specifically */
+body[data-ultra-dark='true'] .chakra-container > div > div > div,
+body[data-ultra-dark='true'] [role='main'] > div > div > div,
+body[data-ultra-dark='true'] .chakra-tabs__tab-panel > div > div,
+body[data-ultra-dark='true'] .chakra-tabs__tab-panels > div {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+}
+
+/* Target claim refinement area */
+body[data-ultra-dark='true'] [data-testid='claim-refinement'],
+body[data-ultra-dark='true'] [data-testid='claim-editor'],
+body[data-ultra-dark='true'] [data-testid='claim-panel'],
+body[data-ultra-dark='true'] .claim-editor,
+body[data-ultra-dark='true'] .claim-panel,
+body[data-ultra-dark='true'] .claim-container,
+body[data-ultra-dark='true'] .claim-content {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+}
+
+/* Force ALL divs in main content to be dark except headers */
+body[data-ultra-dark='true']
+  .chakra-container
+  div:not(.view-header):not(.app-header),
+body[data-ultra-dark='true']
+  [role='main']
+  div:not(.view-header):not(.app-header) {
+  background-color: #1e1e1e !important;
+}
+
+/* Target Chakra layout components */
+body[data-ultra-dark='true'] .chakra-stack,
+body[data-ultra-dark='true'] .chakra-container,
+body[data-ultra-dark='true'] .chakra-box,
+body[data-ultra-dark='true'] .chakra-wrap,
+body[data-ultra-dark='true'] .chakra-flex {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+}
+
+/* Target specific layout areas */
+body[data-ultra-dark='true'] [data-page],
+body[data-ultra-dark='true'] [data-testid*='layout'],
+body[data-ultra-dark='true'] [data-testid*='container'],
+body[data-ultra-dark='true'] [data-testid*='wrapper'],
+body[data-ultra-dark='true'] [data-testid*='content'],
+body[data-ultra-dark='true'] [data-testid*='panel'] {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+}
+
+/* Target any remaining white areas */
+body[data-ultra-dark='true'] [style*='background-color: rgb(255, 255, 255)'],
+body[data-ultra-dark='true'] [style*='background-color: white'],
+body[data-ultra-dark='true'] [style*='background: white'],
+body[data-ultra-dark='true'] [class*='bg-white'] {
+  background-color: #1e1e1e !important;
+}
+
+/* Target every possible content wrapper */
+body[data-ultra-dark='true'] .content-wrapper,
+body[data-ultra-dark='true'] .page-wrapper,
+body[data-ultra-dark='true'] .view-wrapper,
+body[data-ultra-dark='true'] .main-wrapper,
+body[data-ultra-dark='true'] [class*='-wrapper'],
+body[data-ultra-dark='true'] [class*='-container'],
+body[data-ultra-dark='true'] [class*='-content'],
+body[data-ultra-dark='true'] [class*='-panel'],
+body[data-ultra-dark='true'] [class*='-section'] {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+}
+
+/* Override any inline styles */
+body[data-ultra-dark='true'] [style*='background'],
+body[data-ultra-dark='true'] [style*='background-color'],
+body[data-ultra-dark='true'] [style*='rgb(255, 255, 255)'],
+body[data-ultra-dark='true'] [style*='#fff'],
+body[data-ultra-dark='true'] [style*='#ffffff'] {
+  background: #1e1e1e !important;
+  background-color: #1e1e1e !important;
+}
+
+/* Target paper and card elements */
+body[data-ultra-dark='true'] .paper,
+body[data-ultra-dark='true'] .card,
+body[data-ultra-dark='true'] [class*='paper'],
+body[data-ultra-dark='true'] [class*='card'],
+body[data-ultra-dark='true'] [role='article'],
+body[data-ultra-dark='true'] article {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+  border-color: #333333 !important;
+}
+
+/* Target any element with background utility classes */
+body[data-ultra-dark='true'] [class*='bg-'],
+body[data-ultra-dark='true'] [class*='background-'],
+body[data-ultra-dark='true'] [class*='chakra-bg-'] {
+  background-color: #1e1e1e !important;
+}
+
+/* Figure carousel and upload area */
+body[data-ultra-dark='true'] [class*='figure-carousel'],
+body[data-ultra-dark='true'] [class*='upload-area'],
+body[data-ultra-dark='true'] [class*='dropzone'],
+body[data-ultra-dark='true'] [class*='figure-container'],
+body[data-ultra-dark='true'] [class*='figure-wrapper'],
+body[data-ultra-dark='true'] [class*='figure-upload'],
+body[data-ultra-dark='true'] [class*='figure-preview'] {
+  background-color: #1e1e1e !important;
+  border-color: #333333 !important;
+}
+
+/* Reference numerals table */
+body[data-ultra-dark='true'] [data-testid='reference-numerals-table'],
+body[data-ultra-dark='true'] [class*='reference-numerals'],
+body[data-ultra-dark='true'] [class*='numerals-table'],
+body[data-ultra-dark='true'] table,
+body[data-ultra-dark='true'] thead,
+body[data-ultra-dark='true'] tbody,
+body[data-ultra-dark='true'] tr,
+body[data-ultra-dark='true'] th,
+body[data-ultra-dark='true'] td {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+  border-color: #333333 !important;
+}
+
+/* Figure upload area specific styles */
+body[data-ultra-dark='true'] [class*='dashed-border'],
+body[data-ultra-dark='true'] [class*='upload-box'],
+body[data-ultra-dark='true'] [style*='dashed'] {
+  border-color: #333333 !important;
+  background-color: #1e1e1e !important;
+}
+
+/* Ensure all figure-related elements are dark */
+body[data-ultra-dark='true'] [id*='figure'],
+body[data-ultra-dark='true'] [class*='figure'],
+body[data-ultra-dark='true'] [aria-label*='figure'],
+body[data-ultra-dark='true'] [data-testid*='figure'] {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+}
+
+/* Figure upload area - extremely specific targeting */
+body[data-ultra-dark='true'] [class*='figure'] > div,
+body[data-ultra-dark='true'] [class*='dropzone'],
+body[data-ultra-dark='true'] [class*='upload-area'],
+body[data-ultra-dark='true'] [role='button'][aria-label*='upload'],
+body[data-ultra-dark='true'] [class*='dashed'],
+body[data-ultra-dark='true'] [style*='rgb(247, 250, 252)'],
+body[data-ultra-dark='true'] [style*='rgb(237, 242, 247)'],
+body[data-ultra-dark='true'] [style*='rgb(226, 232, 240)'],
+body[data-ultra-dark='true'] [class*='bg-gray-50'],
+body[data-ultra-dark='true'] [class*='bg-blue-50'],
+body[data-ultra-dark='true'] [class*='bg-gray-100'] {
+  background-color: #1e1e1e !important;
+  border-color: #333333 !important;
+  color: #ffffff !important;
+}
+
+/* Override any light backgrounds */
+body[data-ultra-dark='true'] [style*='background-color: rgb(247, 250, 252)'],
+body[data-ultra-dark='true'] [style*='background-color: rgb(237, 242, 247)'],
+body[data-ultra-dark='true'] [style*='background-color: rgb(226, 232, 240)'] {
+  background-color: #1e1e1e !important;
+}
+
+/* Ensure figure area is dark */
+body[data-ultra-dark='true'] .figures-section,
+body[data-ultra-dark='true'] .figure-upload-area,
+body[data-ultra-dark='true'] .figure-dropzone,
+body[data-ultra-dark='true'] .chakra-card[aria-label*='figure'],
+body[data-ultra-dark='true'] [data-testid*='figure'] {
+  background-color: #1e1e1e !important;
+  --chakra-colors-gray-50: #1e1e1e !important;
+  --chakra-colors-gray-100: #1e1e1e !important;
+  --chakra-colors-blue-50: #1e1e1e !important;
+}
+
+/* Super specific figure area targeting */
+body[data-ultra-dark='true'] .chakra-card[aria-label*='figure'] > div,
+body[data-ultra-dark='true'] .chakra-card[aria-label*='figure'] > div > div,
+body[data-ultra-dark='true'] [data-testid*='figure'] > div,
+body[data-ultra-dark='true'] [data-testid*='figure-upload'] > div,
+body[data-ultra-dark='true'] [role='button'][aria-label*='upload'] > div,
+body[data-ultra-dark='true'] [class*='dropzone'] > div,
+body[data-ultra-dark='true'] [class*='figure-container'] > div {
+  background-color: #1e1e1e !important;
+  border-color: #333333 !important;
+}
+
+/* Override Chakra UI background colors */
+body[data-ultra-dark='true'] {
+  --chakra-colors-gray-50: #1e1e1e !important;
+  --chakra-colors-gray-100: #1e1e1e !important;
+  --chakra-colors-blue-50: #1e1e1e !important;
+  --chakra-colors-whiteAlpha-50: #1e1e1e !important;
+  --chakra-colors-whiteAlpha-100: #1e1e1e !important;
+  --chakra-colors-blackAlpha-50: #1e1e1e !important;
+  --chakra-colors-blackAlpha-100: #1e1e1e !important;
+}
+
+/* Form inputs and text areas */
+body[data-ultra-dark='true'] input,
+body[data-ultra-dark='true'] textarea,
+body[data-ultra-dark='true'] select,
+body[data-ultra-dark='true'] .chakra-input,
+body[data-ultra-dark='true'] .chakra-textarea,
+body[data-ultra-dark='true'] .chakra-select,
+body[data-ultra-dark='true'] [role='textbox'],
+body[data-ultra-dark='true'] [contenteditable='true'] {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+  border-color: #333333 !important;
+}
+
+/* Buttons and interactive elements */
+body[data-ultra-dark='true'] button,
+body[data-ultra-dark='true'] .chakra-button,
+body[data-ultra-dark='true'] [role='button'],
+body[data-ultra-dark='true'] .interactive-element {
+  border-color: #333333 !important;
+}
+
+/* Modals and popups */
+body[data-ultra-dark='true'] .chakra-modal__content,
+body[data-ultra-dark='true'] .chakra-modal__header,
+body[data-ultra-dark='true'] .chakra-modal__footer,
+body[data-ultra-dark='true'] .chakra-modal__body,
+body[data-ultra-dark='true'] .chakra-popover__content,
+body[data-ultra-dark='true'] .chakra-menu__list,
+body[data-ultra-dark='true'] .chakra-toast,
+body[data-ultra-dark='true'] [role='dialog'],
+body[data-ultra-dark='true'] [role='tooltip'] {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+  border-color: #333333 !important;
+}
+
+/* Lists and menu items */
+body[data-ultra-dark='true'] .chakra-menu__item,
+body[data-ultra-dark='true'] .chakra-select__option,
+body[data-ultra-dark='true'] li,
+body[data-ultra-dark='true'] [role='menuitem'],
+body[data-ultra-dark='true'] [role='option'] {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+}
+
+/* Hover states */
+body[data-ultra-dark='true'] .chakra-menu__item:hover,
+body[data-ultra-dark='true'] .chakra-select__option:hover,
+body[data-ultra-dark='true'] [role='menuitem']:hover,
+body[data-ultra-dark='true'] [role='option']:hover {
+  background-color: #2d2d2d !important;
+}
+
+/* Additional Chakra UI components */
+body[data-ultra-dark='true'] .chakra-alert,
+body[data-ultra-dark='true'] .chakra-badge,
+body[data-ultra-dark='true'] .chakra-tag,
+body[data-ultra-dark='true'] .chakra-progress,
+body[data-ultra-dark='true'] .chakra-stat,
+body[data-ultra-dark='true'] .chakra-skeleton {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+  border-color: #333333 !important;
+}
+
+/* Code blocks and pre-formatted text */
+body[data-ultra-dark='true'] pre,
+body[data-ultra-dark='true'] code,
+body[data-ultra-dark='true'] .chakra-code,
+body[data-ultra-dark='true'] [class*='code-'],
+body[data-ultra-dark='true'] [class*='syntax-'] {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+  border-color: #333333 !important;
+}
+
+/* Additional color variable overrides */
+body[data-ultra-dark='true'] {
+  --chakra-colors-white: #1e1e1e !important;
+  --chakra-colors-black: #ffffff !important;
+  --chakra-colors-gray-200: #333333 !important;
+  --chakra-colors-gray-300: #424242 !important;
+  --chakra-colors-gray-400: #4f4f4f !important;
+  --chakra-colors-gray-500: #666666 !important;
+  --chakra-colors-gray-600: #808080 !important;
+  --chakra-colors-gray-700: #999999 !important;
+  --chakra-colors-gray-800: #b3b3b3 !important;
+  --chakra-colors-gray-900: #cccccc !important;
+}
+
+/* Additional Chakra UI overrides */
+body[data-ultra-dark='true'] {
+  /* Override Chakra UI theme colors */
+  --chakra-colors-white: #1e1e1e !important;
+  --chakra-colors-black: #ffffff !important;
+  --chakra-colors-gray-50: #1e1e1e !important;
+  --chakra-colors-gray-100: #1e1e1e !important;
+  --chakra-colors-gray-200: #333333 !important;
+  --chakra-colors-gray-300: #424242 !important;
+  --chakra-colors-gray-400: #4f4f4f !important;
+  --chakra-colors-gray-500: #666666 !important;
+  --chakra-colors-gray-600: #808080 !important;
+  --chakra-colors-gray-700: #999999 !important;
+  --chakra-colors-gray-800: #b3b3b3 !important;
+  --chakra-colors-gray-900: #cccccc !important;
+
+  /* Override theme-specific colors */
+  --chakra-colors-ipd-bgMain: #1e1e1e !important;
+  --chakra-colors-ipd-bgSidebar: #1e1e1e !important;
+  --chakra-colors-ipd-bgHeader: #1e1e1e !important;
+  --chakra-colors-ipd-bgCard: #1e1e1e !important;
+
+  /* Override any background utilities */
+  --chakra-colors-bg-canvas: #1e1e1e !important;
+  --chakra-colors-bg-surface: #1e1e1e !important;
+  --chakra-colors-bg-subtle: #1e1e1e !important;
+  --chakra-colors-bg-muted: #1e1e1e !important;
+}
+
+/* Target TipTap editor specifically */
+body[data-ultra-dark='true'] .patent-editor-tiptap,
+body[data-ultra-dark='true'] .ProseMirror,
+body[data-ultra-dark='true'] .tiptap-toolbar,
+body[data-ultra-dark='true'] .DraftEditor-root,
+body[data-ultra-dark='true'] .DraftEditor-editorContainer {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+  border-color: #333333 !important;
+}
+
+/* Target welcome page and gradients */
+body[data-ultra-dark='true'] [style*='linear-gradient'],
+body[data-ultra-dark='true'] [style*='radial-gradient'],
+body[data-ultra-dark='true'] [style*='linear('],
+body[data-ultra-dark='true'] [style*='radial('] {
+  background: #1e1e1e !important;
+  background-image: none !important;
+}
+
+/* Target StyledComponents */
+body[data-ultra-dark='true'] .document-header,
+body[data-ultra-dark='true'] .document-container,
+body[data-ultra-dark='true'] .ai-panel,
+body[data-ultra-dark='true'] .toolbar {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+  border-color: #333333 !important;
+}
+
+/* Target ViewLayout components */
+body[data-ultra-dark='true'] [role='main'] > div,
+body[data-ultra-dark='true'] .chakra-container > div,
+body[data-ultra-dark='true'] [data-testid*='panel'] > div {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+}
+
+/* Target any remaining light backgrounds */
+body[data-ultra-dark='true'] [style*='rgb(255, 255, 255)'],
+body[data-ultra-dark='true'] [style*='rgb(247, 250, 252)'],
+body[data-ultra-dark='true'] [style*='rgb(237, 242, 247)'],
+body[data-ultra-dark='true'] [style*='rgb(226, 232, 240)'],
+body[data-ultra-dark='true'] [class*='bg-white'],
+body[data-ultra-dark='true'] [class*='bg-gray-50'],
+body[data-ultra-dark='true'] [class*='bg-gray-100'],
+body[data-ultra-dark='true'] [class*='bg-blue-50'] {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+}
+
+/* Ensure transitions are smooth */
+body[data-ultra-dark='true'] * {
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease !important;
+}
+
+/* Side panel background */
+body[data-ultra-dark='true'] .chakra-stack[role='complementary'],
+body[data-ultra-dark='true'] .chakra-stack[role='complementary'] > div {
+  background-color: #1e1e1e !important;
+}
+
+/* Side panel header and bottom panel */
+body[data-ultra-dark='true'] [role='complementary'] header,
+body[data-ultra-dark='true'] [role='complementary'] [role='banner'],
+body[data-ultra-dark='true'] [role='complementary'] > div:first-child,
+body[data-ultra-dark='true'] [role='complementary'] > div:last-child,
+body[data-ultra-dark='true'] [role='complementary'] nav header,
+body[data-ultra-dark='true'] [role='complementary'] .chakra-tabs__tablist,
+body[data-ultra-dark='true'] [role='complementary'] [class*='header'],
+body[data-ultra-dark='true'] [role='complementary'] [class*='footer'],
+body[data-ultra-dark='true'] [role='complementary'] [class*='bottom'] {
+  background-color: #1e1e1e !important;
+}
+
+/* Sidebar header and footer */
+body[data-ultra-dark='true'] .sidebar header,
+body[data-ultra-dark='true'] .sidebar > div:first-child,
+body[data-ultra-dark='true'] .sidebar > div:last-child,
+body[data-ultra-dark='true'] .sidebar [role='banner'],
+body[data-ultra-dark='true'] .sidebar [class*='header'],
+body[data-ultra-dark='true'] .sidebar [class*='footer'],
+body[data-ultra-dark='true'] .sidebar [class*='view-all-projects'],
+body[data-ultra-dark='true'] .sidebar [class*='project-navigation'] {
+  background-color: #1e1e1e !important;
+  border-color: #333333 !important;
+}
+
+/* Ensure View All Projects button area is dark */
+body[data-ultra-dark='true'] .sidebar > *:last-child,
+body[data-ultra-dark='true'] .sidebar [role='contentinfo'] {
+  background-color: #1e1e1e !important;
+  border-color: #333333 !important;
+}

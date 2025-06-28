@@ -1,0 +1,128 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# JSON Parsing Security
+
+- **NEVER use `JSON.parse()` directly in production code**
+  - All JSON parsing must use the `safeJsonParse` utility from [json-utils.ts](mdc:src/utils/json-utils.ts)
+  - This prevents application crashes from malformed JSON and provides consistent error handling
+
+- **Implementation Pattern**
+  ```typescript
+  import { safeJsonParse } from '@/utils/json-utils';
+  
+  // ✅ DO: Use safeJsonParse
+  const data = safeJsonParse(jsonString);
+  if (data === undefined) {
+    // Handle invalid JSON - log error and return appropriate response
+    apiLogger.error('Failed to parse JSON - invalid JSON', {
+      dataPreview: jsonString.substring(0, 100)
+    });
+    return res.status(400).json({ error: 'Invalid JSON data' });
+  }
+  
+  // ❌ DON'T: Use JSON.parse directly
+  try {
+    const data = JSON.parse(jsonString); // NEVER DO THIS
+  } catch (e) {
+    // This pattern is forbidden
+  }
+  ```
+
+- **Error Handling Requirements**
+  - **API Routes**: Return 400/500 status codes for invalid JSON
+  - **Background Jobs**: Log errors and handle gracefully
+  - **Debug Tools**: May return null/undefined but must log warnings
+  - **Never silently ignore JSON parsing failures**
+
+- **Common Scenarios**
+
+  1. **Database JSON Fields**
+     ```typescript
+     // Parsing structured data from database
+     const structuredData = safeJsonParse(project.structuredData);
+     if (structuredData === undefined) {
+       apiLogger.warn('Invalid structuredData in database', {
+         projectId: project.id,
+         dataPreview: project.structuredData?.substring(0, 100)
+       });
+       // Decide whether to fail or use empty object based on context
+     }
+     ```
+
+  2. **AI/LLM Responses**
+     ```typescript
+     // Parsing AI responses (often unreliable)
+     const aiResponse = safeJsonParse(rawResponse);
+     if (aiResponse === undefined) {
+       throw createApiError(
+         ErrorCode.INTERNAL_ERROR,
+         'AI returned invalid JSON',
+         { snippet: rawResponse.slice(0, 500) }
+       );
+     }
+     ```
+
+  3. **External API Responses**
+     ```typescript
+     // Parsing third-party API responses
+     const apiData = safeJsonParse(responseText);
+     if (apiData === undefined) {
+       throw createApiError(
+         ErrorCode.SERVICE_UNAVAILABLE,
+         'External service returned invalid JSON'
+       );
+     }
+     ```
+
+- **Logging Best Practices**
+  - Always log parsing failures with context
+  - Include a preview of the invalid data (first 100-500 chars)
+  - Never log sensitive data or full payloads
+  - Add contextual information (IDs, sources, etc.)
+
+- **Type Safety After Parsing**
+  ```typescript
+  const parsed = safeJsonParse(jsonString);
+  if (parsed === undefined) {
+    // Handle error
+    return;
+  }
+  
+  // Validate structure after parsing
+  if (typeof parsed !== 'object' || parsed === null) {
+    apiLogger.error('Parsed JSON is not an object', { 
+      type: typeof parsed 
+    });
+    return res.status(400).json({ error: 'Invalid data structure' });
+  }
+  
+  // Use Zod for full validation when needed
+  const validated = mySchema.safeParse(parsed);
+  if (!validated.success) {
+    return res.status(400).json({ 
+      error: 'Invalid data format',
+      details: validated.error.flatten()
+    });
+  }
+  ```
+
+- **Migration Checklist**
+  - Search for all `JSON.parse(` instances
+  - Replace with `safeJsonParse` imports
+  - Add appropriate error handling
+  - Test with malformed JSON inputs
+  - Verify error responses match API standards
+
+- **Security Considerations**
+  - Malformed JSON in databases indicates potential data corruption
+  - Consider adding monitoring/alerts for JSON parsing failures
+  - Regular audits should check for new `JSON.parse` usage
+  - CI/CD should include linting rules to prevent direct `JSON.parse`
+
+- **References**
+  - Safe parsing utility: [json-utils.ts](mdc:src/utils/json-utils.ts)
+  - Error handling: [errorHandler.ts](mdc:src/utils/errorHandler.ts)
+  - API logging: [apiLogger.ts](mdc:src/lib/monitoring/apiLogger.ts)

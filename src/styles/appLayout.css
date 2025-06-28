@@ -1,0 +1,53 @@
+/* AppLayout Transition Styles */
+/* These styles ensure smooth transitions and prevent layout jumps */
+
+/* Fix sidebar transitions */
+.sidebar {
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  will-change: width;
+  transition: width 0.15s ease-out;
+}
+
+/* Fix content area transitions */
+.main-content {
+  transition: margin-left 0.15s ease-out;
+  will-change: margin-left;
+  backface-visibility: hidden;
+}
+
+/* Ensure fixed heights to prevent layout jumps */
+.content-area {
+  height: auto;
+  position: relative;
+  will-change: auto; /* Reset will-change to prevent GPU memory issues */
+}
+
+/* Prevent flashing during transitions */
+.view-header {
+  transition: left 0.15s ease-out;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform;
+}
+
+/* Improve rendering performance */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure view layout consistency */
+.view-layout-wrapper {
+  width: 100%;
+  position: relative;
+}
+
+/* Fix for blinking animations */
+.framer-motion-div {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+} 

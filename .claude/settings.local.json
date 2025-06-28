@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(npm audit:*)",
+      "Bash(rg:*)",
+      "Bash(grep:*)",
+      "Bash(rm:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run type-check:*)",
+      "Bash(npm outdated)",
+      "Bash(npx depcheck:*)",
+      "Bash(npm run test:coverage:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npm run test:*)",
+      "Bash(npm run cleanup:bundle-analysis:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm test:*)",
+      "Bash(npx jest:*)",
+      "Bash(node:*)",
+      "Bash(mkdir:*)",
+      "Bash(timeout 30 npx tsc --noEmit --listFiles)",
+      "Bash(timeout 30 npx tsc --noEmit src/lib/security/__tests__/validate.test.ts)",
+      "Bash(timeout 30 npx tsc --noEmit src/lib/validation/__tests__/apiValidation.test.ts)",
+      "Bash(timeout 30 npx tsc --noEmit src/features/citation-extraction/hooks/__tests__/useCitationHandler.test.ts)",
+      "Bash(timeout 30 npx tsc --noEmit src/features/citation-extraction/components/CitationMainView.tsx)",
+      "Bash(timeout 30 npx tsc --noEmit src/server/services/deep-analysis-inline.server.service.ts)",
+      "Bash(timeout 30 npx tsc --noEmit src/utils/tenantDebug.ts)"
+    ],
+    "deny": []
+  }
+}

@@ -1,0 +1,31 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+- **Handlers that process HTTP DELETE requests MUST enforce ADMIN role**
+  - Wrap the exported handler with `requireAdminForDelete` or pass `['ADMIN']` into `withTenantGuard`.
+  - Acceptable patterns:
+    ```typescript
+    export default withAuthAndTenant(requireAdminForDelete(handler));
+    // or
+    const guarded = withTenantGuard(resolveTenantId, ['ADMIN'])(handler);
+    export default withAuth(guarded);
+    ```
+  - **Disallowed patterns** (will trigger lint):
+    ```typescript
+    // ❌ No role check
+    export default handler;
+
+    // ❌ withTenantGuard without roles on DELETE route
+    export default withTenantGuard(resolveTenantId)(handler);
+    ```
+- **Read-only routes (GET) may omit ADMIN role**
+  - For multi-method handlers use `requireAdminForDelete` which only checks on DELETE.
+- **Test expectations**
+  - A USER role request to a DELETE endpoint returns 403.
+  - An ADMIN role request succeeds (204/200).
+- **Examples in codebase**
+  - [`projects/[projectId]/claim-set-versions/[versionId].ts`](mdc:src/pages/api/projects/[projectId]/claim-set-versions/[versionId].ts)
+  - [`debug-tools/fix-structureddata.ts`](mdc:src/pages/api/debug-tools/fix-structureddata.ts)
+

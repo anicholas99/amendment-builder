@@ -1,0 +1,12 @@
+---
+description:
+globs:
+alwaysApply: false
+---
++ ---
++ description: Enforces modularization by limiting file and function length to encourage maintainable code
++ alwaysApply: true
++ ---
+
+
+

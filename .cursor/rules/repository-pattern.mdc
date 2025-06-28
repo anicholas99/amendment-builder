@@ -1,0 +1,252 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Repository Pattern Requirements
+
+## 📚 Repository Structure
+
+All database operations MUST go through repository functions located in [src/repositories](mdc:src/repositories).
+
+### Repository Organization
+```
+repositories/
+├── projectRepository.ts       # Project-related queries
+├── userRepository.ts          # User management
+├── citationRepository.ts      # Citation operations
+├── searchRepository.ts        # Search history
+└── project/                   # Modular sub-repositories
+    ├── core.repository.ts
+    ├── security.repository.ts
+    └── index.ts              # Re-exports
+```
+
+## ✅ Repository Function Pattern
+
+### Basic Structure
+```typescript
+import { getPrismaClient } from '@/lib/prisma';
+import { logger } from '@/lib/monitoring/logger';
+import { DatabaseError } from '@/utils/error-utils';
+
+export async function findProjectById(
+  projectId: string,
+  tenantId: string // ALWAYS include tenant isolation
+): Promise<Project | null> {
+  const prisma = getPrismaClient();
+  
+  try {
+    logger.debug('Repository: Finding project', { projectId, tenantId });
+    
+    const project = await prisma.project.findFirst({
+      where: {
+        id: projectId,
+        tenantId, // REQUIRED: Tenant isolation
+      },
+    });
+    
+    return project;
+  } catch (error) {
+    logger.error('Failed to find project', { error, projectId });
+    throw new DatabaseError('Failed to retrieve project');
+  }
+}
+```
+
+## 🔒 Security Requirements
+
+### 1. **Tenant Isolation is MANDATORY**
+Every repository function accessing tenant-scoped data MUST include tenant checks:
+
+```typescript
+// ✅ CORRECT: Includes tenant check
+export async function findProjectsByTenant(
+  tenantId: string,
+  userId?: string
+) {
+  return prisma.project.findMany({
+    where: {
+      tenantId, // Required!
+      ...(userId && { userId }),
+    },
+  });
+}
+
+// ❌ WRONG: Missing tenant check
+export async function findProject(projectId: string) {
+  return prisma.project.findUnique({
+    where: { id: projectId }, // Vulnerable!
+  });
+}
+```
+
+### 2. **Error Handling**
+Wrap all database operations in try-catch blocks:
+
+```typescript
+try {
+  // Database operation
+} catch (error) {
+  logger.error('Repository operation failed', { 
+    error, 
+    operation: 'findProjectById',
+    projectId 
+  });
+  
+  // Throw application-specific error
+  throw new DatabaseError('Failed to retrieve project');
+}
+```
+
+### 3. **Type Safety**
+Define specific return types:
+
+```typescript
+// ✅ GOOD: Specific return type
+export async function getProjectClaims(
+  projectId: string,
+  tenantId: string
+): Promise<Claim[]> {
+  // Implementation
+}
+
+// ❌ BAD: Generic Prisma type
+export async function getProject(id: string) {
+  return prisma.project.findUnique({ where: { id } });
+}
+```
+
+## 🎯 Common Repository Patterns
+
+### Create Operations
+```typescript
+export async function createProject(
+  data: CreateProjectInput,
+  userId: string,
+  tenantId: string
+): Promise<Project> {
+  const prisma = getPrismaClient();
+  
+  try {
+    return await prisma.project.create({
+      data: {
+        ...data,
+        userId,
+        tenantId, // Always set tenant
+      },
+    });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      throw new DatabaseError('Project already exists');
+    }
+    throw error;
+  }
+}
+```
+
+### Update Operations
+```typescript
+export async function updateProject(
+  projectId: string,
+  tenantId: string,
+  data: UpdateProjectInput
+): Promise<Project> {
+  const prisma = getPrismaClient();
+  
+  // First verify ownership
+  const existing = await prisma.project.findFirst({
+    where: { id: projectId, tenantId },
+  });
+  
+  if (!existing) {
+    throw new DatabaseError('Project not found or access denied');
+  }
+  
+  return prisma.project.update({
+    where: { id: projectId },
+    data,
+  });
+}
+```
+
+### Pagination Pattern
+```typescript
+export async function getProjectsPaginated(
+  tenantId: string,
+  page: number = 1,
+  pageSize: number = 20
+) {
+  const skip = (page - 1) * pageSize;
+  
+  const [projects, total] = await prisma.$transaction([
+    prisma.project.findMany({
+      where: { tenantId },
+      skip,
+      take: pageSize,
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.project.count({
+      where: { tenantId },
+    }),
+  ]);
+  
+  return {
+    data: projects,
+    pagination: {
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
+}
+```
+
+## ❌ Anti-Patterns to Avoid
+
+1. **Direct Prisma in API routes** - Never import prisma in API files
+2. **Missing tenant checks** - Every query must be tenant-scoped
+3. **Leaking database errors** - Always wrap in application errors
+4. **Generic return types** - Use specific interfaces
+5. **No logging** - Always log operations for debugging
+
+## 🧪 Testing Repositories
+
+```typescript
+// Mock Prisma for testing
+jest.mock('@/lib/prisma');
+
+describe('ProjectRepository', () => {
+  const mockPrisma = {
+    project: {
+      findFirst: jest.fn(),
+    },
+  };
+  
+  beforeEach(() => {
+    (getPrismaClient as jest.Mock).mockReturnValue(mockPrisma);
+  });
+  
+  it('should enforce tenant isolation', async () => {
+    await findProjectById('123', 'tenant-1');
+    
+    expect(mockPrisma.project.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: '123',
+        tenantId: 'tenant-1',
+      },
+    });
+  });
+});
+```
+
+## 🔍 Verification
+
+```bash
+# Check for direct Prisma usage in API routes
+npx tsx scripts/verify-repository-pattern.ts
+```
+
+Remember: **The repository layer is your security boundary**. Every database query must go through it.
+

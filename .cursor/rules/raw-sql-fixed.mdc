@@ -1,0 +1,38 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+- **Use the tagged-template form of Prisma raw SQL**
+  - ✅ Safe:
+    ```typescript
+    await prisma.$executeRaw`UPDATE table SET col = ${value} WHERE id = ${id}`;
+    const rows = await prisma.$queryRaw<MyType[]>`SELECT * FROM users WHERE id = ${userId}`;
+    ```
+  - ✅ Safe dynamic columns (edge case):
+    ```typescript
+    await prisma.$unsafe(`EXEC sp_rename 'users.${old}', '${named}', 'COLUMN'`);
+    ```
+  - ❌ **Forbidden:** passing a normal string or concatenating SQL manually:
+    ```typescript
+    // ❌ Vulnerable to injection
+    await prisma.$executeRaw(`DELETE FROM users WHERE id = ${userId}`);
+
+    // ❌ Concatenation
+    await prisma.$executeRaw('SELECT * FROM ' + tableName);
+    ```
+  - ❌ **Forbidden:** using `$queryRawUnsafe` or `$executeRawUnsafe` unless justified in a code comment with `// @ts-sql-unsafe-justification:`.
+
+- **Enforcement details**
+  - Lint fails if it matches regex `\.\$(query|execute)Raw\s*\(` without the back-tick tag.
+  - Lint fails on `RawUnsafe` calls without `@ts-sql-unsafe-justification`.
+  - Exemptions: migration scripts under `scripts/` may use untagged SQL.
+
+- **Examples**
+  - Good example:`](mdc:src/repositories/searchRepository.ts) uses tagged template.
+  - Bad example (should trigger rule):
+    ```typescript
+    const sql = 'SELECT * FROM users WHERE email="' + email + '"';
+    await prisma.$queryRaw(sql);
+
+    ```
