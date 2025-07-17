@@ -20,7 +20,9 @@ import { StorageServerService } from '@/server/services/storage.server-service';
 import { EnhancedTextExtractionService } from '@/server/services/enhanced-text-extraction.server-service';
 import { AmendmentServerService } from '@/server/services/amendment.server-service';
 import { createOfficeAction } from '@/repositories/officeActionRepository';
-import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { withAuth } from '@/middleware/auth';
+import { withTenantGuard } from '@/middleware/authorization';
+import { prisma } from '@/lib/prisma';
 
 const apiLogger = createApiLogger('office-actions/upload');
 
@@ -35,6 +37,12 @@ const metadataSchema = z.object({
   mailingDate: z.string().optional(),
   examinerName: z.string().optional(),
 }).optional();
+
+// Schema for test text requests
+const testTextSchema = z.object({
+  testText: z.string().min(1, 'Test text cannot be empty'),
+  metadata: metadataSchema,
+});
 
 // ============ CONSTANTS ============
 
@@ -73,120 +81,163 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       );
     }
 
-    // Parse multipart form data
-    const form = formidable({
-      maxFileSize: MAX_FILE_SIZE,
-      keepExtensions: true,
-      maxFiles: 1,
-    });
-
-    const [fields, files] = await form.parse(req);
+    // Check if this is a test text request (JSON) or file upload (multipart)
+    const contentType = req.headers['content-type'] || '';
     
-    // Get the uploaded file
-    const uploadedFile = Array.isArray(files.file) ? files.file[0] : files.file;
-    
-    if (!uploadedFile) {
-      throw new ApplicationError(
-        ErrorCode.VALIDATION_FAILED,
-        'No Office Action file uploaded'
-      );
-    }
-
-    // Validate file type
-    if (!SUPPORTED_TYPES.includes(uploadedFile.mimetype || '')) {
-      throw new ApplicationError(
-        ErrorCode.VALIDATION_FAILED,
-        'Office Action must be PDF or DOCX format'
-      );
-    }
-
-    // Parse optional metadata
-    let metadata = {};
-    if (fields.metadata) {
-      const metadataString = Array.isArray(fields.metadata) ? fields.metadata[0] : fields.metadata;
-      try {
-        const parsedMetadata = JSON.parse(metadataString);
-        metadata = metadataSchema.parse(parsedMetadata) || {};
-      } catch (error) {
-        apiLogger.warn('Invalid metadata provided, using defaults', { error });
-      }
-    }
-
-    apiLogger.info('Processing Office Action upload', {
-      projectId,
-      fileName: uploadedFile.originalFilename,
-      fileSize: uploadedFile.size,
-      mimeType: uploadedFile.mimetype,
-    });
-
-    // Extract text from the uploaded file using enhanced extraction
     let extractedText = '';
     let textExtractionWarning = '';
-    
-    try {
-      // Try enhanced text extraction first (with OCR support)
-      extractedText = await EnhancedTextExtractionService.extractTextFromFile(uploadedFile);
-      
-      // Log warning for documents with very little text (likely scanned)
-      const textLength = extractedText.trim().length;
-      if (textLength < 50) {
-        textExtractionWarning = 'Document appears to contain minimal text content - may be a scanned or image-based document';
-        apiLogger.warn('Office Action uploaded with minimal text content', {
-          projectId,
-          fileName: uploadedFile.originalFilename,
-          extractedTextLength: textLength,
-          possibleScannedDocument: true,
-        });
-      } else if (textLength < 200) {
-        textExtractionWarning = 'Document contains limited text content';
-        apiLogger.warn('Office Action uploaded with limited text content', {
-          projectId,
-          fileName: uploadedFile.originalFilename,
-          extractedTextLength: textLength,
-        });
+    let uploadResult: any = null;
+    let metadata: any = {};
+
+    if (contentType.includes('application/json')) {
+      // Handle test text request - manually parse JSON since bodyParser is disabled
+      let requestBody;
+      try {
+        // Read the raw body and parse JSON manually
+        const chunks = [];
+        for await (const chunk of req) {
+          chunks.push(chunk);
+        }
+        const rawBody = Buffer.concat(chunks).toString('utf8');
+        requestBody = JSON.parse(rawBody);
+      } catch (error) {
+        throw new ApplicationError(
+          ErrorCode.VALIDATION_FAILED,
+          'Invalid JSON in request body'
+        );
       }
-    } catch (enhancedExtractionError) {
-      // Fall back to original extraction method
-      apiLogger.warn('Enhanced text extraction failed, trying fallback method', {
+
+      const testData = testTextSchema.parse(requestBody);
+      extractedText = testData.testText;
+      metadata = testData.metadata || {};
+      
+      apiLogger.info('Processing test Office Action text', {
         projectId,
-        fileName: uploadedFile.originalFilename,
-        error: enhancedExtractionError instanceof Error ? enhancedExtractionError.message : String(enhancedExtractionError),
+        textLength: extractedText.length,
       });
       
+    } else {
+      // Handle file upload
+      const form = formidable({
+        maxFileSize: MAX_FILE_SIZE,
+        keepExtensions: true,
+        maxFiles: 1,
+      });
+
+      const [fields, files] = await form.parse(req);
+      
+      // Get the uploaded file
+      const uploadedFile = Array.isArray(files.file) ? files.file[0] : files.file;
+      
+      if (!uploadedFile) {
+        throw new ApplicationError(
+          ErrorCode.VALIDATION_FAILED,
+          'No Office Action file uploaded'
+        );
+      }
+
+      // Validate file type
+      if (!SUPPORTED_TYPES.includes(uploadedFile.mimetype || '')) {
+        throw new ApplicationError(
+          ErrorCode.VALIDATION_FAILED,
+          'Office Action must be PDF or DOCX format'
+        );
+      }
+
+      // Parse optional metadata
+      if (fields.metadata) {
+        const metadataString = Array.isArray(fields.metadata) ? fields.metadata[0] : fields.metadata;
+        try {
+          const parsedMetadata = JSON.parse(metadataString);
+          metadata = metadataSchema.parse(parsedMetadata) || {};
+        } catch (error) {
+          apiLogger.warn('Invalid metadata provided, using defaults', { error });
+        }
+      }
+
+      apiLogger.info('Processing Office Action upload', {
+        projectId,
+        fileName: uploadedFile.originalFilename,
+        fileSize: uploadedFile.size,
+        mimeType: uploadedFile.mimetype,
+      });
+
+            // Extract text from the uploaded file using enhanced extraction    
       try {
-        extractedText = await StorageServerService.extractTextFromFile(uploadedFile);
-        textExtractionWarning = 'Basic text extraction used - document may have limited OCR capabilities';
-      } catch (fallbackError) {
-        // Allow upload to proceed even if all text extraction fails
-        textExtractionWarning = 'Text extraction failed - document may be scanned, password-protected, or corrupted';
-        apiLogger.warn('All text extraction methods failed, proceeding with upload', {
+        // Try enhanced text extraction first (with OCR support)
+        extractedText = await EnhancedTextExtractionService.extractTextFromFile(uploadedFile);
+        
+        // Log warning for documents with very little text (likely scanned)
+        const textLength = extractedText.trim().length;
+        if (textLength < 50) {
+          textExtractionWarning = 'Document appears to contain minimal text content - may be a scanned or image-based document';
+          apiLogger.warn('Office Action uploaded with minimal text content', {
+            projectId,
+            fileName: uploadedFile.originalFilename,
+            extractedTextLength: textLength,
+            possibleScannedDocument: true,
+          });
+        } else if (textLength < 200) {
+          textExtractionWarning = 'Document contains limited text content';
+          apiLogger.warn('Office Action uploaded with limited text content', {
+            projectId,
+            fileName: uploadedFile.originalFilename,
+            extractedTextLength: textLength,
+          });
+        }
+      } catch (enhancedExtractionError) {
+        // Fall back to original extraction method
+        apiLogger.warn('Enhanced text extraction failed, trying fallback method', {
           projectId,
           fileName: uploadedFile.originalFilename,
-          enhancedError: enhancedExtractionError instanceof Error ? enhancedExtractionError.message : String(enhancedExtractionError),
-          fallbackError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+          error: enhancedExtractionError instanceof Error ? enhancedExtractionError.message : String(enhancedExtractionError),
         });
         
-        // Set minimal placeholder text to indicate extraction failure
-        extractedText = '[Text extraction failed - manual review required]';
+        try {
+          extractedText = await StorageServerService.extractTextFromFile(uploadedFile);
+          textExtractionWarning = 'Basic text extraction used - document may have limited OCR capabilities';
+        } catch (fallbackError) {
+          // Allow upload to proceed even if all text extraction fails
+          textExtractionWarning = 'Text extraction failed - document may be scanned, password-protected, or corrupted';
+          apiLogger.warn('All text extraction methods failed, proceeding with upload', {
+            projectId,
+            fileName: uploadedFile.originalFilename,
+            enhancedError: enhancedExtractionError instanceof Error ? enhancedExtractionError.message : String(enhancedExtractionError),
+            fallbackError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+          });
+          
+          // Set minimal placeholder text to indicate extraction failure
+          extractedText = '[Text extraction failed - manual review required]';
+        }
       }
+
+      // Upload file to secure storage
+      uploadResult = await StorageServerService.uploadPatentDocument(
+        uploadedFile,
+        {
+          userId,
+          tenantId,
+        }
+      );
     }
 
-    // Upload file to secure storage
-    const uploadResult = await StorageServerService.uploadPatentDocument(
-      uploadedFile,
-      {
-        userId,
-        tenantId,
-      }
-    );
-
     // Create Office Action record in database
-    const officeActionData = {
+    const officeActionData = uploadResult ? {
+      // File upload case
       projectId,
       blobName: uploadResult.blobName,
       originalFileName: uploadResult.fileName,
       mimeType: uploadResult.mimeType,
       sizeBytes: uploadResult.size,
+      extractedText,
+      ...metadata,
+    } : {
+      // Test text case
+      projectId,
+      blobName: null,
+      originalFileName: 'test-office-action.txt',
+      mimeType: 'text/plain',
+      sizeBytes: extractedText.length,
       extractedText,
       ...metadata,
     };
@@ -200,9 +251,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     // Start background parsing process
     try {
       await AmendmentServerService.parseOfficeAction(
-        officeAction.id,
         extractedText,
-        tenantId
+        tenantId,
+        userId
       );
     } catch (parseError) {
       // Log parsing error but don't fail the upload
@@ -212,11 +263,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       });
     }
 
-    apiLogger.info('Office Action uploaded successfully', {
+    apiLogger.info('Office Action processed successfully', {
       id: officeAction.id,
       projectId,
-      fileName: uploadResult.fileName,
+      fileName: officeAction.originalFileName,
       extractedTextLength: extractedText.length,
+      isTestText: !uploadResult,
     });
 
     return apiResponse.ok(res, {
@@ -227,6 +279,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         status: officeAction.status,
         rejectionCount: 0, // Will be updated after parsing
         createdAt: officeAction.createdAt,
+        isTestText: !uploadResult,
       },
       warning: textExtractionWarning || undefined,
     });
@@ -248,21 +301,27 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 // ============ EXPORT WITH SECURITY ============
 
 // Security configuration following existing patterns
-const resolveTenantId = async (req: AuthenticatedRequest): Promise<string | null> => {
+const resolveTenantId = async (req: any): Promise<string | null> => {
   const { projectId } = req.query as { projectId: string };
   
-  // The tenant guard will verify project ownership
-  // For uploads, we rely on the user's tenant context
-  return req.user?.tenantId || null;
+  if (!prisma) {
+    return null;
+  }
+  
+  try {
+    // Resolve tenant ID from the project
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { tenantId: true }
+    });
+    return project?.tenantId || null;
+  } catch (error) {
+    return null;
+  }
 };
 
-export default SecurePresets.tenantProtected(
-  TenantResolvers.fromUser,
-  handler,
-  {
-    rateLimit: 'upload',
-  }
-);
+const guardedHandler = withTenantGuard(resolveTenantId)(handler);
+export default withAuth(guardedHandler as any);
 
 // Disable Next.js body parser for file uploads
 export const config = {

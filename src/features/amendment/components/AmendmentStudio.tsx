@@ -1,40 +1,70 @@
 /**
  * Amendment Studio - Main Interface for Office Action Response
  * 
- * 3-panel layout for comprehensive amendment workflow:
- * - Left: Office Action Navigator (rejections, claims, prior art)
- * - Center: Drafting Workspace (claim amendments, arguments)
- * - Right: AI Assistant Tools (analysis, suggestions, search)
- * 
- * Follows existing UI patterns with SimpleMainPanel and consistent styling.
+ * Handles routing between amendment projects list and studio workspace
+ * Integrates all amendment components with clean state management
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { Box } from '@/components/ui/box';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { SimpleMainPanel } from '@/components/common/SimpleMainPanel';
-import { useOfficeActions, useUploadOfficeAction } from '@/hooks/api/useAmendment';
 import { useRouter } from 'next/router';
 import { logger } from '@/utils/clientLogger';
-import { AmendmentStudioProps } from '@/types/domain/amendment';
+import { cn } from '@/lib/utils';
 
-// TODO: Create these child components
-const OfficeActionNavigator = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
-const DraftingWorkspace = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
-const AIAssistantPanel = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
+// Import new components
+import { AmendmentProjectsList } from './AmendmentProjectsList';
+import { OfficeActionNavigator } from './OfficeActionNavigator';
+import { AIAssistantPanel } from './AIAssistantPanel';
+import { DraftingWorkspace } from './DraftingWorkspace';
 
-// ============ INTERFACES ============
+// Import existing components
+import { SimpleMainPanel } from '@/components/common/SimpleMainPanel';
+import { useOfficeActions } from '@/hooks/api/useAmendment';
 
-interface AmendmentStudioState {
-  selectedOfficeActionId: string | null;
-  selectedRejectionId: string | null;
-  activeTab: 'overview' | 'rejections' | 'amendments' | 'arguments';
-  isAnalyzing: boolean;
-  analysisData: any | null;
+interface AmendmentStudioProps {
+  projectId: string;
+  officeActionId?: string;
 }
 
-// ============ MAIN COMPONENT ============
+// Mock office action data for development
+const createMockOfficeActionData = (officeActionId?: string) => {
+  if (!officeActionId) return null;
+
+  return {
+    id: officeActionId,
+    fileName: 'Non-Final Office Action - Dec 2024.pdf',
+    metadata: {
+      applicationNumber: '17/123,456',
+      mailingDate: '2024-12-15',
+      examinerName: 'Sarah Johnson',
+      artUnit: '3685',
+    },
+    rejections: [
+      {
+        id: 'rej-1',
+        type: '§103' as const,
+        claims: ['1', '2', '3'],
+        priorArtReferences: ['US8,123,456', 'US2020/0234567'],
+        examinerReasoning: 'Claims 1-3 are rejected under 35 U.S.C. § 103 as being obvious over Smith (US 8,123,456) in view of Johnson (US 2020/0234567). Smith discloses a system for processing data but lacks real-time processing capability, which Johnson teaches.',
+        rawText: 'Complete rejection text from office action...',
+      },
+      {
+        id: 'rej-2',
+        type: '§102' as const,
+        claims: ['4'],
+        priorArtReferences: ['US9,987,654'],
+        examinerReasoning: 'Claim 4 is rejected under 35 U.S.C. § 102(a)(1) as being anticipated by Wilson (US 9,987,654). Wilson discloses every element of claim 4.',
+        rawText: 'Complete rejection text for claim 4...',
+      },
+    ],
+    allPriorArtReferences: ['US8,123,456', 'US2020/0234567', 'US9,987,654'],
+    summary: {
+      totalRejections: 2,
+      rejectionTypes: ['§103', '§102'],
+      totalClaimsRejected: 4,
+      uniquePriorArtCount: 3,
+    },
+  };
+};
 
 export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
   projectId,
@@ -42,302 +72,163 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
 }) => {
   const router = useRouter();
   
-  // ============ STATE ============
-  
-  const [studioState, setStudioState] = useState<AmendmentStudioState>({
-    selectedOfficeActionId: initialOfficeActionId || null,
-    selectedRejectionId: null,
-    activeTab: 'overview',
-    isAnalyzing: false,
-    analysisData: null,
-  });
+  // Get amendment ID from query params (for studio view)
+  const amendmentId = router.query.amendmentId as string;
+  const isStudioView = !!amendmentId;
 
-  // ============ QUERIES ============
-  
+  // Studio state
+  const [selectedRejectionId, setSelectedRejectionId] = useState<string | null>(null);
+  const [selectedOfficeActionId, setSelectedOfficeActionId] = useState<string | null>(
+    initialOfficeActionId || null
+  );
+
+  // Fetch office actions
   const {
     data: officeActions = [],
     isLoading: isLoadingOfficeActions,
     error: officeActionsError,
+    refetch: refetchOfficeActions,
   } = useOfficeActions(projectId);
 
-  const uploadOfficeActionMutation = useUploadOfficeAction();
+  // Get office action data (mock for now)
+  const officeActionData = useMemo(() => {
+    if (!isStudioView || !amendmentId) return undefined;
+    
+    // Extract office action ID from amendment ID (mock logic)
+    const officeActionId = amendmentId.replace('amendment-', '');
+    return createMockOfficeActionData(officeActionId) || undefined;
+  }, [isStudioView, amendmentId]);
 
-  // ============ COMPUTED VALUES ============
-  
-  const selectedOfficeAction = useMemo(() => {
-    if (!studioState.selectedOfficeActionId) return null;
-    return officeActions.find(oa => oa.id === studioState.selectedOfficeActionId);
-  }, [officeActions, studioState.selectedOfficeActionId]);
+  // Get selected rejection
+  const selectedRejection = useMemo(() => {
+    if (!officeActionData || !selectedRejectionId) return undefined;
+    return officeActionData.rejections.find(r => r.id === selectedRejectionId);
+  }, [officeActionData, selectedRejectionId]);
 
-  const hasOfficeActions = officeActions.length > 0;
-  const isUploading = uploadOfficeActionMutation.isPending;
-
-  // ============ HANDLERS ============
-  
-  const handleOfficeActionSelect = useCallback((officeActionId: string) => {
-    setStudioState(prev => ({
-      ...prev,
-      selectedOfficeActionId: officeActionId,
-      selectedRejectionId: null,
-      activeTab: 'overview',
-    }));
-
-    // Update URL without page reload
-    router.push(
-      `/projects/${projectId}/amendments/${officeActionId}`,
-      undefined,
-      { shallow: true }
-    );
-  }, [projectId, router]);
-
+  // Handlers
   const handleRejectionSelect = useCallback((rejectionId: string) => {
-    setStudioState(prev => ({
-      ...prev,
-      selectedRejectionId: rejectionId,
-      activeTab: 'rejections',
-    }));
+    setSelectedRejectionId(rejectionId);
+    logger.debug('[AmendmentStudio] Rejection selected', { rejectionId });
   }, []);
 
-  const handleTabChange = useCallback((tab: AmendmentStudioState['activeTab']) => {
-    setStudioState(prev => ({ ...prev, activeTab: tab }));
+  const handlePriorArtSelect = useCallback((reference: string) => {
+    logger.debug('[AmendmentStudio] Prior art selected', { reference });
+    // TODO: Implement prior art detail view
   }, []);
 
-  const handleFileUpload = useCallback(async (file: File, metadata?: any) => {
-    try {
-      logger.info('[AmendmentStudio] Starting file upload', {
-        projectId,
-        fileName: file.name,
-      });
-
-      const result = await uploadOfficeActionMutation.mutateAsync({
-        projectId,
-        file,
-        metadata,
-      });
-
-      if (result.success && result.officeAction) {
-        // Auto-select the newly uploaded office action
-        handleOfficeActionSelect(result.officeAction.id);
-      }
-    } catch (error) {
-      logger.error('[AmendmentStudio] File upload failed', {
-        error,
-        projectId,
-        fileName: file.name,
-      });
-    }
-  }, [projectId, uploadOfficeActionMutation, handleOfficeActionSelect]);
-
-  const handleAnalysisUpdate = useCallback((analysisData: any) => {
-    setStudioState(prev => ({
-      ...prev,
-      analysisData,
-      isAnalyzing: false,
-    }));
+  const handleAnalysisGenerated = useCallback((analysis: any) => {
+    logger.info('[AmendmentStudio] AI analysis generated', { 
+      analysisId: analysis.id, 
+      type: analysis.type 
+    });
   }, []);
 
-  const handleStartAnalysis = useCallback(() => {
-    setStudioState(prev => ({ ...prev, isAnalyzing: true }));
+  const handleInsertText = useCallback((text: string) => {
+    logger.info('[AmendmentStudio] Text insertion requested', { 
+      textLength: text.length 
+    });
+    // TODO: Implement text insertion into drafting workspace
   }, []);
 
-  // ============ RENDER HELPERS ============
-  
-  const renderEmptyState = () => (
-    <div style={{ 
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: '100%',
-      padding: '2rem',
-      textAlign: 'center'
-    }}>
-      <h2 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem', color: '#6B7280' }}>
-        No Office Actions Yet
-      </h2>
-      <p style={{ fontSize: '1rem', color: '#9CA3AF', marginBottom: '1.5rem', maxWidth: '400px' }}>
-        Upload an Office Action document to start generating your amendment response.
-      </p>
-      <Button
-        onClick={() => {
-          const fileInput = document.createElement('input');
-          fileInput.type = 'file';
-          fileInput.accept = '.pdf,.docx';
-          fileInput.onchange = (e) => {
-            const file = (e.target as HTMLInputElement).files?.[0];
-            if (file) {
-              handleFileUpload(file);
-            }
-          };
-          fileInput.click();
-        }}
-        disabled={isUploading}
-      >
-        {isUploading ? 'Uploading...' : 'Upload Office Action'}
-      </Button>
-    </div>
-  );
+  const handleSaveDraft = useCallback((content: any) => {
+    logger.info('[AmendmentStudio] Draft saved', { 
+      amendmentId, 
+      claimCount: content.claimAmendments?.length || 0,
+      argumentCount: content.argumentSections?.length || 0 
+    });
+    // TODO: Implement draft saving
+  }, [amendmentId]);
 
-  const renderLoadingState = () => (
-    <div style={{ 
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: '100%'
-    }}>
-      <div>Loading...</div>
-      <p style={{ fontSize: '1.125rem', color: '#6B7280', marginTop: '1rem' }}>
-        Loading Office Actions...
-      </p>
-    </div>
-  );
+  const handleExportResponse = useCallback(() => {
+    logger.info('[AmendmentStudio] Export requested', { amendmentId });
+    // TODO: Implement export functionality
+  }, [amendmentId]);
 
-  const renderErrorState = () => (
-    <div style={{ 
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: '100%',
-      padding: '2rem'
-    }}>
-      <h2 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem', color: '#EF4444' }}>
-        Error Loading Office Actions
-      </h2>
-      <p style={{ fontSize: '1rem', color: '#9CA3AF', marginBottom: '1rem' }}>
-        {officeActionsError instanceof Error 
-          ? officeActionsError.message 
-          : 'An unexpected error occurred'}
-      </p>
-      <Button onClick={() => window.location.reload()}>
-        Retry
-      </Button>
-    </div>
-  );
+  // Navigation handlers
+  const handleBackToList = useCallback(() => {
+    router.push(`${router.asPath.split('/studio')[0]}`);
+  }, [router]);
 
-  const renderHeader = () => (
-    <div style={{ 
-      padding: '1rem',
-      borderBottom: '1px solid #E5E7EB',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center'
-    }}>
-      <div>
-        <h1 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1F2937' }}>
-          Amendment Studio
-        </h1>
-        {selectedOfficeAction && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
-            <span style={{ fontSize: '0.875rem', color: '#6B7280' }}>
-              {(selectedOfficeAction as any).fileName || 'Office Action'}
-            </span>
-            <Badge>
-              Processing
-            </Badge>
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        {studioState.isAnalyzing && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>⚙️</span>
-            <span style={{ fontSize: '0.875rem', color: '#3B82F6' }}>
-              Analyzing...
-            </span>
-          </div>
-        )}
-        
-        <Badge>
-          {officeActions.length} Office Action{officeActions.length !== 1 ? 's' : ''}
-        </Badge>
-      </div>
-    </div>
-  );
-
-  const renderMainContent = () => {
-    if (isLoadingOfficeActions) {
-      return renderLoadingState();
-    }
-
-    if (officeActionsError) {
-      return renderErrorState();
-    }
-
-    if (!hasOfficeActions) {
-      return renderEmptyState();
-    }
-
+  // Render list view
+  if (!isStudioView) {
     return (
-      <div style={{ 
-        height: '100%',
-        overflow: 'hidden',
-        display: 'flex'
-      }}>
-        {/* Left Panel - Office Action Navigator */}
-        <div style={{
-          width: '320px',
-          borderRight: '1px solid #E5E7EB',
-          backgroundColor: '#F9FAFB',
-          overflow: 'hidden'
-        }}>
-          <OfficeActionNavigator>
-            <div style={{ padding: '1rem' }}>
-              <h3>Office Actions</h3>
-              <p>Total: {officeActions.length}</p>
-              {/* TODO: Implement navigator */}
+      <AmendmentProjectsList 
+        projectId={projectId}
+      />
+    );
+  }
+
+  // Render studio header
+  const renderStudioHeader = () => (
+    <div className="p-4 bg-white border-b">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={handleBackToList}
+            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+          >
+            ← Back to Amendments
+          </button>
+          
+          <div className="h-6 w-px bg-gray-300" />
+          
+          <div>
+            <h1 className="text-lg font-semibold text-gray-900">Amendment Studio</h1>
+            {officeActionData && (
+              <p className="text-sm text-gray-600">
+                {officeActionData.fileName} • {officeActionData.summary.totalRejections} rejections
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {selectedRejection && (
+            <div className="text-sm text-gray-600">
+              Analyzing {selectedRejection.type} rejection
             </div>
-          </OfficeActionNavigator>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render studio workspace
+  return (
+    <SimpleMainPanel
+      header={renderStudioHeader()}
+      contentPadding={false}
+    >
+      <div className="h-full flex overflow-hidden">
+        {/* Left Panel - Office Action Navigator */}
+        <div className="w-80 border-r bg-gray-50 flex flex-col">
+          <OfficeActionNavigator
+            officeAction={officeActionData}
+            selectedRejectionId={selectedRejectionId}
+            onRejectionSelect={handleRejectionSelect}
+            onPriorArtSelect={handlePriorArtSelect}
+          />
         </div>
 
         {/* Center Panel - Drafting Workspace */}
-        <div style={{
-          flex: '1',
-          overflow: 'hidden',
-          backgroundColor: 'white'
-        }}>
-          <DraftingWorkspace>
-            <div style={{ padding: '1rem' }}>
-              <h3>Drafting Workspace</h3>
-              {selectedOfficeAction ? (
-                <p>Selected: {(selectedOfficeAction as any).fileName || 'Office Action'}</p>
-              ) : (
-                <p>No office action selected</p>
-              )}
-              {/* TODO: Implement workspace */}
-            </div>
-          </DraftingWorkspace>
+        <div className="flex-1 bg-white flex flex-col min-w-0">
+          <DraftingWorkspace
+            selectedOfficeAction={officeActionData}
+            selectedOfficeActionId={selectedOfficeActionId}
+            onSave={handleSaveDraft}
+            onExport={handleExportResponse}
+          />
         </div>
 
         {/* Right Panel - AI Assistant */}
-        <div style={{
-          width: '300px',
-          borderLeft: '1px solid #E5E7EB',
-          backgroundColor: '#F9FAFB',
-          overflow: 'hidden'
-        }}>
-          <AIAssistantPanel>
-            <div style={{ padding: '1rem' }}>
-              <h3>AI Assistant</h3>
-              <p>Analysis tools and suggestions</p>
-              {/* TODO: Implement assistant */}
-            </div>
-          </AIAssistantPanel>
+        <div className="w-80 border-l bg-gray-50 flex flex-col">
+          <AIAssistantPanel
+            selectedRejection={selectedRejection}
+            onAnalysisGenerated={handleAnalysisGenerated}
+            onInsertText={handleInsertText}
+          />
         </div>
       </div>
-    );
-  };
-
-  // ============ MAIN RENDER ============
-  
-  return (
-    <SimpleMainPanel
-      header={renderHeader()}
-      contentPadding={false}
-    >
-      {renderMainContent()}
     </SimpleMainPanel>
   );
 }; 

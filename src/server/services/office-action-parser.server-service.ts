@@ -205,14 +205,27 @@ export class OfficeActionParserService {
    */
   private static parseAIResponse(aiResponse: string): ParsedOfficeActionResult {
     try {
-      // Clean the response - remove any markdown formatting
+      // More robust cleaning of the AI response
       let cleanedResponse = aiResponse.trim();
-      if (cleanedResponse.startsWith('```json')) {
-        cleanedResponse = cleanedResponse.replace(/^```json\s*/, '');
+      
+      // Remove markdown code blocks
+      cleanedResponse = cleanedResponse.replace(/^```(?:json)?\s*\n?/gm, '');
+      cleanedResponse = cleanedResponse.replace(/\n?\s*```\s*$/gm, '');
+      
+      // Extract just the JSON object/array part
+      const jsonMatch = cleanedResponse.match(/(\{[\s\S]*\})/);
+      if (jsonMatch) {
+        cleanedResponse = jsonMatch[1];
       }
-      if (cleanedResponse.endsWith('```')) {
-        cleanedResponse = cleanedResponse.replace(/\s*```$/, '');
-      }
+      
+      // Additional cleanup
+      cleanedResponse = cleanedResponse.trim();
+
+      logger.debug('[OfficeActionParser] Attempting to parse cleaned JSON', {
+        originalLength: aiResponse.length,
+        cleanedLength: cleanedResponse.length,
+        cleanedPreview: cleanedResponse.substring(0, 200),
+      });
 
       const parsed = safeJsonParse(cleanedResponse, null);
       if (!parsed) {

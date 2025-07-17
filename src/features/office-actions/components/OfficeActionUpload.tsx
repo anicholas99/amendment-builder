@@ -1,9 +1,10 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Upload, FileText, AlertTriangle } from 'lucide-react';
+import { Upload, FileText, AlertTriangle, TestTube } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/useToastWrapper';
 import { logger } from '@/utils/clientLogger';
 import { useDragDropFileHandler } from '@/features/technology-details/hooks/useDragDropFileHandler';
@@ -35,6 +36,49 @@ export const OfficeActionUpload: React.FC<OfficeActionUploadProps> = ({
     examinerId: '',
     artUnit: '',
   });
+  const [testOfficeActionText, setTestOfficeActionText] = useState(`OFFICE ACTION
+
+Application No.: 17/123,456
+Filing Date: March 15, 2023
+Applicant: Tech Innovations LLC
+Examiner: Sarah Johnson
+Art Unit: 3685
+Date Mailed: December 15, 2024
+
+CLAIM REJECTIONS - 35 USC § 103
+
+Claims 1-5 are rejected under 35 U.S.C. § 103 as being unpatentable over Smith (US 8,123,456) in view of Johnson (US 2020/0234567).
+
+Regarding claim 1, Smith discloses a system for processing data (col. 3, lines 15-25) including a processor configured to receive input data (col. 4, lines 10-15) and generate output results (col. 5, lines 5-10). Smith further teaches storing the processed data in a database (col. 6, lines 1-5).
+
+However, Smith does not explicitly disclose the limitation of "real-time processing with latency under 100ms." Johnson teaches a real-time data processing system that achieves sub-100ms latency (para. [0045]-[0050]), which would be obvious to combine with Smith's system to improve processing speed.
+
+Regarding claims 2-3, these claims depend from claim 1 and add the limitations of "encrypted data transmission" and "user authentication." Smith discloses encryption protocols (col. 8, lines 10-20) and Johnson teaches user authentication methods (para. [0067]-[0072]). The combination would render these claims obvious.
+
+Claims 4-5 are rejected for similar reasons as they merely add routine data validation steps that would be obvious to one skilled in the art.
+
+CLAIM REJECTIONS - 35 USC § 102
+
+Claim 6 is rejected under 35 U.S.C. § 102(a)(1) as being anticipated by Wilson (US 9,987,654).
+
+Wilson discloses every element of claim 6, including the specific algorithm for data compression (col. 12, lines 5-15), the file format conversion process (col. 13, lines 1-10), and the user interface elements recited in the claim (Fig. 3, col. 15, lines 20-30).
+
+OBJECTIONS
+
+Claims 7-9 are objected to as being dependent upon a rejected base claim, but would be allowable if rewritten in independent form including all the limitations of the base claim and any intervening claims.
+
+ALLOWABLE SUBJECT MATTER
+
+Claims 10-12 would be allowable if amended to include the limitations discussed in the Interview Summary dated November 20, 2024, specifically the addition of "machine learning-based optimization" as discussed.
+
+CONCLUSION
+
+Applicant is given a period of THREE MONTHS from the date of this Office Action to file a reply. Extensions of time may be available under 37 CFR 1.136(a).
+
+Any inquiry concerning this communication should be directed to the undersigned at telephone number (571) 272-1234.
+
+/Sarah Johnson/
+Primary Examiner, Art Unit 3685`);
 
   // File upload handler
   const handleFileUpload = useCallback(
@@ -139,6 +183,74 @@ export const OfficeActionUpload: React.FC<OfficeActionUploadProps> = ({
     },
     [projectId, metadata, toast, onUploadComplete]
   );
+
+  // Test text processing handler
+  const handleTestTextProcess = useCallback(async () => {
+    if (!testOfficeActionText.trim()) {
+      toast.error({
+        title: 'No text provided',
+        description: 'Please paste Office Action text to test',
+      });
+      return;
+    }
+
+    try {
+      logger.info('[OfficeActionUpload] Processing test text', {
+        projectId,
+        textLength: testOfficeActionText.length,
+      });
+
+      // Send text directly to the upload endpoint
+      const response = await fetch(`/api/projects/${projectId}/office-actions/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-tenant-slug': window.location.pathname.split('/')[1] || '',
+        },
+        body: JSON.stringify({
+          testText: testOfficeActionText,
+          metadata,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Processing failed');
+      }
+
+      const result = await response.json();
+
+      console.log('[OfficeActionUpload] API Response:', result);
+
+      logger.info('[OfficeActionUpload] Test processing successful', {
+        projectId,
+        officeActionId: result.officeAction?.id,
+      });
+
+      toast.success({
+        title: 'Office Action processed',
+        description: 'Test text has been parsed successfully',
+      });
+
+      if (onUploadComplete) {
+        // The API response is wrapped in a data object: {data: {success: true, officeAction: {...}}}
+        const officeActionData = result.data?.officeAction || result.officeAction || result;
+        console.log('[OfficeActionUpload] Calling onUploadComplete with:', officeActionData);
+        onUploadComplete(officeActionData);
+      }
+
+    } catch (error) {
+      logger.error('[OfficeActionUpload] Test processing failed', {
+        projectId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      toast.error({
+        title: 'Processing failed',
+        description: error instanceof Error ? error.message : 'Failed to process Office Action text',
+      });
+    }
+  }, [projectId, testOfficeActionText, metadata, toast, onUploadComplete]);
 
   // Use the existing drag/drop handler hook
   const {
@@ -299,6 +411,57 @@ export const OfficeActionUpload: React.FC<OfficeActionUploadProps> = ({
                   disabled={isDisabled}
                   className="h-8 text-xs"
                 />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Test Text Input Section */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <TestTube className="h-4 w-4 text-blue-600" />
+              <h3 className="text-sm font-semibold text-foreground">Test with Office Action Text</h3>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              For testing: paste Office Action text directly instead of uploading a file. This will process the text through the same parsing system.
+            </p>
+            
+            <div className="space-y-3">
+              <Label htmlFor="testText" className="text-xs">Office Action Text</Label>
+              <Textarea
+                id="testText"
+                placeholder="Paste Office Action text here... Include sections like:
+
+OFFICE ACTION
+
+Application No.: 17/123,456
+Examiner: John Smith
+
+CLAIM REJECTIONS - 35 USC § 103
+Claims 1-5 are rejected under 35 U.S.C. § 103 as being unpatentable over..."
+                value={testOfficeActionText}
+                onChange={(e) => setTestOfficeActionText(e.target.value)}
+                disabled={isDisabled}
+                className="min-h-[200px] text-xs font-mono"
+              />
+              
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  {testOfficeActionText.length} characters
+                </span>
+                <Button
+                  onClick={handleTestTextProcess}
+                  disabled={isDisabled || !testOfficeActionText.trim()}
+                  size="sm"
+                  variant="outline"
+                  className="h-8"
+                >
+                  <TestTube className="h-3 w-3 mr-1" />
+                  Process Test Text
+                </Button>
               </div>
             </div>
           </div>

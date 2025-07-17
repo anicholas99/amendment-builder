@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Patent Drafter AI is an enterprise-grade application for automated patent drafting and prior art analysis. It leverages AI models (GPT-4, Claude) to help users draft patent applications, analyze prior art, and manage intellectual property workflows.
+Amendment Builder (Patent Drafter AI) is an enterprise-grade application for automated patent amendment drafting and Office Action response. It leverages AI models (GPT-4, Claude) to help patent attorneys efficiently respond to USPTO Office Actions with comprehensive audit logging and security controls.
 
 ## Development Commands
 
@@ -15,17 +15,18 @@ npm run build             # Build for production
 npm run start             # Start production server
 npm run type-check        # Run TypeScript type checking
 npm run lint              # Run ESLint with auto-fix
-npm run lint:no-fix       # Run ESLint without auto-fix
+npm run lint:fix          # Alternative ESLint with auto-fix
 ```
 
 ### Database Management
 ```bash
 npm run db:migrate-dev    # Create and apply development migrations
-npm run db:migrate        # Apply production migrations
 npm run db:push           # Push schema changes without migration (dev only)
+npm run db:generate       # Generate Prisma client
 npm run db:studio         # Open Prisma Studio for database inspection
 npm run db:seed           # Seed database with test data
 npm run db:reset          # Reset database and reseed
+npm run db:apply-indexes  # Apply database performance indexes
 ```
 
 ### Testing
@@ -33,9 +34,7 @@ npm run db:reset          # Reset database and reseed
 npm test                  # Run all tests
 npm run test:watch        # Run tests in watch mode
 npm run test:coverage     # Run tests with coverage report
-npm run test:unit         # Run unit tests only
-npm run test:integration  # Run integration tests
-npm run test:e2e          # Run end-to-end tests
+npm run test:ci           # Run tests in CI mode
 
 # Run a single test file
 npm test -- path/to/test.test.ts
@@ -45,16 +44,18 @@ npm test -- path/to/test.test.ts
 ```bash
 npm run security:scan     # Run comprehensive security audit
 npm run audit:full        # Run all code quality audits
-npm run verify:csrf       # Verify CSRF protection coverage
-npm run verify:rbac       # Verify role-based access control
+npm run audit:csrf        # Verify CSRF protection coverage
+npm run verify:dark-mode  # Verify dark mode compatibility
 npm run check:env         # Validate environment variables
 ```
 
-### Performance & Optimization
+### Code Quality
 ```bash
-npm run db:apply-indexes  # Apply database performance indexes
-npm run analyze:db        # Analyze database performance
-npm run build:analyze     # Analyze bundle size
+npm run format            # Format code with Prettier
+npm run format:check      # Check code formatting
+npm run find:any          # Find TypeScript 'any' usage
+npm run find:console      # Find console statements
+npm run cleanup:unused-deps # Find unused dependencies
 ```
 
 ## Architecture Overview
@@ -64,75 +65,72 @@ npm run build:analyze     # Analyze bundle size
 - **UI**: shadcn/ui components, Tailwind CSS, Radix UI primitives
 - **Backend**: Next.js API Routes, Prisma ORM
 - **Database**: Microsoft SQL Server (Azure SQL)
-- **AI Services**: Azure OpenAI (GPT-4), Anthropic Claude
-- **Search**: Cardinal AI for patent search, PatBase for enrichment
+- **AI Services**: Azure OpenAI (GPT-4), Anthropic Claude, Cardinal AI for patent search
 - **Auth**: Auth0 (migrating to IPD Identity Platform)
 - **Storage**: Azure Blob Storage for documents/figures
 - **Cache**: Redis for rate limiting and caching
+- **Security**: SecurePresets pattern for defense-in-depth
 
 ### Core Patterns
 
-1. **Repository Pattern**: All database access through repositories in `/src/repositories/`
-   - Each entity has a dedicated repository
-   - Repositories handle tenant context automatically
-   - Soft deletes are handled via Prisma middleware
-
-2. **Service Layer**: Business logic in `/src/services/`
-   - Request-scoped services receive context via constructor
-   - Services orchestrate repositories and external APIs
-   - AI operations are abstracted into service methods
-
-3. **Client Services**: Frontend API abstraction in `/src/client/services/`
-   - Centralized API calls with automatic error handling
-   - Built on React Query for caching and optimistic updates
-   - Type-safe request/response handling
-
-4. **Secure API Presets**: Standardized middleware composition
+1. **SecurePresets Pattern**: Standardized security middleware composition
    ```typescript
-   // Example: authenticated endpoint with rate limiting
-   import { withSecurePresets } from '@/middleware/securePresets';
-   
-   export default withSecurePresets('authenticated')({
-     rateLimit: { max: 10, window: '1m' }
-   })(handler);
+   export default SecurePresets.tenantProtected(
+     TenantResolvers.fromProject,
+     handler,
+     { rateLimit: 'ai', validate: { body: requestSchema } }
+   );
    ```
 
-5. **Tool-Based AI Architecture**: AI interactions use a tool system
-   - Tools are defined with schemas and handlers
-   - AI can invoke multiple tools in sequence
-   - Results are streamed back to the client
+2. **Repository Pattern**: All database access through repositories in `/src/repositories/`
+   - Automatic tenant context injection
+   - Soft deletes via Prisma middleware
+   - Type-safe queries with Zod validation
+
+3. **Service Layer**: Business logic in `/src/services/`
+   - Request-scoped services with context injection
+   - AI operations abstracted into service methods
+   - External API integrations
+
+4. **Client Services**: Frontend API abstraction in `/src/client/services/`
+   - Built on React Query for caching
+   - Type-safe request/response handling
+   - Automatic error handling
 
 ### Multi-Tenant Architecture
 
-- Row-level security enforced at repository layer
-- Tenant context flows through: Request → Middleware → Service → Repository
-- All queries automatically filtered by `tenantId`
-- User permissions checked via `UserTenantRole` junction table
+- Row-level security at repository layer
+- Tenant context flows: Request → Middleware → Service → Repository
+- All queries filtered by `tenantId`
+- User permissions via `UserTenantRole` model
 
 ### Security Requirements
 
 1. **Authentication & Authorization**
    - All API routes require authentication (except `/api/health/*`)
-   - Role-based access control (RBAC) with Admin/Member roles
+   - Role-based access control (Admin/Member/Viewer)
    - Tenant isolation enforced at data layer
 
 2. **Input Validation**
-   - Use Zod schemas for all API input validation
-   - Sanitize file uploads and user-generated content
-   - Validate tenant context on every request
+   - Zod schemas for all API input validation
+   - File upload validation with malware scanning
+   - Never use `z.any()` without justification
 
 3. **Rate Limiting**
-   - Redis-based rate limiting on all endpoints
-   - Different limits for authenticated vs anonymous requests
-   - Cost-based limiting for AI operations
+   - Redis-backed distributed rate limiting
+   - Different limits by endpoint type:
+     - Auth: 5 req/5min
+     - AI/ML: 20 req/5min
+     - Search: 50 req/hour
+     - Standard: 100 req/min
 
 ### Key Conventions
 
-1. **TypeScript**: Strict mode enabled, no `any` types allowed
-2. **Error Handling**: Use structured error responses, never expose stack traces
+1. **TypeScript**: Strict mode, no `any` types without justification
+2. **Error Handling**: Use ApplicationError system, never expose stack traces
 3. **Logging**: Use `server-logging.ts` utilities, never `console.log`
-4. **Async Operations**: Use `setImmediate()` for async processing, not external workers
-5. **Database**: Always use soft deletes (deletedAt timestamps)
+4. **Async**: Use `setImmediate()` for async processing, not external workers
+5. **Database**: Always use soft deletes (`deletedAt` timestamps)
 6. **Testing**: Colocate tests with code in `__tests__` directories
 
 ### Critical Files & Directories
@@ -142,34 +140,37 @@ npm run build:analyze     # Analyze bundle size
 - `/src/repositories/` - Database access layer
 - `/src/services/` - Business logic layer
 - `/src/client/services/` - Frontend API services
-- `/src/hooks/api/` - React Query hooks for data fetching
-- `/prisma/schema.prisma` - Database schema definition
+- `/src/hooks/api/` - React Query hooks
+- `/prisma/schema.prisma` - Database schema
 
 ### Environment Configuration
 
 Required environment variables are documented in `.env.example`. Key variables:
 - `DATABASE_URL` - SQL Server connection string
 - `AZURE_OPENAI_*` - AI service configuration
-- `AUTH0_*` - Authentication configuration
+- `AUTH0_*` - Authentication configuration (migrating to IPD)
 - `REDIS_URL` - Redis connection for rate limiting
 - `AZURE_STORAGE_*` - Blob storage configuration
+- `VIRUSTOTAL_API_KEY` - Malware scanning
+- `AIAPI_API_KEY` - Cardinal AI for patent search
+- `PATBASE_USER/PASS` - PatBase for data enrichment
 
 ### Common Development Tasks
 
 #### Adding a New API Endpoint
 1. Create handler in `/src/pages/api/`
-2. Apply security preset based on requirements
+2. Apply SecurePresets based on requirements
 3. Add Zod validation schema
 4. Create/update repository methods if needed
 5. Add client service method
-6. Create React Query hook for frontend
+6. Create React Query hook
 
 #### Modifying Database Schema
 1. Update `prisma/schema.prisma`
 2. Run `npm run db:migrate-dev` to create migration
-3. Update relevant repository interfaces
+3. Update repository interfaces
 4. Update API validation schemas
-5. Run `npm run type-check` to catch type errors
+5. Run `npm run type-check` to catch errors
 
 #### Adding AI Capabilities
 1. Define tool in `/src/lib/ai/tools/`
@@ -180,15 +181,32 @@ Required environment variables are documented in `.env.example`. Key variables:
 
 ### Performance Considerations
 
-- Database queries are optimized with indexes (see `/scripts/manual-indexes.sql`)
-- Use `include` in Prisma queries sparingly to avoid N+1 queries
+- Use database indexes (see `/scripts/manual-indexes.sql`)
+- Use `include` in Prisma queries sparingly (avoid N+1)
 - Implement pagination for large datasets
 - Cache expensive AI operations in Redis
-- Use React Query's stale-while-revalidate pattern
+- Use React Query's stale-while-revalidate
+
+### AI Audit & Compliance
+
+All AI operations are logged comprehensively:
+- Operation type, model used, prompt/response content
+- Token usage tracking for billing/compliance
+- Human review workflow for sensitive operations
+- Export capabilities for compliance reporting
+- Stored in `AIAuditLog` table
 
 ### Deployment Notes
 
 - Production uses Azure App Service with GitHub Actions CI/CD
 - Database migrations run automatically on deploy
 - Environment-specific configs in `/src/config/`
-- Health checks available at `/api/health/live` and `/api/health/ready`
+- Health checks at `/api/health/live` and `/api/health/ready`
+
+### Authentication Migration (Auth0 → IPD)
+
+Currently using Auth0 with plans to migrate to IPD Identity:
+- Toggle via `NEXT_PUBLIC_AUTH_TYPE` environment variable
+- IPD configuration in `src/config/ipd.ts`
+- Cookie-based session handling with IPD
+- Unified SSO across IPD ecosystem
