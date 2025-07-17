@@ -26,6 +26,7 @@ import {
   ClaimAmendment,
   ArgumentSection,
 } from '@/types/domain/amendment';
+import { ParsedOfficeActionData } from '@/types/amendment';
 import { 
   findOfficeActionById,
   updateOfficeActionParsedData,
@@ -130,7 +131,8 @@ export class AmendmentServerService {
    */
   static async parseOfficeAction(
     officeActionId: string,
-    extractedText: string
+    extractedText: string,
+    tenantId: string
   ): Promise<{ success: boolean; rejectionCount: number }> {
     logger.info('[AmendmentService] Starting Office Action parsing', {
       officeActionId,
@@ -138,58 +140,129 @@ export class AmendmentServerService {
     });
 
     try {
+      // Validate inputs
+      if (!officeActionId?.trim()) {
+        throw new ApplicationError(
+          ErrorCode.VALIDATION_REQUIRED_FIELD,
+          'Office Action ID is required for parsing'
+        );
+      }
+
+      if (!extractedText?.trim()) {
+        throw new ApplicationError(
+          ErrorCode.VALIDATION_REQUIRED_FIELD,
+          'Extracted text is required for parsing'
+        );
+      }
+
       // Parse the Office Action using AI
+      logger.debug('[AmendmentService] Calling OfficeActionParserService', {
+        officeActionId,
+        textLength: extractedText.length,
+      });
+
       const parseResult = await OfficeActionParserService.parseOfficeAction(extractedText);
 
-             // TODO: Update the office action with parsed data - integrate with repository
-       // await updateOfficeActionParsedData(officeActionId, JSON.stringify(parseResult));
+      // Transform parser result to repository format
+      const parsedData: ParsedOfficeActionData = {
+        applicationNumber: parseResult.metadata.applicationNumber || undefined,
+        examiner: parseResult.metadata.examinerName ? {
+          name: parseResult.metadata.examinerName,
+          id: undefined,
+          artUnit: undefined,
+        } : undefined,
+        dateIssued: parseResult.metadata.mailingDate || undefined,
+        responseDeadline: undefined,
+        rejections: parseResult.rejections.map(rejection => ({
+          type: rejection.type as '102' | '103' | '101' | '112',
+          claimNumbers: rejection.claims,
+          reasoning: rejection.examinerReasoning,
+          citedReferences: rejection.priorArtReferences,
+          elements: [],
+        })),
+        citedReferences: parseResult.allPriorArtReferences.map(ref => ({
+          patentNumber: ref,
+          title: undefined,
+          inventors: undefined,
+          assignee: undefined,
+        })),
+        examinerRemarks: undefined,
+      };
 
-       // TODO: Create rejection records - integrate with repository
-       // if (parseResult.rejections.length > 0) {
-       //   const rejectionData = parseResult.rejections.map(rejection => ({
-       //     officeActionId,
-       //     type: rejection.type,
-       //     claimNumbers: rejection.claims,
-       //     citedPriorArt: rejection.priorArtReferences,
-       //     examinerText: rejection.examinerReasoning,
-       //     parsedElements: undefined,
-       //     displayOrder: parseResult.rejections.indexOf(rejection),
-       //   }));
-       //   await createRejections(rejectionData);
-       // }
-
-       // TODO: Update status to parsed - integrate with repository
-       // await updateOfficeActionStatus(officeActionId, 'PARSED');
-
-      logger.info('[AmendmentService] Successfully parsed Office Action', {
+      // Update the Office Action with parsed data
+      await updateOfficeActionParsedData(
         officeActionId,
-        rejectionCount: parseResult.rejections.length,
+        tenantId,
+        parsedData,
+        'PARSED'
+      );
+
+      // Create rejection records if any rejections were found
+      let rejectionCount = 0;
+      if (parseResult.rejections && parseResult.rejections.length > 0) {
+        logger.debug('[AmendmentService] Creating rejection records', {
+          officeActionId,
+          rejectionCount: parseResult.rejections.length,
+        });
+
+        const rejectionCreateData = parseResult.rejections.map(rejection => ({
+          officeActionId,
+          type: rejection.type,
+          claimNumbers: rejection.claims,
+          citedPriorArt: rejection.priorArtReferences,
+          examinerText: rejection.examinerReasoning,
+          parsedElements: {
+            rawText: rejection.rawText,
+            startIndex: rejection.startIndex,
+            endIndex: rejection.endIndex,
+          },
+          displayOrder: parseResult.rejections.indexOf(rejection),
+        }));
+
+        await createRejections(rejectionCreateData);
+        rejectionCount = parseResult.rejections.length;
+      }
+
+      // Note: Status is already updated in updateOfficeActionParsedData call above
+
+      logger.info('[AmendmentService] Office Action parsing completed successfully', {
+        officeActionId,
+        rejectionCount,
         priorArtCount: parseResult.allPriorArtReferences.length,
+        hasMetadata: !!parseResult.metadata,
       });
 
       return {
         success: true,
-        rejectionCount: parseResult.rejections.length,
+        rejectionCount,
       };
 
-         } catch (error) {
-       logger.error('[AmendmentService] Failed to parse Office Action', {
-         officeActionId,
-         error: error instanceof Error ? error.message : String(error),
-       });
+    } catch (error) {
+      logger.error('[AmendmentService] Failed to parse Office Action', {
+        officeActionId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
 
-       // TODO: Update status to error - integrate with repository
-       // await updateOfficeActionStatus(officeActionId, 'ERROR');
+      // Update status to ERROR
+      try {
+        await updateOfficeActionStatus(officeActionId, tenantId, 'ERROR');
+      } catch (statusError) {
+        logger.error('[AmendmentService] Failed to update Office Action status to ERROR', {
+          officeActionId,
+          statusError: statusError instanceof Error ? statusError.message : String(statusError),
+        });
+      }
 
-       if (error instanceof ApplicationError) {
-         throw error;
-       }
+      if (error instanceof ApplicationError) {
+        throw error;
+      }
 
-       throw new ApplicationError(
-         ErrorCode.AI_SERVICE_ERROR,
-         `Failed to parse Office Action: ${error instanceof Error ? error.message : 'Unknown error'}`
-       );
-     }
+      throw new ApplicationError(
+        ErrorCode.AI_SERVICE_ERROR,
+        `Failed to parse Office Action: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
   }
 
   /**

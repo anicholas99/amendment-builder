@@ -95,6 +95,11 @@ export const env = {
       environment.azure.storageConnectionString
     : '',
 
+  // Azure Document Intelligence
+  AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT: environment.azure.documentIntelligence.endpoint,
+  AZURE_DOCUMENT_INTELLIGENCE_API_KEY: environment.azure.documentIntelligence.apiKey,
+  AZURE_DOCUMENT_INTELLIGENCE_API_VERSION: environment.azure.documentIntelligence.apiVersion,
+
   // Other APIs
   AIAPI_API_KEY: environment.aiapi.apiKey,
   PATBASE_USER: environment.patbase.user,

@@ -1,404 +1,283 @@
 /**
- * Amendment React Query Hooks
+ * Amendment Workflow Hooks
  * 
- * Provides typed React Query hooks for amendment workflow operations:
- * - Office Action management
- * - Rejection analysis
- * - Amendment generation
- * 
- * Follows existing hook patterns with proper query keys, caching,
- * and error handling.
+ * React Query hooks for Office Action response and amendment generation
+ * Provides type-safe integration with amendment APIs
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@/hooks/useToastWrapper';
-import { AmendmentClientService } from '@/client/services/amendment.client-service';
+import { apiFetch } from '@/lib/api/apiClient';
 import { logger } from '@/utils/clientLogger';
-import {
-  CreateOfficeActionResponse,
-  AnalyzeRejectionsRequest,
-  AnalyzeRejectionsResponse,
-  GenerateAmendmentRequest,
-  GenerateAmendmentResponse,
-  OfficeAction,
-  AmendmentResponse,
-} from '@/types/domain/amendment';
+import { useToast } from '@/hooks/useToastWrapper';
+import type { 
+  ResponseShellResult, 
+  ResponseShellRequest 
+} from '@/server/services/response-shell-generation.server-service';
+
+// ============ TYPES ============
+
+interface OfficeActionUploadRequest {
+  file: File;
+  metadata?: {
+    applicationNumber?: string;
+    mailingDate?: string;
+    examinerName?: string;
+  };
+}
+
+interface OfficeActionUploadResponse {
+  id: string;
+  projectId: string;
+  fileName: string;
+  extractedTextLength: number;
+  rejectionCount: number;
+  textExtractionWarning?: string;
+  message: string;
+}
+
+interface OfficeAction {
+  id: string;
+  projectId: string;
+  fileName: string;
+  uploadedAt: string;
+  status: 'UPLOADED' | 'PARSED' | 'ERROR';
+  metadata?: any;
+  rejections?: any[];
+}
+
+interface GenerateResponseShellRequest {
+  templateStyle?: 'formal' | 'standard' | 'concise';
+  includeBoilerplate?: boolean;
+  firmName?: string;
+}
+
+interface GenerateResponseShellResponse {
+  responseShell: ResponseShellResult;
+  message: string;
+}
 
 // ============ QUERY KEYS ============
 
 export const amendmentQueryKeys = {
-  all: ['amendments'] as const,
-  officeActions: (projectId: string) => 
-    [...amendmentQueryKeys.all, 'officeActions', projectId] as const,
-  officeAction: (projectId: string, officeActionId: string) =>
-    [...amendmentQueryKeys.officeActions(projectId), officeActionId] as const,
-  rejectionAnalysis: (projectId: string, officeActionId: string) =>
-    [...amendmentQueryKeys.officeAction(projectId, officeActionId), 'analysis'] as const,
-  amendmentResponse: (projectId: string, responseId: string) =>
-    [...amendmentQueryKeys.all, 'responses', projectId, responseId] as const,
-} as const;
+  all: ['amendment'] as const,
+  officeActions: (projectId: string) => ['amendment', 'office-actions', projectId] as const,
+  officeAction: (officeActionId: string) => ['amendment', 'office-action', officeActionId] as const,
+  responseShell: (officeActionId: string) => ['amendment', 'response-shell', officeActionId] as const,
+};
 
 // ============ OFFICE ACTION HOOKS ============
 
 /**
- * Hook to fetch Office Actions for a project
+ * Upload Office Action document
+ */
+export function useUploadOfficeAction(projectId: string) {
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async (request: OfficeActionUploadRequest): Promise<OfficeActionUploadResponse> => {
+      logger.info('[useUploadOfficeAction] Starting upload', {
+        projectId,
+        fileName: request.file.name,
+        fileSize: request.file.size,
+      });
+
+      const formData = new FormData();
+      formData.append('file', request.file);
+      
+      if (request.metadata) {
+        formData.append('metadata', JSON.stringify(request.metadata));
+      }
+
+      const response = await apiFetch(
+        `/api/projects/${projectId}/office-actions/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      logger.info('[useUploadOfficeAction] Upload completed', {
+        projectId,
+        officeActionId: data.id,
+        rejectionCount: data.rejectionCount,
+      });
+
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success({
+        title: 'Office Action uploaded successfully',
+        description: `Parsed ${data.rejectionCount} rejection${data.rejectionCount !== 1 ? 's' : ''}`,
+      });
+    },
+    onError: (error) => {
+      logger.error('[useUploadOfficeAction] Upload failed', {
+        projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      
+      toast.error({
+        title: 'Upload failed',
+        description: error instanceof Error ? error.message : 'Failed to upload Office Action',
+      });
+    },
+  });
+}
+
+/**
+ * Get Office Actions for a project
  */
 export function useOfficeActions(projectId: string) {
   return useQuery({
     queryKey: amendmentQueryKeys.officeActions(projectId),
-    queryFn: () => AmendmentClientService.listOfficeActions(projectId),
+    queryFn: async (): Promise<OfficeAction[]> => {
+      logger.debug('[useOfficeActions] Fetching office actions', { projectId });
+
+      const response = await apiFetch(`/api/projects/${projectId}/office-actions`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch office actions: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.officeActions || [];
+    },
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 2,
+    refetchOnWindowFocus: false,
   });
 }
 
 /**
- * Hook to fetch a specific Office Action
+ * Get specific Office Action details
  */
-export function useOfficeAction(projectId: string, officeActionId: string) {
+export function useOfficeAction(officeActionId: string) {
   return useQuery({
-    queryKey: amendmentQueryKeys.officeAction(projectId, officeActionId),
-    queryFn: () => AmendmentClientService.getOfficeAction(projectId, officeActionId),
-    enabled: !!projectId && !!officeActionId,
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    retry: 2,
-  });
-}
+    queryKey: amendmentQueryKeys.officeAction(officeActionId),
+    queryFn: async (): Promise<OfficeAction> => {
+      logger.debug('[useOfficeAction] Fetching office action details', { officeActionId });
 
-/**
- * Hook to upload Office Action
- */
-export function useUploadOfficeAction() {
-  const queryClient = useQueryClient();
-  const toast = useToast();
-
-  return useMutation({
-    mutationFn: async ({
-      projectId,
-      file,
-      metadata,
-    }: {
-      projectId: string;
-      file: File;
-      metadata?: {
-        applicationNumber?: string;
-        mailingDate?: string;
-        examinerName?: string;
-      };
-    }): Promise<CreateOfficeActionResponse> => {
-      return AmendmentClientService.uploadOfficeAction(projectId, file, metadata);
-    },
-    onSuccess: (data, variables) => {
-      // Invalidate office actions list to show the new upload
-      queryClient.invalidateQueries({
-        queryKey: amendmentQueryKeys.officeActions(variables.projectId),
-      });
-
-      // Add the new office action to the cache
-      if (data.officeAction) {
-        queryClient.setQueryData(
-          amendmentQueryKeys.officeAction(variables.projectId, data.officeAction.id),
-          data.officeAction
-        );
-      }
-
-      toast({
-        title: 'Office Action Uploaded',
-        description: `Successfully uploaded "${variables.file.name}"`,
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
-      });
-
-      logger.info('[useUploadOfficeAction] Upload successful', {
-        projectId: variables.projectId,
-        fileName: variables.file.name,
-        officeActionId: data.officeAction?.id,
-      });
-    },
-    onError: (error, variables) => {
-      toast({
-        title: 'Upload Failed',
-        description: error instanceof Error ? error.message : 'Failed to upload Office Action',
-        status: 'error',
-        duration: 8000,
-        isClosable: true,
-      });
-
-      logger.error('[useUploadOfficeAction] Upload failed', {
-        error,
-        projectId: variables.projectId,
-        fileName: variables.file.name,
-      });
-    },
-  });
-}
-
-/**
- * Hook to parse Office Action
- */
-export function useParseOfficeAction() {
-  const queryClient = useQueryClient();
-  const toast = useToast();
-
-  return useMutation({
-    mutationFn: async ({
-      projectId,
-      officeActionId,
-    }: {
-      projectId: string;
-      officeActionId: string;
-    }) => {
-      return AmendmentClientService.parseOfficeAction(projectId, officeActionId);
-    },
-    onSuccess: (data, variables) => {
-      // Invalidate the office action to refetch with updated status
-      queryClient.invalidateQueries({
-        queryKey: amendmentQueryKeys.officeAction(variables.projectId, variables.officeActionId),
-      });
-
-      toast({
-        title: 'Office Action Parsed',
-        description: `Found ${data.rejectionCount} rejection${data.rejectionCount !== 1 ? 's' : ''}`,
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
-      });
-
-      logger.info('[useParseOfficeAction] Parse successful', {
-        projectId: variables.projectId,
-        officeActionId: variables.officeActionId,
-        rejectionCount: data.rejectionCount,
-      });
-    },
-    onError: (error, variables) => {
-      toast({
-        title: 'Parsing Failed',
-        description: error instanceof Error ? error.message : 'Failed to parse Office Action',
-        status: 'error',
-        duration: 8000,
-        isClosable: true,
-      });
-
-      logger.error('[useParseOfficeAction] Parse failed', {
-        error,
-        projectId: variables.projectId,
-        officeActionId: variables.officeActionId,
-      });
-    },
-  });
-}
-
-// ============ REJECTION ANALYSIS HOOKS ============
-
-/**
- * Hook to analyze rejections
- */
-export function useAnalyzeRejections() {
-  const queryClient = useQueryClient();
-  const toast = useToast();
-
-  return useMutation({
-    mutationFn: async (request: AnalyzeRejectionsRequest): Promise<AnalyzeRejectionsResponse> => {
-      return AmendmentClientService.analyzeRejections(request);
-    },
-    onSuccess: (data, variables) => {
-      // Cache the analysis results
-      queryClient.setQueryData(
-        amendmentQueryKeys.rejectionAnalysis(variables.projectId, variables.officeActionId),
-        data
-      );
-
-      toast({
-        title: 'Analysis Complete',
-        description: `Analyzed ${data.analyses?.length || 0} rejection${data.analyses?.length !== 1 ? 's' : ''}`,
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
-      });
-
-      logger.info('[useAnalyzeRejections] Analysis successful', {
-        projectId: variables.projectId,
-        officeActionId: variables.officeActionId,
-        analysisCount: data.analyses?.length || 0,
-        overallStrategy: data.overallStrategy,
-      });
-    },
-    onError: (error, variables) => {
-      toast({
-        title: 'Analysis Failed',
-        description: error instanceof Error ? error.message : 'Failed to analyze rejections',
-        status: 'error',
-        duration: 8000,
-        isClosable: true,
-      });
-
-      logger.error('[useAnalyzeRejections] Analysis failed', {
-        error,
-        projectId: variables.projectId,
-        officeActionId: variables.officeActionId,
-      });
-    },
-  });
-}
-
-/**
- * Hook to fetch rejection analysis results
- */
-export function useRejectionAnalysis(projectId: string, officeActionId: string) {
-  return useQuery({
-    queryKey: amendmentQueryKeys.rejectionAnalysis(projectId, officeActionId),
-    queryFn: async (): Promise<AnalyzeRejectionsResponse | null> => {
-      // This would typically be a separate API call, but for now we rely on cache
-      // TODO: Implement API endpoint to fetch existing analysis
-      return null;
-    },
-    enabled: !!projectId && !!officeActionId,
-    staleTime: 15 * 60 * 1000, // 15 minutes
-  });
-}
-
-// ============ AMENDMENT GENERATION HOOKS ============
-
-/**
- * Hook to generate amendment response
- */
-export function useGenerateAmendment() {
-  const queryClient = useQueryClient();
-  const toast = useToast();
-
-  return useMutation({
-    mutationFn: async (request: GenerateAmendmentRequest): Promise<GenerateAmendmentResponse> => {
-      return AmendmentClientService.generateAmendment(request);
-    },
-    onSuccess: (data, variables) => {
-      // Cache the amendment response
-      if (data.amendment) {
-        queryClient.setQueryData(
-          amendmentQueryKeys.amendmentResponse(variables.projectId, data.amendment.id),
-          data.amendment
-        );
-      }
-
-      toast({
-        title: 'Amendment Generated',
-        description: 'Amendment response has been generated successfully',
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
-      });
-
-      logger.info('[useGenerateAmendment] Generation successful', {
-        projectId: variables.projectId,
-        officeActionId: variables.officeActionId,
-        amendmentId: data.amendment?.id,
-        strategy: variables.strategy,
-      });
-    },
-    onError: (error, variables) => {
-      toast({
-        title: 'Generation Failed',
-        description: error instanceof Error ? error.message : 'Failed to generate amendment',
-        status: 'error',
-        duration: 8000,
-        isClosable: true,
-      });
-
-      logger.error('[useGenerateAmendment] Generation failed', {
-        error,
-        projectId: variables.projectId,
-        officeActionId: variables.officeActionId,
-        strategy: variables.strategy,
-      });
-    },
-  });
-}
-
-/**
- * Hook to fetch amendment response
- */
-export function useAmendmentResponse(projectId: string, responseId: string) {
-  return useQuery({
-    queryKey: amendmentQueryKeys.amendmentResponse(projectId, responseId),
-    queryFn: () => AmendmentClientService.getAmendmentResponse(projectId, responseId),
-    enabled: !!projectId && !!responseId,
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    retry: 2,
-  });
-}
-
-/**
- * Hook to export amendment response
- */
-export function useExportAmendment() {
-  const toast = useToast();
-
-  return useMutation({
-    mutationFn: async ({
-      projectId,
-      responseId,
-      format = 'docx',
-      filename,
-    }: {
-      projectId: string;
-      responseId: string;
-      format?: 'docx' | 'pdf';
-      filename?: string;
-    }) => {
-      const blob = await AmendmentClientService.exportAmendmentResponse(
-        projectId,
-        responseId,
-        format
-      );
-
-      // Auto-download the file
-      const downloadFilename = filename || 
-        AmendmentClientService.generateAmendmentFilename(`Response_${responseId}`, format);
+      const response = await apiFetch(`/api/office-actions/${officeActionId}`);
       
-      AmendmentClientService.downloadFile(blob, downloadFilename);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch office action: ${response.statusText}`);
+      }
 
-      return { blob, filename: downloadFilename };
+      const data = await response.json();
+      return data.officeAction;
     },
-    onSuccess: (data, variables) => {
-      toast({
-        title: 'Export Complete',
-        description: `Amendment exported as ${data.filename}`,
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
+    enabled: !!officeActionId,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
+// ============ RESPONSE SHELL HOOKS ============
+
+/**
+ * Generate Office Action response shell
+ */
+export function useGenerateResponseShell(projectId: string, officeActionId: string) {
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async (request: GenerateResponseShellRequest): Promise<GenerateResponseShellResponse> => {
+      logger.info('[useGenerateResponseShell] Starting response generation', {
+        projectId,
+        officeActionId,
+        templateStyle: request.templateStyle,
       });
 
-      logger.info('[useExportAmendment] Export successful', {
-        projectId: variables.projectId,
-        responseId: variables.responseId,
-        format: variables.format,
-        filename: data.filename,
+      const response = await apiFetch(
+        `/api/projects/${projectId}/office-actions/${officeActionId}/generate-response`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(request),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Response generation failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      logger.info('[useGenerateResponseShell] Response generated successfully', {
+        projectId,
+        officeActionId,
+        sectionCount: data.responseShell.sections.length,
+        totalRejections: data.responseShell.metadata.totalRejections,
+      });
+
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success({
+        title: 'Response shell generated',
+        description: `Created ${data.responseShell.sections.length} sections for ${data.responseShell.metadata.totalRejections} rejection${data.responseShell.metadata.totalRejections !== 1 ? 's' : ''}`,
       });
     },
-    onError: (error, variables) => {
-      toast({
-        title: 'Export Failed',
-        description: error instanceof Error ? error.message : 'Failed to export amendment',
-        status: 'error',
-        duration: 8000,
-        isClosable: true,
+    onError: (error) => {
+      logger.error('[useGenerateResponseShell] Generation failed', {
+        projectId,
+        officeActionId,
+        error: error instanceof Error ? error.message : String(error),
       });
-
-      logger.error('[useExportAmendment] Export failed', {
-        error,
-        projectId: variables.projectId,
-        responseId: variables.responseId,
-        format: variables.format,
+      
+      toast.error({
+        title: 'Generation failed',
+        description: error instanceof Error ? error.message : 'Failed to generate response shell',
       });
     },
   });
 }
 
-// ============ UTILITY HOOKS ============
+/**
+ * Get cached response shell (if available)
+ */
+export function useResponseShell(officeActionId: string) {
+  return useQuery({
+    queryKey: amendmentQueryKeys.responseShell(officeActionId),
+    queryFn: async (): Promise<ResponseShellResult | null> => {
+      logger.debug('[useResponseShell] Fetching response shell', { officeActionId });
+
+      try {
+        const response = await apiFetch(`/api/office-actions/${officeActionId}/response-shell`);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            return null; // No response shell generated yet
+          }
+          throw new Error(`Failed to fetch response shell: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return data.responseShell;
+      } catch (error) {
+        // If response shell doesn't exist, return null instead of throwing
+        logger.debug('[useResponseShell] Response shell not found', { officeActionId });
+        return null;
+      }
+    },
+    enabled: !!officeActionId,
+    staleTime: 15 * 60 * 1000, // 15 minutes (response shells don't change often)
+    refetchOnWindowFocus: false,
+  });
+}
+
+// ============ INVALIDATION HELPERS ============
 
 /**
- * Hook to invalidate amendment-related queries
+ * Invalidate amendment queries
  */
 export function useInvalidateAmendmentQueries() {
   const queryClient = useQueryClient();
@@ -409,9 +288,14 @@ export function useInvalidateAmendmentQueries() {
         queryKey: amendmentQueryKeys.officeActions(projectId),
       });
     },
-    invalidateOfficeAction: (projectId: string, officeActionId: string) => {
+    invalidateOfficeAction: (officeActionId: string) => {
       queryClient.invalidateQueries({
-        queryKey: amendmentQueryKeys.officeAction(projectId, officeActionId),
+        queryKey: amendmentQueryKeys.officeAction(officeActionId),
+      });
+    },
+    invalidateResponseShell: (officeActionId: string) => {
+      queryClient.invalidateQueries({
+        queryKey: amendmentQueryKeys.responseShell(officeActionId),
       });
     },
     invalidateAll: () => {

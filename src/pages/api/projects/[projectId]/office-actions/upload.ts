@@ -17,6 +17,7 @@ import { apiResponse } from '@/utils/api/responses';
 import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { FILE_SIZE_LIMITS } from '@/lib/validation/schemas/fileUploadSchemas';
 import { StorageServerService } from '@/server/services/storage.server-service';
+import { EnhancedTextExtractionService } from '@/server/services/enhanced-text-extraction.server-service';
 import { AmendmentServerService } from '@/server/services/amendment.server-service';
 import { createOfficeAction } from '@/repositories/officeActionRepository';
 import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
@@ -118,14 +119,56 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       mimeType: uploadedFile.mimetype,
     });
 
-    // Extract text from the uploaded file
-    const extractedText = await StorageServerService.extractTextFromFile(uploadedFile);
+    // Extract text from the uploaded file using enhanced extraction
+    let extractedText = '';
+    let textExtractionWarning = '';
     
-    if (!extractedText || extractedText.trim().length < 100) {
-      throw new ApplicationError(
-        ErrorCode.FILE_PROCESSING_ERROR,
-        'Could not extract meaningful text from Office Action document'
-      );
+    try {
+      // Try enhanced text extraction first (with OCR support)
+      extractedText = await EnhancedTextExtractionService.extractTextFromFile(uploadedFile);
+      
+      // Log warning for documents with very little text (likely scanned)
+      const textLength = extractedText.trim().length;
+      if (textLength < 50) {
+        textExtractionWarning = 'Document appears to contain minimal text content - may be a scanned or image-based document';
+        apiLogger.warn('Office Action uploaded with minimal text content', {
+          projectId,
+          fileName: uploadedFile.originalFilename,
+          extractedTextLength: textLength,
+          possibleScannedDocument: true,
+        });
+      } else if (textLength < 200) {
+        textExtractionWarning = 'Document contains limited text content';
+        apiLogger.warn('Office Action uploaded with limited text content', {
+          projectId,
+          fileName: uploadedFile.originalFilename,
+          extractedTextLength: textLength,
+        });
+      }
+    } catch (enhancedExtractionError) {
+      // Fall back to original extraction method
+      apiLogger.warn('Enhanced text extraction failed, trying fallback method', {
+        projectId,
+        fileName: uploadedFile.originalFilename,
+        error: enhancedExtractionError instanceof Error ? enhancedExtractionError.message : String(enhancedExtractionError),
+      });
+      
+      try {
+        extractedText = await StorageServerService.extractTextFromFile(uploadedFile);
+        textExtractionWarning = 'Basic text extraction used - document may have limited OCR capabilities';
+      } catch (fallbackError) {
+        // Allow upload to proceed even if all text extraction fails
+        textExtractionWarning = 'Text extraction failed - document may be scanned, password-protected, or corrupted';
+        apiLogger.warn('All text extraction methods failed, proceeding with upload', {
+          projectId,
+          fileName: uploadedFile.originalFilename,
+          enhancedError: enhancedExtractionError instanceof Error ? enhancedExtractionError.message : String(enhancedExtractionError),
+          fallbackError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+        });
+        
+        // Set minimal placeholder text to indicate extraction failure
+        extractedText = '[Text extraction failed - manual review required]';
+      }
     }
 
     // Upload file to secure storage
@@ -158,7 +201,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     try {
       await AmendmentServerService.parseOfficeAction(
         officeAction.id,
-        extractedText
+        extractedText,
+        tenantId
       );
     } catch (parseError) {
       // Log parsing error but don't fail the upload
@@ -184,6 +228,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         rejectionCount: 0, // Will be updated after parsing
         createdAt: officeAction.createdAt,
       },
+      warning: textExtractionWarning || undefined,
     });
 
   } catch (error) {

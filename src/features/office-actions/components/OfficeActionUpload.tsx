@@ -94,12 +94,21 @@ export const OfficeActionUpload: React.FC<OfficeActionUploadProps> = ({
         logger.info('[OfficeActionUpload] Upload successful', {
           officeActionId: result.officeAction?.id,
           fileName: file.name,
+          hasWarning: !!result.warning,
         });
 
-        toast.success({
-          title: 'Office Action uploaded',
-          description: `"${file.name}" has been uploaded successfully`,
-        });
+        // Show success toast with warning if applicable
+        if (result.warning) {
+          toast.warning({
+            title: 'Office Action uploaded with warnings',
+            description: `"${file.name}" was uploaded, but ${result.warning.toLowerCase()}`,
+          });
+        } else {
+          toast.success({
+            title: 'Office Action uploaded',
+            description: `"${file.name}" has been uploaded successfully`,
+          });
+        }
 
         // Reset metadata form
         setMetadata({

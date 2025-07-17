@@ -20,7 +20,6 @@
     "db:seed:force": "ts-node -r tsconfig-paths/register src/lib/db/seed/seed.ts --force",
     "db:seed:quiet": "ts-node -r tsconfig-paths/register src/lib/db/seed/seed.ts --quiet",
     "db:reset": "prisma migrate reset --force && npm run db:seed",
-
     "find-unused": "ts-prune",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,scss}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,scss}\"",
@@ -52,13 +51,11 @@
     "test:security": "npm audit --audit-level=high",
     "lint:security": "eslint . --ext .ts,.tsx --config .eslintrc.security.js",
     "security:scan": "npm run test:security && npm run lint:security && npm run check:env",
-
     "audit:full": "npm run security:scan",
     "verify:dark-mode": "tsx scripts/verify-dark-mode.ts",
     "precommit": "npm run lint && npm run type-check && npm run test:security",
     "prepush": "npm run audit:full",
     "postinstall": "prisma generate",
-
     "security:type-check": "tsc --noEmit --strict",
     "security:lint": "eslint . --ext .ts,.tsx --max-warnings 0",
     "security:fix-types": "npx ts-migrate",
@@ -68,6 +65,7 @@
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "^3.7.0",
+    "@azure/ai-form-recognizer": "^5.1.0",
     "@azure/storage-blob": "^12.27.0",
     "@azure/storage-queue": "^12.26.0",
     "@emotion/is-prop-valid": "^1.2.1",
@@ -131,6 +129,7 @@
     "lru-cache": "^10.2.0",
     "lucide-react": "^0.525.0",
     "mammoth": "^1.9.1",
+    "markitdown": "^0.0.4",
     "mermaid": "^11.5.0",
     "next": "^15.2.4",
     "openai": "^4.24.1",
