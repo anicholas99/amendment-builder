@@ -32,7 +32,7 @@ export const uiConfig = {
 
 // Application metadata
 export const appConfig = {
-  appName: 'Patent Drafter AI',
+  appName: 'Amendment Builder',
   version: process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
   buildDate: process.env.NEXT_PUBLIC_BUILD_DATE || new Date().toISOString(),
   commitHash: process.env.NEXT_PUBLIC_COMMIT_HASH || 'development',

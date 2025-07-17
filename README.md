@@ -1,10 +1,10 @@
-# Patent Drafter AI
+# Amendment Builder
 
-A sophisticated enterprise-grade application for automated patent drafting and prior art analysis, leveraging AI to streamline the patent application process with comprehensive audit logging and security controls.
+A sophisticated enterprise-grade application for automated patent amendment drafting and Office Action response, leveraging AI to streamline patent prosecution with comprehensive audit logging and security controls.
 
 ## 🚀 Overview
 
-Patent Drafter AI is a full-stack Next.js application that helps patent attorneys and inventors draft high-quality patent applications. The system uses advanced AI models to analyze inventions, generate patent claims, search for prior art, and produce complete patent applications with full compliance tracking.
+Amendment Builder is a full-stack Next.js application that helps patent attorneys efficiently respond to USPTO Office Actions. The system uses advanced AI models to analyze rejections, generate claim amendments, search for supporting prior art, and produce comprehensive Office Action responses with full compliance tracking.
 
 ### Key Features
 

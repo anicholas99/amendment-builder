@@ -67,7 +67,7 @@ export default function LoginPage() {
             </div>
 
             <h1 className="text-3xl font-semibold">
-              Welcome to Patent Drafter
+              Welcome to Amendment Builder
             </h1>
             <p
               className={cn(

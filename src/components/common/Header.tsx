@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 const Logo = memo(() => (
   <img
     src="/images/logo.png"
-    alt="Patent Drafter Logo"
+            alt="Amendment Builder Logo"
     width="32"
     height="32"
     loading="eager"
@@ -26,7 +26,7 @@ Logo.displayName = 'Logo';
 
 const BrandText = memo(() => (
   <span className="text-xl font-bold inline-block align-middle leading-8 ml-2 text-foreground">
-    Patent Drafter
+          Amendment Builder
   </span>
 ));
 BrandText.displayName = 'BrandText';
