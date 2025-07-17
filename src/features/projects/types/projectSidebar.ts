@@ -33,7 +33,7 @@ export interface ProjectSidebarProject {
 
 export interface ActiveDocument {
   projectId?: string;
-  documentType?: 'technology' | 'claim-refinement' | 'patent' | null;
+  documentType?: 'technology' | 'claim-refinement' | 'patent' | 'amendments' | null;
   content?: string;
 }
 
@@ -132,7 +132,7 @@ export type ProjectDeleteHandler = (
 ) => void;
 
 // Navigation types
-export type DocumentType = 'technology' | 'claim-refinement' | 'patent';
+export type DocumentType = 'technology' | 'claim-refinement' | 'patent' | 'amendments';
 
 export interface NavigationTarget {
   projectId: string;

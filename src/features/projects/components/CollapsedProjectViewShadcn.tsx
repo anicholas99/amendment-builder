@@ -213,89 +213,25 @@ const CollapsedProjectViewShadcn: React.FC<CollapsedProjectViewShadcnProps> = ({
                 <TooltipTrigger asChild>
                   <Button
                     variant={
-                      isActive && activeDocument?.documentType === 'technology'
+                      isActive && activeDocument?.documentType === 'amendments'
                         ? 'default'
                         : 'ghost'
                     }
                     size="sm"
                     className={cn(
                       'w-8 h-8 p-0 transition-all hover:scale-105',
-                      isActive && activeDocument?.documentType === 'technology'
+                      isActive && activeDocument?.documentType === 'amendments'
                         ? 'bg-blue-600 hover:bg-blue-600 text-white'
                         : 'hover:bg-accent'
                     )}
                     onClick={_e =>
-                      handleDocumentClick(project.id, 'technology')
-                    }
-                  >
-                    <FiLayers className="w-4 h-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Technology Details</TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={
-                      isActive &&
-                      activeDocument?.documentType === 'claim-refinement'
-                        ? 'default'
-                        : 'ghost'
-                    }
-                    size="sm"
-                    disabled={!inventionProcessed}
-                    className={cn(
-                      'w-8 h-8 p-0 transition-all',
-                      inventionProcessed
-                        ? 'hover:scale-105'
-                        : 'cursor-not-allowed',
-                      isActive &&
-                        activeDocument?.documentType === 'claim-refinement'
-                        ? 'bg-blue-600 hover:bg-blue-600 text-white'
-                        : 'hover:bg-accent',
-                      !inventionProcessed && 'opacity-50'
-                    )}
-                    onClick={() =>
-                      inventionProcessed &&
-                      handleDocumentClick(project.id, 'claim-refinement')
+                      handleDocumentClick(project.id, 'amendments')
                     }
                   >
                     <FiEdit className="w-4 h-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="right">Claim Refinement</TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={
-                      isActive && activeDocument?.documentType === 'patent'
-                        ? 'default'
-                        : 'ghost'
-                    }
-                    size="sm"
-                    disabled={!inventionProcessed}
-                    className={cn(
-                      'w-8 h-8 p-0 transition-all',
-                      inventionProcessed
-                        ? 'hover:scale-105'
-                        : 'cursor-not-allowed',
-                      isActive && activeDocument?.documentType === 'patent'
-                        ? 'bg-blue-600 hover:bg-blue-600 text-white'
-                        : 'hover:bg-accent',
-                      !inventionProcessed && 'opacity-50'
-                    )}
-                    onClick={() =>
-                      inventionProcessed &&
-                      handleDocumentClick(project.id, 'patent')
-                    }
-                  >
-                    <FiFileText className="w-4 h-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Patent Application</TooltipContent>
+                <TooltipContent side="right">Amendment Studio</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>

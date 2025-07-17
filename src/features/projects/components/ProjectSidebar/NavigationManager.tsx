@@ -87,9 +87,9 @@ const NavigationManager: React.FC<NavigationManagerProps> = ({
           to: targetProjectId,
         });
 
-        // Always navigate to technology details when switching projects
+        // Always navigate to amendments when switching projects
         if (!isNewProject) {
-          documentType = 'technology';
+          documentType = 'amendments';
         }
 
         // Navigate to the new project

@@ -64,7 +64,7 @@ export type ProjectStatus = 'draft' | 'in_progress' | 'completed' | 'archived';
 /**
  * Document types within a project
  */
-export type DocumentType = 'technology' | 'patent' | 'claim-refinement';
+export type DocumentType = 'technology' | 'patent' | 'claim-refinement' | 'amendments';
 
 /**
  * Document in a project

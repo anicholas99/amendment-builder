@@ -150,6 +150,7 @@ export const transformProjectsForSidebar = (
 export const getCurrentDocumentType = (
   pathname: string
 ): DocumentType | null => {
+  if (pathname.includes('amendments')) return 'amendments';
   if (pathname.includes('claim-refinement')) return 'claim-refinement';
   if (pathname.includes('technology')) return 'technology';
   if (pathname.includes('patent')) return 'patent';
@@ -382,12 +383,14 @@ export const shouldRefetchProjects = (
  */
 export const normalizeDocumentType = (documentType: string): DocumentType => {
   switch (documentType) {
+    case 'amendments':
+      return 'amendments';
     case 'technology':
       return 'technology';
     case 'claim-refinement':
       return 'claim-refinement';
     default:
-      return 'patent';
+      return 'amendments'; // Default to amendments for this app
   }
 };
 

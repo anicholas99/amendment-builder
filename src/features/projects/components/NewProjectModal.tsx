@@ -87,7 +87,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
   const handleSubmit = async () => {
     if (!projectName.trim()) {
       if (externalError === undefined) {
-        setLocalError('Project name cannot be empty.');
+        setLocalError('Response name cannot be empty.');
       }
       return;
     }
@@ -163,7 +163,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isSuccess ? 'Project Created!' : 'Create New Project'}
+            {isSuccess ? 'Amendment Response Created!' : 'Create New Amendment Response'}
           </DialogTitle>
         </DialogHeader>
 
@@ -174,20 +174,20 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
                 <FiCheck className="h-6 w-6" />
               </Box>
               <Text className="text-green-600 dark:text-green-400 font-medium">
-                Project "{projectName}" created successfully!
+                Amendment response "{projectName}" created successfully!
               </Text>
               <Text size="sm" className="text-muted-foreground">
-                Opening technology details...
+                Opening amendment studio...
               </Text>
             </VStack>
           ) : (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="project-name">Project Name</Label>
+                <Label htmlFor="project-name">Response Name</Label>
                 <Input
                   id="project-name"
                   ref={initialRef}
-                  placeholder="Enter project name"
+                  placeholder="Enter response name (e.g., Response to OA #1)"
                   value={projectName}
                   onChange={handleInputChange}
                   onKeyDown={e => {
@@ -221,7 +221,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
               ) : (
                 <>
                   <FiPlus className="h-4 w-4" />
-                  Create Project
+                  Create Response
                 </>
               )}
             </Button>

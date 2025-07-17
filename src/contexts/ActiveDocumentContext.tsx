@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 interface ActiveDocument {
   projectId: string;
-  documentType: 'technology' | 'claim-refinement' | 'patent';
+  documentType: 'technology' | 'claim-refinement' | 'patent' | 'amendments';
   content: string;
 }
 

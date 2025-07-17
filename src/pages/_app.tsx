@@ -90,7 +90,7 @@ function MyApp({ Component, pageProps }: AppProps) {
     <>
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Amendment Builder</title>
+        <title>Amendment Builder - AI-Powered Office Action Response</title>
       </Head>
       <ErrorBoundary>
         {/* Wrap everything needing React Query with the Provider */}

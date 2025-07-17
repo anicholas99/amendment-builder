@@ -141,7 +141,7 @@ export default function Projects() {
                           isDarkMode ? 'text-white' : 'text-gray-900'
                         )}
                       >
-                        Projects Dashboard
+                        Amendment Builder
                       </h1>
                       <p
                         className={cn(
@@ -149,10 +149,10 @@ export default function Projects() {
                           isDarkMode ? 'text-gray-400' : 'text-gray-600'
                         )}
                       >
-                        Manage your invention projects and generate patent
-                        documents
+                        Respond to Office Actions with AI-powered amendment
+                        generation
                       </p>
-                      <div className="flex items-center gap-6 pt-1">
+                                              <div className="flex items-center gap-6 pt-1">
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full bg-blue-600"></div>
                           <span
@@ -161,7 +161,7 @@ export default function Projects() {
                               isDarkMode ? 'text-gray-300' : 'text-gray-700'
                             )}
                           >
-                            {projects?.length || 0} Projects
+                            {projects?.length || 0} Office Action Responses
                           </span>
                         </div>
                       </div>
@@ -172,7 +172,7 @@ export default function Projects() {
                         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 font-medium rounded-lg shadow-sm hover:shadow transition-all duration-200"
                       >
                         <FiPlus className="mr-2 h-4 w-4" />
-                        New Project
+                        New Amendment Response
                       </Button>
                     </div>
                   </div>

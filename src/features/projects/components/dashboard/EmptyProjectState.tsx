@@ -38,11 +38,11 @@ export const EmptyProjectState: React.FC<EmptyProjectStateProps> = ({
           {/* Text Content */}
           <div className="space-y-3">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Ready to Create Your First Project?
+              Ready to Respond to Your First Office Action?
             </h2>
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-              Transform your innovative ideas into comprehensive patent
-              applications with our AI-powered tools.
+              Upload an Office Action and generate comprehensive amendment
+              responses with our AI-powered analysis tools.
             </p>
           </div>
 
@@ -53,7 +53,7 @@ export const EmptyProjectState: React.FC<EmptyProjectStateProps> = ({
                 <FiZap className="text-blue-600 dark:text-blue-400 text-sm" />
               </div>
               <p className="text-xs text-gray-600 dark:text-gray-400">
-                AI-Powered
+                AI Analysis
               </p>
             </div>
 
@@ -62,7 +62,7 @@ export const EmptyProjectState: React.FC<EmptyProjectStateProps> = ({
                 <FiTarget className="text-green-600 dark:text-green-400 text-sm" />
               </div>
               <p className="text-xs text-gray-600 dark:text-gray-400">
-                Precise Claims
+                Smart Amendments
               </p>
             </div>
 
@@ -71,7 +71,7 @@ export const EmptyProjectState: React.FC<EmptyProjectStateProps> = ({
                 <FiTrendingUp className="text-purple-600 dark:text-purple-400 text-sm" />
               </div>
               <p className="text-xs text-gray-600 dark:text-gray-400">
-                Fast Process
+                Quick Response
               </p>
             </div>
           </div>
@@ -82,12 +82,12 @@ export const EmptyProjectState: React.FC<EmptyProjectStateProps> = ({
             className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transition-all duration-200 px-6 py-2"
           >
             <FiPlus className="mr-2 h-4 w-4" />
-            Create Your First Project
+            Create Your First Response
           </Button>
 
           {/* Simple helpful text */}
           <p className="text-xs text-gray-500 dark:text-gray-500">
-            Get started in under 2 minutes
+            Upload an Office Action to get started
           </p>
         </div>
       </div>

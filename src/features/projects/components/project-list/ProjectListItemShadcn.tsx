@@ -167,34 +167,12 @@ const ProjectListItemShadcn: React.FC<ProjectListItemShadcnProps> = React.memo(
             <div className="max-w-full overflow-hidden">
               <DocumentLink
                 projectId={project.id}
-                documentType="technology"
-                label="Technology Details"
+                documentType="amendments"
+                label="Amendment Studio"
                 isActive={
                   activeProject === project.id &&
-                  activeDocument?.documentType === 'technology'
+                  activeDocument?.documentType === 'amendments'
                 }
-                onClick={handleDocumentSelect}
-              />
-              <DocumentLink
-                projectId={project.id}
-                documentType="claim-refinement"
-                label="Claim Refinement"
-                isActive={
-                  activeProject === project.id &&
-                  activeDocument?.documentType === 'claim-refinement'
-                }
-                isDisabled={!inventionProcessed}
-                onClick={handleDocumentSelect}
-              />
-              <DocumentLink
-                projectId={project.id}
-                documentType="patent"
-                label="Patent Application"
-                isActive={
-                  activeProject === project.id &&
-                  activeDocument?.documentType === 'patent'
-                }
-                isDisabled={!inventionProcessed}
                 onClick={handleDocumentSelect}
               />
             </div>

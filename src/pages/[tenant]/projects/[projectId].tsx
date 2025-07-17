@@ -28,9 +28,9 @@ export default function ProjectPage() {
       // Set the active project when the component loads or URL changes to a different project
       setActiveProject(projectId);
 
-      // Redirect to the technology view
+      // Redirect to the amendments view
       if (tenant) {
-        router.replace(`/${tenant}/projects/${projectId}/technology`);
+        router.replace(`/${tenant}/projects/${projectId}/amendments`);
       }
     } else if (
       projectId &&
@@ -45,7 +45,7 @@ export default function ProjectPage() {
       );
       hasSetProjectRef.current = true;
       if (tenant) {
-        router.replace(`/${tenant}/projects/${projectId}/technology`);
+        router.replace(`/${tenant}/projects/${projectId}/amendments`);
       }
     }
   }, [projectId, router, setActiveProject, tenant, activeProject]);

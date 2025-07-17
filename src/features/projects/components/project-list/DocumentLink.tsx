@@ -32,6 +32,7 @@ const documentIcons: Record<string, React.ElementType> = {
   patent: FiFileText,
   'prior-art': FiGitPullRequest,
   verification: FiCheck,
+  amendments: FiEdit,
 };
 
 const DocumentLink: React.FC<DocumentLinkProps> = React.memo(

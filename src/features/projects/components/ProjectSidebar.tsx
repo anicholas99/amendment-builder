@@ -355,10 +355,10 @@ const ProjectSidebar = () => {
         // The UI will update immediately thanks to optimistic updates
         // No need to wait for refetch
 
-        // Navigate to the new project's technology page immediately
+        // Navigate to the new project's amendments page immediately
         if (newProject && newProject.id) {
           const tenant = getTenantFromRouter(router);
-          const newPath = `/${tenant}/projects/${newProject.id}/technology`;
+          const newPath = `/${tenant}/projects/${newProject.id}/amendments`;
           await router.push(newPath);
         }
       } catch (error) {

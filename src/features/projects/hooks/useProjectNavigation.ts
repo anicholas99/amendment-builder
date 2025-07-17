@@ -57,7 +57,7 @@ export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
       if (!projectId) return;
 
       const targetProject = projects.find(p => p.id === projectId);
-      const documentType = 'technology'; // Always go to tech details by default
+      const documentType = 'amendments'; // Always go to amendments by default
 
       setTransitionState({
         isAnimating: true,
@@ -74,16 +74,11 @@ export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
         // Set new active project
         setActiveProject(projectId);
 
-        // Always navigate to technology details when switching projects
+        // Always navigate to amendments when switching projects
         await navigateToProject(projectId, documentType);
 
         if (targetProject) {
-          const viewName =
-            documentType === 'technology'
-              ? 'Technology Details'
-              : documentType === 'claim-refinement'
-                ? 'Claims'
-                : 'Patent Application';
+          const viewName = 'Amendment Studio';
 
           toast.success('Project opened', {
             description: `Opened ${viewName.toLowerCase()} for "${targetProject.name}"`,
@@ -118,7 +113,9 @@ export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
           ? 'Technology Details'
           : documentType === 'claim-refinement'
             ? 'Claims'
-            : 'Patent';
+            : documentType === 'amendments'
+              ? 'Amendment Studio'
+              : 'Patent';
 
       setTransitionState({
         isAnimating: true,
@@ -177,7 +174,7 @@ export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
       setTransitionState({
         isAnimating: true,
         targetProjectName: newProject.name,
-        targetView: 'Technology Details',
+        targetView: 'Amendment Studio',
       });
 
       // Set new active project
@@ -185,7 +182,7 @@ export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
 
       // Navigate directly to the new project
       const tenantPath = `/${tenant}`;
-      const newPath = `${tenantPath}/projects/${newProject.id}/technology`;
+      const newPath = `${tenantPath}/projects/${newProject.id}/amendments`;
 
       logger.info('[New Project] Navigating to:', {
         projectId: newProject.id,

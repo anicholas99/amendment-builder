@@ -67,9 +67,10 @@ export const ProjectCard = React.memo<ProjectCardProps>(
     const router = useRouter();
     const { tenant } = extractTenantFromQuery(router.query);
 
-    const hasTechDetails = !!project.inventionData?.technologyDetails;
-    const hasClaims = (project.inventionData?.claims?.length ?? 0) > 0;
-    const hasPatentDraft = !!project.inventionData?.patentDraft;
+    // Amendment status indicators (using existing data structure for now)
+    const hasOfficeAction = !!project.inventionData?.technologyDetails; // Will be updated when backend supports OA
+    const hasAnalysis = (project.inventionData?.claims?.length ?? 0) > 0; // Will be updated for rejection analysis
+    const hasResponse = !!project.inventionData?.patentDraft; // Will be updated for amendment response
 
     const isRecent =
       project.lastUpdated &&
@@ -318,54 +319,54 @@ export const ProjectCard = React.memo<ProjectCardProps>(
               </div>
             </div>
 
-            {/* Status badges */}
+            {/* Amendment Status badges */}
             <div className="flex flex-wrap gap-1.5 mb-3">
-              {/* Technology Details Badge */}
+              {/* Office Action Badge */}
               <Badge
-                variant={hasTechDetails ? 'default' : 'outline'}
+                variant={hasOfficeAction ? 'default' : 'outline'}
                 className={cn(
                   'cursor-pointer transition-all duration-200 text-xs px-2 py-0.5',
                   !isEditing && 'hover:scale-105',
-                  hasTechDetails
+                  hasOfficeAction
                     ? 'bg-green-600 text-white hover:bg-green-700'
                     : 'border-green-300 text-green-600 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
                 )}
-                onClick={handleTagClick('technology')}
+                onClick={handleTagClick('amendments')}
                 onMouseDown={e => e.stopPropagation()}
               >
-                Tech Details
+                Office Action
               </Badge>
 
-              {/* Claims Badge */}
+              {/* Analysis Badge */}
               <Badge
-                variant={hasClaims ? 'default' : 'outline'}
+                variant={hasAnalysis ? 'default' : 'outline'}
                 className={cn(
                   'cursor-pointer transition-all duration-200 text-xs px-2 py-0.5',
                   !isEditing && 'hover:scale-105',
-                  hasClaims
+                  hasAnalysis
                     ? 'bg-blue-600 text-white hover:bg-blue-700'
                     : 'border-blue-300 text-blue-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                 )}
-                onClick={handleTagClick('claim-refinement')}
+                onClick={handleTagClick('amendments')}
                 onMouseDown={e => e.stopPropagation()}
               >
-                Claims
+                Analysis
               </Badge>
 
-              {/* Patent Badge */}
+              {/* Response Badge */}
               <Badge
-                variant={hasPatentDraft ? 'default' : 'outline'}
+                variant={hasResponse ? 'default' : 'outline'}
                 className={cn(
                   'cursor-pointer transition-all duration-200 text-xs px-2 py-0.5',
                   !isEditing && 'hover:scale-105',
-                  hasPatentDraft
+                  hasResponse
                     ? 'bg-purple-600 text-white hover:bg-purple-700'
                     : 'border-purple-300 text-purple-600 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20'
                 )}
-                onClick={handleTagClick('patent')}
+                onClick={handleTagClick('amendments')}
                 onMouseDown={e => e.stopPropagation()}
               >
-                Patent
+                Response
               </Badge>
             </div>
 

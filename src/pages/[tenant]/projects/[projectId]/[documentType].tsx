@@ -31,6 +31,12 @@ const PatentApplicationViewClean = lazy(
       '../../../../features/patent-application/components/PatentApplicationViewClean'
     )
 );
+const AmendmentStudio = lazy(
+  () =>
+    import(
+      '../../../../features/amendment/components/AmendmentStudio'
+    ).then(module => ({ default: module.AmendmentStudio }))
+);
 
 // Minimal loading fallback component - properly centered in full height
 const ViewLoadingFallback = () => (
@@ -176,7 +182,8 @@ export default function DocumentTypePage() {
     if (
       documentType === 'technology' ||
       documentType === 'claim-refinement' ||
-      documentType === 'patent'
+      documentType === 'patent' ||
+      documentType === 'amendments'
     ) {
       setViewType(documentType as DocumentType);
     }
@@ -215,6 +222,12 @@ export default function DocumentTypePage() {
         return (
           <Suspense fallback={<ViewLoadingFallback />}>
             <PatentApplicationViewClean key={componentKey} />
+          </Suspense>
+        );
+      case 'amendments':
+        return (
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <AmendmentStudio key={componentKey} projectId={routerProjectId} />
           </Suspense>
         );
       default:
