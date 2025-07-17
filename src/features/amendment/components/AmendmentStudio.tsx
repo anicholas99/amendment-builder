@@ -198,6 +198,7 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
     <SimpleMainPanel
       header={renderStudioHeader()}
       contentPadding={false}
+      viewHeightOffset={0}
     >
       <div className="h-full flex overflow-hidden">
         {/* Left Panel - Office Action Navigator */}

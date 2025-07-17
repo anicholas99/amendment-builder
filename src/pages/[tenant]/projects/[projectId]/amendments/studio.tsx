@@ -14,7 +14,7 @@ import React from 'react';
 import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { AuthGuard } from '@/components/AuthGuard';
+import AppLayout from '@/components/layouts/AppLayout';
 import { AmendmentStudio } from '@/features/amendment/components/AmendmentStudio';
 import { logger } from '@/server/logger';
 
@@ -54,12 +54,12 @@ const AmendmentStudioPage: React.FC<AmendmentStudioPageProps> = ({
         />
       </Head>
 
-      <AuthGuard>
+      <AppLayout>
         <AmendmentStudio 
           projectId={projectId}
           officeActionId={amendmentId as string}
         />
-      </AuthGuard>
+      </AppLayout>
     </>
   );
 };
