@@ -1,8 +1,8 @@
 import React from 'react';
-import { Box, Heading, Text, List, ListItem } from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useColorModeValue } from '@/hooks/useColorModeValue';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface AnalysisMarkdownViewerProps {
   markdownText: string;
@@ -11,95 +11,100 @@ interface AnalysisMarkdownViewerProps {
 export const AnalysisMarkdownViewer: React.FC<AnalysisMarkdownViewerProps> = ({
   markdownText,
 }) => {
-  const codeBg = useColorModeValue('gray.100', 'gray.700');
-  const codeColor = useColorModeValue('text.primary', 'text.primary');
-  const blockquoteBg = useColorModeValue('bg.secondary', 'bg.secondary');
-  const blockquoteColor = useColorModeValue('text.secondary', 'text.secondary');
-  const blockquoteBorderColor = useColorModeValue(
-    'border.primary',
-    'border.primary'
-  );
+  const { isDarkMode } = useThemeContext();
 
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
         h1: ({ children, ...props }) => (
-          <Heading size="lg" mt={5} mb={3} color="text.primary" {...props}>
+          <h1
+            className={cn(
+              'text-lg font-bold mt-5 mb-3',
+              isDarkMode ? 'text-gray-200' : 'text-gray-900'
+            )}
+            {...props}
+          >
             {children}
-          </Heading>
+          </h1>
         ),
         h2: ({ children, ...props }) => (
-          <Heading size="md" mt={4} mb={2} color="text.primary" {...props}>
+          <h2
+            className={cn(
+              'text-md font-semibold mt-4 mb-2',
+              isDarkMode ? 'text-gray-200' : 'text-gray-900'
+            )}
+            {...props}
+          >
             {children}
-          </Heading>
+          </h2>
         ),
         h3: ({ children, ...props }) => (
-          <Heading size="sm" mt={3} mb={1} color="text.primary" {...props}>
+          <h3
+            className={cn(
+              'text-sm font-semibold mt-3 mb-1',
+              isDarkMode ? 'text-gray-200' : 'text-gray-900'
+            )}
+            {...props}
+          >
             {children}
-          </Heading>
+          </h3>
         ),
         p: ({ children, onClick, ...props }) => (
-          <Text mb={2} fontSize="sm" color="text.primary" {...props}>
-            {children}
-          </Text>
-        ),
-        ul: props => (
-          <List
-            spacing={1}
-            mb={2}
-            styleType="disc"
-            stylePosition="inside"
+          <p
+            className={cn(
+              'mb-2 text-sm',
+              isDarkMode ? 'text-gray-200' : 'text-gray-900'
+            )}
             {...props}
-          />
-        ),
-        ol: props => (
-          <List
-            spacing={1}
-            mb={2}
-            styleType="decimal"
-            stylePosition="inside"
-            {...props}
-          />
-        ),
-        li: props => (
-          <ListItem
-            display="list-item"
-            ml="1.2em"
-            fontSize="sm"
-            color="text.primary"
           >
-            {props.children}
-          </ListItem>
+            {children}
+          </p>
+        ),
+        ul: ({ children, ...props }) => (
+          <ul className="list-disc list-inside mb-2 space-y-1" {...props}>
+            {children}
+          </ul>
+        ),
+        ol: ({ children, ...props }) => (
+          <ol className="list-decimal list-inside mb-2 space-y-1" {...props}>
+            {children}
+          </ol>
+        ),
+        li: ({ children, ...props }) => (
+          <li
+            className={cn(
+              'ml-5 text-sm',
+              isDarkMode ? 'text-gray-200' : 'text-gray-900'
+            )}
+            {...props}
+          >
+            {children}
+          </li>
         ),
         code: ({ children }) => (
-          <Box
-            as="code"
-            px={1}
-            py={0.5}
-            bg={codeBg}
-            borderRadius="sm"
-            fontSize="0.85em"
-            fontFamily="monospace"
-            color={codeColor}
+          <code
+            className={cn(
+              'px-1 py-0.5 text-xs font-mono rounded-sm',
+              isDarkMode
+                ? 'bg-gray-700 text-gray-200'
+                : 'bg-gray-100 text-gray-900'
+            )}
           >
             {children}
-          </Box>
+          </code>
         ),
         blockquote: ({ children }) => (
-          <Box
-            as="blockquote"
-            borderLeftWidth="4px"
-            borderColor={blockquoteBorderColor}
-            pl={4}
-            py={2}
-            my={3}
-            bg={blockquoteBg}
-            fontStyle="italic"
-            color={blockquoteColor}
+          <blockquote
+            className={cn(
+              'border-l-4 pl-4 py-2 my-3 italic',
+              isDarkMode
+                ? 'border-gray-600 bg-gray-800 text-gray-400'
+                : 'border-gray-300 bg-gray-50 text-gray-600'
+            )}
           >
             {children}
-          </Box>
+          </blockquote>
         ),
       }}
     >

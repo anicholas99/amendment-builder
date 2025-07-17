@@ -21,7 +21,6 @@ export interface ElementAnalysis {
   relevanceLevel: 'high' | 'medium' | 'low';
   relevanceScore: number;
   keyFindings: string[];
-  recommendation?: string;
 }
 
 export interface StructuredDeepAnalysis {
@@ -62,8 +61,22 @@ export interface ExaminerStructuredDeepAnalysis
   };
   overallAssessment: ExaminerOverallAssessment;
   holisticAnalysis: string;
+  amendmentExplanation?: string;
   originalClaim?: string;
   revisedClaim?: string;
+  validationPerformed?: boolean;
+  validationResults?: {
+    totalSuggestions?: number;
+    disclosedCount?: number;
+    keepCount?: number;
+    validationSummary?: string;
+    validationDetails?: Array<{
+      suggestion: string;
+      wasDisclosed: boolean;
+      reasoning?: string;
+    }>;
+    [key: string]: any;
+  };
 }
 
 export interface DeepAnalysisPanelProps {

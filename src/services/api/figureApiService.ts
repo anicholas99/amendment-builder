@@ -1,7 +1,7 @@
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { z } from 'zod';
 import { validateApiResponse } from '@/lib/validation/apiValidation';
 
@@ -10,13 +10,14 @@ export const FigureSchema = z.object({
   id: z.string(),
   projectId: z.string(),
   status: z.string().optional(),
-  fileName: z.string(),
-  blobName: z.string(),
-  mimeType: z.string(),
-  sizeBytes: z.number(),
+  fileName: z.string().nullish(),
+  blobName: z.string().nullish(),
+  mimeType: z.string().nullish(),
+  sizeBytes: z.number().nullish(),
   figureKey: z.string().nullish(),
   description: z.string().nullish(),
   uploadedBy: z.string(),
+  uploadedRecordId: z.string().optional(), // ID of UPLOADED record created during unassign operations
   createdAt: z
     .string()
     .or(z.date())
@@ -48,15 +49,18 @@ export const FigureElementSchema = z.object({
 
 export const FigureWithElementsSchema = z.object({
   id: z.string(),
+  projectId: z.string().optional(),
   status: z.string().optional(),
-  figureKey: z.string().nullish(),
+  figureKey: z.string().nullish(), // Can be null for unassigned uploads
   title: z.string().nullish(),
   description: z.string().nullish(),
   displayOrder: z.number(),
   fileName: z.string().optional(),
   blobName: z.string().optional(),
   mimeType: z.string().optional(),
+  sizeBytes: z.number().optional(),
   elements: z.array(FigureElementSchema),
+  createdAt: z.string().or(z.date()).optional(),
 });
 
 export const FiguresWithElementsResponseSchema = z.object({
@@ -120,8 +124,10 @@ export class FigureApiService {
       const response = await apiFetch(
         API_ROUTES.PROJECTS.FIGURES.LIST(projectId)
       );
-      const data = await response.json();
+      const result = await response.json();
 
+      // Handle standardized API response format
+      const data = result.data || result;
       const validated = validateApiResponse(data, FigureListResponseSchema);
 
       logger.info('[FigureApiService] Figures listed successfully', {
@@ -146,8 +152,10 @@ export class FigureApiService {
     projectId: string
   ): Promise<FiguresWithElementsResponse> {
     try {
+      // Add cache-busting parameter to ensure fresh data
+      const cacheBuster = Date.now();
       const response = await apiFetch(
-        `${API_ROUTES.PROJECTS.FIGURES.LIST(projectId)}?includeElements=true`
+        `${API_ROUTES.PROJECTS.FIGURES.LIST(projectId)}?includeElements=true&_t=${cacheBuster}`
       );
 
       if (!response.ok) {
@@ -157,7 +165,10 @@ export class FigureApiService {
         );
       }
 
-      const data = await response.json();
+      const result = await response.json();
+
+      // Handle standardized API response format
+      const data = result.data || result;
 
       return validateApiResponse(data, FiguresWithElementsResponseSchema);
     } catch (error) {
@@ -277,7 +288,10 @@ export class FigureApiService {
         );
       }
 
-      const data = await response.json();
+      const result = await response.json();
+
+      // Handle standardized API response format
+      const data = result.data || result;
       const validated = validateApiResponse(data, FigureSchema);
 
       logger.info('[FigureApiService] Figure updated successfully', {
@@ -323,7 +337,10 @@ export class FigureApiService {
         }
       );
 
-      const data = await response.json();
+      const result = await response.json();
+
+      // Handle standardized API response format
+      const data = result.data || result;
       const validated = validateApiResponse(data.figure, FigureSchema);
 
       logger.info('[FigureApiService] Figure metadata updated successfully', {
@@ -512,7 +529,10 @@ export class FigureApiService {
         }
       );
 
-      const data = await response.json();
+      const result = await response.json();
+
+      // Handle standardized API response format
+      const data = result.data || result;
       const validated = validateApiResponse(data.element, ElementSchema);
 
       logger.info('[FigureApiService] Element name updated successfully', {
@@ -580,7 +600,7 @@ export class FigureApiService {
     figureKey: string,
     description?: string,
     title?: string
-  ): Promise<{ id: string; figureKey: string; status: string }> {
+  ): Promise<FigureWithElements> {
     logger.debug('[FigureApiService] Creating pending figure', {
       projectId,
       figureKey,
@@ -604,15 +624,21 @@ export class FigureApiService {
         }
       );
 
-      const data = await response.json();
+      const result = await response.json();
+
+      // Handle standardized API response format
+      const data = result.data || result;
+
+      // Validate the response as a FigureWithElements
+      const validated = validateApiResponse(data, FigureWithElementsSchema);
 
       logger.info('[FigureApiService] Pending figure created successfully', {
         projectId,
         figureKey,
-        figureId: data.id,
+        figureId: validated.id,
       });
 
-      return data;
+      return validated;
     } catch (error) {
       logger.error('[FigureApiService] Failed to create pending figure', {
         projectId,

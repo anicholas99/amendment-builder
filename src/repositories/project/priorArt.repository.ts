@@ -1,5 +1,5 @@
 import { prisma } from '../../lib/prisma';
-import { logger } from '../../lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { PriorArtInput, SavedPriorArtWithFields } from './types';
 import {
   ProcessedSavedPriorArt,
@@ -23,11 +23,7 @@ import {
 export async function addProjectPriorArt(
   projectId: string,
   priorArt: PriorArtInput
-): Promise<SavedPriorArtWithFields> {
-  logger.debug(
-    `Repository: Adding prior art ${priorArt.patentNumber} to project ${projectId}`
-  );
-
+): Promise<any> {
   try {
     // Normalize the patent number
     const normalizedPatentNumber = priorArt.patentNumber
@@ -42,73 +38,67 @@ export async function addProjectPriorArt(
           patentNumber: normalizedPatentNumber,
         },
       },
-      select: {
-        id: true,
-        patentNumber: true,
-        title: true,
-        abstract: true,
-        url: true,
-        notes: true,
-        authors: true,
-        publicationDate: true,
-        savedCitationsData: true,
-        claim1: true,
-        summary: true,
-        savedAt: true,
-        projectId: true,
+      include: {
+        savedCitations: {
+          orderBy: { displayOrder: 'asc' },
+        },
       },
     });
 
     if (existingArt) {
-      logger.warn(
-        `Repository: Prior art ${priorArt.patentNumber} already saved for project ${projectId}. Updating.`
-      );
-
       // Handle citation data merging if new citations are provided
-      let mergedCitationsData = existingArt.savedCitationsData;
       if (priorArt.savedCitationsData) {
         try {
-          // Parse existing citations
-          const existingCitations: SavedCitationUI[] = existingArt.savedCitationsData 
-            ? JSON.parse(existingArt.savedCitationsData) 
-            : [];
-          
-          // Parse new citations
-          const newCitations: SavedCitationUI[] = JSON.parse(priorArt.savedCitationsData);
-          
-          // Merge citations, avoiding duplicates based on elementText + citation combination
-          const mergedCitations: SavedCitationUI[] = [...existingCitations];
-          
-          for (const newCitation of newCitations) {
-            const isDuplicate = existingCitations.some((existing: SavedCitationUI) => 
-              existing.elementText?.trim() === newCitation.elementText?.trim() &&
-              existing.citation?.trim() === newCitation.citation?.trim()
-            );
-            
-            if (!isDuplicate) {
-              mergedCitations.push(newCitation);
-            }
-          }
-          
-          mergedCitationsData = JSON.stringify(mergedCitations);
-          
-          logger.debug(
-            `Repository: Merged citations for ${priorArt.patentNumber}. ` +
-            `Existing: ${existingCitations.length}, New: ${newCitations.length}, ` +
-            `Final: ${mergedCitations.length}`
+          // Parse new citations from JSON
+          const newCitations: SavedCitationUI[] = JSON.parse(
+            priorArt.savedCitationsData
           );
+
+          // Get existing citation keys for duplicate checking
+          const existingCitationKeys = new Set(
+            existingArt.savedCitations.map(
+              (c: any) => `${c.elementText?.trim()}:::${c.citationText?.trim()}`
+            )
+          );
+
+          // Filter out duplicates
+          const citationsToAdd = newCitations.filter(newCitation => {
+            const key = `${newCitation.elementText?.trim()}:::${newCitation.citation?.trim()}`;
+            return !existingCitationKeys.has(key);
+          });
+
+          // Add new citations
+          if (citationsToAdd.length > 0) {
+            const startOrder = existingArt.savedCitations.length;
+            await prisma!.savedCitation.createMany({
+              data: citationsToAdd.map((citation, index) => ({
+                savedPriorArtId: existingArt.id,
+                elementText: citation.elementText || '',
+                citationText: citation.citation || '',
+                location: citation.location || null,
+                reasoning: citation.reasoning || null,
+                displayOrder: startOrder + index,
+              })),
+            });
+
+            logger.info(
+              `[addProjectPriorArt] Added citations to existing prior art`,
+              {
+                projectId,
+                patentNumber: priorArt.patentNumber,
+                citationsAdded: citationsToAdd.length,
+              }
+            );
+          }
         } catch (error) {
           logger.error(
-            `Repository: Error merging citation data for ${priorArt.patentNumber}`, 
+            `Repository: Error adding citation data for ${priorArt.patentNumber}`,
             { error }
           );
-          // Fall back to new data if parsing fails
-          mergedCitationsData = priorArt.savedCitationsData;
         }
       }
 
       // Update the existing record with new information
-      // This allows updating/adding citation data to existing prior art
       const updatedArt = await prisma!.savedPriorArt.update({
         where: {
           id: existingArt.id,
@@ -124,33 +114,32 @@ export async function addProjectPriorArt(
             priorArt.publicationDate ?? existingArt.publicationDate,
           claim1: priorArt.claim1 ?? existingArt.claim1,
           summary: priorArt.summary ?? existingArt.summary,
-          // Use merged citation data
-          savedCitationsData: mergedCitationsData,
         },
-        select: {
-          id: true,
-          patentNumber: true,
-          title: true,
-          abstract: true,
-          url: true,
-          notes: true,
-          authors: true,
-          publicationDate: true,
-          savedCitationsData: true,
-          claim1: true,
-          summary: true,
-          savedAt: true,
-          projectId: true,
+        include: {
+          savedCitations: {
+            orderBy: { displayOrder: 'asc' },
+          },
         },
       });
 
-      logger.info(
-        `Repository: Successfully updated prior art ${updatedArt.patentNumber} for project ${projectId}`
-      );
+      logger.info(`[addProjectPriorArt] Updated existing prior art`, {
+        projectId,
+        patentNumber: updatedArt.patentNumber,
+      });
       return updatedArt;
     }
 
-    // Create the new prior art record
+    // Parse citations if provided
+    let citationsToCreate: SavedCitationUI[] = [];
+    if (priorArt.savedCitationsData) {
+      try {
+        citationsToCreate = JSON.parse(priorArt.savedCitationsData);
+      } catch (error) {
+        logger.error('Repository: Failed to parse citation data', { error });
+      }
+    }
+
+    // Create the new prior art record with citations
     const newArt = await prisma!.savedPriorArt.create({
       data: {
         projectId: projectId,
@@ -161,30 +150,34 @@ export async function addProjectPriorArt(
         notes: priorArt.notes,
         authors: priorArt.authors,
         publicationDate: priorArt.publicationDate,
-        savedCitationsData: priorArt.savedCitationsData,
         claim1: priorArt.claim1,
         summary: priorArt.summary,
+        // Create citations in the same transaction
+        savedCitations:
+          citationsToCreate.length > 0
+            ? {
+                create: citationsToCreate.map((citation, index) => ({
+                  elementText: citation.elementText || '',
+                  citationText: citation.citation || '',
+                  location: citation.location || null,
+                  reasoning: citation.reasoning || null,
+                  displayOrder: index,
+                })),
+              }
+            : undefined,
       },
-      select: {
-        id: true,
-        patentNumber: true,
-        title: true,
-        abstract: true,
-        url: true,
-        notes: true,
-        authors: true,
-        publicationDate: true,
-        savedCitationsData: true,
-        claim1: true,
-        summary: true,
-        savedAt: true,
-        projectId: true,
+      include: {
+        savedCitations: {
+          orderBy: { displayOrder: 'asc' },
+        },
       },
     });
 
-    logger.info(
-      `Repository: Successfully added prior art ${newArt.patentNumber} to project ${projectId}`
-    );
+    logger.info(`[addProjectPriorArt] Created new prior art`, {
+      projectId,
+      patentNumber: newArt.patentNumber,
+      citationsCount: citationsToCreate.length,
+    });
     return newArt;
   } catch (error) {
     logger.error(
@@ -193,8 +186,7 @@ export async function addProjectPriorArt(
         error: error instanceof Error ? error : new Error(String(error)),
       }
     );
-    // Decide on error handling: rethrow, return null, etc.
-    throw error; // Rethrow for now
+    throw error;
   }
 }
 
@@ -204,39 +196,35 @@ export async function addProjectPriorArt(
  * @param projectId The ID of the project to fetch prior art for.
  * @returns A promise resolving to an array of saved prior art.
  */
-export async function findProjectPriorArt(
-  projectId: string
-): Promise<SavedPriorArtWithFields[]> {
+export async function findProjectPriorArt(projectId: string): Promise<any[]> {
   try {
-    logger.debug(
-      `Repository: Finding saved prior art for project ID: ${projectId}`
-    );
-
     const priorArtItems = await prisma!.savedPriorArt.findMany({
       where: { projectId },
-      select: {
-        id: true,
-        patentNumber: true,
-        title: true,
-        abstract: true,
-        url: true,
-        notes: true,
-        authors: true,
-        publicationDate: true,
-        savedCitationsData: true,
-        claim1: true,
-        summary: true,
-        savedAt: true,
-        projectId: true,
+      include: {
+        savedCitations: {
+          orderBy: { displayOrder: 'asc' },
+        },
       },
       orderBy: {
         savedAt: 'desc',
       },
     });
 
-    logger.debug(
-      `Repository: Found ${priorArtItems.length} saved prior art items for project ${projectId}`
-    );
+    // Only log if there are no items or if there's an unusually large number
+    if (priorArtItems.length === 0) {
+      logger.info(
+        `[findProjectPriorArt] No prior art found for project ${projectId}`
+      );
+    } else if (priorArtItems.length > 50) {
+      logger.info(
+        `[findProjectPriorArt] Large number of prior art items found`,
+        {
+          projectId,
+          count: priorArtItems.length,
+        }
+      );
+    }
+
     return priorArtItems;
   } catch (error) {
     logger.error(
@@ -262,13 +250,10 @@ export async function removeProjectPriorArt(
   patentNumber: string
 ): Promise<boolean> {
   try {
-    logger.debug(
-      `Repository: Removing prior art ${patentNumber} from project ${projectId}`
-    );
-
     // Normalize the patent number
     const normalizedPatentNumber = patentNumber.replace(/-/g, '');
 
+    // Note: Citations will be cascade deleted automatically
     const result = await prisma!.savedPriorArt.deleteMany({
       where: {
         projectId,
@@ -276,9 +261,13 @@ export async function removeProjectPriorArt(
       },
     });
 
-    logger.debug(
-      `Repository: Removed ${result.count} prior art items for patent ${patentNumber}`
-    );
+    if (result.count > 0) {
+      logger.info(`[removeProjectPriorArt] Removed prior art`, {
+        projectId,
+        patentNumber,
+        count: result.count,
+      });
+    }
     return result.count > 0;
   } catch (error) {
     logger.error(
@@ -303,10 +292,6 @@ export async function removeProjectPriorArtById(
   priorArtId: string
 ): Promise<boolean> {
   try {
-    logger.debug(
-      `Repository: Removing prior art by ID ${priorArtId} from project ${projectId}`
-    );
-
     // First check if the prior art exists and belongs to the project
     const existingArt = await prisma!.savedPriorArt.findFirst({
       where: {
@@ -316,22 +301,20 @@ export async function removeProjectPriorArtById(
     });
 
     if (!existingArt) {
-      logger.debug(
-        `Repository: Prior art ${priorArtId} not found for project ${projectId}`
-      );
       return false;
     }
 
-    // Delete the prior art
+    // Delete the prior art (citations will cascade delete)
     await prisma!.savedPriorArt.delete({
       where: {
         id: priorArtId,
       },
     });
 
-    logger.info(
-      `Repository: Successfully removed prior art ${priorArtId} from project ${projectId}`
-    );
+    logger.info(`[removeProjectPriorArtById] Removed prior art by ID`, {
+      projectId,
+      priorArtId,
+    });
     return true;
   } catch (error) {
     logger.error(

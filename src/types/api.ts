@@ -1,7 +1,6 @@
 import type { NextApiRequest } from 'next';
 import { NextApiResponse } from 'next';
 import { PriorArtReference } from './domain/priorArt';
-import { InventionData } from './invention';
 import { ProjectData } from './project';
 
 // Re-export PriorArtReference
@@ -152,24 +151,34 @@ export interface ApiError {
 export * from './api/responses';
 export * from './api/citations';
 export * from './api/invention';
-export * from './api/citation';
+// Exclude CitationMatchSchema from citation.ts as it's already exported from responses.ts
+export {
+  ProcessedCitationMatchResponseSchema,
+  CitationMatchesBySearchResponseSchema,
+  CitationJobResponseSchema,
+  validateCitationMatchResponse,
+  validateCitationMatchesArrayResponse,
+  validateCitationJobResponse,
+  CitationLocationSchema,
+  DeepAnalysisSchema,
+  CitationResultSchema,
+  CitationJobSchema,
+} from './api/citation';
 
-// Prisma model types - can be imported directly from @prisma/client
 export type {
-  User,
-  Project,
-  SearchHistory,
-  CitationMatch,
-  SavedPriorArt,
-  ChatMessage,
-  Invention,
-} from '@prisma/client';
+  ProcessedCitationMatchResponse,
+  CitationMatchesBySearchResponse,
+  CitationJobResponse,
+} from './api/citation';
+
+// Prisma model types - removed due to TypeScript issues
+// Import these directly from @prisma/client in files that need them
 
 // Basic types for API requests
 export interface ApiRequest {
   method?: string;
   headers?: Record<string, string>;
-  body?: any;
+  body?: unknown;
 }
 
 export interface PaginationParams {

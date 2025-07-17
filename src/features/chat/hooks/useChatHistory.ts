@@ -1,4 +1,4 @@
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import {
   useChatHistoryQuery,
   useClearChatHistoryMutation,

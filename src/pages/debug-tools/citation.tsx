@@ -1,19 +1,13 @@
 import React, { useState } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import {
-  Box,
-  Button,
-  Heading,
-  Input,
-  Text,
-  VStack,
-  HStack,
-  useToast,
-  Code,
-  Alert,
-  AlertIcon,
-  Divider,
-} from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle } from 'lucide-react';
+import { useToast } from '@/hooks/useToastWrapper';
+import { useThemeContext } from '@/contexts/ThemeContext';
 import {
   useCheckCitationJobStatus,
   useResetCitationExtraction,
@@ -21,6 +15,7 @@ import {
 } from '@/hooks/api/useDebug';
 
 export default function DebugCitationPage() {
+  const { isDarkMode } = useThemeContext();
   const [jobId, setJobId] = useState<string>('1579');
   const toast = useToast();
 
@@ -77,91 +72,108 @@ export default function DebugCitationPage() {
     isCheckingStatus || resetExtraction.isPending || isLoadingDebugInfo;
 
   return (
-    <Box p={8} maxWidth="800px" mx="auto">
-      <Heading mb={6}>Citation Extraction Debug</Heading>
+    <div className="p-6 max-w-[800px] mx-auto">
+      <h1 className="text-2xl font-semibold mb-6">Citation Extraction Debug</h1>
 
-      <Alert status="info" mb={6}>
-        <AlertIcon />
-        This page helps debug citation extraction issues. Use it to check job
-        status or reset the UI state.
+      <Alert className="mb-6">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          This page helps debug citation extraction issues. Use it to check job
+          status or reset the UI state.
+        </AlertDescription>
       </Alert>
 
-      <VStack spacing={6} align="stretch">
-        <Box>
-          <Heading size="md" mb={3}>
-            Job ID
-          </Heading>
-          <HStack>
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold mb-3">Job ID</h2>
+          <div className="flex items-center space-x-2">
             <Input
               value={jobId}
               onChange={e => setJobId(e.target.value)}
               placeholder="Enter job ID"
               type="number"
-              width="200px"
+              className="w-[200px]"
             />
-            <Button
-              onClick={handleCheckStatus}
-              colorScheme="blue"
-              isLoading={isCheckingStatus}
-            >
-              Check Status
+            <Button onClick={handleCheckStatus} disabled={isCheckingStatus}>
+              {isCheckingStatus ? (
+                <>
+                  <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Checking...
+                </>
+              ) : (
+                'Check Status'
+              )}
             </Button>
             <Button
               onClick={handleResetExtraction}
-              colorScheme="orange"
-              isLoading={resetExtraction.isPending}
+              variant="outline"
+              className="border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+              disabled={resetExtraction.isPending}
             >
-              Reset UI State
+              {resetExtraction.isPending ? (
+                <>
+                  <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-orange-600 border-t-transparent" />
+                  Resetting...
+                </>
+              ) : (
+                'Reset UI State'
+              )}
             </Button>
             <Button
               onClick={() => getDebugInfo()}
               variant="outline"
-              isLoading={isLoadingDebugInfo}
+              disabled={isLoadingDebugInfo}
             >
-              Debug Info
+              {isLoadingDebugInfo ? (
+                <>
+                  <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-t-transparent" />
+                  Loading...
+                </>
+              ) : (
+                'Debug Info'
+              )}
             </Button>
-          </HStack>
-        </Box>
+          </div>
+        </div>
 
-        <Divider />
+        <Separator />
 
-        <Box>
-          <Heading size="md" mb={3}>
-            Result
-          </Heading>
+        <div>
+          <h2 className="text-lg font-semibold mb-3">Result</h2>
           {resultStatus ? (
-            <Box
-              p={4}
-              bg="gray.50"
-              borderRadius="md"
-              overflowX="auto"
-              _dark={{ bg: 'gray.800' }}
+            <div
+              className={cn(
+                'p-4 rounded-md overflow-x-auto font-mono text-sm',
+                isDarkMode
+                  ? 'bg-gray-800 text-gray-300'
+                  : 'bg-gray-50 text-gray-800'
+              )}
             >
               <pre>{resultStatus}</pre>
-            </Box>
+            </div>
           ) : (
-            <Text color="gray.500">
+            <p className={cn(isDarkMode ? 'text-gray-400' : 'text-gray-500')}>
               No results yet. Click one of the buttons above.
-            </Text>
+            </p>
           )}
-        </Box>
+        </div>
 
-        <Divider />
+        <Separator />
 
-        <VStack align="stretch" spacing={3}>
-          <Heading size="md">Instructions</Heading>
-          <Text>1. Enter the job ID (default: 1579)</Text>
-          <Text>2. Click "Check Status" to see if the job is complete</Text>
-          <Text>
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">Instructions</h2>
+          <p>1. Enter the job ID (default: 1579)</p>
+          <p>2. Click "Check Status" to see if the job is complete</p>
+          <p>
             3. If the UI is stuck, click "Reset UI State" to try resetting the
             extraction state
-          </Text>
-          <Text>
+          </p>
+          <p>
             4. Return to the main app and try clicking the citation extraction
             button again
-          </Text>
-        </VStack>
-      </VStack>
-    </Box>
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

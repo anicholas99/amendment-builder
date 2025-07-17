@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { groupAndSortCitationMatches } from '../utils/citationUtils';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 interface UseCitationDisplayParams {
   citationMatchesData: unknown[] | undefined;
@@ -22,7 +22,7 @@ export function useCitationDisplay({
   // Add logging to debug the input data
   // COMMENTED OUT: Excessive logging causing console noise
   /*
-  logger.log('[useCitationDisplay] Hook called with:', {
+  logger.info('[useCitationDisplay] Hook called with:', {
     citationMatchesDataLength: citationMatchesData?.length,
     selectedReference,
     selectedSearchId,
@@ -42,7 +42,7 @@ export function useCitationDisplay({
 
     // COMMENTED OUT: Excessive logging causing console noise
     /*
-      logger.log('[useCitationDisplay] Grouped and sorted result:', {
+      logger.info('[useCitationDisplay] Grouped and sorted result:', {
         resultLength: result?.length,
         groups: result?.map(g => ({
           elementText: g.elementText,

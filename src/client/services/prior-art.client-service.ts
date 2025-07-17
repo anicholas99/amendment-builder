@@ -5,7 +5,7 @@
  * Handles data fetching, transformation, and error handling.
  */
 
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { validateApiResponse } from '@/lib/validation/apiValidation';
@@ -49,7 +49,18 @@ export class PriorArtApiService {
       API_ROUTES.PROJECTS.PRIOR_ART.LIST(projectId)
     );
     const json = await response.json();
-    return validateApiResponse(json, GetPriorArtResponseSchema);
+
+    logger.debug('[PriorArtApiService] Raw API response', {
+      projectId,
+      responseKeys: Object.keys(json),
+      hasData: 'data' in json,
+      dataKeys: json.data ? Object.keys(json.data) : [],
+    });
+
+    // Handle standardized API response format { data: { priorArt: [...], count: ... } }
+    const dataToValidate = json.data || json;
+
+    return validateApiResponse(dataToValidate, GetPriorArtResponseSchema);
   }
 
   /**
@@ -124,10 +135,24 @@ export class PriorArtApiService {
    */
   static async getProjectExclusions(
     projectId: string
-  ): Promise<GetExclusionsResponse> {
+  ): Promise<GetExclusionsResponse['data']> {
     const response = await apiFetch(API_ROUTES.PROJECTS.EXCLUSIONS(projectId));
     const json = await response.json();
-    return validateApiResponse(json, GetExclusionsResponseSchema);
+
+    logger.debug('[PriorArtApiService] Raw exclusions response', {
+      projectId,
+      responseKeys: Object.keys(json),
+      hasData: 'data' in json,
+    });
+
+    // Handle standardized API response format
+    const dataToValidate = json.data || json;
+
+    const validated = validateApiResponse(
+      dataToValidate,
+      GetExclusionsResponseSchema
+    );
+    return validated.data;
   }
 
   /**

@@ -1,25 +1,6 @@
-import React, { useCallback, useRef } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import {
-  Box,
-  Text,
-  HStack,
-  VStack,
-  Badge,
-  Icon,
-  Tooltip,
-  Button,
-  Collapse,
-  Flex,
-  AlertDialog,
-  AlertDialogBody,
-  AlertDialogContent,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogOverlay,
-  useDisclosure,
-  useColorModeValue,
-} from '@chakra-ui/react';
+import React, { useCallback, useRef, useState } from 'react';
+import { logger } from '@/utils/clientLogger';
+import { cn } from '@/lib/utils';
 import { FiChevronDown, FiChevronUp, FiFileText, FiUser } from 'react-icons/fi';
 import {
   PriorArtReference,
@@ -30,9 +11,26 @@ import {
   formatRelevancePercentage,
   isValidRelevance,
   cleanAbstract,
+  getRelevanceBadgeClasses,
 } from '../utils/searchHistoryUtils';
 import { ReferenceActionButtons } from './ReferenceActionButtons';
 import { FamilyMemberItem } from './FamilyMemberItem';
+import { useThemeContext } from '@/contexts/ThemeContext';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 // Define the props for the ReferenceCard component
 interface ReferenceCardProps {
@@ -64,6 +62,7 @@ interface ReferenceCardProps {
 
 /**
  * Reusable component to display a single prior art reference card.
+ * Migrated to shadcn/ui with exact visual consistency.
  */
 const ReferenceCard: React.FC<ReferenceCardProps> = React.memo(
   ({
@@ -79,15 +78,10 @@ const ReferenceCard: React.FC<ReferenceCardProps> = React.memo(
     onExclude,
     resultIndex = 0, // Default index
   }) => {
-    const { isOpen: isFamilyExpanded, onToggle: onFamilyToggle } =
-      useDisclosure();
-    const {
-      isOpen: isConfirmOpen,
-      onOpen: onConfirmOpen,
-      onClose: onConfirmClose,
-    } = useDisclosure();
-    const { isOpen: isAbstractExpanded, onToggle: onAbstractToggle } =
-      useDisclosure();
+    const { isDarkMode } = useThemeContext();
+    const [isFamilyExpanded, setIsFamilyExpanded] = useState(false);
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [isAbstractExpanded, setIsAbstractExpanded] = useState(false);
     const cancelRef = useRef<HTMLButtonElement>(null);
 
     // Central handler for the exclude button click
@@ -100,41 +94,41 @@ const ReferenceCard: React.FC<ReferenceCardProps> = React.memo(
       if (isExcluded) return; // Already excluded
 
       if (hasFamily) {
-        onConfirmOpen(); // Open confirmation dialog for family
+        setIsConfirmOpen(true); // Open confirmation dialog for family
       } else {
         onExclude(reference); // Exclude single directly using the reference prop
       }
-    }, [isExcluded, reference, onConfirmOpen, onExclude]);
+    }, [isExcluded, reference, onExclude]);
 
     // Dialog confirmation actions
     const confirmExcludeFamily = useCallback(() => {
       onExclude(reference); // Exclude the main reference (parent handles family logic)
-      onConfirmClose();
-    }, [reference, onExclude, onConfirmClose]);
+      setIsConfirmOpen(false);
+    }, [reference, onExclude]);
 
     const declineExcludeFamily = useCallback(() => {
       logger.warn(
         'Excluding only single reference after declining family exclusion. Ensure parent handler supports this.'
       );
       onExclude(reference); // Call parent handler for single exclusion
-      onConfirmClose();
-    }, [reference, onExclude, onConfirmClose]);
+      setIsConfirmOpen(false);
+    }, [reference, onExclude]);
 
     // Click handlers with useCallback
     const handleAbstractToggle = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
-        onAbstractToggle();
+        setIsAbstractExpanded(!isAbstractExpanded);
       },
-      [onAbstractToggle]
+      [isAbstractExpanded]
     );
 
     const handleFamilyToggle = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
-        onFamilyToggle();
+        setIsFamilyExpanded(!isFamilyExpanded);
       },
-      [onFamilyToggle]
+      [isFamilyExpanded]
     );
 
     const handleSaveReference = useCallback(() => {
@@ -153,73 +147,92 @@ const ReferenceCard: React.FC<ReferenceCardProps> = React.memo(
 
     return (
       <>
-        <Box
-          key={`${patentNumber}-${resultIndex}`} // Consider a more stable key if possible
-          borderWidth="1px"
-          borderRadius="md"
-          p={1.5}
-          bg={colors.tableBg}
-          borderColor={colors.borderColor}
-          _hover={{ bg: colors.hoverBg }}
+        <div
+          key={`${patentNumber}-${resultIndex}`}
+          className={cn(
+            'border rounded-md p-1.5 transition-colors duration-200',
+            isDarkMode
+              ? 'border-gray-600 bg-gray-800 hover:bg-gray-700'
+              : 'border-gray-200 bg-white hover:bg-gray-50'
+          )}
         >
-          <VStack align="stretch" spacing={0.5}>
-            <Flex justify="space-between" align="center">
-              <HStack spacing={2} align="center">
-                <Text fontSize="sm" fontWeight="medium" title={reference.title}>
+          <div className="flex flex-col space-y-1">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center space-x-2">
+                <span
+                  className={cn(
+                    'text-sm font-medium',
+                    isDarkMode ? 'text-gray-100' : 'text-gray-900'
+                  )}
+                  title={reference.title}
+                >
                   {patentNumber.replace(/-/g, '')}
-                </Text>
+                </span>
+
                 {isValidRelevance(displayRelevanceValue) ? (
                   (() => {
                     const validRelevance = displayRelevanceValue as number;
                     return (
                       <Badge
-                        colorScheme={getRelevancyColor(validRelevance)}
-                        variant="solid"
-                        fontSize="2xs"
-                        px={2}
-                        py={0.5}
+                        variant="secondary"
+                        className={cn(
+                          'text-xs px-2 py-1',
+                          getRelevanceBadgeClasses(validRelevance / 100)
+                        )}
                       >
                         {formatRelevancePercentage(validRelevance)}
                       </Badge>
                     );
                   })()
                 ) : (
-                  <Text fontSize="2xs" color={colors.mutedTextColor}>
+                  <span
+                    className={cn(
+                      'text-xs',
+                      isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                    )}
+                  >
                     (N/A)
-                  </Text>
+                  </span>
                 )}
+
                 {reference.searchAppearanceCount &&
                   reference.searchAppearanceCount > 1 && (
                     <Badge
-                      colorScheme="purple"
-                      variant="solid"
-                      fontSize="2xs"
-                      px={2}
-                      py={0.5}
+                      variant="secondary"
+                      className={cn(
+                        'text-xs px-2 py-1',
+                        isDarkMode
+                          ? 'bg-purple-900 text-purple-200'
+                          : 'bg-purple-100 text-purple-800'
+                      )}
                     >
                       {reference.searchAppearanceCount}x
                     </Badge>
                   )}
+
                 {hasAbstract && (
                   <Button
-                    size="xs"
-                    fontSize="2xs"
                     variant="link"
-                    colorScheme="blue"
-                    leftIcon={<FiFileText />}
-                    rightIcon={
-                      isAbstractExpanded ? <FiChevronUp /> : <FiChevronDown />
-                    }
+                    size="sm"
                     onClick={handleAbstractToggle}
-                    height="auto"
-                    minHeight="auto"
-                    p={1}
-                    fontWeight="normal"
+                    className={cn(
+                      'h-auto min-h-0 p-1 text-xs font-normal',
+                      isDarkMode
+                        ? 'text-blue-400 hover:text-blue-300'
+                        : 'text-blue-600 hover:text-blue-500'
+                    )}
                   >
+                    <FiFileText className="w-3 h-3 mr-1" />
                     Abstract
+                    {isAbstractExpanded ? (
+                      <FiChevronUp className="w-3 h-3 ml-1" />
+                    ) : (
+                      <FiChevronDown className="w-3 h-3 ml-1" />
+                    )}
                   </Button>
                 )}
-              </HStack>
+              </div>
+
               <ReferenceActionButtons
                 referenceNumber={patentNumber}
                 isSaved={isSaved}
@@ -228,139 +241,153 @@ const ReferenceCard: React.FC<ReferenceCardProps> = React.memo(
                 onExclude={handleExcludeClick}
                 getCitationIcon={getCitationIcon}
               />
-            </Flex>
+            </div>
 
-            <Text
-              fontSize="2xs"
-              color={colors.textColor}
-              noOfLines={1}
+            <p
+              className={cn(
+                'text-xs line-clamp-1 leading-tight',
+                isDarkMode ? 'text-gray-200' : 'text-gray-700'
+              )}
               title={reference.title}
-              lineHeight="tight"
             >
               {reference.title || 'No title available'}
-            </Text>
+            </p>
 
             {/* Abstract collapse section */}
             {hasAbstract && (
-              <Collapse in={isAbstractExpanded} animateOpacity>
-                <Box
-                  bg={colors.queryBg}
-                  p={2}
-                  mt={2}
-                  borderRadius="sm"
-                  borderLeft="3px solid"
-                  borderLeftColor="blue.300"
-                >
-                  <Text
-                    fontSize="xs"
-                    color={colors.textColor}
-                    lineHeight="1.4"
-                    whiteSpace="pre-wrap"
+              <Collapsible open={isAbstractExpanded}>
+                <CollapsibleContent>
+                  <div
+                    className={cn(
+                      'p-2 mt-2 rounded-sm border-l-3 border-l-blue-300',
+                      isDarkMode
+                        ? 'bg-gray-700 border-l-blue-600'
+                        : 'bg-blue-50 border-l-blue-300'
+                    )}
                   >
-                    {cleanAbstract(reference.abstract!)}
-                  </Text>
-                </Box>
-              </Collapse>
+                    <p
+                      className={cn(
+                        'text-xs leading-relaxed whitespace-pre-wrap',
+                        isDarkMode ? 'text-gray-200' : 'text-gray-700'
+                      )}
+                    >
+                      {cleanAbstract(reference.abstract!)}
+                    </p>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             )}
 
-            <HStack
-              justify="space-between"
-              fontSize="2xs"
-              color={colors.mutedTextColor}
+            <div
+              className={cn(
+                'flex justify-between text-xs',
+                isDarkMode ? 'text-gray-400' : 'text-gray-500'
+              )}
             >
-              <VStack align="start" spacing={1}>
-                <HStack spacing={1} mt={1}>
-                  <Icon as={FiUser} color={colors.textColor} />
-                  <Text noOfLines={1} title={reference.authors?.join(', ')}>
+              <div className="flex flex-col space-y-1">
+                <div className="flex items-center space-x-1 mt-1">
+                  <FiUser
+                    className={cn(
+                      'w-3 h-3',
+                      isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                    )}
+                  />
+                  <span
+                    className="line-clamp-1"
+                    title={reference.authors?.join(', ')}
+                  >
                     {reference.authors?.join(', ') || 'N/A'}
-                  </Text>
-                </HStack>
+                  </span>
+                </div>
+
                 {hasOtherFamilyMembers && (
                   <Button
-                    size="sm"
-                    fontSize="xs"
                     variant="link"
-                    colorScheme="blue"
-                    leftIcon={
-                      isFamilyExpanded ? <FiChevronUp /> : <FiChevronDown />
-                    }
+                    size="sm"
                     onClick={handleFamilyToggle}
-                    mt={0}
+                    className={cn(
+                      'h-auto min-h-0 p-0 text-xs font-normal justify-start',
+                      isDarkMode
+                        ? 'text-blue-400 hover:text-blue-300'
+                        : 'text-blue-600 hover:text-blue-500'
+                    )}
                   >
+                    {isFamilyExpanded ? (
+                      <FiChevronUp className="w-3 h-3 mr-1" />
+                    ) : (
+                      <FiChevronDown className="w-3 h-3 mr-1" />
+                    )}
                     {isFamilyExpanded ? 'Hide' : 'Show'} Family Members (
                     {(reference.otherFamilyMembers || []).length})
                   </Button>
                 )}
-              </VStack>
-              <Text whiteSpace="nowrap">
-                {/* Use reference.year as it exists on the type */}
+              </div>
+
+              <span className="whitespace-nowrap">
                 {reference.year || 'N/A'}
-              </Text>
-            </HStack>
-          </VStack>
+              </span>
+            </div>
+          </div>
 
           {hasOtherFamilyMembers && (
-            <Collapse in={isFamilyExpanded} animateOpacity>
-              <VStack align="stretch" spacing={1} mt={2} pl={4}>
-                {(reference.otherFamilyMembers || []).map((member, index) => {
-                  const memberRef = member as FamilyMemberReference;
-                  const memberNumber = memberRef.number;
-                  if (!memberNumber) return null;
+            <Collapsible open={isFamilyExpanded}>
+              <CollapsibleContent>
+                <div className="flex flex-col space-y-1 mt-2 pl-4">
+                  {(reference.otherFamilyMembers || []).map((member, index) => {
+                    const memberRef = member as FamilyMemberReference;
+                    const memberNumber = memberRef.number;
+                    if (!memberNumber) return null;
 
-                  return (
-                    <FamilyMemberItem
-                      key={`${memberNumber}-${index}`}
-                      member={memberRef}
-                      index={index}
-                      colors={{
-                        textColor: colors.textColor,
-                        hoverBg: colors.hoverBg,
-                      }}
-                      isSaved={isFamilyMemberSaved(memberNumber)}
-                      isExcluded={isFamilyMemberExcluded(memberNumber)}
-                      getCitationIcon={getCitationIcon}
-                      onSave={onSave}
-                      onExclude={onExclude}
-                    />
-                  );
-                })}
-              </VStack>
-            </Collapse>
+                    return (
+                      <FamilyMemberItem
+                        key={`${memberNumber}-${index}`}
+                        member={memberRef}
+                        index={index}
+                        colors={{
+                          textColor: colors.textColor,
+                          hoverBg: colors.hoverBg,
+                        }}
+                        isSaved={isFamilyMemberSaved(memberNumber)}
+                        isExcluded={isFamilyMemberExcluded(memberNumber)}
+                        getCitationIcon={getCitationIcon}
+                        onSave={onSave}
+                        onExclude={onExclude}
+                      />
+                    );
+                  })}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           )}
-        </Box>
+        </div>
 
         {/* Confirmation Dialog for family exclusion */}
-        <AlertDialog
-          isOpen={isConfirmOpen}
-          leastDestructiveRef={cancelRef}
-          onClose={onConfirmClose}
-          isCentered
-        >
-          <AlertDialogOverlay>
-            <AlertDialogContent>
-              <AlertDialogHeader fontSize="lg" fontWeight="bold">
+        <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold">
                 Exclude Family Members?
-              </AlertDialogHeader>
-              <AlertDialogBody>
+              </DialogTitle>
+              <DialogDescription>
                 This reference has {reference.otherFamilyMembers?.length || 0}{' '}
                 associated family member(s). Do you want to exclude the entire
                 family?
-              </AlertDialogBody>
-              <AlertDialogFooter>
-                <Button
-                  ref={cancelRef}
-                  onClick={declineExcludeFamily}
-                  variant="outline"
-                >
-                  No, Exclude Only This
-                </Button>
-                <Button colorScheme="red" onClick={confirmExcludeFamily} ml={3}>
-                  Yes, Exclude Family
-                </Button>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialogOverlay>
-        </AlertDialog>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                ref={cancelRef}
+                variant="outline"
+                onClick={declineExcludeFamily}
+              >
+                No, Exclude Only This
+              </Button>
+              <Button variant="destructive" onClick={confirmExcludeFamily}>
+                Yes, Exclude Family
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </>
     );
   },

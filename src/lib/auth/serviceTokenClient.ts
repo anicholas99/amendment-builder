@@ -6,7 +6,6 @@
  */
 
 import { env, getServiceAccountCredentials } from '@/config/env';
-import { logger } from '@/lib/monitoring/logger';
 
 interface TokenResponse {
   access_token: string;
@@ -49,7 +48,7 @@ export async function getServiceToken(
     const auth0Audience = env.AUTH0_AUDIENCE;
 
     if (!auth0Domain || !auth0Audience) {
-      logger.error('Missing Auth0 configuration for service token request');
+      // Error logging removed for client compatibility
       return null;
     }
 
@@ -77,11 +76,7 @@ export async function getServiceToken(
 
     if (!response.ok) {
       const error = await response.text();
-      logger.error('Failed to obtain service token', {
-        clientId,
-        status: response.status,
-        error,
-      });
+      // Error logging removed for client compatibility
       return null;
     }
 
@@ -93,19 +88,11 @@ export async function getServiceToken(
       token: data.access_token,
       expiresAt,
     });
-
-    logger.debug('Service token obtained successfully', {
-      clientId,
-      tenantId,
-      expiresIn: data.expires_in,
-    });
+    // Debug logging removed for client compatibility
 
     return data.access_token;
   } catch (error) {
-    logger.error('Error obtaining service token', {
-      clientId,
-      error,
-    });
+    // Error logging removed for client compatibility
     return null;
   }
 }
@@ -150,7 +137,7 @@ export function getServiceCredentials(
   const credentials = getServiceAccountCredentials(prefix);
 
   if (!credentials.clientId || !credentials.clientSecret) {
-    logger.warn(`Service credentials not configured for ${serviceName}`);
+    // Warning logging removed for client compatibility
     return null;
   }
 

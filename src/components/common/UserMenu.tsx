@@ -1,247 +1,98 @@
 import React, { memo, useCallback } from 'react';
-import {
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  Button as ChakraButton,
-  Flex,
-  Text,
-  Icon,
-  useToast,
-  Avatar,
-} from '@chakra-ui/react';
-import { FiChevronDown, FiLogOut } from 'react-icons/fi';
+import { FiUser, FiLogOut, FiSettings, FiChevronDown } from 'react-icons/fi';
 import { useAuth } from '@/hooks/useAuth';
-import { redirectToLogin, redirectToLogout } from '@/lib/auth/redirects';
-import { logger } from '@/lib/monitoring/logger';
-import type { AppUser } from '@/lib/auth/getSession';
+import { redirectToLogout } from '@/lib/auth/redirects';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
+import { logger } from '@/utils/clientLogger';
 
-interface UserMenuProps {
-  /**
-   * Optional custom styling props
-   */
-  size?: 'sm' | 'md' | 'lg';
-  /**
-   * Optional data-testid for testing
-   */
-  'data-testid'?: string;
-}
+const UserMenu = memo(() => {
+  const { user, currentTenant } = useAuth();
 
-export const UserMenu: React.FC<UserMenuProps> = memo(
-  ({ size = 'sm', 'data-testid': testId }) => {
-    const { user } = useAuth();
-    const toast = useToast();
+  const handleLogout = useCallback(() => {
+    redirectToLogout();
+  }, []);
 
-    // Memoized logout handler
-    const handleLogout = useCallback(
-      async (e: React.MouseEvent = {} as React.MouseEvent) => {
-        e.preventDefault?.();
+  const handleSettings = useCallback(() => {
+    // TODO: Navigate to user settings page
+    logger.info('Settings clicked');
+  }, []);
 
-        try {
-          // Show loading state
-          toast({
-            title: 'Logging out...',
-            status: 'info',
-            duration: 1000,
-            isClosable: false,
-            position: 'bottom-right',
-          });
+  const handleProfile = useCallback(() => {
+    // TODO: Navigate to user profile page
+    logger.info('Profile clicked');
+  }, []);
 
-          // Redirect to logout
-          redirectToLogout();
-        } catch (error) {
-          logger.error('Logout error:', error);
-          toast.closeAll();
-          toast({
-            title: 'Logout failed. Please try again.',
-            description:
-              'If the problem persists, try clearing your browser cache.',
-            status: 'error',
-            duration: 5000,
-            isClosable: true,
-            position: 'bottom-right',
-          });
-        }
-      },
-      [toast]
-    );
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (!user?.name) return 'U';
+    return user.name
+      .split(' ')
+      .map(name => name[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
-    // Memoized login handler
-    const handleLogin = useCallback(
-      async (e: React.MouseEvent = {} as React.MouseEvent) => {
-        e.preventDefault?.();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger>
+        <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium cursor-pointer hover:opacity-90 transition-all duration-200">
+          {getUserInitials()}
+        </div>
+      </DropdownMenuTrigger>
 
-        try {
-          // Show loading state
-          toast({
-            title: 'Redirecting to login...',
-            status: 'info',
-            duration: 1000,
-            isClosable: false,
-            position: 'bottom-right',
-          });
+      <DropdownMenuContent className="w-56">
+        {/* User Info Header */}
+        <div className="px-2 py-1.5 border-b border-border">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
+              {getUserInitials()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">
+                {user?.name || 'User'}
+              </p>
+              {currentTenant && (
+                <p className="text-xs text-muted-foreground truncate">
+                  {currentTenant.name}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
 
-          // Redirect to login
-          redirectToLogin();
-        } catch (error) {
-          logger.error('Login error:', error);
-          toast.closeAll();
-          toast({
-            title: 'Login failed. Please try again.',
-            description:
-              'If the problem persists, try clearing your browser cache.',
-            status: 'error',
-            duration: 5000,
-            isClosable: true,
-            position: 'bottom-right',
-          });
-        }
-      },
-      [toast]
-    );
+        {/* Menu Items */}
+        <DropdownMenuItem onClick={handleProfile}>
+          <FiUser className="w-4 h-4 mr-2" />
+          Profile
+        </DropdownMenuItem>
 
-    // User display email with fallback
-    const userDisplayEmail = user?.email || 'USER';
-    const userDisplayName = user?.name || 'User';
+        <DropdownMenuItem onClick={handleSettings}>
+          <FiSettings className="w-4 h-4 mr-2" />
+          Settings
+        </DropdownMenuItem>
 
-    // Authenticated user menu
-    if (user) {
-      return (
-        <Menu placement="bottom-end" autoSelect={false}>
-          <MenuButton
-            as={ChakraButton}
-            variant="ghost"
-            size={size}
-            bg="bg.card"
-            borderWidth="1px"
-            borderColor="border.light"
-            color="text.primary"
-            h="32px"
-            px={2}
-            borderRadius="6px"
-            transition="background-color 0.15s ease-out, border-color 0.15s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out"
-            rightIcon={
-              <Icon
-                as={FiChevronDown}
-                style={{
-                  width: '12px',
-                  height: '12px',
-                  transition: 'transform 0.15s ease-out',
-                }}
-              />
-            }
-            _hover={{
-              bg: 'bg.hover',
-              borderColor: 'border.primary',
-              transform: 'translateY(-1px)',
-              boxShadow: 'sm',
-            }}
-            _active={{
-              bg: 'bg.focus',
-              transform: 'translateY(0px)',
-              boxShadow: 'xs',
-            }}
-            data-testid={testId}
-            aria-label={`User menu for ${userDisplayEmail}`}
-          >
-            <Flex align="center" gap={2}>
-              <Avatar
-                size="sm"
-                name={userDisplayName}
-                src={user.picture || undefined}
-                w="24px"
-                h="24px"
-                fontSize="12px"
-                borderWidth="1px"
-                borderColor="border.light"
-              />
-              <Text
-                fontSize="sm"
-                fontWeight="medium"
-                color="ipd.blue"
-                style={{
-                  display: 'inline-block',
-                  lineHeight: '24px',
-                  verticalAlign: 'middle',
-                }}
-                data-testid="user-email"
-              >
-                {userDisplayEmail}
-              </Text>
-            </Flex>
-          </MenuButton>
+        <DropdownMenuSeparator />
 
-          <MenuList
-            bg="bg.card"
-            borderColor="border.primary"
-            boxShadow="sm"
-            minWidth="200px"
-            py={1}
-          >
-            <MenuItem
-              onClick={handleLogout}
-              px="12px"
-              py="8px"
-              color="text.primary"
-              _hover={{
-                bg: 'bg.hover',
-                color: 'blue.500',
-              }}
-              _focus={{
-                bg: 'bg.hover',
-                color: 'blue.500',
-              }}
-              aria-label="Logout from your account"
-            >
-              <Icon
-                as={FiLogOut}
-                color="inherit"
-                style={{
-                  marginRight: '8px',
-                  width: '16px',
-                  height: '16px',
-                }}
-              />
-              <Text color="inherit">Logout</Text>
-            </MenuItem>
-          </MenuList>
-        </Menu>
-      );
-    }
-
-    // Unauthenticated login button
-    return (
-      <ChakraButton
-        onClick={handleLogin}
-        size={size}
-        variant="ghost"
-        bg="bg.card"
-        borderWidth="1px"
-        borderColor="border.light"
-        color="text.primary"
-        h="32px"
-        px={3}
-        borderRadius="6px"
-        transition="background-color 0.15s ease-out, border-color 0.15s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out"
-        _hover={{
-          bg: 'bg.hover',
-          borderColor: 'border.primary',
-          transform: 'translateY(-1px)',
-          boxShadow: 'sm',
-        }}
-        _active={{
-          bg: 'bg.focus',
-          transform: 'translateY(0px)',
-          boxShadow: 'xs',
-        }}
-        data-testid={testId}
-        aria-label="Login to your account"
-      >
-        Login
-      </ChakraButton>
-    );
-  }
-);
+        <DropdownMenuItem
+          onClick={handleLogout}
+          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+        >
+          <FiLogOut className="w-4 h-4 mr-2" />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+});
 
 UserMenu.displayName = 'UserMenu';
+
+export default UserMenu;

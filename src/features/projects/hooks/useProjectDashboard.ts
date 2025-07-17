@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useDisclosure, useToast } from '@chakra-ui/react';
+import { useDisclosure } from '@/hooks/useDisclosure';
 import {
   useAllProjects,
   useCreateProject,
@@ -7,11 +7,11 @@ import {
 } from '@/hooks/api/useProjects';
 import { useProjectListFilters } from './useProjectListFilters';
 import { useProjectNavigation } from './useProjectNavigation';
-import { logger } from '@/lib/monitoring/logger';
-import { showErrorToast } from '@/utils/toast';
+import { logger } from '@/utils/clientLogger';
+import { useToast as useCustomToast } from '@/utils/toast';
 
 export function useProjectDashboard() {
-  const toast = useToast();
+  const toast = useCustomToast();
   const createProjectMutation = useCreateProject();
   const deleteProjectMutation = useDeleteProjectMutation();
 
@@ -70,19 +70,19 @@ export function useProjectDashboard() {
           logger.warn(
             'New project created, but project data/ID not returned for navigation.'
           );
-          showErrorToast(
-            toast,
-            'Creation incomplete',
-            'Project may have been created but response was incomplete. Please refresh.'
-          );
+          toast.error('Creation incomplete', {
+            description:
+              'Project may have been created but response was incomplete. Please refresh.',
+          });
         }
       } catch (error) {
-        logger.error('Error creating project:', error);
-        showErrorToast(
-          toast,
-          'Creation failed',
-          error instanceof Error ? error.message : 'Failed to create project'
-        );
+        logger.error('Error during project creation:', error);
+        toast.error('Failed to create project', {
+          description:
+            error instanceof Error
+              ? error.message
+              : 'An error occurred during project creation',
+        });
         throw error;
       } finally {
         navigation.setIsAnimating(false);

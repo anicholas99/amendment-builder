@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 
 export interface SeederOptions {
   force?: boolean; // Force re-seeding even if data exists

@@ -1,28 +1,21 @@
 import React from 'react';
-import { Box, Skeleton, SkeletonText, VStack, HStack } from '@chakra-ui/react';
+import { LoadingState } from '@/components/common/LoadingState';
 
-export const EditorSkeleton: React.FC = () => {
+interface EditorSkeletonProps {
+  message?: string;
+}
+
+export const EditorSkeleton: React.FC<EditorSkeletonProps> = ({ 
+  message = "Loading patent content..." 
+}) => {
   return (
-    <Box flex="1" p={4}>
-      <VStack spacing={4} align="stretch">
-        {/* Skeleton for Toolbar */}
-        <HStack
-          spacing={2}
-          p={2}
-          borderBottomWidth="1px"
-          borderColor="gray.200"
-        >
-          <Skeleton height="20px" width="40px" />
-          <Skeleton height="20px" width="40px" />
-          <Skeleton height="20px" width="40px" />
-          <Skeleton height="20px" width="60px" />
-          <Skeleton height="20px" width="60px" />
-        </HStack>
-        {/* Skeleton for Text Area */}
-        <Box flex="1" p={2}>
-          <SkeletonText mt="4" noOfLines={15} spacing="4" skeletonHeight="3" />
-        </Box>
-      </VStack>
-    </Box>
+    <div className="flex-1 p-4">
+      <LoadingState
+        variant="spinner"
+        message={message}
+        minHeight="100%"
+        size="md"
+      />
+    </div>
   );
 };

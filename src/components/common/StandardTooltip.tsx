@@ -1,12 +1,22 @@
 import React from 'react';
-import { Tooltip, TooltipProps } from '@chakra-ui/react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
-interface StandardTooltipProps extends Omit<TooltipProps, 'children'> {
+interface StandardTooltipProps {
   children: React.ReactElement;
+  label?: React.ReactNode;
+  placement?: 'top' | 'right' | 'bottom' | 'left';
+  delayDuration?: number;
+  disabled?: boolean;
 }
 
 /**
  * StandardTooltip component that provides consistent tooltip styling across the application
+ * Uses a high z-index to prevent clipping by overflow containers
  *
  * @example
  * <StandardTooltip label="Create new project">
@@ -15,21 +25,23 @@ interface StandardTooltipProps extends Omit<TooltipProps, 'children'> {
  */
 export const StandardTooltip: React.FC<StandardTooltipProps> = ({
   children,
+  label,
   placement = 'top',
-  hasArrow = true,
-  openDelay = 100,
-  closeDelay = 100,
-  ...props
+  delayDuration = 100,
+  disabled = false,
 }) => {
+  if (!label || disabled) {
+    return children;
+  }
+
   return (
-    <Tooltip
-      placement={placement}
-      hasArrow={hasArrow}
-      openDelay={openDelay}
-      closeDelay={closeDelay}
-      {...props}
-    >
-      {children}
-    </Tooltip>
+    <TooltipProvider delayDuration={delayDuration}>
+      <Tooltip>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipContent side={placement}>
+          {typeof label === 'string' ? <p>{label}</p> : label}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 };

@@ -1,42 +1,44 @@
-import React from 'react';
-import {
-  Box,
-  Heading,
-  Text,
-  Alert,
-  AlertIcon,
-  AlertTitle,
-  AlertDescription,
-  Spinner,
-  Button,
-  VStack,
-  HStack,
-  Progress,
-} from '@chakra-ui/react';
+import React, { useMemo } from 'react';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertCircle, InfoIcon, Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/contexts/ThemeContext';
 import DeepAnalysisPanel from './DeepAnalysisPanel';
 import ExaminerAnalysisPanel from './ExaminerAnalysisPanel';
-import { ApplicationError, ErrorCode } from '@/lib/error';
+import { ApplicationError } from '@/lib/error';
+import {
+  ParsedDeepAnalysis,
+  StructuredDeepAnalysis,
+} from '../types/deepAnalysis';
+import { ProcessedCitationMatch } from '@/types/domain/citation';
 
 interface CitationAnalysisPanelProps {
   type: 'deep' | 'examiner';
   selectedReference: string;
   onClose: () => void;
   isLoading: boolean;
-  analysisData?: { highRelevanceElements?: Array<{ element: string; reasoning: string }>; overallAssessment?: { patentabilityScore?: number } } | null; // StructuredDeepAnalysis | StructuredExaminerAnalysis
-  examinerAnalysis?: { examinerName?: string; citationCategories?: Array<{ category: string; citations: Array<string> }> } | null;
+  analysisData?: ParsedDeepAnalysis | StructuredDeepAnalysis | null;
+  examinerAnalysis?: {
+    examinerName?: string;
+    citationCategories?: Array<{ category: string; citations: Array<string> }>;
+  } | null;
   onRunAnalysis: () => void;
   onApplyAmendmentToClaim1?: (original: string, revised: string) => void;
   error?: ApplicationError | Error | null;
   isExaminerAnalysisEnabled?: boolean;
   isRunningAnalysis?: boolean; // New prop to specifically track if analysis is being run
+  onMatchClick?: (match: ProcessedCitationMatch) => void;
+  activeMatch?: ProcessedCitationMatch | null;
+  citationType?: string;
+  referenceStatuses?: Array<{
+    referenceNumber: string;
+    status?: string;
+    isOptimistic?: boolean;
+    showAsOptimistic?: boolean;
+  }>;
 }
-
-/**
- * Format reference number by removing dashes
- */
-const formatReferenceNumber = (ref: string): string => {
-  return ref.replace(/-/g, '');
-};
 
 /**
  * CitationAnalysisPanel - A unified component for displaying either deep analysis or examiner analysis
@@ -45,7 +47,7 @@ const formatReferenceNumber = (ref: string): string => {
 export const CitationAnalysisPanel: React.FC<CitationAnalysisPanelProps> = ({
   type,
   selectedReference,
-  onClose,
+  onClose: _onClose,
   isLoading,
   analysisData,
   examinerAnalysis,
@@ -54,64 +56,89 @@ export const CitationAnalysisPanel: React.FC<CitationAnalysisPanelProps> = ({
   error,
   isExaminerAnalysisEnabled = true,
   isRunningAnalysis = false,
+  onMatchClick: _onMatchClick,
+  activeMatch: _activeMatch,
+  citationType: _citationType = 'patent',
+  referenceStatuses,
 }) => {
-  const title = type === 'deep' ? 'Deep Analysis' : 'Examiner Perspective';
+  const { isDarkMode } = useThemeContext();
   const data = type === 'deep' ? analysisData : examinerAnalysis;
+
+  // Check if the selected reference is in optimistic/processing state
+  const isSelectedReferenceProcessing = useMemo(() => {
+    if (!selectedReference || !referenceStatuses) return false;
+    
+    const referenceStatus = referenceStatuses.find(
+      ref => ref.referenceNumber === selectedReference
+    );
+    
+    return referenceStatus?.showAsOptimistic === true;
+  }, [selectedReference, referenceStatuses]);
+
+  // Check if the selected reference has failed
+  const isSelectedReferenceFailed = useMemo(() => {
+    if (!selectedReference || !referenceStatuses) return false;
+    
+    const referenceStatus = referenceStatuses.find(
+      ref => ref.referenceNumber === selectedReference
+    );
+    
+    return referenceStatus?.status === 'FAILED' || referenceStatus?.status === 'ERROR';
+  }, [selectedReference, referenceStatuses]);
 
   // Determine if we're actively running a new analysis (not just loading existing data)
   // Only show running animation when explicitly running a new analysis
   const isActivelyRunning = isRunningAnalysis;
 
   return (
-    <Box height="100%" display="flex" flexDirection="column" bg="bg.primary">
+    <div
+      className={cn(
+        'h-full flex flex-col',
+        isDarkMode ? 'bg-gray-900' : 'bg-white'
+      )}
+    >
       {/* Scrollable content area */}
-      <Box
-        flex="1"
-        overflowY="auto"
-        pt={4}
-        pr={4}
-        pl={4}
-        pb={0}
-        className="custom-scrollbar"
-      >
+      <div className="flex-1 overflow-y-auto pt-4 pr-4 pl-4 pb-0 custom-scrollbar">
         {/* Only show running state when actively running analysis */}
         {isActivelyRunning && (
-          <VStack spacing={4} py={8}>
-            <HStack spacing={3}>
-              <Spinner
-                thickness="4px"
-                speed="0.65s"
-                emptyColor="border.primary"
-                color="blue.500"
-                size="lg"
-              />
-              <Text fontSize="lg" fontWeight="medium" color="text.primary">
+          <div className="flex flex-col items-center gap-4 py-8">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              <span
+                className={cn(
+                  'text-lg font-medium',
+                  isDarkMode ? 'text-gray-100' : 'text-gray-900'
+                )}
+              >
                 Running Deep Analysis...
-              </Text>
-            </HStack>
-            <VStack spacing={2} align="stretch" w="100%" maxW="400px">
-              <Progress size="xs" isIndeterminate colorScheme="blue" />
-              <Text fontSize="sm" color="text.secondary" textAlign="center">
+              </span>
+            </div>
+            <div className="flex flex-col gap-2 w-full max-w-[400px]">
+              <Progress className="h-2" />
+              <p
+                className={cn(
+                  'text-sm text-center',
+                  isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                )}
+              >
                 This may take up to a minute as we analyze the citation
                 relevance for each claim element.
-              </Text>
-            </VStack>
-            <Alert status="info" variant="subtle" maxW="400px">
-              <AlertIcon />
-              <Box>
-                <AlertDescription fontSize="sm">
-                  <strong>Tip:</strong> The analysis examines how this prior art
-                  reference relates to your claim elements and provides USPTO
-                  examiner-style feedback.
-                </AlertDescription>
-              </Box>
+              </p>
+            </div>
+            <Alert className="max-w-[400px]">
+              <InfoIcon className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Tip:</strong> The analysis examines how this prior art
+                reference relates to your claim elements and provides USPTO
+                examiner-style feedback.
+              </AlertDescription>
             </Alert>
-          </VStack>
+          </div>
         )}
 
         {error && (
-          <Alert status="error">
-            <AlertIcon />
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
             <AlertTitle>Analysis Failed</AlertTitle>
             <AlertDescription>{error.message}</AlertDescription>
           </Alert>
@@ -119,57 +146,81 @@ export const CitationAnalysisPanel: React.FC<CitationAnalysisPanelProps> = ({
 
         {/* Show loading state when fetching existing data */}
         {!isActivelyRunning && !data && !error && isLoading && (
-          <VStack spacing={4} py={8}>
-            <HStack spacing={3}>
-              <Spinner
-                thickness="4px"
-                speed="0.65s"
-                emptyColor="border.primary"
-                color="blue.500"
-                size="lg"
-              />
-              <Text fontSize="lg" fontWeight="medium" color="text.primary">
+          <div className="flex flex-col items-center gap-4 py-8">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              <span
+                className={cn(
+                  'text-lg font-medium',
+                  isDarkMode ? 'text-gray-100' : 'text-gray-900'
+                )}
+              >
                 Loading Analysis Data...
-              </Text>
-            </HStack>
-          </VStack>
+              </span>
+            </div>
+          </div>
         )}
 
         {/* Only show empty state when not loading */}
         {!isActivelyRunning && !data && !error && !isLoading && (
-          <Alert status="info">
-            <AlertIcon />
-            <AlertDescription>
-              <VStack align="start" spacing={2}>
-                <Text>No analysis data available for this reference.</Text>
-                <Button
-                  size="sm"
-                  onClick={onRunAnalysis}
-                  colorScheme="blue"
-                  loadingText="Starting analysis..."
-                  isDisabled={isLoading}
-                >
-                  Run Analysis
-                </Button>
-              </VStack>
-            </AlertDescription>
-          </Alert>
+          <>
+            {/* Show error state for failed extractions */}
+            {isSelectedReferenceFailed ? (
+              <div className="flex flex-col items-center justify-center min-h-[200px] p-6">
+                <AlertCircle className="h-8 w-8 text-destructive mb-3" />
+                <h3 className="text-lg font-medium text-destructive mb-2">
+                  Extraction Failed
+                </h3>
+                <p className="text-sm text-muted-foreground text-center leading-relaxed">
+                  Citation extraction failed for {selectedReference ? `Reference ${selectedReference.replace(/-/g, '')}` : 'this reference'}.
+                  <br />
+                  Please try running the extraction again.
+                </p>
+              </div>
+            ) : /* Show citation extraction message if extraction is in progress */
+            isSelectedReferenceProcessing ? (
+              <div className="flex flex-col items-center justify-center min-h-[200px] p-6">
+                <h3 className="text-lg font-medium text-foreground mb-2">
+                  Extracting Citations
+                </h3>
+                <p className="text-sm text-muted-foreground text-center leading-relaxed">
+                  Analyzing {selectedReference ? `Reference ${selectedReference.replace(/-/g, '')}` : 'this reference'} for relevant citations.
+                  <br />
+                  This may take a few moments...
+                </p>
+              </div>
+            ) : (
+              <Alert>
+                <InfoIcon className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="flex flex-col items-start gap-2">
+                    <span>No analysis data available for this reference.</span>
+                    <Button size="sm" onClick={onRunAnalysis} disabled={isLoading}>
+                      Run Analysis
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+          </>
         )}
 
-        {data && type === 'deep' && !isActivelyRunning && (
+        {analysisData && type === 'deep' && !isActivelyRunning && (
           <DeepAnalysisPanel
-            analysisData={data}
+            analysisData={analysisData}
             onApplyAmendment={onApplyAmendmentToClaim1}
             referenceNumber={selectedReference}
             isLoading={false}
           />
         )}
 
-        {data &&
+        {examinerAnalysis &&
           type === 'examiner' &&
           isExaminerAnalysisEnabled &&
-          !isActivelyRunning && <ExaminerAnalysisPanel analysisResult={data} />}
-      </Box>
-    </Box>
+          !isActivelyRunning && (
+            <ExaminerAnalysisPanel analysisResult={examinerAnalysis} />
+          )}
+      </div>
+    </div>
   );
 };

@@ -1,0 +1,500 @@
+{
+  "timestamp": "2025-06-28T17:54:41.203Z",
+  "stats": {
+    "totalFiles": 29,
+    "totalViolations": 63,
+    "imports": 27,
+    "usages": 36
+  },
+  "violations": [
+    {
+      "file": "src\\server\\tools\\patentApplication.tool.ts",
+      "count": 2,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { prisma } from '@/lib/prisma';"
+        },
+        {
+          "line": 34,
+          "type": "usage",
+          "context": "const project = await prisma.project.findFirst({"
+        }
+      ]
+    },
+    {
+      "file": "src\\server\\tools\\figureOperations.tool.ts",
+      "count": 9,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { prisma } from '@/lib/prisma';"
+        },
+        {
+          "line": 30,
+          "type": "usage",
+          "context": "const project = await prisma.project.findFirst({"
+        },
+        {
+          "line": 111,
+          "type": "usage",
+          "context": "const project = await prisma.project.findFirst({"
+        },
+        {
+          "line": 127,
+          "type": "usage",
+          "context": "const figure = await prisma.projectFigure.findFirst({"
+        },
+        {
+          "line": 143,
+          "type": "usage",
+          "context": "const existingElement = await prisma.figureElement.findFirst({"
+        },
+        {
+          "line": 217,
+          "type": "usage",
+          "context": "const project = await prisma.project.findFirst({"
+        },
+        {
+          "line": 233,
+          "type": "usage",
+          "context": "const figure = await prisma.projectFigure.findFirst({"
+        },
+        {
+          "line": 308,
+          "type": "usage",
+          "context": "const project = await prisma.project.findFirst({"
+        },
+        {
+          "line": 324,
+          "type": "usage",
+          "context": "const figure = await prisma.projectFigure.findFirst({"
+        }
+      ]
+    },
+    {
+      "file": "src\\server\\tools\\enhancePatentSection.tool.ts",
+      "count": 2,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { prisma } from '@/lib/prisma';"
+        },
+        {
+          "line": 58,
+          "type": "usage",
+          "context": "const project = await prisma.project.findFirst({"
+        }
+      ]
+    },
+    {
+      "file": "src\\server\\tools\\consistencyCheck.tool.ts",
+      "count": 2,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { prisma } from '@/lib/prisma';"
+        },
+        {
+          "line": 34,
+          "type": "usage",
+          "context": "const project = await prisma.project.findFirst({"
+        }
+      ]
+    },
+    {
+      "file": "src\\server\\tools\\claimOperations.tool.ts",
+      "count": 3,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { prisma } from '@/lib/prisma';"
+        },
+        {
+          "line": 33,
+          "type": "usage",
+          "context": "const project = await prisma.project.findFirst({"
+        },
+        {
+          "line": 303,
+          "type": "usage",
+          "context": "const project = await prisma.project.findFirst({"
+        }
+      ]
+    },
+    {
+      "file": "src\\server\\tools\\checkPatentConsistency.tool.ts",
+      "count": 2,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { prisma } from '@/lib/prisma';"
+        },
+        {
+          "line": 51,
+          "type": "usage",
+          "context": "const project = await prisma.project.findFirst({"
+        }
+      ]
+    },
+    {
+      "file": "src\\server\\services\\tenant.server.service.ts",
+      "count": 2,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { prisma } from '@/lib/prisma';"
+        },
+        {
+          "line": 34,
+          "type": "usage",
+          "context": "const project = await prisma.project.findUnique({"
+        }
+      ]
+    },
+    {
+      "file": "src\\server\\services\\project.server-service.ts",
+      "count": 2,
+      "violations": [
+        {
+          "line": 8,
+          "type": "import",
+          "context": "import { Prisma } from '@prisma/client';"
+        },
+        {
+          "line": 22,
+          "type": "import",
+          "context": "import { Invention } from '@prisma/client';"
+        }
+      ]
+    },
+    {
+      "file": "src\\server\\services\\invention-data.server-service.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 8,
+          "type": "import",
+          "context": "import { Invention } from '@prisma/client';"
+        }
+      ]
+    },
+    {
+      "file": "src\\server\\services\\claim-mirroring.server-service.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 5,
+          "type": "import",
+          "context": "import { Claim } from '@prisma/client';"
+        }
+      ]
+    },
+    {
+      "file": "src\\server\\services\\citations.server.service.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 3,
+          "type": "import",
+          "context": "import { Prisma } from '@prisma/client';"
+        }
+      ]
+    },
+    {
+      "file": "src\\server\\services\\citation-processing.server-service.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 30,
+          "type": "import",
+          "context": "import { Prisma } from '@prisma/client';"
+        }
+      ]
+    },
+    {
+      "file": "src\\server\\ai\\reasoningService.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 450,
+          "type": "usage",
+          "context": "const inventionResult = await prisma.invention.findUnique({"
+        }
+      ]
+    },
+    {
+      "file": "src\\pages\\api\\tenants\\index.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 14,
+          "type": "import",
+          "context": "import { Prisma } from '@prisma/client';"
+        }
+      ]
+    },
+    {
+      "file": "src\\pages\\api\\projects\\[projectId]\\figures\\create-pending.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 7,
+          "type": "import",
+          "context": "import { prisma } from '@/lib/prisma';"
+        }
+      ]
+    },
+    {
+      "file": "src\\pages\\api\\projects\\[projectId]\\figures\\[figureId]\\download.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 54,
+          "type": "usage",
+          "context": "const figure = (await prisma.projectFigure.findFirst({"
+        }
+      ]
+    },
+    {
+      "file": "src\\middleware\\auth.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 5,
+          "type": "import",
+          "context": "// import { PrismaClient } from '@prisma/client';"
+        }
+      ]
+    },
+    {
+      "file": "src\\lib\\testing\\test-factory.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { Project, User, Tenant } from '@prisma/client';"
+        }
+      ]
+    },
+    {
+      "file": "src\\lib\\testing\\templates\\repository.test.template.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { PrismaClient } from '@prisma/client';"
+        }
+      ]
+    },
+    {
+      "file": "src\\lib\\monitoring\\health-check.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { prisma } from '@/lib/prisma';"
+        }
+      ]
+    },
+    {
+      "file": "src\\lib\\monitoring\\audit-logger.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 45,
+          "type": "import",
+          "context": "const { PrismaClient } = require('@prisma/client');"
+        }
+      ]
+    },
+    {
+      "file": "src\\lib\\db\\soft-delete-middleware.ts",
+      "count": 7,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { Prisma } from '@prisma/client';"
+        },
+        {
+          "line": 139,
+          "type": "usage",
+          "context": "await prisma.$executeRaw`DELETE FROM users WHERE id = ${where.id}`;"
+        },
+        {
+          "line": 143,
+          "type": "usage",
+          "context": "await prisma.$executeRaw`DELETE FROM tenants WHERE id = ${where.id}`;"
+        },
+        {
+          "line": 147,
+          "type": "usage",
+          "context": "await prisma.$executeRaw`DELETE FROM projects WHERE id = ${where.id}`;"
+        },
+        {
+          "line": 151,
+          "type": "usage",
+          "context": "await prisma.$executeRaw`DELETE FROM documents WHERE id = ${where.id}`;"
+        },
+        {
+          "line": 155,
+          "type": "usage",
+          "context": "await prisma.$executeRaw`DELETE FROM application_versions WHERE id = ${where.id}`;"
+        },
+        {
+          "line": 159,
+          "type": "usage",
+          "context": "await prisma.$executeRaw`DELETE FROM project_figures WHERE id = ${where.id}`;"
+        }
+      ]
+    },
+    {
+      "file": "src\\lib\\db\\seed\\seeders\\user-seeder.ts",
+      "count": 8,
+      "violations": [
+        {
+          "line": 9,
+          "type": "usage",
+          "context": "const count = await this.prisma.user.count();"
+        },
+        {
+          "line": 16,
+          "type": "usage",
+          "context": "await this.prisma.userPreference.deleteMany({});"
+        },
+        {
+          "line": 17,
+          "type": "usage",
+          "context": "await this.prisma.userTenant.deleteMany({});"
+        },
+        {
+          "line": 18,
+          "type": "usage",
+          "context": "await this.prisma.user.deleteMany({});"
+        },
+        {
+          "line": 23,
+          "type": "usage",
+          "context": "const tenants = await this.prisma.tenant.findMany();"
+        },
+        {
+          "line": 70,
+          "type": "usage",
+          "context": "const user = await this.prisma.user.create({ data: userData });"
+        },
+        {
+          "line": 73,
+          "type": "usage",
+          "context": "await this.prisma.userTenant.create({"
+        },
+        {
+          "line": 91,
+          "type": "usage",
+          "context": "await this.prisma.userPreference.create({"
+        }
+      ]
+    },
+    {
+      "file": "src\\lib\\db\\seed\\seeders\\tenant-seeder.ts",
+      "count": 6,
+      "violations": [
+        {
+          "line": 2,
+          "type": "import",
+          "context": "import { PrismaClient } from '@prisma/client';"
+        },
+        {
+          "line": 10,
+          "type": "usage",
+          "context": "const count = await this.prisma.tenant.count();"
+        },
+        {
+          "line": 18,
+          "type": "usage",
+          "context": "await this.prisma.project.deleteMany({});"
+        },
+        {
+          "line": 19,
+          "type": "usage",
+          "context": "await this.prisma.user.deleteMany({});"
+        },
+        {
+          "line": 20,
+          "type": "usage",
+          "context": "await this.prisma.tenant.deleteMany({});"
+        },
+        {
+          "line": 85,
+          "type": "usage",
+          "context": "await this.prisma.tenant.create({"
+        }
+      ]
+    },
+    {
+      "file": "src\\lib\\db\\seed\\seeders\\base-seeder.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { PrismaClient } from '@prisma/client';"
+        }
+      ]
+    },
+    {
+      "file": "src\\lib\\api\\clients\\projects.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { Project } from '@prisma/client';"
+        }
+      ]
+    },
+    {
+      "file": "src\\features\\search\\hooks\\useCitationJobs.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 7,
+          "type": "import",
+          "context": "export type { CitationJob } from '@prisma/client';"
+        }
+      ]
+    },
+    {
+      "file": "src\\features\\citation-extraction\\utils\\citationJob.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 13,
+          "type": "import",
+          "context": "} from '@prisma/client';"
+        }
+      ]
+    },
+    {
+      "file": "src\\features\\citation-extraction\\components\\utils\\typeConversions.ts",
+      "count": 1,
+      "violations": [
+        {
+          "line": 1,
+          "type": "import",
+          "context": "import { CitationJob } from '@prisma/client';"
+        }
+      ]
+    }
+  ]
+}

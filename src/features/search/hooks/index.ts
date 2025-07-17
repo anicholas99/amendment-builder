@@ -1,6 +1,6 @@
 // Export all hooks from the search module
 export * from './useDeepAnalysis';
-export * from './usePriorArtManagement';
+// Deprecated: export * from './usePriorArtManagement'; - Use useSaveCitation, useProjectPriorArt instead
 export * from './useCitationJobDetails';
 export * from './useExaminerAnalysis';
 export * from './useCitationMatches';

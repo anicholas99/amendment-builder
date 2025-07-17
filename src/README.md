@@ -91,7 +91,7 @@ export default composeApiMiddleware(handler, {
 1. Design system components are in `/ui`
 2. Feature-specific components in `/features/[feature]/components`
 3. Shared components in `/components`
-4. Use Chakra UI as the base component library
+4. Use Tailwind CSS for styling
 
 ## 📋 Best Practices
 
@@ -99,7 +99,7 @@ export default composeApiMiddleware(handler, {
 ```typescript
 // 1. External imports
 import React from 'react';
-import { Box } from '@chakra-ui/react';
+import { Box } from '@/components/ui/box';
 
 // 2. Internal absolute imports
 import { useAuth } from '@/hooks/useAuth';

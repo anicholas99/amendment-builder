@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { queryKeys } from '@/config/reactQueryConfig';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { z } from 'zod';
 import { STALE_TIME } from '@/constants/time';
 
@@ -41,10 +41,15 @@ export function useUnassignedFigures(projectId: string) {
           projectId,
         });
 
+        // Add cache-busting parameter to ensure fresh data
+        const cacheBuster = Date.now();
         const response = await apiFetch(
-          API_ROUTES.PROJECTS.FIGURES.UNASSIGNED(projectId)
+          `${API_ROUTES.PROJECTS.FIGURES.UNASSIGNED(projectId)}?_t=${cacheBuster}`
         );
-        const data = await response.json();
+        const result = await response.json();
+
+        // Handle standardized API response format
+        const data = result.data || result;
 
         // Validate response
         const validated = UnassignedFiguresResponseSchema.parse(data);

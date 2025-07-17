@@ -12,8 +12,11 @@ import {
   NavigationHandlers,
   DocumentType,
 } from '../../types/projectSidebar';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { performanceMonitor } from '@/utils/performance';
+import { getTenantFromRouter } from '@/utils/routerTenant';
+import { projectKeys } from '@/lib/queryKeys';
+import { ProjectApiService } from '@/client/services/project.client-service';
 
 const NavigationManager: React.FC<NavigationManagerProps> = ({
   activeProject,
@@ -27,7 +30,7 @@ const NavigationManager: React.FC<NavigationManagerProps> = ({
   const { setActiveProject } = useProjectData();
   const { setActiveDocument } = useActiveDocument();
 
-  // Helper to safely get string values from router query
+  // Helper for non-tenant query params
   const getQueryString = (value: string | string[] | undefined): string => {
     if (Array.isArray(value)) return value[0] || '';
     return value || '';
@@ -36,13 +39,20 @@ const NavigationManager: React.FC<NavigationManagerProps> = ({
   // Handle document selection with prefetching
   const handleDocumentSelect = useCallback(
     async (projectId: string, documentType: string) => {
-      const tenant = getQueryString(router.query.tenant) || 'development';
+      const tenant = getTenantFromRouter(router);
       const docType = documentType as DocumentType;
 
       try {
         logger.debug('[NavigationManager] Document selection started', {
           projectId,
           documentType,
+        });
+
+        // Prefetch the project detail data before navigation
+        await queryClient.prefetchQuery({
+          queryKey: projectKeys.detail(projectId),
+          queryFn: () => ProjectApiService.getProject(projectId),
+          staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
         });
 
         // Just navigate - let the page component handle all state updates
@@ -61,13 +71,13 @@ const NavigationManager: React.FC<NavigationManagerProps> = ({
         throw error;
       }
     },
-    [router, onDocumentNavigation]
+    [router, onDocumentNavigation, queryClient]
   );
 
   // Handle project switching
   const handleProjectSwitch = useCallback(
     async (targetProjectId: string, isNewProject: boolean = false) => {
-      const tenant = getQueryString(router.query.tenant) || 'development';
+      const tenant = getTenantFromRouter(router);
       let documentType =
         getQueryString(router.query.documentType) || 'technology';
 
@@ -97,9 +107,6 @@ const NavigationManager: React.FC<NavigationManagerProps> = ({
             queryKey: ['project', targetProjectId],
           });
           queryClient.invalidateQueries({
-            queryKey: ['invention', targetProjectId],
-          });
-          queryClient.invalidateQueries({
             queryKey: ['priorArt', targetProjectId],
           });
         }, 0);
@@ -112,12 +119,12 @@ const NavigationManager: React.FC<NavigationManagerProps> = ({
         throw error;
       }
     },
-    [router, activeProject, onProjectSwitch, queryClient, projects]
+    [router, activeProject, onProjectSwitch, queryClient]
   );
 
   // Navigate to projects dashboard
   const navigateToProjects = useCallback(async () => {
-    const tenant = getQueryString(router.query.tenant) || 'development';
+    const tenant = getTenantFromRouter(router);
     const targetPath = `/${tenant}/projects`;
 
     try {

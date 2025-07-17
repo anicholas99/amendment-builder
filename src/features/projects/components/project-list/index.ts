@@ -1,4 +1,4 @@
 export { DocumentLink } from './DocumentLink';
 export { EmptyProjectList } from './EmptyProjectList';
-export { ProjectListItem } from './ProjectListItem';
+export { default as ProjectListItemShadcn } from './ProjectListItemShadcn';
 export { ProjectSwitchModal } from './ProjectSwitchModal';

@@ -6,7 +6,7 @@
  */
 import { apiFetch } from '@/lib/api/apiClient';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { API_ROUTES } from '@/constants/apiRoutes';
 
 interface UploadFigureResponse {
@@ -153,8 +153,5 @@ class StorageClientService {
   }
 }
 
-// Export as singleton instance
-export const storageClientService = new StorageClientService();
-
-// Also export the class for testing purposes
+// Export the class for context-based instantiation
 export { StorageClientService };

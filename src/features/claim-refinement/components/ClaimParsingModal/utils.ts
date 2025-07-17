@@ -1,6 +1,5 @@
 import { ParsedElement, InventionData } from './types';
-import { logger } from '@/lib/monitoring/logger';
-import { claimClientService } from '@/client/services/claim.client-service';
+import { logger } from '@/utils/clientLogger';
 
 /**
  * Copies a query to the clipboard
@@ -39,13 +38,12 @@ export const copyToClipboard = (text: string): Promise<void> => {
 //   }
 // };
 
-export const parseClaimText = async (claimText: string) => {
+export const parseClaimText = async (claimText: string, claimService: any) => {
   if (!claimText.trim()) {
     throw new Error('Claim text cannot be empty.');
   }
-  // const response = await claimClientService.parseClaim(claimText);
-  // return response.parsed;
-  return { placeholder: 'parsed' }; // Returning placeholder
+  const response = await claimService.parseClaim(claimText);
+  return response.parsed;
 };
 
 /**

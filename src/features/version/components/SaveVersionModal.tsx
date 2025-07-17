@@ -1,15 +1,15 @@
 import React from 'react';
 import {
-  AlertDialog,
-  AlertDialogBody,
-  AlertDialogContent,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogOverlay,
-  Button,
-  Input,
-  Text,
-} from '@chakra-ui/react';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface SaveVersionModalProps {
   isOpen: boolean;
@@ -32,43 +32,53 @@ const SaveVersionModal: React.FC<SaveVersionModalProps> = ({
     onSave();
   };
 
-  return (
-    <AlertDialog
-      isOpen={isOpen}
-      leastDestructiveRef={cancelRef}
-      onClose={onClose}
-    >
-      <AlertDialogOverlay>
-        <AlertDialogContent>
-          <AlertDialogHeader fontSize="lg" fontWeight="semibold">
-            Save Version
-          </AlertDialogHeader>
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    }
+  };
 
-          <AlertDialogBody>
-            <Text mb={4}>Add a description for this version:</Text>
+  return (
+    <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold">
+            Save Version
+          </DialogTitle>
+          <DialogDescription>
+            Add a description for this version:
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-1 gap-2">
+            <Label htmlFor="version-description" className="sr-only">
+              Version Description
+            </Label>
             <Input
+              id="version-description"
               value={versionDescription}
               onChange={e => setVersionDescription(e.target.value)}
               placeholder="e.g., Updated FIELD section"
-              onKeyPress={e => {
-                if (e.key === 'Enter') {
-                  handleSave();
-                }
-              }}
+              onKeyDown={handleKeyPress}
+              className="w-full"
             />
-          </AlertDialogBody>
+          </div>
+        </div>
 
-          <AlertDialogFooter>
-            <Button ref={cancelRef} onClick={onClose}>
-              Cancel
-            </Button>
-            <Button colorScheme="green" onClick={handleSave} ml={3}>
-              Save
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialogOverlay>
-    </AlertDialog>
+        <DialogFooter>
+          <Button ref={cancelRef} variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

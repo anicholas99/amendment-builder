@@ -3,7 +3,7 @@
  */
 import { apiFetch } from '@/lib/api/apiClient';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { API_ROUTES } from '@/constants/apiRoutes';
 
 interface ChatMessage {
@@ -12,7 +12,12 @@ interface ChatMessage {
 }
 
 interface LastAction {
-  type: 'claim-revised' | 'claim-added' | 'claim-deleted' | 'claims-mirrored' | 'claims-reordered';
+  type:
+    | 'claim-revised'
+    | 'claim-added'
+    | 'claim-deleted'
+    | 'claims-mirrored'
+    | 'claims-reordered';
   claimNumber?: number;
   claimNumbers?: number[];
   details?: string;
@@ -24,7 +29,9 @@ class ChatClientService {
     message: string,
     history: ChatMessage[],
     pageContext?: 'technology' | 'claim-refinement' | 'patent',
-    lastAction?: LastAction
+    lastAction?: LastAction,
+    sessionId?: string,
+    attachedDocumentIds?: string[]
   ): Promise<ReadableStream<Uint8Array>> {
     try {
       // The messages array should already include the new message
@@ -34,7 +41,14 @@ class ChatClientService {
       const response = await apiFetch(API_ROUTES.PROJECTS.CHAT_STREAM, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, messages, pageContext, lastAction }),
+        body: JSON.stringify({
+          projectId,
+          messages,
+          pageContext,
+          lastAction,
+          sessionId,
+          attachedDocumentIds,
+        }),
       });
 
       if (!response.ok || !response.body) {
@@ -74,4 +88,7 @@ class ChatClientService {
   }
 }
 
-export const chatClientService = new ChatClientService();
+// Export the class for context-based instantiation
+export { ChatClientService };
+
+// REMOVED: Singleton export that could cause session isolation issues

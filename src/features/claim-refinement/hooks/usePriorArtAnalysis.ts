@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import { ProcessedSearchHistoryEntry } from '@/types/domain/searchHistory';
 import { PriorArtReference } from '../../../types/claimTypes';
 import {

@@ -1,31 +1,35 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { withAuth } from '@/middleware/auth';
-import { withMethod } from '@/middleware/method';
+import { NextApiRequest, NextApiResponse } from 'next';
+import { logger } from '@/server/logger';
+import { AuthenticatedRequest } from '@/types/middleware';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { getInventionContextForChat } from '@/repositories/chatRepository';
-import { logger } from '@/lib/monitoring/logger';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
+import { apiResponse } from '@/utils/api/responses';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
+import { ApplicationError, ErrorCode } from '@/lib/error';
 
-async function handler(req: NextApiRequest, res: NextApiResponse) {
+const apiLogger = createApiLogger('debug-tools/chat-context');
+
+/**
+ * Debug endpoint to fetch complete chat context for a project
+ * This mimics what the ChatContext would load
+ */
+async function handler(
+  req: AuthenticatedRequest,
+  res: NextApiResponse
+): Promise<void> {
   const { projectId } = req.query;
-  const tenantId = (req as any).user?.tenantId;
+  const tenantId = req.user!.tenantId!;
 
   if (!projectId || typeof projectId !== 'string') {
-    return res.status(400).json({ error: 'projectId is required' });
-  }
-
-  if (!tenantId) {
-    return res.status(401).json({ error: 'User not authenticated' });
+    return apiResponse.badRequest(res, 'projectId is required');
   }
 
   try {
     const context = await getInventionContextForChat(projectId, tenantId);
 
     if (!context) {
-      return res.status(404).json({
-        error: 'No context found',
-        projectId,
-        tenantId,
-      });
+      return apiResponse.notFound(res, 'No context found');
     }
 
     // Return detailed information about what the chat agent sees
@@ -39,7 +43,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         exists: !!context.invention,
         id: context.invention?.id,
         title: context.invention?.title,
-
         hasParsedElements: context.invention?.parsedClaimElements?.length || 0,
       },
       claims: {
@@ -53,11 +56,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       savedPriorArt: {
         count: context.savedPriorArt.length,
       },
+      figures: {
+        count: context.figures.length,
+      },
     };
 
     logger.info('[DebugChatContext] Context retrieved', summary);
 
-    return res.status(200).json({
+    return apiResponse.ok(res, {
       summary,
       fullContext: context,
     });
@@ -72,4 +78,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-export default withAuth(withMethod('GET', handler));
+// SECURITY: This is an admin debug endpoint
+// Only admin users can access chat context information
+export default SecurePresets.adminTenant(TenantResolvers.fromUser, handler);

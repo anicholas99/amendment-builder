@@ -1,10 +1,13 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
-import { ClaimMirroringService, ClaimType } from '@/server/services/claim-mirroring.server-service';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import {
+  ClaimMirroringService,
+  ClaimType,
+} from '@/server/services/claim-mirroring.server-service';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
 import { ApplicationError } from '@/lib/error';
 
 const apiLogger = createApiLogger('claims/mirror');
@@ -23,10 +26,7 @@ const requestBodySchema = z.object({
  * API handler for mirroring claims to a different type
  * POST /api/projects/[projectId]/claims/mirror
  */
-async function handler(
-  req: AuthenticatedRequest,
-  res: NextApiResponse
-) {
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: `Method ${req.method} not allowed` });
@@ -80,8 +80,10 @@ async function handler(
 
     return res.status(201).json({
       success: true,
-      message: `Successfully created ${mirroredClaims.length} ${targetType} claims`,
-      claims: mirroredClaims,
+      data: {
+        message: `Successfully created ${mirroredClaims.length} ${targetType} claims`,
+        claims: mirroredClaims,
+      },
     });
   } catch (error) {
     apiLogger.error('Failed to mirror claims', {
@@ -116,4 +118,4 @@ export default SecurePresets.tenantProtected(
     },
     rateLimit: 'api',
   }
-); 
+);

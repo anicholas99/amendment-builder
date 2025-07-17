@@ -1,5 +1,5 @@
-import { logger } from '@/lib/monitoring/logger';
-import { safeJsonParse } from '@/utils/json-utils';
+import { logger } from '@/server/logger';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import environment from '@/config/environment';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { OpenaiServerService } from '@/server/services/openai.server-service';
@@ -427,9 +427,10 @@ Respond ONLY in JSON format with exactly two fields:
         if (searchHistory?.projectId) {
           // Fetch invention data and claims from the new system
           try {
-            const { inventionDataService } = await import(
+            const { InventionDataService } = await import(
               '@/server/services/invention-data.server-service'
             );
+            const inventionDataService = new InventionDataService();
             const inventionData = await inventionDataService.getInventionData(
               searchHistory.projectId
             );

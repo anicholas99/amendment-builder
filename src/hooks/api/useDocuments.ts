@@ -1,17 +1,16 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  documentClientService,
-  DocumentUpdate,
-} from '@/client/services/document.client-service';
+import { DocumentUpdate } from '@/client/services/document.client-service';
+import { useDocumentService } from '@/contexts/ClientServicesContext';
 import { versionQueryKeys } from '@/lib/queryKeys/versionQueryKeys';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 export const useBatchUpdateDocumentsMutation = () => {
   const queryClient = useQueryClient();
+  const documentService = useDocumentService();
 
   return useMutation({
     mutationFn: (updates: DocumentUpdate[]) =>
-      documentClientService.batchUpdate(updates),
+      documentService.batchUpdate(updates),
     onMutate: async updates => {
       // Optimistically update the cache immediately
       // This ensures your edits are visible when navigating back

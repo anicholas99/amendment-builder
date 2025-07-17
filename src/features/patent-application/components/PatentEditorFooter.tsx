@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, HStack, Text } from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface PatentEditorFooterProps {
   wordCount: number;
@@ -10,28 +11,28 @@ export const PatentEditorFooter: React.FC<PatentEditorFooterProps> = ({
   wordCount,
   characterCount,
 }) => {
+  const { isDarkMode } = useThemeContext();
+
   return (
-    <Box
-      p={2}
-      display="flex"
-      justifyContent="flex-end"
-      alignItems="center"
-      bg="bg.primary"
-      borderTopWidth="1px"
-      borderTopColor="border.primary"
-      fontSize="sm"
-      color="gray.600"
-      _dark={{ color: 'gray.400' }}
+    <div
+      className={cn(
+        'p-2 flex justify-end items-center text-sm border-t',
+        isDarkMode
+          ? 'bg-gray-900 text-gray-400 border-gray-700'
+          : 'bg-white text-gray-600 border-gray-200'
+      )}
     >
-      <HStack spacing={4}>
-        <Text>
+      <div className="flex items-center gap-4">
+        <span>
           {wordCount} {wordCount === 1 ? 'word' : 'words'}
-        </Text>
-        <Text color="gray.400">•</Text>
-        <Text>
+        </span>
+        <span className={isDarkMode ? 'text-gray-500' : 'text-gray-400'}>
+          •
+        </span>
+        <span>
           {characterCount} {characterCount === 1 ? 'character' : 'characters'}
-        </Text>
-      </HStack>
-    </Box>
+        </span>
+      </div>
+    </div>
   );
 };

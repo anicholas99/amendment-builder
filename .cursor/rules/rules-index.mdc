@@ -37,9 +37,7 @@ alwaysApply: true
 - **[error-handling.mdc](mdc:.cursor/rules/error-handling.mdc)** - Consistent error handling patterns
 
 ## 🚀 Development Workflow
-- **[dev_workflow.mdc](mdc:.cursor/rules/dev_workflow.mdc)** - Task management with Task Master
 - **[git-workflow.mdc](mdc:.cursor/rules/git-workflow.mdc)** - Git commit and PR conventions
-- **[taskmaster.mdc](mdc:.cursor/rules/taskmaster.mdc)** - Task Master tool reference
 - **[deployment-checklist.mdc](mdc:.cursor/rules/deployment-checklist.mdc)** - Pre-deployment verification
 
 ## 📂 Project Structure
@@ -67,7 +65,6 @@ alwaysApply: true
 ### Before Committing?
 1. Run checks from [code-quality.mdc](mdc:.cursor/rules/code-quality.mdc)
 2. Follow [git-workflow.mdc](mdc:.cursor/rules/git-workflow.mdc)
-3. Update tasks per [dev_workflow.mdc](mdc:.cursor/rules/dev_workflow.mdc)
 
 ### Ready to Deploy?
 1. Complete [deployment-checklist.mdc](mdc:.cursor/rules/deployment-checklist.mdc)

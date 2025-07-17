@@ -1,4 +1,3 @@
-import { logger } from '@/lib/monitoring/logger';
 import { createHash } from 'crypto';
 import { SearchResult } from '@/types/searchTypes';
 
@@ -60,21 +59,16 @@ class SearchResultCache {
     const cached = this.cache.get(cacheKey);
 
     if (!cached) {
-      logger.debug('Cache miss for search', { cacheKey });
+      // Debug logging removed for client compatibility
       return null;
     }
 
     if (!this.isValidCache(cached)) {
-      logger.debug('Cache expired for search', { cacheKey });
+      // Debug logging removed for client compatibility
       this.cache.delete(cacheKey);
       return null;
     }
-
-    logger.info('Cache hit for search', {
-      cacheKey,
-      resultCount: cached.results.length,
-      ageMinutes: Math.round((Date.now() - cached.timestamp) / 1000 / 60),
-    });
+    // Info logging removed for client compatibility
 
     return cached;
   }
@@ -97,12 +91,7 @@ class SearchResultCache {
     };
 
     this.cache.set(cacheKey, cachedResult);
-
-    logger.info('Cached search results', {
-      cacheKey,
-      resultCount: results.results.length,
-      ttlMinutes: Math.round(ttl / 1000 / 60),
-    });
+    // Info logging removed for client compatibility
 
     // Cleanup old entries periodically
     this.cleanupExpiredEntries();
@@ -123,7 +112,7 @@ class SearchResultCache {
     });
 
     if (removedCount > 0) {
-      logger.debug('Cleaned up expired cache entries', { removedCount });
+      // Debug logging removed for client compatibility
     }
   }
 
@@ -133,7 +122,7 @@ class SearchResultCache {
   async clearCache(): Promise<void> {
     const size = this.cache.size;
     this.cache.clear();
-    logger.info('Cleared search result cache', { clearedEntries: size });
+    // Info logging removed for client compatibility
   }
 
   /**
@@ -163,8 +152,8 @@ class SearchResultCache {
   }
 }
 
-// Export singleton instance
-export const searchCache = new SearchResultCache();
+// Export the class for request-scoped instantiation
+export { SearchResultCache };
 
 /**
  * Redis-based cache for production (optional enhancement)
@@ -198,14 +187,11 @@ export class RedisSearchCache {
       if (!cached) return null;
 
       const result = JSON.parse(cached) as CachedSearchResult;
-      logger.info('Redis cache hit for search', {
-        cacheKey,
-        resultCount: result.results?.length || 0,
-      });
+      // Info logging removed for client compatibility
 
       return result;
     } catch (error) {
-      logger.error('Redis cache get error', { error });
+      // Error logging removed for client compatibility
       return null;
     }
   }
@@ -233,14 +219,9 @@ export class RedisSearchCache {
           setex: (key: string, ttl: number, value: string) => Promise<string>;
         }
       ).setex(cacheKey, ttl, JSON.stringify(cachedResult));
-
-      logger.info('Cached search results in Redis', {
-        cacheKey,
-        resultCount: results.results?.length || 0,
-        ttlMinutes: Math.round(ttl / 60),
-      });
+      // Info logging removed for client compatibility
     } catch (error) {
-      logger.error('Redis cache set error', { error });
+      // Error logging removed for client compatibility
     }
   }
 }

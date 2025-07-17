@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { useToast } from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
+import { useToast } from '@/hooks/useToastWrapper';
 import { InventionData } from '../../../types';
 import { PriorArtReference } from '../../../types/claimTypes';
 
@@ -22,12 +22,12 @@ export const usePriorArtManagement = (
   const toast = useToast();
 
   // Stub functions
-  const handleAddPriorArt = () => logger.log('Add prior art stub');
-  const handleDeletePriorArt = () => logger.log('Delete prior art stub');
-  const handleUpdatePriorArt = () => logger.log('Update prior art stub');
-  const handleAddRelevance = () => logger.log('Add relevance stub');
-  const handleRemoveRelevance = () => logger.log('Remove relevance stub');
-  const handleSelectPriorArt = () => logger.log('Select prior art stub');
+  const handleAddPriorArt = () => logger.info('Add prior art stub');
+  const handleDeletePriorArt = () => logger.info('Delete prior art stub');
+  const handleUpdatePriorArt = () => logger.info('Update prior art stub');
+  const handleAddRelevance = () => logger.info('Add relevance stub');
+  const handleRemoveRelevance = () => logger.info('Remove relevance stub');
+  const handleSelectPriorArt = () => logger.info('Select prior art stub');
 
   return {
     selectedPriorArt,

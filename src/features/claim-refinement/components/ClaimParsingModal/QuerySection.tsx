@@ -1,18 +1,10 @@
 import React from 'react';
-import {
-  VStack,
-  Box,
-  Heading,
-  Text,
-  Icon,
-  Button,
-  Textarea,
-  FormControl,
-  Badge,
-  Flex,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import { FiInfo, FiCopy, FiCheck } from 'react-icons/fi';
+import { Info, Copy, Check } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/contexts/ThemeContext';
 import { QuerySectionProps } from './types';
 
 const QuerySection: React.FC<QuerySectionProps> = React.memo(
@@ -24,61 +16,66 @@ const QuerySection: React.FC<QuerySectionProps> = React.memo(
     copyQuery,
     copiedQueryIndex,
   }) => {
-    const queryBgColor = useColorModeValue('green.50', 'green.900');
-    const queryBorderColor = useColorModeValue('green.200', 'green.700');
+    const { isDarkMode } = useThemeContext();
 
     return (
-      <VStack spacing={4} align="stretch">
-        <Box>
-          <Heading size="md" mb={2}>
-            Review Search Queries
-          </Heading>
-          <Text fontSize="sm" color="gray.600" mb={4}>
+      <div className="flex flex-col gap-4">
+        <div>
+          <h3 className="text-lg font-semibold mb-2">Review Search Queries</h3>
+          <p
+            className={cn(
+              'text-sm mb-4',
+              isDarkMode ? 'text-gray-400' : 'text-gray-600'
+            )}
+          >
             Based on your emphasized elements, we've generated the following
             search queries. You can edit these queries before executing the
             search.
-          </Text>
+          </p>
 
-          <Box p={3} bg="green.50" borderRadius="md" mb={4}>
-            <Text fontSize="sm" fontStyle="italic">
-              <Icon as={FiInfo} mr={2} color="green.500" />
+          <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-md mb-4">
+            <p className="text-sm italic flex items-start">
+              <Info className="h-4 w-4 mr-2 text-green-500 flex-shrink-0 mt-0.5" />
               The emphasized elements have been given priority in these queries
               with additional synonyms and variations. The final query combines
               all aspects of the claim.
-            </Text>
-          </Box>
+            </p>
+          </div>
 
-          <Button
-            leftIcon={<FiCopy />}
-            size="sm"
-            onClick={onCopy}
-            mb={4}
-            colorScheme="teal"
-            variant="outline"
-          >
-            {hasCopied ? 'Copied all queries!' : 'Copy all queries'}
+          <Button size="sm" onClick={onCopy} variant="outline" className="mb-4">
+            {hasCopied ? (
+              <>
+                <Check className="h-4 w-4 mr-2" />
+                Copied all queries!
+              </>
+            ) : (
+              <>
+                <Copy className="h-4 w-4 mr-2" />
+                Copy all queries
+              </>
+            )}
           </Button>
-        </Box>
+        </div>
 
         {editableSearchQueries.map((query, index) => (
-          <Box
+          <div
             key={index}
-            p={4}
-            borderWidth="1px"
-            borderRadius="md"
-            borderColor={queryBorderColor}
-            bg={queryBgColor}
-            position="relative"
-            transition="box-shadow 0.15s ease-out"
-            _hover={{ shadow: 'md' }}
+            className={cn(
+              'p-4 border rounded-md relative transition-shadow hover:shadow-md',
+              isDarkMode
+                ? 'bg-green-900/20 border-green-700'
+                : 'bg-green-50 border-green-200'
+            )}
           >
-            <Flex justify="space-between" align="center" mb={2}>
+            <div className="flex justify-between items-center mb-2">
               <Badge
-                colorScheme="green"
-                fontSize="sm"
-                px={2}
-                py={1}
-                borderRadius="md"
+                variant="secondary"
+                className={cn(
+                  'px-2 py-1',
+                  isDarkMode
+                    ? 'bg-green-800 text-green-200'
+                    : 'bg-green-100 text-green-700'
+                )}
               >
                 {index === editableSearchQueries.length - 1
                   ? 'Consolidated Query'
@@ -86,51 +83,45 @@ const QuerySection: React.FC<QuerySectionProps> = React.memo(
               </Badge>
 
               <Button
-                size="xs"
-                leftIcon={copiedQueryIndex === index ? <FiCheck /> : <FiCopy />}
-                onClick={() => copyQuery(index, query)}
-                colorScheme={copiedQueryIndex === index ? 'green' : 'gray'}
+                size="sm"
                 variant="ghost"
+                onClick={() => copyQuery(index, query)}
+                className={cn(copiedQueryIndex === index && 'text-green-600')}
               >
-                {copiedQueryIndex === index ? 'Copied!' : 'Copy'}
+                {copiedQueryIndex === index ? (
+                  <>
+                    <Check className="h-4 w-4 mr-2" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy
+                  </>
+                )}
               </Button>
-            </Flex>
+            </div>
 
-            <FormControl>
-              <Textarea
-                value={query}
-                onChange={e => handleQueryChange(index, e.target.value)}
-                fontSize="md"
-                resize="vertical"
-                rows={Math.max(3, query.split('\n').length)}
-                minHeight={
-                  index === editableSearchQueries.length - 1 ? '200px' : '100px'
-                }
-                maxHeight={
-                  index === editableSearchQueries.length - 1 ? 'none' : '200px'
-                }
-                onInput={e => {
-                  // Auto-resize the textarea to fit content
-                  const target = e.target as HTMLTextAreaElement;
-                  target.style.height = 'auto';
-                  target.style.height = `${target.scrollHeight}px`;
-                }}
-                className={
-                  index === editableSearchQueries.length - 1
-                    ? 'hide-scrollbar'
-                    : ''
-                }
-                sx={{
-                  // Remove scrollbar for consolidated query
-                  ...(index === editableSearchQueries.length - 1 && {
-                    overflowY: 'visible',
-                  }),
-                }}
-              />
-            </FormControl>
-          </Box>
+            <Textarea
+              value={query}
+              onChange={e => handleQueryChange(index, e.target.value)}
+              className={cn(
+                'resize-y',
+                index === editableSearchQueries.length - 1
+                  ? 'min-h-[200px]'
+                  : 'min-h-[100px] max-h-[200px]'
+              )}
+              rows={Math.max(3, query.split('\n').length)}
+              onInput={e => {
+                // Auto-resize the textarea to fit content
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = `${target.scrollHeight}px`;
+              }}
+            />
+          </div>
         ))}
-      </VStack>
+      </div>
     );
   }
 );

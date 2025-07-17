@@ -1,12 +1,12 @@
 import type { NextApiResponse } from 'next';
 import { PriorArtReference } from '@/types/claimTypes';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { CustomApiRequest } from '@/types/api';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { PatentServerService } from '@/server/services/patent.server-service';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
 
 const apiLogger = createApiLogger('patbase-test-enrichment');
 
@@ -94,8 +94,11 @@ const handler = async (
   });
 
   return res.status(200).json({
-    message: `Successfully enriched ${enrichedResults.length} patents.`,
-    results: enrichedResults,
+    success: true,
+    data: {
+      message: `Successfully enriched ${enrichedResults.length} patents.`,
+      results: enrichedResults,
+    },
   });
 };
 

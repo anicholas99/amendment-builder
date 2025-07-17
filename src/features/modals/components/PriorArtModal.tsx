@@ -1,6 +1,18 @@
 import React from 'react';
-import { Box, Text, Button, Flex } from '@chakra-ui/react';
-import { IconButton, Badge } from '@chakra-ui/react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Box } from '@/components/ui/box';
+import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/button';
+import { Flex } from '@/components/ui/flex';
+import { IconButton } from '@/components/ui/icon-button';
+import { Badge } from '@/components/ui/badge';
 import { FiX, FiEye } from 'react-icons/fi';
 import { PriorArtReference } from '../../../types/claimTypes';
 
@@ -15,96 +27,67 @@ const PriorArtModal: React.FC<PriorArtModalProps> = ({
   onClose,
   priorArt,
 }) => {
-  if (!isOpen || !priorArt) return null;
+  if (!priorArt) return null;
 
   return (
-    <Box
-      position="fixed"
-      top="0"
-      left="0"
-      right="0"
-      bottom="0"
-      bg="blackAlpha.600"
-      zIndex={1000}
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      onClick={onClose}
-    >
-      <Box
-        bg="white"
-        borderRadius="md"
-        boxShadow="xl"
-        width="90%"
-        maxWidth="800px"
-        maxHeight="90vh"
-        overflow="hidden"
-        onClick={(e: React.MouseEvent) => e.stopPropagation()}
-      >
-        <Flex
-          p={4}
-          borderBottomWidth="1px"
-          justify="space-between"
-          align="center"
-        >
-          <Text fontSize="lg" fontWeight="bold">
-            Prior Art Details
-          </Text>
-          <IconButton
-            aria-label="Close"
-            icon={<FiX />}
-            size="sm"
-            onClick={onClose}
-          />
-        </Flex>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+        <DialogHeader>
+          <DialogTitle>Prior Art Details</DialogTitle>
+          <DialogDescription className="sr-only">
+            View detailed information about the selected prior art reference
+          </DialogDescription>
+        </DialogHeader>
 
-        <Box p={4} maxHeight="calc(90vh - 120px)" overflowY="auto">
-          <Flex justify="space-between" align="center" mb={4}>
+        <Box className="max-h-[calc(90vh-120px)] overflow-y-auto">
+          <Flex justify="between" align="center" className="mb-4">
             <Box>
-              <Text fontSize="xl" fontWeight="bold">
+              <Text size="xl" weight="bold">
                 {priorArt.number.replace(/-/g, '')}
               </Text>
-              <Text fontSize="md" color="gray.600">
+              <Text size="md" className="text-muted-foreground">
                 {priorArt.title}
               </Text>
             </Box>
-            <Badge colorScheme="red" fontSize="md">
+            <Badge variant="destructive" className="text-md">
               {priorArt.relevance}% Match
             </Badge>
           </Flex>
 
-          <Box p={4} bg="red.50" borderRadius="md" mb={4}>
-            <Text fontWeight="medium" mb={2}>
+          <Box className="p-4 bg-red-50 rounded-md mb-4 dark:bg-red-900/20">
+            <Text weight="medium" className="mb-2">
               Relevant Text:
             </Text>
             <Text>"{priorArt.relevantText}"</Text>
           </Box>
 
-          <Box p={4} bg="gray.50" borderRadius="md" mb={4}>
-            <Text fontWeight="medium" mb={2}>
+          <Box className="p-4 bg-muted rounded-md mb-4">
+            <Text weight="medium" className="mb-2">
               Publication Year:
             </Text>
             <Text>{priorArt.year}</Text>
           </Box>
-
-          <Flex justify="space-between" mt={4}>
-            <Button
-              leftIcon={<FiEye />}
-              colorScheme="blue"
-              onClick={() =>
-                window.open(
-                  `https://patents.google.com/patent/${priorArt.number.replace(/-/g, '')}`,
-                  '_blank'
-                )
-              }
-            >
-              View Full Patent
-            </Button>
-            <Button onClick={onClose}>Close</Button>
-          </Flex>
         </Box>
-      </Box>
-    </Box>
+
+        <DialogFooter>
+          <Button
+            onClick={() =>
+              window.open(
+                `https://patents.google.com/patent/${priorArt.number.replace(/-/g, '')}`,
+                '_blank'
+              )
+            }
+            className="gap-1"
+          >
+            <FiEye className="h-4 w-4" />
+            View Full Patent
+          </Button>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

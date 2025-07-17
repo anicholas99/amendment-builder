@@ -1,45 +1,30 @@
 import React from 'react';
 import {
-  Box,
-  Heading,
-  Text,
-  VStack,
-  HStack,
-  Badge,
-  Card,
-  CardBody,
-  CardHeader,
-  Accordion,
-  AccordionItem,
-  AccordionButton,
-  AccordionPanel,
-  AccordionIcon,
-  Divider,
-  List,
-  ListItem,
-  ListIcon,
-  Tag,
-  TagLabel,
-  Collapse,
-  useDisclosure,
-  Alert,
-  AlertIcon,
-  AlertTitle,
-  AlertDescription,
-  IconButton,
-  Tooltip,
-} from '@chakra-ui/react';
+  AlertCircle,
+  CheckCircle,
+  Info,
+  FileText,
+  Shield,
+  Target,
+  Eye,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import {
-  FiAlertCircle,
-  FiCheckCircle,
-  FiInfo,
-  FiFileText,
-  FiShield,
-  FiTarget,
-  FiEye,
-  FiChevronDown,
-  FiChevronUp,
-} from 'react-icons/fi';
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { ExaminerAnalysisResult } from '@/types/domain/citation';
 
 interface ExaminerAnalysisViewProps {
@@ -53,24 +38,39 @@ export const ExaminerAnalysisView: React.FC<ExaminerAnalysisViewProps> = ({
   referenceNumber,
   onClose,
 }) => {
-  const { isOpen: isStrategyOpen, onToggle: onStrategyToggle } = useDisclosure({
-    defaultIsOpen: true,
-  });
-  const { isOpen: isElementsOpen, onToggle: onElementsToggle } = useDisclosure({
-    defaultIsOpen: false,
-  });
+  const [isStrategyOpen, setIsStrategyOpen] = React.useState(true);
+  const [isElementsOpen, setIsElementsOpen] = React.useState(false);
 
   // Determine rejection severity
   const getRejectionSeverity = (type: string) => {
     switch (type) {
       case '102 Anticipation':
-        return { color: 'red', icon: FiAlertCircle };
+        return {
+          color: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
+          icon: AlertCircle,
+          alertVariant: 'destructive' as const,
+        };
       case '103 Obviousness':
-        return { color: 'orange', icon: FiInfo };
+        return {
+          color:
+            'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400',
+          icon: Info,
+          alertVariant: 'default' as const,
+        };
       case 'No Rejection':
-        return { color: 'green', icon: FiCheckCircle };
+        return {
+          color:
+            'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
+          icon: CheckCircle,
+          alertVariant: 'default' as const,
+        };
       default:
-        return { color: 'gray', icon: FiInfo };
+        return {
+          color:
+            'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400',
+          icon: Info,
+          alertVariant: 'default' as const,
+        };
     }
   };
 
@@ -85,57 +85,57 @@ export const ExaminerAnalysisView: React.FC<ExaminerAnalysisViewProps> = ({
   };
 
   return (
-    <Box w="full" maxW="1200px" mx="auto" p={4}>
-      <VStack spacing={6} align="stretch">
+    <div className="w-full max-w-6xl mx-auto p-4">
+      <div className="flex flex-col space-y-6">
         {/* Header */}
         <Card>
           <CardHeader>
-            <VStack align="start" spacing={2}>
-              <HStack justify="space-between" w="full">
-                <HStack spacing={3}>
-                  <FiFileText size="24px" />
-                  <Heading size="lg">USPTO Examiner Analysis</Heading>
-                </HStack>
-                <Badge colorScheme="blue" fontSize="md" p={2}>
+            <div className="flex flex-col space-y-2">
+              <div className="flex justify-between items-start w-full">
+                <div className="flex items-center space-x-3">
+                  <FileText className="h-6 w-6" />
+                  <h1 className="text-2xl font-semibold">
+                    USPTO Examiner Analysis
+                  </h1>
+                </div>
+                <Badge
+                  variant="outline"
+                  className="bg-blue-50 text-blue-700 border-blue-200 text-base px-3 py-1"
+                >
                   {referenceNumber}
                 </Badge>
-              </HStack>
-              <HStack spacing={4} fontSize="sm" color="gray.600">
-                <Text>{analysis.referenceTitle}</Text>
-                <Text>•</Text>
-                <Text>Analysis Date: {formatDate(analysis.analysisDate)}</Text>
-              </HStack>
-            </VStack>
+              </div>
+              <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                <span>{analysis.referenceTitle}</span>
+                <span>•</span>
+                <span>Analysis Date: {formatDate(analysis.analysisDate)}</span>
+              </div>
+            </div>
           </CardHeader>
         </Card>
 
         {/* Examiner Summary */}
         <Card>
           <CardHeader>
-            <Heading size="md">Examiner Summary</Heading>
+            <CardTitle className="text-lg">Examiner Summary</CardTitle>
           </CardHeader>
-          <CardBody>
-            <Box
-              fontSize="md"
-              lineHeight="tall"
-              whiteSpace="pre-wrap"
-              color="gray.700"
-            >
+          <CardContent>
+            <div className="text-base leading-relaxed whitespace-pre-wrap text-foreground">
               {analysis.examinerSummary}
-            </Box>
-          </CardBody>
+            </div>
+          </CardContent>
         </Card>
 
         {/* Key Rejection Points */}
         <Card>
           <CardHeader>
-            <HStack>
-              <FiShield size="20px" />
-              <Heading size="md">Key Rejection Analysis</Heading>
-            </HStack>
+            <div className="flex items-center space-x-2">
+              <Shield className="h-5 w-5" />
+              <CardTitle className="text-lg">Key Rejection Analysis</CardTitle>
+            </div>
           </CardHeader>
-          <CardBody>
-            <VStack spacing={4} align="stretch">
+          <CardContent>
+            <div className="flex flex-col space-y-4">
               {analysis.keyRejectionPoints.map((rejection, index) => {
                 const severity = getRejectionSeverity(rejection.type);
                 const Icon = severity.icon;
@@ -143,222 +143,219 @@ export const ExaminerAnalysisView: React.FC<ExaminerAnalysisViewProps> = ({
                 return (
                   <Alert
                     key={index}
-                    status={
-                      rejection.type === 'No Rejection' ? 'success' : 'warning'
+                    variant={
+                      rejection.type === 'No Rejection'
+                        ? 'default'
+                        : severity.alertVariant
                     }
-                    variant="left-accent"
-                    borderRadius="md"
+                    className={`border-l-4 ${
+                      rejection.type === 'No Rejection'
+                        ? 'border-l-green-400 bg-green-50 dark:bg-green-950/10'
+                        : rejection.type === '102 Anticipation'
+                          ? 'border-l-red-400 bg-red-50 dark:bg-red-950/10'
+                          : 'border-l-orange-400 bg-orange-50 dark:bg-orange-950/10'
+                    }`}
                   >
-                    <AlertIcon as={Icon} />
-                    <Box flex="1">
-                      <AlertTitle>
-                        <Badge colorScheme={severity.color} fontSize="sm">
+                    <Icon className="h-4 w-4" />
+                    <div className="flex-1">
+                      <AlertTitle className="mb-2">
+                        <Badge className={severity.color}>
                           {rejection.type}
                         </Badge>
                       </AlertTitle>
-                      <AlertDescription mt={2}>
-                        <VStack align="start" spacing={2}>
-                          <Text fontSize="sm">{rejection.rationale}</Text>
+                      <AlertDescription>
+                        <div className="flex flex-col space-y-2">
+                          <p className="text-sm">{rejection.rationale}</p>
                           {rejection.elements.length > 0 && (
-                            <HStack wrap="wrap" spacing={2}>
-                              <Text fontSize="xs" fontWeight="semibold">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-semibold">
                                 Elements:
-                              </Text>
+                              </span>
                               {rejection.elements.map((element, i) => (
-                                <Tag key={i} size="sm" colorScheme="blue">
-                                  <TagLabel>{element}</TagLabel>
-                                </Tag>
+                                <Badge
+                                  key={i}
+                                  variant="outline"
+                                  className="bg-blue-50 text-blue-700 border-blue-200"
+                                >
+                                  {element}
+                                </Badge>
                               ))}
-                            </HStack>
+                            </div>
                           )}
-                        </VStack>
+                        </div>
                       </AlertDescription>
-                    </Box>
+                    </div>
                   </Alert>
                 );
               })}
-            </VStack>
-          </CardBody>
+            </div>
+          </CardContent>
         </Card>
 
         {/* Response Strategy */}
         <Card>
           <CardHeader>
-            <HStack justify="space-between">
-              <HStack>
-                <FiTarget size="20px" />
-                <Heading size="md">Response Strategy</Heading>
-              </HStack>
-              <IconButton
-                aria-label="Toggle strategy"
-                icon={isStrategyOpen ? <FiChevronUp /> : <FiChevronDown />}
-                size="sm"
-                variant="ghost"
-                onClick={onStrategyToggle}
-              />
-            </HStack>
+            <Collapsible open={isStrategyOpen} onOpenChange={setIsStrategyOpen}>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <Target className="h-5 w-5" />
+                  <CardTitle className="text-lg">Response Strategy</CardTitle>
+                </div>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    {isStrategyOpen ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+              </div>
+              <CollapsibleContent>
+                <CardContent className="pt-4">
+                  <div className="flex flex-col space-y-4">
+                    {/* Primary Argument */}
+                    <div>
+                      <h4 className="font-semibold mb-2">Primary Argument</h4>
+                      <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border-l-4 border-blue-400 rounded-md">
+                        <p>{analysis.responseStrategy.primaryArgument}</p>
+                      </div>
+                    </div>
+
+                    {/* Amendment Suggestions */}
+                    {analysis.responseStrategy.amendmentSuggestions.length >
+                      0 && (
+                      <div>
+                        <h4 className="font-semibold mb-2">
+                          Recommended Amendments
+                        </h4>
+                        <ul className="space-y-2">
+                          {analysis.responseStrategy.amendmentSuggestions.map(
+                            (amendment, i) => (
+                              <li key={i} className="text-sm flex items-start">
+                                <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
+                                <span>{amendment}</span>
+                              </li>
+                            )
+                          )}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Key Distinctions */}
+                    {analysis.responseStrategy.distinctionPoints.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold mb-2">Key Distinctions</h4>
+                        <ul className="space-y-2">
+                          {analysis.responseStrategy.distinctionPoints.map(
+                            (point, i) => (
+                              <li key={i} className="text-sm flex items-start">
+                                <Info className="h-4 w-4 text-blue-500 mr-2 mt-0.5 flex-shrink-0" />
+                                <span>{point}</span>
+                              </li>
+                            )
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Collapsible>
           </CardHeader>
-          <Collapse in={isStrategyOpen}>
-            <CardBody>
-              <VStack spacing={4} align="stretch">
-                {/* Primary Argument */}
-                <Box>
-                  <Heading size="sm" mb={2}>
-                    Primary Argument
-                  </Heading>
-                  <Box
-                    p={4}
-                    bg="blue.50"
-                    borderRadius="md"
-                    borderLeft="4px solid"
-                    borderLeftColor="blue.400"
-                  >
-                    <Text>{analysis.responseStrategy.primaryArgument}</Text>
-                  </Box>
-                </Box>
-
-                {/* Amendment Suggestions */}
-                {analysis.responseStrategy.amendmentSuggestions.length > 0 && (
-                  <Box>
-                    <Heading size="sm" mb={2}>
-                      Recommended Amendments
-                    </Heading>
-                    <List spacing={2}>
-                      {analysis.responseStrategy.amendmentSuggestions.map(
-                        (amendment, i) => (
-                          <ListItem key={i} fontSize="sm">
-                            <HStack align="start">
-                              <ListIcon
-                                as={FiCheckCircle}
-                                color="green.500"
-                                mt={0.5}
-                              />
-                              <Text>{amendment}</Text>
-                            </HStack>
-                          </ListItem>
-                        )
-                      )}
-                    </List>
-                  </Box>
-                )}
-
-                {/* Key Distinctions */}
-                {analysis.responseStrategy.distinctionPoints.length > 0 && (
-                  <Box>
-                    <Heading size="sm" mb={2}>
-                      Key Distinctions
-                    </Heading>
-                    <List spacing={2}>
-                      {analysis.responseStrategy.distinctionPoints.map(
-                        (point, i) => (
-                          <ListItem key={i} fontSize="sm">
-                            <HStack align="start">
-                              <ListIcon as={FiInfo} color="blue.500" mt={0.5} />
-                              <Text>{point}</Text>
-                            </HStack>
-                          </ListItem>
-                        )
-                      )}
-                    </List>
-                  </Box>
-                )}
-              </VStack>
-            </CardBody>
-          </Collapse>
         </Card>
 
         {/* Element-by-Element Comparison */}
         <Card>
           <CardHeader>
-            <HStack justify="space-between">
-              <HStack>
-                <FiEye size="20px" />
-                <Heading size="md">Element-by-Element Analysis</Heading>
-              </HStack>
-              <IconButton
-                aria-label="Toggle elements"
-                icon={isElementsOpen ? <FiChevronUp /> : <FiChevronDown />}
-                size="sm"
-                variant="ghost"
-                onClick={onElementsToggle}
-              />
-            </HStack>
-          </CardHeader>
-          <Collapse in={isElementsOpen}>
-            <CardBody>
-              <Accordion allowMultiple>
-                {analysis.elementComparisons.map((comparison, index) => (
-                  <AccordionItem key={index}>
-                    <h2>
-                      <AccordionButton>
-                        <Box flex="1" textAlign="left">
-                          <Text fontWeight="semibold" fontSize="sm">
+            <Collapsible open={isElementsOpen} onOpenChange={setIsElementsOpen}>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <Eye className="h-5 w-5" />
+                  <CardTitle className="text-lg">
+                    Element-by-Element Analysis
+                  </CardTitle>
+                </div>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    {isElementsOpen ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+              </div>
+              <CollapsibleContent>
+                <CardContent className="pt-4">
+                  <Accordion type="multiple">
+                    {analysis.elementComparisons.map((comparison, index) => (
+                      <AccordionItem key={index} value={`item-${index}`}>
+                        <AccordionTrigger className="text-left">
+                          <span className="font-semibold text-sm">
                             {comparison.element}
-                          </Text>
-                        </Box>
-                        <AccordionIcon />
-                      </AccordionButton>
-                    </h2>
-                    <AccordionPanel pb={4}>
-                      <VStack spacing={3} align="stretch">
-                        {/* Examiner View */}
-                        <Box>
-                          <Text
-                            fontSize="xs"
-                            fontWeight="semibold"
-                            color="gray.600"
-                            mb={1}
-                          >
-                            Examiner's Assessment:
-                          </Text>
-                          <Text fontSize="sm">{comparison.examinerView}</Text>
-                        </Box>
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent className="pb-4">
+                          <div className="flex flex-col space-y-3">
+                            {/* Examiner View */}
+                            <div>
+                              <p className="text-xs font-semibold text-muted-foreground mb-1">
+                                Examiner's Assessment:
+                              </p>
+                              <p className="text-sm">
+                                {comparison.examinerView}
+                              </p>
+                            </div>
 
-                        {/* Top Citations */}
-                        {comparison.topCitations.length > 0 && (
-                          <Box>
-                            <Text
-                              fontSize="xs"
-                              fontWeight="semibold"
-                              color="gray.600"
-                              mb={2}
-                            >
-                              Supporting Citations:
-                            </Text>
-                            <VStack spacing={2} align="stretch">
-                              {comparison.topCitations.map((citation, i) => (
-                                <Box
-                                  key={i}
-                                  p={3}
-                                  bg="gray.50"
-                                  borderRadius="md"
-                                  fontSize="sm"
-                                >
-                                  <HStack justify="space-between" mb={1}>
-                                    <Badge colorScheme="purple" fontSize="xs">
-                                      {citation.location}
-                                    </Badge>
-                                    <Badge colorScheme="green" fontSize="xs">
-                                      {citation.relevance.toFixed(1)}% Match
-                                    </Badge>
-                                  </HStack>
-                                  <Text fontSize="xs" fontStyle="italic">
-                                    "{citation.text}"
-                                  </Text>
-                                </Box>
-                              ))}
-                            </VStack>
-                          </Box>
-                        )}
-                      </VStack>
-                    </AccordionPanel>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </CardBody>
-          </Collapse>
+                            {/* Top Citations */}
+                            {comparison.topCitations.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground mb-2">
+                                  Supporting Citations:
+                                </p>
+                                <div className="flex flex-col space-y-2">
+                                  {comparison.topCitations.map(
+                                    (citation, i) => (
+                                      <div
+                                        key={i}
+                                        className="p-4 bg-muted/50 rounded-md text-sm"
+                                      >
+                                        <div className="flex justify-between items-center mb-1">
+                                          <Badge
+                                            variant="outline"
+                                            className="bg-purple-50 text-purple-700 border-purple-200 text-xs"
+                                          >
+                                            {citation.location}
+                                          </Badge>
+                                          <Badge
+                                            variant="outline"
+                                            className="bg-green-50 text-green-700 border-green-200 text-xs"
+                                          >
+                                            {citation.relevance.toFixed(1)}%
+                                            Match
+                                          </Badge>
+                                        </div>
+                                        <p className="text-xs italic">
+                                          "{citation.text}"
+                                        </p>
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </CardContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </CardHeader>
         </Card>
-      </VStack>
-    </Box>
+      </div>
+    </div>
   );
 };

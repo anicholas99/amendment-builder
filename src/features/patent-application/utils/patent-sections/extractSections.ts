@@ -1,6 +1,15 @@
 import { STANDARD_SECTION_ORDER, SECTION_PATTERNS } from './constants';
-import { getStandardSectionName, shouldAutoCreateSection, PATENT_SECTION_CONFIG } from './sectionConfig';
-import { logger } from '@/lib/monitoring/logger';
+import {
+  getStandardSectionName,
+  shouldAutoCreateSection,
+  PATENT_SECTION_CONFIG,
+} from './sectionConfig';
+import { logger } from '@/utils/clientLogger';
+
+// Add import for TipTap Editor
+import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import type { Node } from '@tiptap/pm/model';
 
 /**
  * Extract individual sections from complete patent content
@@ -13,11 +22,21 @@ export const extractSections = (content: string): { [key: string]: string } => {
     return {};
   }
 
-  // First try HTML-aware extraction if content contains HTML
+  // First try Editor-based extraction if content contains HTML
   if (content.includes('<h1') || content.includes('<h2')) {
+    const editorSections = extractSectionsUsingEditor(content);
+    if (Object.keys(editorSections).length > 0) {
+      logger.info('Successfully extracted sections using Editor', {
+        sectionCount: Object.keys(editorSections).length,
+        sectionKeys: Object.keys(editorSections),
+      });
+      return editorSections;
+    }
+
+    // Fall back to DOM-based extraction
     const htmlSections = extractSectionsFromHTML(content);
     if (Object.keys(htmlSections).length > 0) {
-      logger.log('Successfully extracted sections from HTML', {
+      logger.info('Successfully extracted sections from HTML', {
         sectionCount: Object.keys(htmlSections).length,
         sectionKeys: Object.keys(htmlSections),
       });
@@ -85,7 +104,7 @@ export const extractSections = (content: string): { [key: string]: string } => {
         if (sectionContent) {
           sections[name] = sectionContent;
           processedSectionNames.add(name.toUpperCase());
-          logger.log(
+          logger.info(
             `Extracted section via Regex: ${name} (${sectionContent.length} chars)`
           );
         }
@@ -102,11 +121,114 @@ export const extractSections = (content: string): { [key: string]: string } => {
     extractSectionsLineByLine(cleanContent, sections, processedSectionNames);
   }
 
-  logger.log('Final Extracted sections:', {
+  logger.info('Final Extracted sections:', {
     sectionKeys: Object.keys(sections),
   });
   return sections;
 };
+
+/**
+ * Extract sections using TipTap Editor for reliable parsing
+ * This avoids regex failures on complex content
+ */
+export function extractSectionsUsingEditor(htmlContent: string): {
+  [key: string]: string;
+} {
+  const sections: { [key: string]: string } = {};
+
+  // Only use in browser environment
+  if (typeof window === 'undefined') {
+    logger.warn(
+      '[extractSectionsUsingEditor] Not in browser environment, falling back'
+    );
+    return extractSectionsFromHTML(htmlContent);
+  }
+
+  try {
+    // Create a headless editor instance
+    const editor = new Editor({
+      content: htmlContent,
+      extensions: [StarterKit],
+      editable: false,
+    });
+
+    let currentSection = '';
+    let currentContent: string[] = [];
+
+    // Traverse the document
+    editor.state.doc.descendants((node: Node, pos: number) => {
+      if (node.type.name === 'heading') {
+        // Save previous section if exists
+        if (currentSection) {
+          const normalizedTitle = getStandardSectionName(currentSection);
+          if (normalizedTitle) {
+            sections[normalizedTitle] = currentContent.join('\n').trim();
+          }
+        }
+
+        // Check heading level to determine if it's a title (h1) or section header (h2)
+        const headingLevel = node.attrs.level;
+        const headingText = node.textContent || '';
+
+        if (headingLevel === 1) {
+          // This is the title - save the content directly
+          sections['Title'] = headingText;
+          logger.info('[extractSectionsUsingEditor] Found title in h1', {
+            title: headingText,
+            headingLevel,
+            nodeType: node.type.name,
+          });
+          currentSection = '';
+          currentContent = [];
+        } else {
+          // This is a section header (h2, h3, etc.)
+          currentSection = headingText;
+          currentContent = [];
+          logger.debug('[extractSectionsUsingEditor] Found section header', {
+            section: headingText,
+            headingLevel,
+            nodeType: node.type.name,
+          });
+        }
+      } else if (currentSection) {
+        // Skip section spacers
+        if (node.type.name === 'paragraph' && node.textContent) {
+          currentContent.push(node.textContent);
+        }
+      }
+
+      return true; // Continue traversing
+    });
+
+    // Don't forget the last section
+    if (currentSection) {
+      const normalizedTitle = getStandardSectionName(currentSection);
+      if (normalizedTitle) {
+        sections[normalizedTitle] = currentContent.join('\n').trim();
+      }
+    }
+
+    // Clean up
+    editor.destroy();
+
+    logger.info(
+      '[extractSectionsUsingEditor] Successfully extracted sections',
+      {
+        sectionCount: Object.keys(sections).length,
+        sectionKeys: Object.keys(sections),
+        titleContent: sections['Title'] || 'NO TITLE FOUND',
+        titleLength: sections['Title']?.length || 0,
+      }
+    );
+
+    return sections;
+  } catch (error) {
+    logger.error('[extractSectionsUsingEditor] Failed to parse with Editor', {
+      error,
+    });
+    return extractSectionsFromHTML(htmlContent);
+  }
+}
 
 function extractTitle(
   content: string,
@@ -135,7 +257,7 @@ function extractTitle(
   if (potentialTitle && !processedSectionNames.has('TITLE')) {
     sections['Title'] = potentialTitle;
     processedSectionNames.add('TITLE');
-    logger.log(`Extracted Title: ${potentialTitle}`);
+    logger.info(`Extracted Title: ${potentialTitle}`);
   }
 }
 
@@ -144,7 +266,7 @@ function extractSectionsLineByLine(
   sections: { [key: string]: string },
   processedSectionNames: Set<string>
 ) {
-  logger.log('[Fallback] Using line-by-line section extraction.');
+  logger.info('[Fallback] Using line-by-line section extraction.');
 
   const lines = content.split('\n');
   let currentSection = '';
@@ -200,7 +322,7 @@ function extractSectionsLineByLine(
       ) {
         sections[currentSection] = currentContent.join('\n').trim();
         processedSectionNames.add(currentSection.toUpperCase());
-        logger.log(`[Fallback] Extracted: ${currentSection}`);
+        logger.info(`[Fallback] Extracted: ${currentSection}`);
       }
 
       // Start new section, only if not already processed
@@ -208,7 +330,7 @@ function extractSectionsLineByLine(
       if (!processedSectionNames.has(normalizedName.toUpperCase())) {
         currentSection = normalizedName;
         currentContent = [];
-        logger.log(
+        logger.info(
           `[Fallback] Found header: ${line} -> Section: ${currentSection}`
         );
         // Skip potential blank line after header
@@ -217,7 +339,7 @@ function extractSectionsLineByLine(
         }
       } else {
         // Section already processed, treat subsequent lines as content of *previous* section (if any)
-        logger.log(`[Fallback] Skipping already processed header: ${line}`);
+        logger.info(`[Fallback] Skipping already processed header: ${line}`);
         // Add line to previous section's content if a section was active
         if (currentSection) {
           currentContent.push(lines[i]); // Add the header line itself as content if skipping
@@ -238,7 +360,7 @@ function extractSectionsLineByLine(
   ) {
     sections[currentSection] = currentContent.join('\n').trim();
     processedSectionNames.add(currentSection.toUpperCase());
-    logger.log(`[Fallback] Extracted final section: ${currentSection}`);
+    logger.info(`[Fallback] Extracted final section: ${currentSection}`);
   }
 }
 
@@ -258,7 +380,7 @@ function extractSectionsFromHTML(htmlContent: string): {
     const titleText = titleMatch[1].replace(/<[^>]*>/g, '').trim();
     if (titleText) {
       sections['Title'] = titleText;
-      logger.log(`Extracted Title from HTML: ${titleText}`);
+      logger.info(`Extracted Title from HTML: ${titleText}`);
     }
   }
 
@@ -280,7 +402,7 @@ function extractSectionsFromHTML(htmlContent: string): {
       // Normalize section name to match standard names
       const normalizedTitle = normalizeSectionTitle(sectionTitle);
       sections[normalizedTitle] = sectionContent;
-      logger.log(
+      logger.info(
         `Extracted section from HTML: ${normalizedTitle} (${sectionContent.length} chars)`
       );
     }
@@ -295,18 +417,20 @@ function extractSectionsFromHTML(htmlContent: string): {
 function normalizeSectionTitle(title: string): string {
   // Use the configuration-based normalization
   const standardName = getStandardSectionName(title);
-  
+
   if (standardName) {
     // Only return the standard name if auto-creation is allowed
     // This prevents unexpected sections from appearing
     if (shouldAutoCreateSection(title)) {
       return standardName;
     }
-    
+
     // Log when we skip auto-creating a section
-    logger.debug(`[extractSections] Skipping auto-creation of section: ${title} -> ${standardName}`);
+    logger.debug(
+      `[extractSections] Skipping auto-creation of section: ${title} -> ${standardName}`
+    );
   }
-  
+
   // Return original if no match found or auto-creation not allowed
   return title;
 }

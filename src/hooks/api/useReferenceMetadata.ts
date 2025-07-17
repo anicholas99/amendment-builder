@@ -8,7 +8,7 @@ import {
   CitationApiService,
   ReferenceMetadata,
 } from '@/client/services/citation.client-service';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { ApplicationError } from '@/lib/error';
 import { STALE_TIME } from '@/constants/time';
 

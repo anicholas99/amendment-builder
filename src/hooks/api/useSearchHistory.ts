@@ -4,7 +4,7 @@
  * search history data via React Query.
  */
 import { useApiQuery, useApiMutation } from '@/lib/api/queryClient';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { ProcessedSearchHistoryEntry } from '@/types/search';
 import { SearchHistoryApiService } from '@/client/services/search-history.client-service';
@@ -17,7 +17,7 @@ import { getCurrentTenant } from '@/lib/queryKeys/tenant';
 /**
  * Hook to fetch search history for a project
  */
-export function useSearchHistory(projectId: string | null) {
+export function useSearchHistory(projectId: string | undefined | null) {
   const apiUrl = projectId ? API_ROUTES.PROJECTS.SEARCH_HISTORY(projectId) : '';
 
   const result = useApiQuery<
@@ -25,95 +25,52 @@ export function useSearchHistory(projectId: string | null) {
     ProcessedSearchHistoryEntry[]
   >([...searchHistoryKeys.all(projectId || '')], {
     url: apiUrl,
-    params: { limit: 100 },
+    params: {
+      limit: 100,
+    },
     enabled: !!projectId,
     refetchOnWindowFocus: true,
     refetchOnMount: true,
-    // Dynamically poll every 5 s while any entry is still being processed (no results yet)
+    // Poll while any search is processing
     refetchInterval: query => {
       if (!projectId) return false;
-      const raw = (query as any).state?.data as
+      const data = (query as any).state?.data as
         | ProcessedSearchHistoryEntry[]
         | undefined;
-      if (!raw || !Array.isArray(raw)) return false;
-      const hasInProgress = raw.some(entry => {
-        // Primary check: explicit processing status
-        if (entry.citationExtractionStatus === 'processing') {
-          return true;
-        }
-        // Secondary check: no results and not completed/failed
-        return (
-          (!entry.results || entry.resultCount === 0) &&
-          entry.citationExtractionStatus !== 'failed' &&
-          entry.citationExtractionStatus !== 'completed'
-        );
+      if (!data || !Array.isArray(data)) return false;
+
+      // Check if any search is currently processing
+      const hasInProgress = data.some(entry => {
+        return entry.citationExtractionStatus === 'processing';
       });
-      return hasInProgress ? 3000 : false; // Reduced to 3-second polling for faster updates
+
+      // Poll every 1 second while processing, otherwise no polling
+      return hasInProgress ? 1000 : false;
     },
-    // Dynamic stale time: short when polling, normal otherwise
-    staleTime: query => {
-      if (!projectId) return STALE_TIME.ONE_MINUTE;
-      const raw = (query as any).state?.data as
-        | ProcessedSearchHistoryEntry[]
-        | undefined;
-      if (!raw || !Array.isArray(raw)) return STALE_TIME.ONE_MINUTE;
-      const hasInProgress = raw.some(entry => {
-        // Primary check: explicit processing status
-        if (entry.citationExtractionStatus === 'processing') {
-          return true;
-        }
-        // Secondary check: no results and not completed/failed
-        return (
-          (!entry.results || entry.resultCount === 0) &&
-          entry.citationExtractionStatus !== 'failed' &&
-          entry.citationExtractionStatus !== 'completed'
-        );
-      });
-      // Use 1 second stale time when searches are in progress for immediate updates
-      return hasInProgress ? 1000 : STALE_TIME.ONE_MINUTE;
-    },
-    select: (
-      data: ProcessedSearchHistoryEntry[] | undefined
-    ): ProcessedSearchHistoryEntry[] => {
+    // Force refetch on reconnect
+    refetchOnReconnect: true,
+    select: (data: ProcessedSearchHistoryEntry[] | undefined) => {
       if (!data || !Array.isArray(data)) {
-        logger.debug('[useSearchHistory] No data or invalid data format', {
-          projectId,
+        logger.warn('[useSearchHistory] Received invalid data', {
           dataType: typeof data,
           isArray: Array.isArray(data),
         });
         return [];
       }
 
-      // The data is already processed by the backend, so just ensure proper types
-      return data.map(entry => {
-        // If the entry already has the correct structure, use it directly
-        const processedEntry: ProcessedSearchHistoryEntry = {
-          ...entry,
-          // Ensure timestamp is a Date object
-          timestamp:
-            typeof entry.timestamp === 'string'
-              ? new Date(entry.timestamp)
-              : entry.timestamp,
-          // Use existing fields from the processed entry
-          parsedElements: entry.parsedElements || [],
-          searchData: entry.searchData || {
-            numberOfResults: entry.resultCount || 0,
-            searchEngineUsed: 'Google',
-          },
-          // Ensure results is an array
-          results: entry.results || [],
-          resultCount: entry.resultCount || 0,
-          priorArtReferences: Array.isArray(entry.results) ? entry.results : [],
-          projectId: entry.projectId || '',
-          userId: entry.userId || null,
-          citationJobId: entry.citationJobId || null,
-          citationExtractionStatus: entry.citationExtractionStatus || undefined,
-          hasCitationJobs: entry.hasCitationJobs || false,
-          citationJobCount: entry.citationJobCount || 0,
-        };
-
-        return processedEntry;
+      // Simple pass-through with basic logging
+      logger.debug('[useSearchHistory] Data updated', {
+        projectId,
+        count: data.length,
+        firstEntry: data[0]
+          ? {
+              id: data[0].id,
+              status: data[0].citationExtractionStatus,
+            }
+          : null,
       });
+
+      return data;
     },
   });
 

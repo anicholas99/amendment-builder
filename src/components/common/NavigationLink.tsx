@@ -4,11 +4,12 @@
  */
 import React, { useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { Link, LinkProps } from '@chakra-ui/react';
 import { usePrefetchViewData } from '@/hooks/navigation/usePrefetchViewData';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
+import Link from 'next/link';
 
-export interface NavigationLinkProps extends LinkProps {
+export interface NavigationLinkProps
+  extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
   href: string;
   viewType?: 'technology' | 'claim-refinement' | 'patent';
   projectId?: string;
@@ -21,6 +22,7 @@ export const NavigationLink: React.FC<NavigationLinkProps> = ({
   projectId,
   children,
   onMouseEnter,
+  className,
   ...props
 }) => {
   const router = useRouter();
@@ -79,13 +81,15 @@ export const NavigationLink: React.FC<NavigationLinkProps> = ({
   );
 
   return (
-    <Link
-      href={href}
-      onClick={handleClick}
-      onMouseEnter={handleMouseEnter}
-      {...props}
-    >
-      {children}
+    <Link href={href} passHref legacyBehavior>
+      <a
+        onClick={handleClick}
+        onMouseEnter={handleMouseEnter}
+        className={`text-blue-600 hover:text-blue-800 hover:underline ${className || ''}`}
+        {...props}
+      >
+        {children}
+      </a>
     </Link>
   );
 };

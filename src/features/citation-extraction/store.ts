@@ -16,6 +16,7 @@ interface CitationStore {
   clearSpecificOptimisticRefs: (searchId: string, references: string[]) => void;
   getOptimisticRefsForSearch: (searchId: string) => Record<string, boolean>;
   clearStaleOptimisticRefs: (searchId: string, maxAgeMs: number) => void;
+  clearAllState: () => void;
 }
 
 export const useCitationStore = create<CitationStore>((set, get) => ({
@@ -99,5 +100,11 @@ export const useCitationStore = create<CitationStore>((set, get) => ({
       }
 
       return { optimisticRefs: newOptimisticRefs };
+    }),
+  clearAllState: () =>
+    set({
+      activeSearchId: null,
+      selectedReference: null,
+      optimisticRefs: {},
     }),
 }));

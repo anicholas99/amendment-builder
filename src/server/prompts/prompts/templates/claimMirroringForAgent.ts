@@ -52,4 +52,4 @@ Existing claims for reference:
 
 Generate diverse claims that cover different aspects of the invention.`,
   variables: ['count', 'maxClaimNumber', 'startNumber', 'existingClaims'],
-}; 
+};

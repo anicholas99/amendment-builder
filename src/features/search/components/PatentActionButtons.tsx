@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { Flex } from '@chakra-ui/react';
-import {
-  IconButton,
-  Tooltip,
-  useToast,
-  useColorModeValue,
-} from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
+import { cn } from '@/lib/utils';
 import { FiExternalLink, FiBookmark, FiX, FiList } from 'react-icons/fi';
-import { useApiMutation } from '@/lib/api/queryClient';
-import { useQueryClient } from '@tanstack/react-query';
-import { Icon } from '@chakra-ui/react';
+import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { useThemeContext } from '@/contexts/ThemeContext';
+import { useToast } from '@/utils/toast';
+import { useAddPatentExclusion } from '@/hooks/api/usePatentExclusions';
 
 interface PatentActionButtonsProps {
   patentNumber: string;
@@ -31,38 +31,12 @@ const PatentActionButtons: React.FC<PatentActionButtonsProps> = ({
   onExtractCitations,
 }) => {
   const [isActuallySaved, setIsActuallySaved] = useState(isSaved);
+  const { isDarkMode } = useThemeContext();
   const toast = useToast();
-  const queryClient = useQueryClient();
 
-  // Add color mode value for unsaved bookmark
-  const unsavedBookmarkColor = useColorModeValue('gray.600', 'text.secondary');
-
-  // React Query mutation for excluding patents
-  const excludePatentMutation = useApiMutation<
-    { success: boolean },
-    { patentNumbers: string[] }
-  >({
-    url: `/api/projects/${projectId}/exclusions`,
-    method: 'POST',
-    onSuccess: () => {
-      toast({
-        title: 'Patent excluded',
-        description: `${patentNumber} will be excluded from future searches.`,
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-
-      // Invalidate related queries instead of page refresh
-      queryClient.invalidateQueries({
-        queryKey: ['projectExclusions', projectId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['projectExclusionsList', projectId],
-      });
-      queryClient.invalidateQueries({ queryKey: ['searchHistory'] });
-    },
-  });
+  // Use the centralized hook for excluding patents
+  const { mutateAsync: excludePatentMutation, isPending: isExcluding } =
+    useAddPatentExclusion();
 
   // Update internal state when prop changes
   useEffect(() => {
@@ -102,97 +76,138 @@ const PatentActionButtons: React.FC<PatentActionButtonsProps> = ({
   const handleExclude = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    logger.log('Exclude button clicked for patent:', { patentNumber });
-    logger.log('Project ID:', { projectId });
+    logger.info('Exclude button clicked for patent:', { patentNumber });
+    logger.info('Project ID:', { projectId });
 
     if (!projectId) {
-      toast({
-        title: 'Cannot exclude patent',
+      toast.error('Cannot exclude patent', {
         description: 'No project context available for exclusion.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
       });
       return;
     }
 
-    excludePatentMutation.mutate({ patentNumbers: [patentNumber] });
+    try {
+      await excludePatentMutation({
+        projectId,
+        patentNumbers: [patentNumber],
+        metadata: { source: 'PatentActionButtons' },
+      });
+
+      logger.info('Patent excluded successfully:', { patentNumber });
+    } catch (error) {
+      logger.error('Error excluding patent:', { error, patentNumber });
+      // Error handling is done in the hook
+    }
   };
 
   return (
-    <Flex direction="row" gap={1}>
+    <div className="flex flex-row gap-1">
       {/* View in Google Patents */}
-      <Tooltip label="View in Google Patents">
-        <IconButton
-          aria-label="View in Google Patents"
-          icon={<Icon as={FiExternalLink} color="text.secondary" />}
-          size="sm"
-          variant="ghost"
-          onClick={handleViewPatent}
-          _hover={{
-            color: 'text.primary',
-            bg: 'bg.hover',
-          }}
-        />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              'h-8 w-8 p-0',
+              isDarkMode
+                ? 'text-gray-400 hover:text-gray-100 hover:bg-gray-700'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            )}
+            onClick={handleViewPatent}
+          >
+            <FiExternalLink className="h-4 w-4" />
+            <span className="sr-only">View in Google Patents</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>View in Google Patents</p>
+        </TooltipContent>
       </Tooltip>
 
       {/* Save to Prior Art (if save handler provided) */}
       {onSave && (
-        <Tooltip
-          label={isActuallySaved ? 'Already saved' : 'Save to Prior Art'}
-        >
-          <IconButton
-            aria-label={isActuallySaved ? 'Already saved' : 'Save to Prior Art'}
-            icon={<Icon as={FiBookmark} />}
-            size="sm"
-            variant="ghost"
-            color={isActuallySaved ? 'green.500' : unsavedBookmarkColor}
-            isDisabled={isActuallySaved}
-            onClick={handleSave}
-            _hover={{
-              color: isActuallySaved ? 'green.600' : 'text.primary',
-              bg: isActuallySaved ? 'green.50' : 'bg.hover',
-            }}
-          />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isActuallySaved}
+              className={cn(
+                'h-8 w-8 p-0',
+                isActuallySaved
+                  ? isDarkMode
+                    ? 'text-green-400 hover:text-green-300 hover:bg-green-900/20'
+                    : 'text-green-500 hover:text-green-600 hover:bg-green-50'
+                  : isDarkMode
+                    ? 'text-gray-400 hover:text-gray-100 hover:bg-gray-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              )}
+              onClick={handleSave}
+            >
+              <FiBookmark className="h-4 w-4" />
+              <span className="sr-only">
+                {isActuallySaved ? 'Already saved' : 'Save to Prior Art'}
+              </span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{isActuallySaved ? 'Already saved' : 'Save to Prior Art'}</p>
+          </TooltipContent>
         </Tooltip>
       )}
 
       {/* Extract Citations button */}
       {onExtractCitations && (
-        <Tooltip label="Extract Citations">
-          <IconButton
-            aria-label="Extract Citations"
-            icon={<Icon as={FiList} color="text.secondary" />}
-            size="sm"
-            variant="ghost"
-            onClick={handleExtractCitations}
-            _hover={{
-              color: 'text.primary',
-              bg: 'bg.hover',
-            }}
-          />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'h-8 w-8 p-0',
+                isDarkMode
+                  ? 'text-gray-400 hover:text-gray-100 hover:bg-gray-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              )}
+              onClick={handleExtractCitations}
+            >
+              <FiList className="h-4 w-4" />
+              <span className="sr-only">Extract Citations</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Extract Citations</p>
+          </TooltipContent>
         </Tooltip>
       )}
 
       {/* Exclude patent button */}
       {projectId && (
-        <Tooltip label="Exclude from future searches">
-          <IconButton
-            aria-label="Exclude Patent"
-            icon={<Icon as={FiX} color="red.500" />}
-            size="sm"
-            variant="ghost"
-            colorScheme="red"
-            onClick={handleExclude}
-            isLoading={excludePatentMutation.isPending}
-            _hover={{
-              color: 'red.600',
-              bg: 'red.50',
-            }}
-          />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isExcluding}
+              className={cn(
+                'h-8 w-8 p-0',
+                isDarkMode
+                  ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20'
+                  : 'text-red-500 hover:text-red-600 hover:bg-red-50'
+              )}
+              onClick={handleExclude}
+            >
+              <FiX className="h-4 w-4" />
+              <span className="sr-only">Exclude Patent</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Exclude from future searches</p>
+          </TooltipContent>
         </Tooltip>
       )}
-    </Flex>
+    </div>
   );
 };
 

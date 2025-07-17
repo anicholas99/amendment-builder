@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { ProcessedCitationMatch } from '@/types/domain/citation';
 
 interface UseDefensiveReferenceSelectionProps {

@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { Box, Text } from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 // Process node is a rectangular box with text inside
 const ProcessNode: React.FC<NodeProps> = ({ data, selected }) => {
+  const { isDarkMode } = useThemeContext();
   const [isEditing, setIsEditing] = useState(false);
   const [label, setLabel] = useState(data.label || 'Process Step');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,18 +49,13 @@ const ProcessNode: React.FC<NodeProps> = ({ data, selected }) => {
       <Handle type="target" position={Position.Top} className="flow-handle" />
 
       {/* Node body */}
-      <Box
-        width="200px"
-        minHeight="60px"
-        padding="10px"
-        borderRadius="4px"
-        border="1px solid black"
-        backgroundColor="white"
-        boxShadow={selected ? '0 0 0 2px #1a192b' : 'none'}
-        display="flex"
-        flexDirection="column"
-        justifyContent="center"
-        alignItems="center"
+      <div
+        className={cn(
+          'w-[200px] min-h-[60px] p-2.5 rounded border border-black',
+          'flex flex-col justify-center items-center',
+          isDarkMode ? 'bg-gray-800' : 'bg-white',
+          selected && 'shadow-[0_0_0_2px_#1a192b]'
+        )}
         onDoubleClick={handleDoubleClick}
       >
         {isEditing ? (
@@ -74,11 +71,11 @@ const ProcessNode: React.FC<NodeProps> = ({ data, selected }) => {
             className="input-reset"
           />
         ) : (
-          <Text textAlign="center" fontWeight="normal" fontSize="14px">
+          <span className="text-center font-normal text-sm">
             {displayLabel}
-          </Text>
+          </span>
         )}
-      </Box>
+      </div>
 
       {/* Output target handle */}
       <Handle

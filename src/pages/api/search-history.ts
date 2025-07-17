@@ -4,7 +4,7 @@
  * This API handles saving and retrieving search history.
  */
 import { NextApiResponse } from 'next';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { NormalizedSearchResult } from '@/types/domain/searchHistory';
 import { normalizeSearchResults } from '@/features/search/utils/searchHistory';
@@ -17,10 +17,11 @@ import {
 } from '@/repositories/search';
 import { CustomApiRequest } from '@/types/api';
 import { z } from 'zod';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
 import { resolveTenantIdFromProject } from '@/repositories/tenantRepository';
+import { apiResponse } from '@/utils/api/responses';
 
 const apiLogger = createApiLogger('search-history');
 
@@ -45,10 +46,20 @@ const searchResultSchema = z
   })
   .passthrough();
 
-// Define Zod schema for request body validation
-const bodySchema = z.object({
+// Query schemas for GET and DELETE
+const getQuerySchema = z.object({
+  projectId: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(100).optional(),
+});
+
+const deleteQuerySchema = z.object({
   projectId: z.string().min(1, 'Project ID is required'),
-  query: z.string().min(1, 'Query is required'),
+});
+
+// Body schema for POST
+const postBodySchema = z.object({
+  projectId: z.string().min(1, 'Project ID is required'),
+  query: z.string().min(1, 'Query is required').max(1000, 'Query too long'),
   results: z
     .union([
       z.string(), // Can be JSON string
@@ -58,28 +69,10 @@ const bodySchema = z.object({
     .optional(),
 });
 
-// Define type for search data structure
-interface SearchDataStructure {
-  results?: unknown[];
-  [key: string]: unknown;
-}
-
-// Schemas
-const getQuerySchema = z.object({
-  projectId: z.string().optional(),
-  limit: z.coerce.number().int().positive().optional(),
-});
-const deleteQuerySchema = z.object({
-  projectId: z.string().min(1, 'Project ID is required'),
-});
-
-type GetRequest = AuthenticatedRequest & {
-  validatedQuery: z.infer<typeof getQuerySchema>;
-};
-type PostRequest = CustomApiRequest<z.infer<typeof bodySchema>>;
-type DeleteRequest = AuthenticatedRequest & {
-  validatedQuery: z.infer<typeof deleteQuerySchema>;
-};
+// Type definitions
+type GetQuery = z.infer<typeof getQuerySchema>;
+type DeleteQuery = z.infer<typeof deleteQuerySchema>;
+type PostBody = z.infer<typeof postBodySchema>;
 
 // Custom tenant resolver that handles both GET (query) and POST (body) cases
 const searchHistoryTenantResolver = async (
@@ -106,150 +99,126 @@ const searchHistoryTenantResolver = async (
   return resolveTenantIdFromProject(projectId);
 };
 
-// GET handler
-async function getHandler(req: GetRequest, res: NextApiResponse) {
-  const { projectId, limit } = req.validatedQuery;
-  const { tenantId } = req.user!;
-
-  if (!tenantId) {
-    throw new ApplicationError(
-      ErrorCode.AUTH_UNAUTHORIZED,
-      'User tenant not found'
-    );
-  }
-
-  // SECURITY: Tenant guard has already verified project access if projectId is provided
-  // If no projectId, we show all search history for the user's tenant
-  const queryOptions: SearchHistoryQueryOptions = {
-    orderBy: { timestamp: 'desc' },
-    where: {
-      ...(projectId && { projectId }),
-      // Filter by tenant through project relationship
-      project: {
-        tenantId: tenantId,
-      },
-    },
-    ...(limit && { take: limit }),
-  };
-
-  const searchHistory = await findManySearchHistory(queryOptions as any);
-
-  // Return the search history entries without claimSetVersion enhancement
-  res.status(200).json(searchHistory);
-}
-
-// POST handler
-async function postHandler(req: PostRequest, res: NextApiResponse) {
-  const { projectId, query, results } = req.body;
-  const { tenantId, id: userId } = req.user!;
-
-  if (!tenantId) {
-    throw new ApplicationError(
-      ErrorCode.AUTH_UNAUTHORIZED,
-      'User tenant not found'
-    );
-  }
-
-  // SECURITY: Tenant guard has already verified that the project belongs to the user's tenant
-
-  // Normalize results to ensure it's an array of NormalizedSearchResult
-  let normalizedResults: NormalizedSearchResult[] | undefined;
-
-  if (results) {
-    let rawResults: any[] = [];
-
-    if (typeof results === 'string') {
-      // Try to parse JSON string
-      const parsed = safeJsonParse(results);
-      if (Array.isArray(parsed)) {
-        rawResults = parsed;
-      } else if (
-        parsed &&
-        typeof parsed === 'object' &&
-        'results' in parsed &&
-        Array.isArray(parsed.results)
-      ) {
-        rawResults = parsed.results;
-      }
-    } else if (Array.isArray(results)) {
-      rawResults = results;
-    } else if (
-      typeof results === 'object' &&
-      'results' in results &&
-      Array.isArray(results.results)
-    ) {
-      rawResults = results.results;
-    }
-
-    // Use the centralized normalization function
-    normalizedResults = normalizeSearchResults(rawResults);
-  }
-
-  const searchHistoryEntry = await createSearchHistory({
-    projectId,
-    userId,
-    query,
-    results: normalizedResults,
-    timestamp: new Date(),
-    citationExtractionStatus: 'pending',
-  });
-  res.status(201).json(searchHistoryEntry);
-}
-
-// DELETE handler
-async function deleteHandler(req: DeleteRequest, res: NextApiResponse) {
-  if (req.user?.role !== 'ADMIN') {
-    throw new ApplicationError(
-      ErrorCode.AUTH_INSUFFICIENT_PERMISSIONS,
-      'Admin access required'
-    );
-  }
-  const { projectId } = req.validatedQuery;
-
-  // SECURITY: Tenant guard has already verified that the project belongs to the admin's tenant
-  // Admins can only delete search history within their own tenant
-
-  const searchHistoryIds = await findSearchHistoryIdsByProjectId(projectId);
-  if (searchHistoryIds.length > 0) {
-    await deletePatentabilityScoresBySearchHistoryIds(searchHistoryIds);
-  }
-  const result = await deleteSearchHistoryByProjectId(projectId);
-  res.status(200).json({
-    message: `Deleted ${result.count} search history records`,
-    deleted: result.count,
-  });
-}
-
 // Main handler that routes based on method
-async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+async function handler(
+  req: AuthenticatedRequest & {
+    body: PostBody;
+    validatedQuery?: GetQuery | DeleteQuery;
+  },
+  res: NextApiResponse
+) {
   const { method } = req;
 
   // Validate HTTP method
   if (!['GET', 'POST', 'DELETE'].includes(method || '')) {
-    res.setHeader('Allow', ['GET', 'POST', 'DELETE']);
-    return res.status(405).json({
-      error: 'Method not allowed',
-      message: `Only GET, POST, DELETE requests are accepted.`,
-    });
+    return apiResponse.methodNotAllowed(res, ['GET', 'POST', 'DELETE']);
   }
 
-  // Apply method-specific validation
+  const { tenantId } = req.user!;
+  if (!tenantId) {
+    throw new ApplicationError(
+      ErrorCode.AUTH_UNAUTHORIZED,
+      'User tenant not found'
+    );
+  }
+
   if (method === 'GET') {
-    const validatedQuery = getQuerySchema.parse(req.query);
-    const getReq = { ...req, validatedQuery } as GetRequest;
-    return getHandler(getReq, res);
+    const { projectId, limit } = req.validatedQuery as GetQuery;
+
+    // SECURITY: Tenant guard has already verified project access if projectId is provided
+    // If no projectId, we show all search history for the user's tenant
+    const queryOptions: SearchHistoryQueryOptions = {
+      orderBy: { timestamp: 'desc' },
+      where: {
+        ...(projectId && { projectId }),
+        // Filter by tenant through project relationship
+        project: {
+          tenantId: tenantId,
+        },
+      },
+      ...(limit && { take: limit }),
+    };
+
+    const searchHistory = await findManySearchHistory(queryOptions as any);
+
+    // Return the search history entries without claimSetVersion enhancement
+    return apiResponse.ok(res, searchHistory);
   }
 
   if (method === 'POST') {
-    const validatedBody = bodySchema.parse(req.body);
-    const postReq = { ...req, body: validatedBody } as PostRequest;
-    return postHandler(postReq, res);
+    const { projectId, query, results } = req.body;
+    const { id: userId } = req.user!;
+
+    // SECURITY: Tenant guard has already verified that the project belongs to the user's tenant
+
+    // Normalize results to ensure it's an array of NormalizedSearchResult
+    let normalizedResults: NormalizedSearchResult[] | undefined;
+
+    if (results) {
+      let rawResults: any[] = [];
+
+      if (typeof results === 'string') {
+        // Try to parse JSON string
+        const parsed = safeJsonParse(results);
+        if (Array.isArray(parsed)) {
+          rawResults = parsed;
+        } else if (
+          parsed &&
+          typeof parsed === 'object' &&
+          'results' in parsed &&
+          Array.isArray(parsed.results)
+        ) {
+          rawResults = parsed.results;
+        }
+      } else if (Array.isArray(results)) {
+        rawResults = results;
+      } else if (
+        typeof results === 'object' &&
+        'results' in results &&
+        Array.isArray(results.results)
+      ) {
+        rawResults = results.results;
+      }
+
+      // Use the centralized normalization function
+      normalizedResults = normalizeSearchResults(rawResults);
+    }
+
+    const searchHistoryEntry = await createSearchHistory({
+      projectId,
+      userId,
+      query,
+      results: normalizedResults,
+      timestamp: new Date(),
+      citationExtractionStatus: 'pending',
+    });
+
+    return apiResponse.created(res, searchHistoryEntry);
   }
 
   if (method === 'DELETE') {
-    const validatedQuery = deleteQuerySchema.parse(req.query);
-    const deleteReq = { ...req, validatedQuery } as DeleteRequest;
-    return deleteHandler(deleteReq, res);
+    if (req.user?.role !== 'ADMIN') {
+      throw new ApplicationError(
+        ErrorCode.AUTH_INSUFFICIENT_PERMISSIONS,
+        'Admin access required'
+      );
+    }
+
+    const { projectId } = req.validatedQuery as DeleteQuery;
+
+    // SECURITY: Tenant guard has already verified that the project belongs to the admin's tenant
+    // Admins can only delete search history within their own tenant
+
+    const searchHistoryIds = await findSearchHistoryIdsByProjectId(projectId);
+    if (searchHistoryIds.length > 0) {
+      await deletePatentabilityScoresBySearchHistoryIds(searchHistoryIds);
+    }
+    const result = await deleteSearchHistoryByProjectId(projectId);
+
+    return apiResponse.ok(res, {
+      message: `Deleted ${result.count} search history records`,
+      deleted: result.count,
+    });
   }
 }
 
@@ -260,8 +229,13 @@ export default SecurePresets.tenantProtected(
   handler,
   {
     validate: {
-      // Validation is handled per-method in the handler
-      // This is because different methods need different schemas
+      query: {
+        // GET and DELETE use query parameters
+        GET: getQuerySchema,
+        DELETE: deleteQuerySchema,
+      } as any,
+      body: postBodySchema,
+      bodyMethods: ['POST'], // Only POST has a body
     },
     rateLimit: 'api',
   }

@@ -1,6 +1,6 @@
 import React from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { useToast } from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
+import { useToast } from '@/hooks/useToastWrapper';
 import { PriorArtReference } from '../../../types/claimTypes';
 
 /**
@@ -157,7 +157,7 @@ export const processPriorArtSave = async (
   projectId?: string,
   toast?: ReturnType<typeof useToast>
 ): Promise<void> => {
-  logger.log('[SearchHistoryRow] Calling onSavePriorArt', {
+  logger.info('[SearchHistoryRow] Calling onSavePriorArt', {
     referenceNumber: priorArtRef.number,
     title: priorArtRef.title,
   });
@@ -166,7 +166,7 @@ export const processPriorArtSave = async (
     // Wait for the API call to complete before refreshing
     await onSavePriorArt(priorArtRef);
 
-    logger.log('[SearchHistoryRow] onSavePriorArt completed successfully', {
+    logger.info('[SearchHistoryRow] onSavePriorArt completed successfully', {
       referenceNumber: priorArtRef.number,
     });
 
@@ -174,13 +174,13 @@ export const processPriorArtSave = async (
     if (refreshSavedArtData && projectId) {
       // Defer the refresh slightly to ensure the backend has committed the new record
       setTimeout(async () => {
-        logger.log('[SearchHistoryRow] Refreshing saved art data (deferred)', {
+        logger.info('[SearchHistoryRow] Refreshing saved art data (deferred)', {
           projectId,
         });
 
         try {
           await refreshSavedArtData(projectId);
-          logger.log('[SearchHistoryRow] refreshSavedArtData completed');
+          logger.info('[SearchHistoryRow] refreshSavedArtData completed');
         } catch (refreshError) {
           logger.error(
             '[SearchHistoryRow] Error calling refreshSavedArtData:',

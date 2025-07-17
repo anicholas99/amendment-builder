@@ -1,7 +1,7 @@
 import { NextApiResponse, NextApiRequest } from 'next';
 
 import { CitationResults } from '../../../types/searchTypes';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import {
   getCitationResultsBySearchId,
   saveCitationResultsForSearchId,
@@ -11,7 +11,7 @@ import { AuthenticatedRequest } from '@/types/middleware';
 import { CustomApiRequest } from '@/types/api';
 import { z, ZodError } from 'zod';
 import { searchIdQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 // Define request body type for POST requests (CitationResults), GET has no body
 interface CitationResultsBody extends CitationResults {}

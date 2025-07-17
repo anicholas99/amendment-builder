@@ -64,10 +64,12 @@ const handler = async (req: AuthenticatedRequest, res: NextApiResponse) => {
   // ... business logic
 };
 
-// composeApiMiddleware wraps the handler with withAuth and other guards.
-export default composeApiMiddleware(handler, {
-  // ... configuration for validation, tenant security, etc.
-});
+// composeMiddleware wraps the handler with withAuth and other guards.
+export default composeMiddleware(
+  withAuth,
+  withTenant,
+  withCsrf
+)(handler);
 ```
 
 ---

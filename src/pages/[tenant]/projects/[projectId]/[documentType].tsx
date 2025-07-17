@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { useRouter } from 'next/router';
-import { Center, Spinner, Box, useColorModeValue } from '@chakra-ui/react';
 import AppLayout from '../../../../components/layouts/AppLayout';
-import SkeletonLoader from '../../../../components/common/SkeletonLoader';
 import { useProjectData } from '@/contexts/ProjectDataContext';
 import { useProject } from '@/hooks/api/useProjects';
 import { useProjectAutosave } from '@/contexts/ProjectAutosaveContext';
@@ -12,6 +10,7 @@ import { performanceMonitor } from '@/utils/performance';
 import { useViewPrefetch } from '@/hooks/useViewPrefetch';
 import { useBatchedUpdates } from '@/hooks/useBatchedUpdates';
 import { useViewTransition } from '@/hooks/navigation/useViewTransition';
+import type { DocumentType } from '@/types/project';
 
 // Lazy load all views to optimize initial bundle size
 const TechnologyDetailsViewClean = lazy(
@@ -33,18 +32,17 @@ const PatentApplicationViewClean = lazy(
     )
 );
 
-// Loading fallback component
+// Minimal loading fallback component - properly centered in full height
 const ViewLoadingFallback = () => (
-  <Center h="100vh">
-    <Spinner size="xl" />
-  </Center>
+  <div className="flex items-center justify-center h-full min-h-screen">
+    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+  </div>
 );
 
 export default function DocumentTypePage() {
   const router = useRouter();
   const [hasError, setHasError] = useState(false);
   const [viewType, setViewType] = useState<DocumentType | null>(null);
-  const bgColor = useColorModeValue('gray.50', 'gray.900');
   const batchUpdates = useBatchedUpdates();
 
   // Refs for tracking state across renders
@@ -64,11 +62,11 @@ export default function DocumentTypePage() {
   useEffect(() => {
     // Check if we came from project creation (modal or dashboard)
     const referrer = document.referrer;
-    const fromProjectCreation = 
-      referrer.includes('/projects') && 
+    const fromProjectCreation =
+      referrer.includes('/projects') &&
       !referrer.includes('/projects/') &&
       routerDocumentType === 'technology';
-    
+
     if (fromProjectCreation) {
       isLikelyNewProject.current = true;
     }
@@ -90,7 +88,7 @@ export default function DocumentTypePage() {
   const [isProjectChanging, setIsProjectChanging] = useState(false);
 
   // Only fetch data for the router's project ID
-  const {} = useProject(routerProjectId || null);
+  const { data: project } = useProject(routerProjectId || null);
 
   // Simplified transition management
   const viewSwitchTimerRef = useRef<string | null>(null);
@@ -137,13 +135,19 @@ export default function DocumentTypePage() {
   // Set active document - but only after project is set
   useEffect(() => {
     if (routerProjectId && routerDocumentType && !isProjectChanging) {
-      setActiveDocument({
-        projectId: routerProjectId,
-        documentType: routerDocumentType as
-          | 'technology'
-          | 'claim-refinement'
-          | 'patent',
-        content: '',
+      // Clear first to prevent any data leak
+      setActiveDocument(null);
+
+      // Then set the new document
+      requestAnimationFrame(() => {
+        setActiveDocument({
+          projectId: routerProjectId,
+          documentType: routerDocumentType as
+            | 'technology'
+            | 'claim-refinement'
+            | 'patent',
+          content: '',
+        });
       });
 
       // End performance timer when everything is loaded
@@ -152,6 +156,11 @@ export default function DocumentTypePage() {
         viewSwitchTimerRef.current = null;
       }
     }
+
+    // Clear on unmount or when project changes
+    return () => {
+      setActiveDocument(null);
+    };
   }, [
     routerProjectId,
     routerDocumentType,
@@ -161,29 +170,33 @@ export default function DocumentTypePage() {
 
   // Set the view type based on the document type
   const documentType = routerDocumentType || 'technology';
-  
+
   // Update view type in effect to avoid render-time state updates
   useEffect(() => {
-    if (documentType === 'technology' || documentType === 'claim-refinement' || documentType === 'patent') {
+    if (
+      documentType === 'technology' ||
+      documentType === 'claim-refinement' ||
+      documentType === 'patent'
+    ) {
       setViewType(documentType as DocumentType);
     }
   }, [documentType]);
 
-  // Show loading state only on initial load without project ID
+  // Only show loading for missing project ID (shouldn't happen in normal flow)
   if (!routerProjectId) {
     return (
       <AppLayout>
-        <Center h="100vh">
-          <Spinner size="xl" />
-        </Center>
+        <div className="flex items-center justify-center h-full min-h-screen">
+          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
       </AppLayout>
     );
   }
 
   // Render the appropriate view based on document type
   const renderView = () => {
-    // Use a stable key that changes when project changes
-    const componentKey = `${routerProjectId}-${routerDocumentType}`;
+    // Use both projectId and documentType as key to ensure proper unmounting when switching views
+    const componentKey = `${routerProjectId}-${documentType}`;
 
     switch (documentType) {
       case 'technology':
@@ -195,7 +208,7 @@ export default function DocumentTypePage() {
       case 'claim-refinement':
         return (
           <Suspense fallback={<ViewLoadingFallback />}>
-            <ClaimRefinementViewClean />
+            <ClaimRefinementViewClean key={componentKey} />
           </Suspense>
         );
       case 'patent':
@@ -205,22 +218,19 @@ export default function DocumentTypePage() {
           </Suspense>
         );
       default:
-        return <SkeletonLoader type="document" />;
+        return (
+          <div className="flex items-center justify-center h-full min-h-screen">
+            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        );
     }
   };
 
   return (
     <AppLayout>
-      <Box
-        width="100%"
-        height="100%"
-        bg={bgColor}
-        overflow="auto"
-        display="flex"
-        flexDirection="column"
-      >
+      <div className="w-full h-full overflow-auto flex flex-col bg-background">
         {renderView()}
-      </Box>
+      </div>
     </AppLayout>
   );
 }

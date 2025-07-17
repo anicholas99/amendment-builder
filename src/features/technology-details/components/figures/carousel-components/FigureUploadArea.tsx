@@ -1,17 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import {
-  Box,
-  Text,
-  Button,
-  Icon,
-  VStack,
-  Center,
-  useDisclosure,
-} from '@chakra-ui/react';
 import { FiUpload, FiImage, FiFolder } from 'react-icons/fi';
 import { FigureUploadAreaProps } from './types';
 import { useThemeContext } from '../../../../../contexts/ThemeContext';
-import { UnassignedFiguresModal } from '../UnassignedFiguresModal';
+import { FigureManagementModal } from '../FigureManagementModal';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 /**
  * Custom hook to get colors based on theme mode
@@ -33,9 +26,13 @@ const FigureUploadArea: React.FC<FigureUploadAreaProps> = React.memo(
     readOnly = false,
     projectId,
     onFigureAssigned,
+    inventionData,
   }) => {
     const [isDragging, setIsDragging] = useState(false);
-    const { isOpen, onOpen, onClose } = useDisclosure();
+    const [isOpen, setIsOpen] = useState(false);
+    const onOpen = () => setIsOpen(true);
+    const onClose = () => setIsOpen(false);
+
     const bgColor = useColorModeValue('#ebf8ff', '#1e3a8a'); // blue.50, blue.900
     const bgColorHover = useColorModeValue('#bee3f8', '#1e40af'); // blue.100, blue.800
     const borderColor = useColorModeValue('#90cdf4', '#2563eb'); // blue.200, blue.600
@@ -84,126 +81,107 @@ const FigureUploadArea: React.FC<FigureUploadAreaProps> = React.memo(
     // In fullView mode (modal), we show a different UI
     if (fullView) {
       return (
-        <Center
-          style={{
-            height: '70vh',
-            width: '100%',
-            padding: '40px',
-            backgroundColor: '#f7fafc',
-          }}
-        >
-          <VStack spacing={5}>
-            <Icon as={FiImage} className="w-12 h-12 text-gray-500" />
-            <Text fontSize="lg" fontWeight="medium" color="#718096">
+        <div className="h-[70vh] w-full p-10 bg-muted flex items-center justify-center">
+          <div className="flex flex-col items-center space-y-5">
+            <FiImage className="w-12 h-12 text-gray-500" />
+            <span className="text-lg font-medium text-gray-700 dark:text-gray-300">
               No image available for {figureKey}
-            </Text>
+            </span>
             {!readOnly && (
               <>
                 <Button
-                  colorScheme="blue"
-                  size="md"
-                  leftIcon={<Icon as={FiUpload} />}
                   onClick={onUpload}
+                  className="bg-blue-600 hover:bg-blue-700"
                 >
+                  <FiUpload className="w-4 h-4 mr-2" />
                   Upload Image
                 </Button>
                 {projectId && (
                   <Button
-                    colorScheme="blue"
-                    size="md"
                     variant="outline"
-                    leftIcon={<Icon as={FiFolder} />}
                     onClick={onOpen}
+                    className="border-blue-600 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20"
                   >
-                    Browse Unassigned
+                    <FiFolder className="w-4 h-4 mr-2" />
+                    Manage Figures
                   </Button>
                 )}
               </>
             )}
-          </VStack>
+          </div>
 
-          {/* Unassigned Figures Modal */}
+          {/* Figure Management Modal */}
           {projectId && (
-            <UnassignedFiguresModal
+            <FigureManagementModal
               isOpen={isOpen}
               onClose={onClose}
               projectId={projectId}
-              targetFigureKey={figureKey}
+              inventionData={inventionData}
+              currentFigure={figureKey}
               onFigureAssigned={onFigureAssigned}
             />
           )}
-        </Center>
+        </div>
       );
     }
 
     return (
       <>
-        <Box
-          position="relative"
+        <div
+          className={cn(
+            'relative border-2 border-dashed rounded-md h-full w-full flex items-center justify-center transition-all duration-150 ease-out',
+            isDragging
+              ? 'border-blue-500 dark:border-blue-400 bg-blue-100 dark:bg-blue-800'
+              : 'border-blue-200 dark:border-blue-600 bg-blue-50 dark:bg-blue-900'
+          )}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          borderWidth="2px"
-          borderRadius="md"
-          style={{
-            borderStyle: 'dashed',
-            borderColor: isDragging ? borderColorActive : borderColor,
-            backgroundColor: isDragging ? bgColorHover : bgColor,
-            transition:
-              'border-color 0.15s ease-out, background-color 0.15s ease-out',
-            height: '100%',
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
         >
-          <VStack spacing={3} align="center" justify="center">
-            <Icon as={FiImage} className="w-9 h-9" color={textColor} />
-            <Text
-              fontWeight="medium"
-              fontSize="sm"
-              color={textColor}
-              className="text-center"
+          <div className="flex flex-col items-center justify-center space-y-3">
+            <FiImage className="w-9 h-9" style={{ color: textColor }} />
+            <span
+              className="font-medium text-sm text-center"
+              style={{ color: textColor }}
             >
               Drag & Drop or Click to Upload
-            </Text>
+            </span>
 
             {!readOnly && (
-              <VStack spacing={2} align="center">
+              <div className="flex flex-col items-center space-y-2">
                 <Button
-                  leftIcon={<Icon as={FiUpload} />}
-                  colorScheme="blue"
                   size="sm"
-                  variant="solid"
                   onClick={onUpload}
+                  className="bg-blue-600 hover:bg-blue-700"
                 >
+                  <FiUpload className="w-3 h-3 mr-2" />
                   Upload Figure
                 </Button>
 
                 {projectId && (
                   <Button
-                    leftIcon={<Icon as={FiFolder} />}
-                    colorScheme="blue"
                     size="sm"
                     variant="outline"
                     onClick={onOpen}
+                    className="border-blue-600 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20"
                   >
-                    Browse Unassigned
+                    <FiFolder className="w-3 h-3 mr-2" />
+                    Manage Figures
                   </Button>
                 )}
-              </VStack>
+              </div>
             )}
-          </VStack>
-        </Box>
+          </div>
+        </div>
 
-        {/* Unassigned Figures Modal */}
+        {/* Figure Management Modal */}
         {projectId && (
-          <UnassignedFiguresModal
+          <FigureManagementModal
             isOpen={isOpen}
             onClose={onClose}
             projectId={projectId}
-            targetFigureKey={figureKey}
+            inventionData={inventionData}
+            currentFigure={figureKey}
             onFigureAssigned={onFigureAssigned}
           />
         )}

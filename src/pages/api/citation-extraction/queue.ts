@@ -1,14 +1,23 @@
 import { NextApiResponse } from 'next';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { CustomApiRequest } from '@/types/api';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { CitationsServerService } from '@/server/services/citations.server.service';
 import { getSearchHistoryWithTenant } from '@/repositories/search';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 const apiLogger = createApiLogger('citation-extraction-queue');
+
+// Define schema for parsed elements (legacy)
+const LegacyParsedElementSchema = z.object({
+  id: z.string().optional(),
+  text: z.string(),
+  type: z.string().optional(),
+  order: z.number().optional(),
+});
 
 // Legacy schema for backward compatibility
 const requestSchema = z.object({
@@ -18,7 +27,7 @@ const requestSchema = z.object({
   searchHistoryId: z.string().uuid(),
   // Legacy fields that are no longer used
   claimSetVersionId: z.string().optional(),
-  parsedElements: z.array(z.any()).optional(),
+  parsedElements: z.array(LegacyParsedElementSchema).optional(),
 });
 
 type CitationExtractionQueueBody = z.infer<typeof requestSchema>;
@@ -32,8 +41,7 @@ const handler = async (
   res: NextApiResponse
 ): Promise<void> => {
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: `Method ${req.method} not allowed` });
+    return apiResponse.methodNotAllowed(res, ['POST']);
   }
   apiLogger.logRequest(req);
   apiLogger.warn('Using deprecated citation-extraction/queue endpoint');
@@ -52,7 +60,7 @@ const handler = async (
     });
 
     // Return response in the legacy format
-    return res.status(202).json({
+    return apiResponse.ok(res, {
       success: true,
       jobId: newJob.id,
       externalJobId: newJob.externalJobId || undefined,

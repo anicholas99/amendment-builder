@@ -1,15 +1,17 @@
-import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import type { ConsistencyIssue } from '@/types/tools';
-import { safeJsonParse } from '@/utils/json-utils';
+import { findProjectByIdAndTenant } from '@/repositories/project/core.repository';
+import { ClaimRepository } from '@/repositories/claimRepository';
+import { figureRepository } from '@/repositories/figure';
 
 /**
  * Validates invention consistency by checking:
  * 1. Claim references point to existing claims
- * 2. Parsed elements exist in actual claims
- * 3. No duplicate claim numbers
+ * 2. No duplicate claim numbers
+ * 3. Mirror claim patterns and consistency
  * 4. All claims are properly linked to invention
+ * 5. Figure and reference numeral consistency
  *
  * SECURITY: Always validates tenant ownership before accessing data
  */
@@ -17,13 +19,6 @@ export async function validateInventionConsistency(
   projectId: string,
   tenantId: string
 ): Promise<ConsistencyIssue[]> {
-  if (!prisma) {
-    throw new ApplicationError(
-      ErrorCode.DB_CONNECTION_ERROR,
-      'Database client not initialized'
-    );
-  }
-
   logger.debug('[ConsistencyCheck] Starting validation', {
     projectId,
     tenantId,
@@ -31,21 +26,7 @@ export async function validateInventionConsistency(
 
   try {
     // First, verify tenant ownership
-    const project = await prisma.project.findFirst({
-      where: {
-        id: projectId,
-        tenantId: tenantId,
-      },
-      include: {
-        invention: {
-          include: {
-            claims: {
-              orderBy: { number: 'asc' },
-            },
-          },
-        },
-      },
-    });
+    const project = await findProjectByIdAndTenant(projectId, tenantId);
 
     if (!project) {
       throw new ApplicationError(
@@ -65,12 +46,14 @@ export async function validateInventionConsistency(
     }
 
     const issues: ConsistencyIssue[] = [];
-    const claims = project.invention.claims || [];
 
-    // Parse claim elements from JSON
-    const parsedElements = project.invention.parsedClaimElementsJson
-      ? safeJsonParse<string[]>(project.invention.parsedClaimElementsJson) || []
-      : [];
+    // Get claims from repository
+    const claims = await ClaimRepository.findByInventionId(
+      project.invention.id
+    );
+
+    // Get figures for the project
+    const figures = await figureRepository.getFiguresWithElements(projectId);
 
     // 1. Check for duplicate claim numbers
     const claimNumbers = new Map<number, string[]>();
@@ -121,75 +104,74 @@ export async function validateInventionConsistency(
       }
     });
 
-    // 3. Check parsed elements exist in claims
-    if (parsedElements.length > 0 && claims.length > 0) {
-      const allClaimText = claims.map(c => c.text.toLowerCase()).join(' ');
-
-      parsedElements.forEach(element => {
-        const elementLower = element.toLowerCase();
-        if (!allClaimText.includes(elementLower)) {
-          issues.push({
-            type: 'element_mismatch',
-            severity: 'warning',
-            message: `Parsed element "${element}" not found in any claim`,
-            suggestion:
-              'Update claims to include this element or remove it from parsed elements',
-          });
-        }
-      });
-
-      // 4. Check for orphaned elements (in claims but not parsed)
-      const parsedElementsLower = new Set(
-        parsedElements.map(e => e.toLowerCase())
-      );
-
-      // Common technical terms that might appear in claims but aren't key elements
-      const commonTerms = new Set([
-        'the',
-        'a',
-        'an',
-        'and',
-        'or',
-        'for',
-        'to',
-        'of',
-        'in',
-        'with',
-      ]);
-
-      claims.forEach(claim => {
-        // Extract potential technical elements (nouns/noun phrases)
-        const words = claim.text
-          .replace(/[,;.]/g, '')
-          .split(/\s+/)
-          .filter(
-            word => word.length > 3 && !commonTerms.has(word.toLowerCase())
-          );
-
-        // This is a heuristic - you might want to make this smarter
-        const potentialElements = words.filter(word => {
-          const lower = word.toLowerCase();
-          return !parsedElementsLower.has(lower) && /^[a-z]+$/i.test(word);
-        });
-
-        if (potentialElements.length > 5) {
-          // Only flag if many potential elements missing
-          issues.push({
-            type: 'orphaned_element',
-            severity: 'warning',
-            claimId: claim.id,
-            claimNumber: claim.number,
-            message: `Claim ${claim.number} may contain elements not in parsed list`,
-            suggestion:
-              'Review claim for key technical elements to add to parsed elements',
-          });
-        }
-      });
-    }
-
-    // 5. NEW: Check for mirror claim patterns and consistency
+    // 3. Check for mirror claim patterns and consistency
     const mirrorIssues = checkMirrorClaimConsistency(claims);
     issues.push(...mirrorIssues);
+
+    // 4. Check Figure Reference Consistency
+    if (figures && figures.length > 0) {
+      // Check if invention text references the figures
+      const inventionText = JSON.stringify(project.invention).toLowerCase();
+
+      figures.forEach(figure => {
+        if (figure.figureKey) {
+          const figureRef = figure.figureKey.toLowerCase();
+          if (!inventionText.includes(figureRef)) {
+            issues.push({
+              type: 'missing_reference',
+              severity: 'warning',
+              message: `${figure.figureKey} is not referenced in the invention description`,
+              suggestion: `Add references to ${figure.figureKey} in the technical implementation or features sections`,
+            });
+          }
+        }
+
+        // Check if figure has reference numerals
+        if (!figure.elements || figure.elements.length === 0) {
+          issues.push({
+            type: 'missing_reference',
+            severity: 'warning',
+            message: `${figure.figureKey || 'A figure'} has no reference numerals`,
+            suggestion:
+              'Add reference numerals to identify key components in the figure',
+          });
+        }
+      });
+
+      // Check if reference numerals in text match figures
+      const numeralPattern = /reference numeral[s]?\s+(\d+[a-zA-Z]?)/gi;
+      const textNumerals = new Set<string>();
+      let match;
+      while ((match = numeralPattern.exec(inventionText)) !== null) {
+        textNumerals.add(match[1]);
+      }
+
+      const figureNumerals = new Set<string>();
+      figures.forEach(fig => {
+        fig.elements?.forEach(el => figureNumerals.add(el.elementKey));
+      });
+
+      // Find numerals in text but not in figures
+      textNumerals.forEach(numeral => {
+        if (!figureNumerals.has(numeral)) {
+          issues.push({
+            type: 'missing_reference',
+            severity: 'error',
+            message: `Reference numeral ${numeral} mentioned in text but not defined in any figure`,
+            suggestion: `Add reference numeral ${numeral} to the appropriate figure`,
+          });
+        }
+      });
+    } else {
+      // No figures but have invention data
+      issues.push({
+        type: 'missing_reference',
+        severity: 'warning',
+        message: 'No figures have been created for this invention',
+        suggestion:
+          'Consider using the chat to analyze your invention and suggest appropriate figures',
+      });
+    }
 
     logger.info('[ConsistencyCheck] Validation complete', {
       projectId,
@@ -208,21 +190,39 @@ export async function validateInventionConsistency(
 /**
  * Detects claim types based on preamble
  */
-function detectClaimType(claimText: string): 'system' | 'method' | 'apparatus' | 'process' | 'crm' | 'unknown' {
+function detectClaimType(
+  claimText: string
+): 'system' | 'method' | 'apparatus' | 'process' | 'crm' | 'unknown' {
   const lowerText = claimText.toLowerCase();
-  
-  if (lowerText.includes('system comprising') || lowerText.includes('system for')) {
+
+  if (
+    lowerText.includes('system comprising') ||
+    lowerText.includes('system for')
+  ) {
     return 'system';
-  } else if (lowerText.includes('method comprising') || lowerText.includes('method for') || lowerText.includes('method of')) {
+  } else if (
+    lowerText.includes('method comprising') ||
+    lowerText.includes('method for') ||
+    lowerText.includes('method of')
+  ) {
     return 'method';
-  } else if (lowerText.includes('apparatus comprising') || lowerText.includes('apparatus for')) {
+  } else if (
+    lowerText.includes('apparatus comprising') ||
+    lowerText.includes('apparatus for')
+  ) {
     return 'apparatus';
-  } else if (lowerText.includes('process comprising') || lowerText.includes('process for')) {
+  } else if (
+    lowerText.includes('process comprising') ||
+    lowerText.includes('process for')
+  ) {
     return 'process';
-  } else if (lowerText.includes('computer-readable medium') || lowerText.includes('non-transitory')) {
+  } else if (
+    lowerText.includes('computer-readable medium') ||
+    lowerText.includes('non-transitory')
+  ) {
     return 'crm';
   }
-  
+
   return 'unknown';
 }
 
@@ -232,7 +232,7 @@ function detectClaimType(claimText: string): 'system' | 'method' | 'apparatus' |
 function extractClaimElementsForComparison(claimText: string): string[] {
   // Remove the preamble
   const withoutPreamble = claimText.replace(/^[^:]+:\s*/, '');
-  
+
   // Split by semicolons and clean up
   const elements = withoutPreamble
     .split(/[;.]/)
@@ -248,7 +248,7 @@ function extractClaimElementsForComparison(claimText: string): string[] {
         .replace(/^for\s+/, '')
         .trim();
     });
-  
+
   return elements;
 }
 
@@ -257,7 +257,7 @@ function extractClaimElementsForComparison(claimText: string): string[] {
  */
 function checkMirrorClaimConsistency(claims: any[]): ConsistencyIssue[] {
   const issues: ConsistencyIssue[] = [];
-  
+
   // Group claims by type
   const claimsByType: { [key: string]: any[] } = {};
   claims.forEach(claim => {
@@ -267,60 +267,76 @@ function checkMirrorClaimConsistency(claims: any[]): ConsistencyIssue[] {
     }
     claimsByType[type].push(claim);
   });
-  
+
   // Sort each group by claim number
   Object.values(claimsByType).forEach(group => {
     group.sort((a, b) => a.number - b.number);
   });
-  
+
   // Check for potential mirror patterns
-  const claimTypes = Object.keys(claimsByType).filter(type => type !== 'unknown');
-  
+  const claimTypes = Object.keys(claimsByType).filter(
+    type => type !== 'unknown'
+  );
+
   // Common mirror patterns
   const mirrorPatterns = [
     ['system', 'method'],
     ['apparatus', 'method'],
     ['system', 'process'],
-    ['apparatus', 'process']
+    ['apparatus', 'process'],
   ];
-  
+
   for (const [type1, type2] of mirrorPatterns) {
     if (claimsByType[type1] && claimsByType[type2]) {
       const group1 = claimsByType[type1];
       const group2 = claimsByType[type2];
-      
+
       // Check if groups appear to be mirrors (similar count, sequential numbering)
       const group1Numbers = group1.map(c => c.number);
       const group2Numbers = group2.map(c => c.number);
-      
+
       // Check if they're in sequential ranges
       const isGroup1Sequential = isSequential(group1Numbers);
       const isGroup2Sequential = isSequential(group2Numbers);
-      const group1Follows2 = Math.min(...group1Numbers) > Math.max(...group2Numbers);
-      const group2Follows1 = Math.min(...group2Numbers) > Math.max(...group1Numbers);
-      
-      if (isGroup1Sequential && isGroup2Sequential && (group1Follows2 || group2Follows1)) {
+      const group1Follows2 =
+        Math.min(...group1Numbers) > Math.max(...group2Numbers);
+      const group2Follows1 =
+        Math.min(...group2Numbers) > Math.max(...group1Numbers);
+
+      if (
+        isGroup1Sequential &&
+        isGroup2Sequential &&
+        (group1Follows2 || group2Follows1)
+      ) {
         // Likely mirror claims - add info issue
         issues.push({
           type: 'element_mismatch',
           severity: 'warning',
           message: `Detected potential mirror claim pattern: ${type1} claims (${group1Numbers.join(', ')}) and ${type2} claims (${group2Numbers.join(', ')})`,
-          suggestion: 'Reviewing mirror claim consistency'
+          suggestion: 'Reviewing mirror claim consistency',
         });
-        
+
         // Compare independent claims
-        const independentClaims1 = group1.filter(c => !c.text.includes('claim '));
-        const independentClaims2 = group2.filter(c => !c.text.includes('claim '));
-        
+        const independentClaims1 = group1.filter(
+          c => !c.text.includes('claim ')
+        );
+        const independentClaims2 = group2.filter(
+          c => !c.text.includes('claim ')
+        );
+
         if (independentClaims1.length > 0 && independentClaims2.length > 0) {
           // Compare elements between first independent claims of each type
-          const elements1 = extractClaimElementsForComparison(independentClaims1[0].text);
-          const elements2 = extractClaimElementsForComparison(independentClaims2[0].text);
-          
+          const elements1 = extractClaimElementsForComparison(
+            independentClaims1[0].text
+          );
+          const elements2 = extractClaimElementsForComparison(
+            independentClaims2[0].text
+          );
+
           // Check for missing elements in mirror
           const elements1Set = new Set(elements1.map(e => normalizeElement(e)));
           const elements2Set = new Set(elements2.map(e => normalizeElement(e)));
-          
+
           elements1.forEach((elem, idx) => {
             const normalized = normalizeElement(elem);
             if (!hasEquivalentElement(normalized, elements2Set, type1, type2)) {
@@ -329,11 +345,11 @@ function checkMirrorClaimConsistency(claims: any[]): ConsistencyIssue[] {
                 severity: 'error',
                 claimNumber: independentClaims1[0].number,
                 message: `${type1} claim ${independentClaims1[0].number} element "${elem}" appears to be missing from mirror ${type2} claim ${independentClaims2[0].number}`,
-                suggestion: `Ensure ${type2} claim includes equivalent element or explain why it's intentionally omitted`
+                suggestion: `Ensure ${type2} claim includes equivalent element or explain why it's intentionally omitted`,
               });
             }
           });
-          
+
           elements2.forEach((elem, idx) => {
             const normalized = normalizeElement(elem);
             if (!hasEquivalentElement(normalized, elements1Set, type2, type1)) {
@@ -342,28 +358,33 @@ function checkMirrorClaimConsistency(claims: any[]): ConsistencyIssue[] {
                 severity: 'error',
                 claimNumber: independentClaims2[0].number,
                 message: `${type2} claim ${independentClaims2[0].number} element "${elem}" appears to be missing from mirror ${type1} claim ${independentClaims1[0].number}`,
-                suggestion: `Ensure ${type1} claim includes equivalent element or explain why it's intentionally omitted`
+                suggestion: `Ensure ${type1} claim includes equivalent element or explain why it's intentionally omitted`,
               });
             }
           });
-          
+
           // Check dependent claim mirroring
-          const dependentClaims1 = group1.filter(c => c.text.includes('claim '));
-          const dependentClaims2 = group2.filter(c => c.text.includes('claim '));
-          
+          const dependentClaims1 = group1.filter(c =>
+            c.text.includes('claim ')
+          );
+          const dependentClaims2 = group2.filter(c =>
+            c.text.includes('claim ')
+          );
+
           if (Math.abs(dependentClaims1.length - dependentClaims2.length) > 1) {
             issues.push({
               type: 'element_mismatch',
               severity: 'warning',
               message: `Unequal number of dependent claims: ${type1} has ${dependentClaims1.length} dependent claims, ${type2} has ${dependentClaims2.length}`,
-              suggestion: 'Consider adding corresponding dependent claims for complete mirror coverage'
+              suggestion:
+                'Consider adding corresponding dependent claims for complete mirror coverage',
             });
           }
         }
       }
     }
   }
-  
+
   return issues;
 }
 
@@ -374,7 +395,7 @@ function isSequential(numbers: number[]): boolean {
   if (numbers.length < 2) return true;
   const sorted = [...numbers].sort((a, b) => a - b);
   for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i] - sorted[i-1] !== 1) return false;
+    if (sorted[i] - sorted[i - 1] !== 1) return false;
   }
   return true;
 }
@@ -394,20 +415,24 @@ function normalizeElement(element: string): string {
  * Checks if an equivalent element exists in the mirror set
  */
 function hasEquivalentElement(
-  element: string, 
-  mirrorSet: Set<string>, 
-  sourceType: string, 
+  element: string,
+  mirrorSet: Set<string>,
+  sourceType: string,
   targetType: string
 ): boolean {
   // Direct match
   if (mirrorSet.has(element)) return true;
-  
+
   // Check for type-specific transformations
-  const transformations = getTypeTransformations(element, sourceType, targetType);
+  const transformations = getTypeTransformations(
+    element,
+    sourceType,
+    targetType
+  );
   for (const transform of transformations) {
     if (mirrorSet.has(transform)) return true;
   }
-  
+
   // Fuzzy match - check if most key words are present
   const elementWords = element.split(' ').filter(w => w.length > 3);
   for (const mirrorElement of mirrorSet) {
@@ -415,18 +440,25 @@ function hasEquivalentElement(
     const matchCount = elementWords.filter(w => mirrorWords.includes(w)).length;
     if (matchCount >= elementWords.length * 0.7) return true;
   }
-  
+
   return false;
 }
 
 /**
  * Get type-specific transformations for an element
  */
-function getTypeTransformations(element: string, sourceType: string, targetType: string): string[] {
+function getTypeTransformations(
+  element: string,
+  sourceType: string,
+  targetType: string
+): string[] {
   const transforms: string[] = [];
-  
+
   // System/Apparatus to Method transformations
-  if ((sourceType === 'system' || sourceType === 'apparatus') && targetType === 'method') {
+  if (
+    (sourceType === 'system' || sourceType === 'apparatus') &&
+    targetType === 'method'
+  ) {
     transforms.push(
       element.replace(/processor/g, 'processing'),
       element.replace(/sensor/g, 'sensing'),
@@ -436,9 +468,12 @@ function getTypeTransformations(element: string, sourceType: string, targetType:
       element.replace(/unit/g, 'step')
     );
   }
-  
+
   // Method to System/Apparatus transformations
-  if (sourceType === 'method' && (targetType === 'system' || targetType === 'apparatus')) {
+  if (
+    sourceType === 'method' &&
+    (targetType === 'system' || targetType === 'apparatus')
+  ) {
     transforms.push(
       element.replace(/processing/g, 'processor'),
       element.replace(/sensing/g, 'sensor'),
@@ -448,6 +483,6 @@ function getTypeTransformations(element: string, sourceType: string, targetType:
       element.replace(/step/g, 'module')
     );
   }
-  
+
   return transforms.filter(t => t !== element);
 }

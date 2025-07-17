@@ -7,13 +7,12 @@ import {
   fireEvent,
 } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ChakraProvider } from '@chakra-ui/react';
 // Note: Auth0 UserProvider will be replaced with IPD Identity integration
 import { UserProvider } from '@auth0/nextjs-auth0/client';
 import { NextRouter } from 'next/router';
-import { theme } from '@/theme';
 // ProjectProvider is no longer needed - contexts are split
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { Toaster } from '@/components/ui/toaster';
 import { ProjectData as Project } from '@/types/project';
 
 // Mock Next.js router
@@ -106,11 +105,10 @@ export function TestProviders({
   return (
     <RouterContext.Provider value={router}>
       <QueryClientProvider client={testQueryClient}>
-        <ChakraProvider theme={theme}>
-          <ThemeProvider>
-            <UserProvider user={user}>{children}</UserProvider>
-          </ThemeProvider>
-        </ChakraProvider>
+        <ThemeProvider>
+          <UserProvider user={user}>{children}</UserProvider>
+          <Toaster />
+        </ThemeProvider>
       </QueryClientProvider>
     </RouterContext.Provider>
   );
@@ -247,11 +245,16 @@ export function mockPrisma(): MockPrismaClient {
 }
 
 // Wait utilities
-export async function waitForElement(testId: string, container = document) {
+export async function waitForElement(
+  testId: string,
+  container: ParentNode = document
+) {
   return waitFor(() => {
     const element = container.querySelector(`[data-testid="${testId}"]`);
-    if (!element) throw new Error(`Element with testId "${testId}" not found`);
-    return element;
+    if (!element) {
+      throw new Error(`Element with testId "${testId}" not found`);
+    }
+    return element as HTMLElement;
   });
 }
 
@@ -273,11 +276,7 @@ export async function fillForm(
 // API testing utilities
 export function createMockApiResponse<T>(
   data: T,
-  options: Partial<{
-    status: number;
-    error: boolean;
-    message: string;
-  }> = {}
+  options: Partial<{ status: number; error: boolean; message: string }> = {}
 ): Response {
   const { status = 200, error = false, message = 'Success' } = options;
 
@@ -286,105 +285,11 @@ export function createMockApiResponse<T>(
   return {
     ok: !error,
     status,
-    json: async () => responseBody,
+    json: async () => responseBody as unknown as T,
     text: async () => JSON.stringify(responseBody),
-    headers: new Headers({
-      'content-type': 'application/json',
-    }),
+    headers: new Headers({ 'content-type': 'application/json' }),
   } as Response;
 }
-
-// Testing hooks
-export function renderHook<TResult, TProps>(
-  hook: (props: TProps) => TResult,
-  options?: {
-    initialProps?: TProps;
-    wrapper?: React.ComponentType;
-  }
-) {
-  let result: TResult;
-  const TestComponent = ({ props }: { props?: TProps }) => {
-    result = hook(props || ({} as TProps));
-    return null;
-  };
-
-  const { rerender, ...rest } = render(
-    <TestComponent props={options?.initialProps} />,
-    { wrapper: options?.wrapper }
-  );
-
-  return {
-    result: () => result!,
-    rerender: (newProps?: TProps) =>
-      rerender(<TestComponent props={newProps} />),
-    ...rest,
-  };
-}
-
-// Accessibility testing
-export async function checkA11y(container: HTMLElement) {
-  try {
-    const axeModule = await import('jest-axe');
-    const { axe, toHaveNoViolations } = axeModule;
-    expect.extend(toHaveNoViolations);
-
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
-  } catch (error) {
-    // Using logger instead of console for consistent logging
-    import('@/lib/monitoring/logger').then(({ logger }) => {
-      logger.warn('jest-axe not installed, skipping accessibility check');
-    });
-  }
-}
-
-// Snapshot testing utilities
-export function createSnapshotTest<
-  P extends Record<string, unknown> = Record<string, never>,
->(
-  ComponentName: string,
-  Component: React.ComponentType<P>,
-  props: P = {} as P
-) {
-  it(`${ComponentName} matches snapshot`, () => {
-    const { container } = render(<Component {...props} />);
-    expect(container.firstChild).toMatchSnapshot();
-  });
-}
-
-// Performance testing utilities
-export function measureRenderTime<
-  P extends Record<string, unknown> = Record<string, never>,
->(Component: React.ComponentType<P>, props: P = {} as P): number {
-  const start = performance.now();
-  render(<Component {...props} />);
-  const end = performance.now();
-  return end - start;
-}
-
-// Mock data generators
-export const generateMockProject = (overrides = {}) => ({
-  id: `project-${Math.random().toString(36).substring(2, 11)}`,
-  name: 'Mock Project',
-  userId: 'mock-user-id',
-  tenantId: 'mock-tenant-id',
-  status: 'DRAFT',
-  textInput: 'Mock invention description',
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-});
-
-export const generateMockUser = (overrides = {}) => ({
-  id: `user-${Math.random().toString(36).substring(2, 11)}`,
-  email: 'mock@example.com',
-  name: 'Mock User',
-  role: 'USER',
-  isVerified: true,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-});
 
 // Cleanup utilities
 export function cleanupMocks() {

@@ -5,12 +5,12 @@ import React, {
   useMemo,
   useCallback,
 } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { Box } from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
 import SidebarTabContainer from '@/components/layouts/SidebarTabContainer';
 import { PriorArtReference } from '../../../types/claimTypes';
 import { ProcessedSavedPriorArt as SavedPriorArtType } from '../../search/types';
 import { useProjectData } from '@/contexts';
+import { useCurrentProjectId } from '@/hooks/useCurrentProjectId';
 import { useCitationHandler } from '../../citation-extraction/hooks/useCitationHandler';
 import { FullAnalysisResponse } from '../../../types/priorArtAnalysisTypes';
 import { InventionData } from '@/types/invention';
@@ -20,6 +20,8 @@ import SavedPriorArtTabContainer from '@/features/search/components/SavedPriorAr
 // NOTE: Prior Art Analysis temporarily disabled - may be reactivated in the future
 // import PriorArtAnalysisTabContainer from './PriorArtAnalysisTabContainer';
 import { SearchTabContainer } from '@/features/search/components/SearchTabContainer';
+// NOTE: Image Analysis temporarily disabled - may be reactivated in the future
+// import ImageAnalysisTabContainer from './ImageAnalysisTabContainer';
 import type { UseClaimSyncStateReturn } from '../hooks/useClaimSyncState';
 
 // Import new hooks and components
@@ -29,7 +31,7 @@ import { useClaimAmendment } from '../hooks/useClaimAmendment';
 import { useSidebarCitationLogic } from '../hooks/useSidebarCitationLogic';
 import { SidebarTabIcons } from './sidebar/SidebarTabIcons';
 import { ChatTab } from './sidebar/ChatTab';
-import { ClaimAmendmentModal } from './ClaimAmendmentModal';
+import { ClaimAmendmentModalShadcn } from './ClaimAmendmentModalShadcn';
 
 // Define the Message interface to match what useProjectSidebarData expects
 interface Message {
@@ -133,7 +135,11 @@ const ClaimSidebar: React.FC<ClaimSidebarProps> = ({
   claimSyncState,
 }) => {
   // --- Context ---
-  const { activeProjectId } = useProjectData();
+  // Prefer the route-derived projectId first, then fall back to context.
+  // This ensures data loads immediately on first render before context hydration.
+  const { activeProjectId: contextProjectId } = useProjectData();
+  const routeProjectId = useCurrentProjectId();
+  const activeProjectId = routeProjectId || contextProjectId;
   const router = useRouter();
 
   // --- Custom Hooks ---
@@ -216,8 +222,11 @@ const ClaimSidebar: React.FC<ClaimSidebarProps> = ({
     }
   }, [searchHistory, analysisSelectedSearchId]);
 
-  // Check if the Citations tab is active
+  // Check if the Citations tab is active (index 1 after removing Image Analysis tab)
   const isCitationsTabActive = activeTab === '1';
+
+  // Store reset function from Citations tab
+  const resetToCitationResultsRef = useRef<(() => void) | null>(null);
 
   // Wrapper for handleTabChange to clear notification
   const handleTabChange = useCallback(
@@ -238,13 +247,17 @@ const ClaimSidebar: React.FC<ClaimSidebarProps> = ({
         isActive={isCitationsTabActive}
         projectId={projectIdForChat}
         onApplyAmendmentToClaim1={updateClaimText}
+        onResetToCitationResults={resetFn => {
+          resetToCitationResultsRef.current = resetFn;
+        }}
       />
     ),
     // Only re-render when essential props change
     [isCitationsTabActive, projectIdForChat, updateClaimText]
   );
 
-  // Memoize the chat tab content
+  // Memoize the chat tab content with minimal dependencies
+  // Only re-render if projectId changes since other props are stable or rarely change
   const chatTabContent = useMemo(
     () => (
       <ChatTab
@@ -255,16 +268,132 @@ const ClaimSidebar: React.FC<ClaimSidebarProps> = ({
         refreshInventionData={refreshInventionData}
       />
     ),
+    // Reduce dependencies to prevent unnecessary re-renders
+    // activeProjectData changes frequently but ChatTab can handle null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectIdForChat] // Main dependency - other props are passed through but don't trigger re-render
+  );
+
+  // Memoize the entire tab contents array to prevent re-creating it on every render
+  const tabContents = useMemo(
+    () => [
+      // Search Tab - Restored with full functionality
+      <SearchTabContainer
+        key="search-tab"
+        searchHistory={searchHistory}
+        savedPriorArt={savedPriorArt}
+        parsedElements={parsedElements}
+        isLoading={isDataLoading}
+        isParsingClaim={isParsingClaim}
+        onSearch={onSearch}
+        onDirectSearch={onDirectSearch}
+        onSavePriorArt={onSavePriorArt}
+        onRemovePriorArt={handleRemovePriorArt}
+        onOpenPriorArtDetails={onOpenPriorArtDetails}
+        projectId={projectIdForChat}
+        refreshProjectData={refreshProjectData}
+        onExtractCitations={(searchId: string) => {
+          persistentSelectedSearchId.current = searchId;
+          setActiveSearchId(searchId);
+          onSetSelectedSearchId?.(searchId);
+        }}
+        onExtractCitationForReference={async (
+          searchId: string,
+          referenceNumber: string
+        ) => {
+          await handleExtractCitationForReference(searchId, referenceNumber);
+          return { isSuccess: true };
+        }}
+        onViewCitationsForReference={(
+          searchId: string,
+          referenceNumber: string
+        ) => {
+          persistentSelectedSearchId.current = searchId;
+          setActiveSearchId(searchId);
+          setSelectedReference(referenceNumber);
+          onSetSelectedSearchId?.(searchId);
+
+          // Reset combined analysis view to show individual results
+          if (resetToCitationResultsRef.current) {
+            resetToCitationResultsRef.current();
+          }
+
+          handleTabChange(1); // Switch to Citations tab (index 1 after removing Image Analysis tab)
+        }}
+        isActive={activeTab === '0'}
+        savedArtNumbers={savedArtNumbersSet}
+        excludedPatentNumbers={excludedPatentNumbersSet}
+        onSetSelectedSearchId={onSetSelectedSearchId}
+        setCitationContext={_setCitationContext}
+        setSelectedReference={setSelectedReference}
+        claimSyncState={claimSyncState}
+      />,
+
+      // NOTE: Image Analysis Tab temporarily removed - may be reactivated in the future
+      // <ImageAnalysisTabContainer
+      //   key="image-analysis-tab"
+      //   projectId={projectIdForChat}
+      // />,
+
+      // Citations Tab
+      citationsTab,
+
+      // Saved Prior Art Tab
+      <SavedPriorArtTabContainer
+        key="saved-prior-art-tab"
+        savedPriorArt={savedPriorArt}
+        handleRemovePriorArt={(index: number) => {
+          // Pass the actual saved prior art item at the index
+          const artToRemove = savedPriorArt[index];
+          logger.info('[ClaimSidebar] Handling remove prior art', {
+            index,
+            artToRemove,
+            savedPriorArtLength: savedPriorArt.length,
+          });
+          handleRemovePriorArt(index, artToRemove);
+        }}
+        onOpenPriorArtDetails={onOpenPriorArtDetails}
+        onRefreshList={refreshProjectData}
+      />,
+
+      // NOTE: Prior Art Analysis Tab temporarily removed - may be reactivated in the future
+      // <PriorArtAnalysisTabContainer
+      //   key="prior-art-analysis-tab"
+      //   claim1Text={claim1Text}
+      //   isAnalyzing={isAnalyzing}
+      //   analysisData={analysisData}
+      //   searchHistory={searchHistory}
+      //   projectId={projectIdForChat}
+      //   handleOpenApplyModal={handleOpenApplyModal}
+      //   onInsertClaim={handleInsertNewClaim}
+      // />,
+
+      // Chat Tab
+      chatTabContent,
+    ],
+    // Include all dependencies that affect tab content
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      activeProjectData,
+      // Data dependencies
+      searchHistory,
+      savedPriorArt,
+      parsedElements,
+      isDataLoading,
+      isParsingClaim,
+      savedArtNumbersSet,
+      excludedPatentNumbersSet,
+
+      // Stable callbacks and refs - these rarely change
       projectIdForChat,
-      analyzedInvention,
-      refreshInventionData,
+      activeTab,
+      claimSyncState,
+      citationsTab,
+      chatTabContent,
     ]
   );
 
   return (
-    <Box h="100%" position="relative">
+    <div className="h-full relative">
       <SidebarTabContainer
         activeTab={activeTab}
         handleTabChange={handleTabChange}
@@ -273,102 +402,21 @@ const ClaimSidebar: React.FC<ClaimSidebarProps> = ({
           'Citations',
           'Saved Prior Art',
           // NOTE: 'Prior Art Analysis' temporarily removed - may be reactivated in the future
+          // NOTE: 'Image Analysis' temporarily removed - may be reactivated in the future
           'Chat',
         ]}
         tabIcons={tabIcons}
-        tabContents={[
-          // Search Tab - Restored with full functionality
-          <SearchTabContainer
-            key="search-tab"
-            searchHistory={searchHistory}
-            savedPriorArt={savedPriorArt}
-            parsedElements={parsedElements}
-            isLoading={isDataLoading}
-            isParsingClaim={isParsingClaim}
-            onSearch={onSearch}
-            onDirectSearch={onDirectSearch}
-            onSavePriorArt={onSavePriorArt}
-            onRemovePriorArt={handleRemovePriorArt}
-            onOpenPriorArtDetails={onOpenPriorArtDetails}
-            projectId={projectIdForChat}
-            refreshProjectData={refreshProjectData}
-            onExtractCitations={searchId => {
-              persistentSelectedSearchId.current = searchId;
-              setActiveSearchId(searchId);
-              onSetSelectedSearchId?.(searchId);
-            }}
-            onExtractCitationForReference={async (
-              searchId,
-              referenceNumber
-            ) => {
-              await handleExtractCitationForReference(
-                searchId,
-                referenceNumber
-              );
-              return { isSuccess: true };
-            }}
-            onViewCitationsForReference={(searchId, referenceNumber) => {
-              persistentSelectedSearchId.current = searchId;
-              setActiveSearchId(searchId);
-              setSelectedReference(referenceNumber);
-              onSetSelectedSearchId?.(searchId);
-              handleTabChange(1); // Switch to Citations tab
-            }}
-            isActive={activeTab === '0'}
-            savedArtNumbers={savedArtNumbersSet}
-            excludedPatentNumbers={excludedPatentNumbersSet}
-            onSetSelectedSearchId={onSetSelectedSearchId}
-            setCitationContext={_setCitationContext}
-            setSelectedReference={setSelectedReference}
-            claimSyncState={claimSyncState}
-          />,
-
-          // Citations Tab
-          citationsTab,
-
-          // Saved Prior Art Tab
-          <SavedPriorArtTabContainer
-            key="saved-prior-art-tab"
-            savedPriorArt={savedPriorArt}
-            handleRemovePriorArt={(index: number) => {
-              // Pass the actual saved prior art item at the index
-              const artToRemove = savedPriorArt[index];
-              logger.log('[ClaimSidebar] Handling remove prior art', {
-                index,
-                artToRemove,
-                savedPriorArtLength: savedPriorArt.length,
-              });
-              handleRemovePriorArt(index, artToRemove);
-            }}
-            onOpenPriorArtDetails={onOpenPriorArtDetails}
-            onRefreshList={refreshProjectData}
-          />,
-
-          // NOTE: Prior Art Analysis Tab temporarily removed - may be reactivated in the future
-          // <PriorArtAnalysisTabContainer
-          //   key="prior-art-analysis-tab"
-          //   claim1Text={claim1Text}
-          //   isAnalyzing={isAnalyzing}
-          //   analysisData={analysisData}
-          //   searchHistory={searchHistory}
-          //   projectId={projectIdForChat}
-          //   handleOpenApplyModal={handleOpenApplyModal}
-          //   onInsertClaim={handleInsertNewClaim}
-          // />,
-
-          // Chat Tab
-          chatTabContent,
-        ]}
+        tabContents={tabContents}
       />
 
       {/* Claim Amendment Confirmation Modal */}
-      <ClaimAmendmentModal
+      <ClaimAmendmentModalShadcn
         isOpen={isConfirmOpen}
         onClose={onConfirmClose}
         onConfirm={handleConfirmAmendment}
         onCancel={handleCancelAmendment}
       />
-    </Box>
+    </div>
   );
 };
 

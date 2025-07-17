@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { AuthenticatedRequest } from '@/types/middleware';
 import {
   findProjectForAccess,
@@ -14,14 +14,24 @@ import {
   projectIdQuerySchema,
   latestQuerySchema,
 } from '@/lib/validation/schemas/shared/querySchemas';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 const apiLogger = createApiLogger('projects/versions');
+
+// Define a flexible schema for version sections
+const SectionSchema = z.object({
+  id: z.string().optional(),
+  type: z.string().optional(),
+  title: z.string().optional(),
+  content: z.string().optional(),
+  order: z.number().optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
 
 // Define validation schema for POST requests
 const postSchema = z.object({
   name: z.string().min(1, 'Version name is required').max(255),
-  sections: z.any().optional(), // Allow any sections structure for flexibility
+  sections: z.array(SectionSchema).optional(), // Now properly typed for flexibility
 });
 
 // Define request body type from schema
@@ -140,7 +150,7 @@ async function handler(
       const { createApplicationVersionFromDraft } = await import(
         '@/repositories/project'
       );
-      
+
       const newVersion = await createApplicationVersionFromDraft(
         String(projectId),
         userId,

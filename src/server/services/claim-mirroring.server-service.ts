@@ -1,4 +1,4 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { OpenaiServerService } from './openai.server-service';
 import { ClaimRepository } from '@/repositories/claimRepository';
@@ -26,10 +26,14 @@ interface MirroredClaim {
 }
 
 const TYPE_GUIDANCE = {
-  system: 'Start with "A system comprising..." and focus on structural components and their interconnections.',
-  method: 'Start with "A method comprising..." and focus on steps/actions performed.',
-  apparatus: 'Start with "An apparatus comprising..." and focus on physical components.',
-  process: 'Start with "A process for..." and focus on the sequence of operations.',
+  system:
+    'Start with "A system comprising..." and focus on structural components and their interconnections.',
+  method:
+    'Start with "A method comprising..." and focus on steps/actions performed.',
+  apparatus:
+    'Start with "An apparatus comprising..." and focus on physical components.',
+  process:
+    'Start with "A process for..." and focus on the sequence of operations.',
   crm: 'Start with "A non-transitory computer-readable medium storing instructions that when executed cause a processor to..." and focus on the stored instructions.',
 };
 
@@ -48,8 +52,11 @@ export class ClaimMirroringService {
 
     try {
       // Fetch existing claims
-      const existingClaims = await ClaimRepository.findByIds(claimIds, tenantId);
-      
+      const existingClaims = await ClaimRepository.findByIds(
+        claimIds,
+        tenantId
+      );
+
       if (existingClaims.length === 0) {
         throw new ApplicationError(
           ErrorCode.DB_RECORD_NOT_FOUND,
@@ -60,10 +67,15 @@ export class ClaimMirroringService {
       // Get all claims for the project to determine next claim number
       const invention = existingClaims[0].inventionId;
       const allClaims = await ClaimRepository.findByInventionId(invention);
-      const maxClaimNumber = Math.max(...allClaims.map((c: Claim) => c.number), 0);
+      const maxClaimNumber = Math.max(
+        ...allClaims.map((c: Claim) => c.number),
+        0
+      );
 
       // Sort claims by number for consistent processing
-      const sortedClaims = existingClaims.sort((a: Claim, b: Claim) => a.number - b.number);
+      const sortedClaims = existingClaims.sort(
+        (a: Claim, b: Claim) => a.number - b.number
+      );
 
       // Build claim text for prompt
       const claimsText = sortedClaims
@@ -87,9 +99,12 @@ export class ClaimMirroringService {
         const originalClaim = sortedClaims.find(
           (c: Claim) => c.number === mirrored.originalNumber
         );
-        
+
         // Handle dependencies
-        if (originalClaim && originalClaim.text.toLowerCase().includes('claim')) {
+        if (
+          originalClaim &&
+          originalClaim.text.toLowerCase().includes('claim')
+        ) {
           // Extract dependency from original claim
           const depMatch = originalClaim.text.match(/claim\s+(\d+)/i);
           if (depMatch) {
@@ -121,10 +136,13 @@ export class ClaimMirroringService {
         claimsToCreate
       );
 
-      logger.info('[ClaimMirroringService] Successfully created mirrored claims', {
-        projectId,
-        createdCount: result.count,
-      });
+      logger.info(
+        '[ClaimMirroringService] Successfully created mirrored claims',
+        {
+          projectId,
+          createdCount: result.count,
+        }
+      );
 
       return result.claims;
     } catch (error) {
@@ -168,7 +186,7 @@ export class ClaimMirroringService {
 
     try {
       const result = JSON.parse(response.content);
-      
+
       if (!result.mirroredClaims || !Array.isArray(result.mirroredClaims)) {
         throw new ApplicationError(
           ErrorCode.AI_INVALID_RESPONSE,
@@ -188,4 +206,4 @@ export class ClaimMirroringService {
       );
     }
   }
-} 
+}

@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 
 /**
  * Interface representing a user preference (key-value pair)

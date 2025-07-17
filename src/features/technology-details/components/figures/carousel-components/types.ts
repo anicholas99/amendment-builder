@@ -29,8 +29,12 @@ export interface Figure {
   content?: string | ReactFlowContent | unknown;
   // Text description of the figure
   description?: string;
+
+  title?: string;
   // Map of element IDs to their descriptions
   elements?: Record<string, unknown>;
+  // Database ID for API calls (optional for backwards compatibility)
+  _id?: string;
 }
 
 export type Figures = Record<string, Figure>;
@@ -55,6 +59,7 @@ export interface FigureContentProps {
   readOnly?: boolean;
   projectId?: string;
   onFigureAssigned?: (figureId: string, figureKey: string) => void;
+  inventionData?: any; // Optional invention data for Figure Management Modal
 }
 
 export interface FigureUploadAreaProps {
@@ -65,6 +70,7 @@ export interface FigureUploadAreaProps {
   readOnly?: boolean;
   projectId?: string;
   onFigureAssigned?: (figureId: string, figureKey: string) => void;
+  inventionData?: any; // Optional invention data for Figure Management Modal
 }
 
 export interface FigureControlsProps {
@@ -88,4 +94,5 @@ export interface FigureMetadataProps {
   onUpload?: () => void;
   onAddNewFigure?: () => void;
   onRenameFigure?: (newNumber: string) => void;
+  onManageAllFigures?: () => void;
 }

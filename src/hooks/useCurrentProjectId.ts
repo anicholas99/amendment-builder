@@ -1,5 +1,6 @@
 import { useRouter } from 'next/router';
 import { useProjectData } from '@/contexts/ProjectDataContext';
+import { logger } from '@/utils/clientLogger';
 
 /**
  * useCurrentProjectId
@@ -18,7 +19,18 @@ export function useCurrentProjectId(): string | null {
 
   const routeProjectId = router.query.projectId;
 
+  // Debug logging to understand hard refresh behavior
+  logger.debug('[useCurrentProjectId] Hook called', {
+    routeProjectId,
+    activeProjectId,
+    isReady: router.isReady,
+    asPath: router.asPath,
+  });
+
   if (typeof routeProjectId === 'string' && routeProjectId.trim() !== '') {
+    logger.debug('[useCurrentProjectId] Using route project ID', {
+      routeProjectId,
+    });
     return routeProjectId;
   }
 
@@ -26,8 +38,14 @@ export function useCurrentProjectId(): string | null {
   // window before Next.js populates `router.query` on the very first render).
   const match = router.asPath.match(/projects\/([^/]+)/);
   if (match && match[1]) {
+    logger.debug('[useCurrentProjectId] Using parsed project ID from URL', {
+      projectId: match[1],
+    });
     return match[1];
   }
 
+  logger.debug('[useCurrentProjectId] Falling back to context project ID', {
+    activeProjectId,
+  });
   return activeProjectId ?? null;
 }

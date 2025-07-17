@@ -39,12 +39,12 @@ const RATE_LIMIT_CONFIG = {
 
 // Auth0 configuration
 const AUTH0_CONFIG = {
-  DOMAIN: environment.auth.domain,
-  CLIENT_ID: environment.auth.clientId,
-  CLIENT_SECRET: environment.auth.clientSecret || '',
-  AUDIENCE: environment.auth.audience,
+  DOMAIN: environment.auth?.domain || '',
+  CLIENT_ID: environment.auth?.clientId || '',
+  CLIENT_SECRET: environment.auth?.clientSecret || '',
+  AUDIENCE: environment.auth?.audience || '',
   SCOPE: 'openid profile email',
-  SESSION_SECRET: environment.auth.sessionSecret,
+  SESSION_SECRET: environment.auth?.sessionSecret || '',
 };
 
 // Security headers
@@ -53,10 +53,10 @@ export const SECURITY_HEADERS = {
   CONTENT_SECURITY_POLICY: `
     default-src 'self';
     script-src 'self';
-    style-src 'self' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     img-src 'self' data: blob:;
-    font-src 'self';
-    connect-src 'self' https://api.openai.com ${environment.auth.domain};
+    font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com;
+    connect-src 'self' https://api.openai.com ${environment.auth?.domain || ''};
     frame-src 'none';
     object-src 'none';
   `

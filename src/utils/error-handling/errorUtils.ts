@@ -3,7 +3,7 @@
  * and type-safe error handling throughout the application.
  */
 
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 /**
  * Safely extracts an error message from an unknown error type

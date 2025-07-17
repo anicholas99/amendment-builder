@@ -1,7 +1,7 @@
 /**
  * Performance monitoring utilities for project switching
  */
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 interface PerformanceTimer {
   start: number;

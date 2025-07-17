@@ -4,8 +4,8 @@ import { z } from 'zod';
 import * as combinedAnalysisRepository from '@/repositories/combinedExaminerAnalysisRepository';
 import { CustomApiRequest } from '@/types/api';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
-import { logger } from '@/lib/monitoring/logger';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { logger } from '@/server/logger';
 
 // Query params schema
 const querySchema = z.object({
@@ -45,7 +45,10 @@ const handler = async (
       count: parsedAnalyses.length,
     });
 
-    res.status(200).json({ analyses: parsedAnalyses });
+    return res.status(200).json({
+      success: true,
+      data: { analyses: parsedAnalyses },
+    });
   } catch (error) {
     logger.error('Failed to retrieve combined analyses', {
       error,

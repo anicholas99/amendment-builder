@@ -2,25 +2,16 @@
  * Loading Overlay Component
  *
  * Professional loading overlay component to display during project switching or tenant switching
- * Implemented using React best practices and Chakra UI components
+ * Implemented using React best practices and shadcn/ui components
  */
 import React from 'react';
-import {
-  Box,
-  Flex,
-  Text,
-  VStack,
-  HStack,
-  Spinner,
-  useColorModeValue,
-  Center,
-  Portal,
-} from '@chakra-ui/react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
+import { createPortal } from 'react-dom';
 
 /**
  * Professional loading overlay component to display during project switching or tenant switching
- * Implemented using React best practices and Chakra UI components
+ * Implemented using React best practices and shadcn/ui components
  */
 interface LoadingOverlayProps {
   isSwitchingTenant?: boolean;
@@ -33,12 +24,6 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
   title,
   subtitle,
 }) => {
-  const bgColor = useColorModeValue('white', 'gray.900');
-  const textColor = useColorModeValue('gray.800', 'white');
-  const subtitleColor = useColorModeValue('gray.600', 'gray.400');
-  const spinnerColor = useColorModeValue('blue.500', 'blue.300');
-  const dotColor = useColorModeValue('blue.500', 'blue.400');
-
   // Set appropriate messages based on props or defaults
   const titleText =
     title ?? (isSwitchingTenant ? 'Switching Tenant' : 'Loading Project');
@@ -48,94 +33,57 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
       ? 'Redirecting to the selected tenant...'
       : 'Preparing your patent project data...');
 
-  return (
-    <Portal>
-      <AnimatePresence>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 9999,
-          }}
-        >
-          <Box
-            position="fixed"
-            top={0}
-            left={0}
-            right={0}
-            bottom={0}
-            bg={bgColor}
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            zIndex={9999}
-          >
-            <VStack spacing={6}>
-              {/* Spinner */}
-              <Box position="relative">
-                <Spinner
-                  thickness="4px"
-                  speed="0.65s"
-                  emptyColor="gray.200"
-                  color={spinnerColor}
-                  size="xl"
-                  w={20}
-                  h={20}
-                />
-              </Box>
+  const overlay = (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-background"
+      >
+        <div className="flex flex-col items-center space-y-6">
+          {/* Spinner */}
+          <div className="relative">
+            <div className="w-20 h-20 border-4 border-gray-200 border-t-blue-500 dark:border-gray-700 dark:border-t-blue-300 rounded-full animate-spin" />
+          </div>
 
-              {/* Title */}
-              <Text
-                fontSize="2xl"
-                fontWeight="bold"
-                color={textColor}
-                textAlign="center"
-              >
-                {titleText}
-              </Text>
+          {/* Title */}
+          <h2 className="text-2xl font-bold text-foreground text-center">
+            {titleText}
+          </h2>
 
-              {/* Subtitle */}
-              <Text
-                fontSize="md"
-                color={subtitleColor}
-                textAlign="center"
-                maxW="md"
-                px={4}
-              >
-                {subtitleText}
-              </Text>
+          {/* Subtitle */}
+          <p className="text-base text-muted-foreground text-center max-w-md px-4">
+            {subtitleText}
+          </p>
 
-              {/* Loading dots animation */}
-              <HStack spacing={2}>
-                {[0, 1, 2].map(index => (
-                  <motion.div
-                    key={index}
-                    animate={{
-                      scale: [1, 1.2, 1],
-                      opacity: [0.7, 1, 0.7],
-                    }}
-                    transition={{
-                      duration: 1.5,
-                      repeat: Infinity,
-                      delay: index * 0.3,
-                      ease: 'easeInOut',
-                    }}
-                  >
-                    <Box w={2} h={2} bg={dotColor} borderRadius="full" />
-                  </motion.div>
-                ))}
-              </HStack>
-            </VStack>
-          </Box>
-        </motion.div>
-      </AnimatePresence>
-    </Portal>
+          {/* Loading dots animation */}
+          <div className="flex items-center space-x-2">
+            {[0, 1, 2].map(index => (
+              <motion.div
+                key={index}
+                animate={{
+                  scale: [1, 1.2, 1],
+                  opacity: [0.7, 1, 0.7],
+                }}
+                transition={{
+                  duration: 1.5,
+                  repeat: Infinity,
+                  delay: index * 0.3,
+                  ease: 'easeInOut',
+                }}
+                className="w-2 h-2 bg-blue-500 dark:bg-blue-400 rounded-full"
+              />
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    </AnimatePresence>
   );
+
+  // Use createPortal to render the overlay at the document body level
+  return typeof document !== 'undefined'
+    ? createPortal(overlay, document.body)
+    : overlay;
 };

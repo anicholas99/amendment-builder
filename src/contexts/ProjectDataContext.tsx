@@ -11,11 +11,12 @@ import React, {
   useCallback,
   useMemo,
 } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import {
   useSetActiveProjectMutation,
   useClearActiveProjectMutation,
 } from '@/hooks/api/useProjects';
+import { useProjectCleanup } from '@/hooks/useProjectCleanup';
 
 interface ProjectDataContextValue {
   activeProjectId: string | null;
@@ -37,6 +38,9 @@ export function ProjectDataProvider({
 
   const setActiveProjectMutation = useSetActiveProjectMutation();
   const clearActiveProjectMutation = useClearActiveProjectMutation();
+
+  // Use the cleanup hook to clear data when project changes
+  useProjectCleanup(activeProjectId);
 
   const setActiveProject = useCallback(
     (projectId: string | null) => {

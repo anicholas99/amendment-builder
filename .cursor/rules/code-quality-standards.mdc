@@ -108,12 +108,12 @@ This rule documents the established patterns and standards for maintaining high 
   ```typescript
   // ✅ DO: Call hooks at top level
   const MyComponent = () => {
-    const theme = useColorModeValue('light', 'dark');
+    const theme = useTheme();
     const [state, setState] = useState(false);
     
     // ❌ DON'T: Call hooks conditionally
     if (someCondition) {
-      const value = useColorModeValue('light', 'dark'); // ERROR!
+      const value = useTheme(); // ERROR!
     }
   ```
 
@@ -137,25 +137,25 @@ This rule documents the established patterns and standards for maintaining high 
 ## 🎨 UI Component Guidelines
 
 ### Framework Usage
-- **Prefer abstracted UI components** from `@/ui` over direct Chakra imports
+- **Use consistent UI components** from `@/components/ui` for reusable elements
 - **Keep UI framework-specific code** isolated to the `src/ui` directory
 - **Pattern**:
   ```typescript
-  // ✅ DO: Use direct Chakra UI imports with proper imports
-  import { Button, Text, Box } from '@chakra-ui/react';
+  // ✅ DO: Use Tailwind CSS classes and component abstractions
+  import { Button } from '@/components/ui/button';
   
   const MyComponent = () => (
-    <Box p={4}>
-      <Text fontSize="lg" fontWeight="bold">Clean Code</Text>
-      <Button colorScheme="blue" onClick={handleAction}>
+    <div className="p-4">
+      <h2 className="text-lg font-bold">Clean Code</h2>
+      <Button variant="primary" onClick={handleAction}>
         Action
       </Button>
-    </Box>
+    </div>
   );
   
-  // ❌ DON'T: Mix different import sources
+  // ❌ DON'T: Mix different UI libraries
   import { Box } from 'some-other-ui-lib';
-  import { Button } from '@chakra-ui/react';
+  import { Button } from 'another-ui-lib';
   ```
 
 ## 📐 Type Safety

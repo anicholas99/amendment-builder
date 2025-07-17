@@ -1,78 +1,30 @@
-// TODO(migration): Remove when IPD Identity integration is complete
-// This file handles Auth0 sessions which will be replaced by IPD Identity OAuth flow
-import { getSession as getAuth0Session } from '@auth0/nextjs-auth0';
+/**
+ * Session wrapper that provides a consistent interface regardless of auth provider
+ *
+ * This file now just re-exports from the auth manager for backward compatibility.
+ * All auth operations go through the auth manager.
+ */
+
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { getSession as getAuthManagerSession } from './authManager';
+import { AuthSession, AuthUser, AuthTenant } from './types';
 
-export interface AppUser {
-  id: string;
-  email: string;
-  name?: string;
-  picture?: string;
-}
-
-export interface AppTenant {
-  id: string;
-  slug: string;
-  name: string;
-}
-
-export interface AppSession {
-  user: AppUser;
-  currentTenant?: AppTenant;
-  permissions: string[];
-  tenants: AppTenant[];
-}
+// Re-export types for backward compatibility
+export type AppUser = AuthUser;
+export type AppTenant = AuthTenant;
+export type AppSession = AuthSession;
 
 /**
- * Generic session wrapper that abstracts away Auth0 specifics
- * This allows us to swap auth providers later with minimal changes
+ * Get the current session from the auth manager
  *
- * Supports both:
- * - Cookie-based sessions (current Auth0 implementation)
- * - Bearer token in Authorization header (future OAuth support)
+ * This function maintains the same signature as before but now delegates
+ * to the auth manager which handles provider-specific logic.
  */
 export async function getSession(
   req: NextApiRequest,
   res: NextApiResponse
 ): Promise<AppSession | null> {
-  // TODO(migration): When IPD Identity is ready, check for bearer token first
-  // This will allow API clients to authenticate directly with IPD tokens
-  // without going through the Auth0 session flow
-
-  const session = await getAuth0Session(req, res);
-  if (!session?.user) return null;
-
-  // Extract Auth0-specific fields and normalize them
-  const user: AppUser = {
-    id: session.user.sub!,
-    email: session.user.email!,
-    name: session.user.name || undefined,
-    picture: session.user.picture || undefined,
-  };
-
-  // Extract tenant information from Auth0 custom claims
-  const currentTenant: AppTenant | undefined = session.user[
-    'https://patentdraft/tenant_id'
-  ]
-    ? {
-        id: session.user['https://patentdraft/tenant_id'],
-        slug: session.user['https://patentdraft/tenant_slug'] || '',
-        name: session.user['https://patentdraft/tenant_name'] || '',
-      }
-    : undefined;
-
-  // Extract permissions and tenants arrays
-  const permissions: string[] =
-    session.user['https://patentdraft/permissions'] || [];
-  const tenants: AppTenant[] =
-    session.user['https://patentdraft/tenants'] || [];
-
-  return {
-    user,
-    currentTenant,
-    permissions,
-    tenants,
-  };
+  return getAuthManagerSession(req, res);
 }
 
 /**

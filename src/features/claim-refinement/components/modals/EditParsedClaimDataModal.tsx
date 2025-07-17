@@ -1,72 +1,59 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Button,
-  HStack,
-  Text,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  ModalCloseButton,
-  VStack,
-  Divider,
-  Textarea,
-  useToast,
-  IconButton,
-  Input,
-  Card,
-  CardBody,
-  Badge,
-  Tooltip,
-  Tabs,
-  TabList,
-  TabPanels,
-  Tab,
-  TabPanel,
-  useColorModeValue,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  MenuDivider,
-} from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import {
   FiRefreshCw,
   FiTrash2,
-  FiEdit2,
   FiPlus,
   FiInfo,
   FiChevronDown,
+  FiList,
+  FiSearch,
+  FiCheck,
+  FiX,
 } from 'react-icons/fi';
-import {
-  modalStyles,
-  modalButtonStyles,
-} from '@/components/common/ModalStyles';
+import { useToast } from '@/hooks/useToastWrapper';
+import { cn } from '@/lib/utils';
 
-// Simplified ParsedElement interface without type categorization
-interface ParsedElement {
-  text: string;
-}
+// shadcn/ui imports
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
 interface EditParsedClaimDataModalProps {
   isOpen: boolean;
   onClose: () => void;
-  parsedElements: ParsedElement[] | string[];
+  parsedElements: string[];
   searchQueries: string[];
-  onSave: (data: {
-    elements: ParsedElement[];
-    queries: string[];
-  }) => Promise<void>;
+  onSave: (data: { elements: string[]; queries: string[] }) => Promise<void>;
   onSaveAndResync: (data: {
-    elements: ParsedElement[];
+    elements: string[];
     queries: string[];
   }) => Promise<void>;
   onResyncElementsOnly?: () => Promise<void>;
-  onResyncQueriesOnly?: (elements: ParsedElement[]) => Promise<void>;
+  onResyncQueriesOnly?: (elements: string[]) => Promise<void>;
 }
 
 export const EditParsedClaimDataModal: React.FC<
@@ -82,37 +69,17 @@ export const EditParsedClaimDataModal: React.FC<
   onResyncQueriesOnly,
 }) => {
   const [editedQueries, setEditedQueries] = useState<string[]>([]);
-  const [editedElements, setEditedElements] = useState<ParsedElement[]>([]);
-  const [editingElementIndex, setEditingElementIndex] = useState<number | null>(
-    null
-  );
+  const [editedElements, setEditedElements] = useState<string[]>([]);
   const [isAddingElement, setIsAddingElement] = useState(false);
   const [newElementText, setNewElementText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
   const toast = useToast();
-
-  // Theme colors
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const cardBg = useColorModeValue('white', 'gray.700');
-  const addCardBg = useColorModeValue('blue.50', 'blue.900');
-  const addCardBorder = useColorModeValue('blue.300', 'blue.600');
-
-  // Convert string elements to ParsedElement objects if needed
-  const convertToParsedElements = (
-    elements: ParsedElement[] | string[]
-  ): ParsedElement[] => {
-    return elements.map(element => {
-      if (typeof element === 'string') {
-        return { text: element };
-      }
-      return element;
-    });
-  };
 
   useEffect(() => {
     if (isOpen) {
       setEditedQueries(searchQueries || []);
-      setEditedElements(convertToParsedElements(parsedElements || []));
+      setEditedElements(parsedElements || []);
     }
   }, [isOpen, searchQueries, parsedElements]);
 
@@ -120,7 +87,7 @@ export const EditParsedClaimDataModal: React.FC<
     setIsSaving(true);
     try {
       await onSave({
-        elements: editedElements.filter(el => el.text.trim()),
+        elements: editedElements.filter(el => el.trim()),
         queries: editedQueries.filter(q => q.trim()),
       });
       toast({
@@ -128,7 +95,6 @@ export const EditParsedClaimDataModal: React.FC<
         description:
           'Elements and queries have been saved. Your next search will use these updated values.',
         status: 'success',
-        duration: 4000,
       });
       onClose();
     } catch (error) {
@@ -138,7 +104,6 @@ export const EditParsedClaimDataModal: React.FC<
         description:
           'Failed to save changes. Please check your connection and try again.',
         status: 'error',
-        duration: 6000,
       });
     } finally {
       setIsSaving(false);
@@ -149,7 +114,7 @@ export const EditParsedClaimDataModal: React.FC<
     setIsSaving(true);
     try {
       await onSaveAndResync({
-        elements: editedElements.filter(el => el.text.trim()),
+        elements: editedElements.filter(el => el.trim()),
         queries: editedQueries.filter(q => q.trim()),
       });
       toast({
@@ -157,16 +122,16 @@ export const EditParsedClaimDataModal: React.FC<
         description:
           'Your changes have been saved and a resync is in progress.',
         status: 'success',
-        duration: 4000,
       });
       onClose();
     } catch (error) {
-      logger.error('Save and resync failed in EditParsedClaimDataModal', { error });
+      logger.error('Save and resync failed in EditParsedClaimDataModal', {
+        error,
+      });
       toast({
         title: 'Operation failed',
         description: 'Could not save and resync. Please try again.',
         status: 'error',
-        duration: 6000,
       });
     } finally {
       setIsSaving(false);
@@ -178,13 +143,11 @@ export const EditParsedClaimDataModal: React.FC<
 
     setIsSaving(true);
     try {
-      // First save the current queries
       await onSave({
-        elements: editedElements.filter(el => el.text.trim()),
+        elements: editedElements.filter(el => el.trim()),
         queries: editedQueries.filter(q => q.trim()),
       });
 
-      // Then resync elements
       await onResyncElementsOnly();
 
       toast({
@@ -192,16 +155,16 @@ export const EditParsedClaimDataModal: React.FC<
         description:
           'Elements have been regenerated from claim text. Your custom queries are preserved.',
         status: 'success',
-        duration: 4000,
       });
       onClose();
     } catch (error) {
-      logger.error('Resync elements failed in EditParsedClaimDataModal', { error });
+      logger.error('Resync elements failed in EditParsedClaimDataModal', {
+        error,
+      });
       toast({
         title: 'Resync failed',
         description: 'Could not resync elements. Please try again.',
         status: 'error',
-        duration: 6000,
       });
     } finally {
       setIsSaving(false);
@@ -213,29 +176,27 @@ export const EditParsedClaimDataModal: React.FC<
 
     setIsSaving(true);
     try {
-      // Save current elements first
       await onSave({
-        elements: editedElements.filter(el => el.text.trim()),
+        elements: editedElements.filter(el => el.trim()),
         queries: editedQueries.filter(q => q.trim()),
       });
 
-      // Then regenerate queries from the edited elements
-      await onResyncQueriesOnly(editedElements.filter(el => el.text.trim()));
+      await onResyncQueriesOnly(editedElements.filter(el => el.trim()));
 
       toast({
         title: 'Queries Regenerated',
         description: 'Search queries have been regenerated from your elements.',
         status: 'success',
-        duration: 4000,
       });
       onClose();
     } catch (error) {
-      logger.error('Resync queries failed in EditParsedClaimDataModal', { error });
+      logger.error('Resync queries failed in EditParsedClaimDataModal', {
+        error,
+      });
       toast({
         title: 'Resync failed',
         description: 'Could not regenerate queries. Please try again.',
         status: 'error',
-        duration: 6000,
       });
     } finally {
       setIsSaving(false);
@@ -249,299 +210,323 @@ export const EditParsedClaimDataModal: React.FC<
 
   const handleEditElement = (index: number, value: string) => {
     const newElements = [...editedElements];
-    newElements[index] = { text: value };
+    newElements[index] = value;
     setEditedElements(newElements);
   };
 
   const handleAddElement = () => {
     if (newElementText.trim()) {
-      setEditedElements([...editedElements, { text: newElementText.trim() }]);
+      setEditedElements([...editedElements, newElementText.trim()]);
       setNewElementText('');
       setIsAddingElement(false);
     }
   };
 
-  // Render the elements section
-  const renderElementsSection = () => (
-    <Box>
-      <HStack justify="space-between" mb={3}>
-        <HStack>
-          <Text fontWeight="bold" fontSize="lg">
-            Parsed Elements
-          </Text>
-          <Badge colorScheme="blue">{editedElements.length}</Badge>
-        </HStack>
-        <Button
-          size="sm"
-          leftIcon={<FiPlus />}
-          onClick={() => setIsAddingElement(true)}
-          colorScheme="blue"
-          variant="ghost"
-        >
-          Add Element
-        </Button>
-      </HStack>
-
-      <VStack align="stretch" spacing={3}>
-        {editedElements.map((element, index) => (
-          <Card key={index} variant="outline" bg={cardBg}>
-            <CardBody py={2}>
-              {editingElementIndex === index ? (
-                <VStack align="stretch" spacing={2}>
-                  <Input
-                    value={element.text}
-                    onChange={e => handleEditElement(index, e.target.value)}
-                    placeholder="Enter element text"
-                    size="md"
-                  />
-                  <HStack>
-                    <Button
-                      size="sm"
-                      onClick={() => setEditingElementIndex(null)}
-                      colorScheme="blue"
-                    >
-                      Done
-                    </Button>
-                  </HStack>
-                </VStack>
-              ) : (
-                <HStack justify="space-between" align="center">
-                  <Text fontSize="md">{element.text}</Text>
-                  <HStack>
-                    <IconButton
-                      aria-label="Edit element"
-                      icon={<FiEdit2 />}
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setEditingElementIndex(index)}
-                    />
-                    <IconButton
-                      aria-label="Delete element"
-                      icon={<FiTrash2 />}
-                      size="sm"
-                      variant="ghost"
-                      colorScheme="red"
-                      onClick={() => handleDeleteElement(index)}
-                    />
-                  </HStack>
-                </HStack>
-              )}
-            </CardBody>
-          </Card>
-        ))}
-
-        {isAddingElement && (
-          <Card
-            variant="outline"
-            borderStyle="dashed"
-            borderColor={addCardBorder}
-            bg={addCardBg}
-          >
-            <CardBody>
-              <VStack align="stretch" spacing={3}>
-                <Input
-                  placeholder="Enter element text"
-                  value={newElementText}
-                  onChange={e => setNewElementText(e.target.value)}
-                  size="md"
-                />
-                <HStack>
-                  <Button
-                    colorScheme="blue"
-                    onClick={handleAddElement}
-                    isDisabled={!newElementText.trim()}
-                    size="sm"
-                  >
-                    Add
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setIsAddingElement(false);
-                      setNewElementText('');
-                    }}
-                    size="sm"
-                  >
-                    Cancel
-                  </Button>
-                </HStack>
-              </VStack>
-            </CardBody>
-          </Card>
-        )}
-      </VStack>
-    </Box>
+    // Render modern element item
+  const renderElementItem = (element: string, index: number) => (
+    <div
+      key={index}
+      className="group relative rounded border bg-card p-2 hover:bg-accent/50 transition-colors"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          className="text-sm flex-1 leading-relaxed outline-none focus:bg-accent/20 rounded px-1 py-0.5 transition-colors"
+          onBlur={e => handleEditElement(index, e.currentTarget.textContent || '')}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
+          dangerouslySetInnerHTML={{ __html: element }}
+        />
+        <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleDeleteElement(index)}
+                  className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <FiTrash2 className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Delete element</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </div>
+    </div>
   );
 
-  // Render the queries section
-  const renderQueriesSection = () => (
-    <Box>
-      <HStack justify="space-between" mb={3}>
-        <HStack>
-          <Text fontWeight="bold" fontSize="lg">
-            Search Queries
-          </Text>
-          <Badge colorScheme="green">{editedQueries.length}</Badge>
-          <Tooltip label="These queries are used to find relevant prior art. Each query approaches the search from a different angle.">
-            <IconButton
-              aria-label="Query info"
-              icon={<FiInfo />}
-              size="sm"
-              variant="ghost"
-            />
-          </Tooltip>
-        </HStack>
-        <Button
-          size="sm"
-          leftIcon={<FiPlus />}
-          onClick={() => setEditedQueries([...editedQueries, ''])}
-          colorScheme="green"
-          variant="ghost"
-        >
-          Add Query
-        </Button>
-      </HStack>
-
-      <VStack align="stretch" spacing={4}>
-        {editedQueries.map((query, index) => (
-          <Card key={index} variant="outline" bg={cardBg}>
-            <CardBody py={3}>
-              <VStack align="stretch" spacing={2}>
-                <HStack justify="space-between">
-                  <Badge colorScheme="green">Query {index + 1}</Badge>
-                  <IconButton
-                    aria-label="Delete query"
-                    icon={<FiTrash2 />}
-                    size="sm"
-                    variant="ghost"
-                    colorScheme="red"
-                    onClick={() => {
-                      setEditedQueries(
-                        editedQueries.filter((_, i) => i !== index)
-                      );
-                    }}
-                  />
-                </HStack>
-                <Textarea
-                  value={query}
-                  onChange={e => {
-                    const newQueries = [...editedQueries];
-                    newQueries[index] = e.target.value;
-                    setEditedQueries(newQueries);
-                  }}
-                  minH="80px"
-                  resize="vertical"
-                  fontSize="md"
-                  placeholder="Enter search query text..."
-                />
-              </VStack>
-            </CardBody>
-          </Card>
-        ))}
-      </VStack>
-    </Box>
+  // Render modern query item
+  const renderQueryItem = (query: string, index: number) => (
+    <div
+      key={index}
+      className="group relative rounded border bg-card p-2 hover:bg-accent/50 transition-colors"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded">
+          Q{index + 1}
+        </span>
+        <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setEditedQueries(
+                      editedQueries.filter((_, i) => i !== index)
+                    )
+                  }
+                  className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <FiTrash2 className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Delete query</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </div>
+      <div
+        contentEditable
+        suppressContentEditableWarning
+        className="text-sm leading-relaxed outline-none focus:bg-accent/20 rounded px-1 py-0.5 transition-colors min-h-[100px]"
+        onBlur={e => {
+          const newQueries = [...editedQueries];
+          newQueries[index] = e.currentTarget.textContent || '';
+          setEditedQueries(newQueries);
+        }}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && e.ctrlKey) {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+        }}
+        dangerouslySetInnerHTML={{ __html: query }}
+        style={{ whiteSpace: 'pre-wrap' }}
+      />
+    </div>
   );
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="xl">
-      <ModalOverlay {...modalStyles.overlay} />
-      <ModalContent maxH="85vh">
-        <ModalHeader {...modalStyles.header} borderColor={borderColor}>
-          <Text>Edit Parsed Claim Data</Text>
-        </ModalHeader>
-        <ModalCloseButton />
+    <TooltipProvider>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-5xl max-h-[85vh] p-0">
+          <DialogHeader className="px-4 py-3 border-b">
+            <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+              <FiList className="h-4 w-4" />
+              Edit Parsed Claim Data
+            </DialogTitle>
+          </DialogHeader>
 
-        <ModalBody {...modalStyles.body}>
-          <Tabs variant="enclosed" colorScheme="blue" isLazy>
-            <TabList>
-              <Tab>
-                <HStack spacing={2}>
-                  <Text>Elements</Text>
-                  <Badge colorScheme="blue" variant="solid">
-                    {editedElements.length}
-                  </Badge>
-                </HStack>
-              </Tab>
-              <Tab>
-                <HStack spacing={2}>
-                  <Text>Search Queries</Text>
-                  <Badge colorScheme="green" variant="solid">
-                    {editedQueries.length}
-                  </Badge>
-                </HStack>
-              </Tab>
-            </TabList>
+          <div className="grid grid-cols-2 min-h-[650px]">
+            {/* Elements Section */}
+            <div className="border-r bg-slate-50/50 dark:bg-slate-900/20">
+              <div className="p-4">
+                {/* Elements Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <FiList className="h-4 w-4 text-blue-600" />
+                    <h3 className="font-medium text-sm">Parsed Elements</h3>
+                    <Badge variant="secondary" className="text-xs">
+                      {editedElements.length}
+                    </Badge>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setIsAddingElement(true)}
+                    variant="outline"
+                    className="h-7 text-xs"
+                  >
+                    <FiPlus className="h-3 w-3 mr-1" />
+                    Add
+                  </Button>
+                </div>
 
-            <TabPanels>
-              <TabPanel px={0}>{renderElementsSection()}</TabPanel>
-              <TabPanel px={0}>{renderQueriesSection()}</TabPanel>
-            </TabPanels>
-          </Tabs>
-        </ModalBody>
+                <ScrollArea className="h-[570px] pr-2">
+                  <div className="space-y-2">
+                    {editedElements.map((element, index) =>
+                      renderElementItem(element, index)
+                    )}
 
-        <ModalFooter {...modalStyles.footer} borderColor={borderColor}>
-          <HStack spacing={3}>
-            <Button onClick={onClose} {...modalButtonStyles.secondary}>
-              Cancel
-            </Button>
-            <Menu>
-              <MenuButton
-                as={Button}
-                leftIcon={<FiRefreshCw />}
-                rightIcon={<FiChevronDown />}
-                colorScheme="blue"
+                    {/* Add Element Form */}
+                    {isAddingElement && (
+                      <Card className="border-2 border-dashed border-blue-300 bg-blue-50/50 dark:bg-blue-900/20">
+                        <CardContent className="p-3">
+                          <div className="space-y-3">
+                            <Input
+                              placeholder="Enter element text"
+                              value={newElementText}
+                              onChange={e => setNewElementText(e.target.value)}
+                              autoFocus
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  handleAddElement();
+                                } else if (e.key === 'Escape') {
+                                  setIsAddingElement(false);
+                                  setNewElementText('');
+                                }
+                              }}
+                            />
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setIsAddingElement(false);
+                                  setNewElementText('');
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={handleAddElement}
+                                disabled={!newElementText.trim()}
+                              >
+                                Add Element
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+
+            {/* Queries Section */}
+            <div>
+              <div className="p-4">
+                {/* Queries Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <FiSearch className="h-4 w-4 text-emerald-600" />
+                    <h3 className="font-medium text-sm">Search Queries</h3>
+                    <Badge variant="secondary" className="text-xs">
+                      {editedQueries.length}
+                    </Badge>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setEditedQueries([...editedQueries, ''])}
+                    variant="outline"
+                    className="h-7 text-xs"
+                  >
+                    <FiPlus className="h-3 w-3 mr-1" />
+                    Add
+                  </Button>
+                </div>
+
+                <ScrollArea className="h-[570px] pr-2">
+                  <div className="space-y-1">
+                    {editedQueries.map((query, index) =>
+                      renderQueryItem(query, index)
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="px-4 py-3 border-t bg-muted/20">
+            <div className="flex items-center justify-between w-full">
+              <Button
+                onClick={onClose}
                 variant="outline"
-                isLoading={isSaving}
+                disabled={isSaving}
+                size="sm"
               >
-                Resync Options
-              </MenuButton>
-              <MenuList>
-                <MenuItem onClick={handleResync} icon={<FiRefreshCw />}>
-                  <VStack align="start" spacing={0}>
-                    <Text fontWeight="medium">Full Resync</Text>
-                    <Text fontSize="xs" color="text.secondary">
-                      Regenerate both elements & queries from claim
-                    </Text>
-                  </VStack>
-                </MenuItem>
-                <MenuDivider />
-                <MenuItem
-                  onClick={handleResyncElementsOnly}
-                  icon={<FiRefreshCw />}
-                  isDisabled={!onResyncElementsOnly}
+                Cancel
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className="inline-flex items-center justify-center h-10 px-4 py-2 text-sm font-medium rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:pointer-events-none"
+                    disabled={isSaving}
+                  >
+                    <FiRefreshCw className="h-4 w-4 mr-2" />
+                    Resync
+                    <FiChevronDown className="h-4 w-4 ml-2" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-64">
+                    <DropdownMenuItem
+                      onClick={handleResync}
+                      className="cursor-pointer"
+                    >
+                      <div className="flex flex-col items-start gap-1">
+                        <span className="font-medium">Full Resync</span>
+                        <span className="text-xs text-muted-foreground">
+                          Regenerate both elements & queries
+                        </span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {onResyncElementsOnly && (
+                      <DropdownMenuItem
+                        onClick={handleResyncElementsOnly}
+                        className="cursor-pointer"
+                      >
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="font-medium">Elements Only</span>
+                          <span className="text-xs text-muted-foreground">
+                            Re-parse claim, keep queries
+                          </span>
+                        </div>
+                      </DropdownMenuItem>
+                    )}
+                    {onResyncQueriesOnly && (
+                      <DropdownMenuItem
+                        onClick={handleResyncQueriesOnly}
+                        className="cursor-pointer"
+                      >
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="font-medium">Queries Only</span>
+                          <span className="text-xs text-muted-foreground">
+                            Regenerate from elements
+                          </span>
+                        </div>
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="min-w-[120px]"
                 >
-                  <VStack align="start" spacing={0}>
-                    <Text fontWeight="medium">Resync Elements Only</Text>
-                    <Text fontSize="xs" color="text.secondary">
-                      Re-parse claim, keep your queries
-                    </Text>
-                  </VStack>
-                </MenuItem>
-                <MenuItem
-                  onClick={handleResyncQueriesOnly}
-                  icon={<FiRefreshCw />}
-                  isDisabled={!onResyncQueriesOnly}
-                >
-                  <VStack align="start" spacing={0}>
-                    <Text fontWeight="medium">Resync Queries Only</Text>
-                    <Text fontSize="xs" color="text.secondary">
-                      Regenerate queries from current elements
-                    </Text>
-                  </VStack>
-                </MenuItem>
-              </MenuList>
-            </Menu>
-            <Button
-              {...modalButtonStyles.primary}
-              onClick={handleSave}
-              isLoading={isSaving}
-              loadingText="Saving..."
-            >
-              Save Changes
-            </Button>
-          </HStack>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+                  {isSaving ? (
+                    <>
+                      <FiRefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <FiCheck className="h-4 w-4 mr-2" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </TooltipProvider>
   );
 };

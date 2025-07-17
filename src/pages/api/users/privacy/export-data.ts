@@ -1,10 +1,10 @@
 import { NextApiResponse, NextApiRequest } from 'next';
 import { CustomApiRequest } from '@/types/api';
-import { auditPrivacyEvent } from '@/lib/monitoring/audit-logger';
-import { logger } from '@/lib/monitoring/logger';
+import { auditPrivacyEvent } from '@/server/monitoring/audit-logger';
+import { logger } from '@/server/logger';
 import { z } from 'zod';
 import { exportUserData } from '@/repositories/userRepository';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
 
 const querySchema = z.object({
   format: z.enum(['json', 'csv']).optional().default('json'),
@@ -60,7 +60,10 @@ Total Searches: ${exportData.searchHistory.length}`;
       'Content-Disposition',
       `attachment; filename="patent-drafter-export-${Date.now()}.json"`
     );
-    return res.status(200).json(exportPayload);
+    return res.status(200).json({
+      success: true,
+      data: exportPayload,
+    });
   } catch (error) {
     logger.error('Error exporting user data:', { userId, error });
     return res.status(500).json({

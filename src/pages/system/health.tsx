@@ -1,93 +1,75 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  Box,
-  Heading,
-  Text,
-  VStack,
-  HStack,
-  Badge,
-  Progress,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatHelpText,
-  SimpleGrid,
-  Card,
-  CardHeader,
-  CardBody,
-  Icon,
-  useColorModeValue,
-  Spinner,
-  Button,
-  Alert,
-  AlertIcon,
-  AlertTitle,
-  AlertDescription,
-  Divider,
-  Code,
-  Accordion,
-  AccordionItem,
-  AccordionButton,
-  AccordionPanel,
-  AccordionIcon,
-  Tooltip,
-} from '@chakra-ui/react';
-import {
-  FiCheckCircle,
-  FiAlertCircle,
-  FiXCircle,
-  FiRefreshCw,
-  FiServer,
-  FiDatabase,
-  FiCloud,
-  FiCpu,
-  FiHardDrive,
-} from 'react-icons/fi';
+  CheckCircle,
+  AlertCircle,
+  XCircle,
+  RefreshCw,
+  Server,
+  Database,
+  Cloud,
+  Cpu,
+  HardDrive,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { useApiQuery } from '@/lib/api/queryClient';
-import { SystemHealth, HealthStatus } from '@/lib/monitoring/health-check';
+import { SystemHealth, HealthStatus } from '@/types/health';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { systemHealthKeys } from '@/lib/queryKeys/systemKeys';
+import AppLayout from '@/components/layouts/AppLayout';
+import { LoadingState } from '@/components/common/LoadingState';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 
 const getStatusColor = (status: HealthStatus) => {
   switch (status) {
     case 'healthy':
-      return 'green';
+      return 'success';
     case 'degraded':
-      return 'yellow';
+      return 'warning';
     case 'unhealthy':
-      return 'red';
+      return 'destructive';
     default:
-      return 'gray';
+      return 'secondary';
   }
 };
 
 const getStatusIcon = (status: HealthStatus) => {
   switch (status) {
     case 'healthy':
-      return FiCheckCircle;
+      return CheckCircle;
     case 'degraded':
-      return FiAlertCircle;
+      return AlertCircle;
     case 'unhealthy':
-      return FiXCircle;
+      return XCircle;
     default:
-      return FiAlertCircle;
+      return AlertCircle;
   }
 };
 
 const getCheckIcon = (checkName: string) => {
   switch (checkName) {
     case 'database':
-      return FiDatabase;
+      return Database;
     case 'redis':
-      return FiServer;
+      return Server;
     case 'external-apis':
-      return FiCloud;
+      return Cloud;
     case 'memory':
-      return FiCpu;
+      return Cpu;
     case 'storage':
-      return FiHardDrive;
+      return HardDrive;
     default:
-      return FiServer;
+      return Server;
   }
 };
 
@@ -112,11 +94,8 @@ function formatUptime(seconds: number): string {
 }
 
 export default function SystemHealthPage() {
-  const bgColor = useColorModeValue('gray.50', 'gray.900');
-  const cardBg = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({});
 
   const {
     data: health,
@@ -129,28 +108,35 @@ export default function SystemHealthPage() {
     refetchInterval: autoRefresh ? 30000 : false, // Refresh every 30 seconds when enabled
   });
 
+  const toggleDetails = (name: string) => {
+    setOpenDetails(prev => ({ ...prev, [name]: !prev[name] }));
+  };
+
   if (isLoading) {
     return (
-      <Box minH="100vh" bg={bgColor} p={8}>
-        <VStack spacing={4}>
-          <Spinner size="xl" />
-          <Text>Loading system health...</Text>
-        </VStack>
-      </Box>
+      <AppLayout>
+        <div className="container mx-auto max-w-4xl py-8">
+          <LoadingState
+            variant="spinner"
+            size="lg"
+            message="Checking system health..."
+          />
+        </div>
+      </AppLayout>
     );
   }
 
   if (error || !health) {
     return (
-      <Box minH="100vh" bg={bgColor} p={8}>
-        <Alert status="error">
-          <AlertIcon />
+      <div className="min-h-screen bg-background p-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
           <AlertTitle>Failed to load health status</AlertTitle>
           <AlertDescription>
             {error instanceof Error ? error.message : 'Unknown error'}
           </AlertDescription>
         </Alert>
-      </Box>
+      </div>
     );
   }
 
@@ -158,232 +144,212 @@ export default function SystemHealthPage() {
   const StatusIcon = getStatusIcon(health.status);
 
   return (
-    <Box minH="100vh" bg={bgColor}>
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <Box bg={cardBg} borderBottom="1px solid" borderColor={borderColor} p={6}>
-        <VStack align="start" spacing={4} maxW="1200px" mx="auto">
-          <HStack justify="space-between" w="full">
-            <HStack spacing={4}>
-              <Heading size="lg">System Health Monitor</Heading>
+      <div className="border-b bg-card p-6">
+        <div className="mx-auto max-w-6xl space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h1 className="text-2xl font-bold">System Health Monitor</h1>
               <Badge
-                colorScheme={overallStatusColor}
-                fontSize="md"
-                px={3}
-                py={1}
-                borderRadius="full"
+                variant={overallStatusColor as any}
+                className="flex items-center gap-2 px-4 py-1"
               >
-                <HStack spacing={2}>
-                  <Icon as={StatusIcon} />
-                  <Text>{health.status.toUpperCase()}</Text>
-                </HStack>
+                <StatusIcon className="h-4 w-4" />
+                <span>{health.status.toUpperCase()}</span>
               </Badge>
-            </HStack>
-            <HStack spacing={4}>
-              <Button
-                leftIcon={<FiRefreshCw />}
-                onClick={() => refetch()}
-                size="sm"
-                variant="outline"
-              >
+            </div>
+            <div className="flex gap-4">
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                <RefreshCw className="mr-2 h-4 w-4" />
                 Refresh
               </Button>
               <Button
+                variant={autoRefresh ? 'default' : 'outline'}
                 size="sm"
-                variant={autoRefresh ? 'solid' : 'outline'}
                 onClick={() => setAutoRefresh(!autoRefresh)}
               >
                 Auto-refresh: {autoRefresh ? 'ON' : 'OFF'}
               </Button>
-            </HStack>
-          </HStack>
-          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} w="full">
-            <Stat>
-              <StatLabel>Last Check</StatLabel>
-              <StatNumber fontSize="lg">
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div>
+              <p className="text-sm text-muted-foreground">Last Check</p>
+              <p className="text-lg font-semibold">
                 {new Date(health.timestamp).toLocaleTimeString()}
-              </StatNumber>
-              <StatHelpText>
+              </p>
+              <p className="text-xs text-muted-foreground">
                 {new Date(health.timestamp).toLocaleDateString()}
-              </StatHelpText>
-            </Stat>
-            <Stat>
-              <StatLabel>System Uptime</StatLabel>
-              <StatNumber fontSize="lg">
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">System Uptime</p>
+              <p className="text-lg font-semibold">
                 {formatUptime(health.uptime)}
-              </StatNumber>
-              <StatHelpText>Since last restart</StatHelpText>
-            </Stat>
-            <Stat>
-              <StatLabel>Version</StatLabel>
-              <StatNumber fontSize="lg">v{health.version}</StatNumber>
-              <StatHelpText>Application version</StatHelpText>
-            </Stat>
-          </SimpleGrid>
-        </VStack>
-      </Box>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Since last restart
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Version</p>
+              <p className="text-lg font-semibold">v{health.version}</p>
+              <p className="text-xs text-muted-foreground">
+                Application version
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Health Checks */}
-      <Box p={8} maxW="1200px" mx="auto">
-        <VStack spacing={6} align="stretch">
+      <div className="mx-auto max-w-6xl p-6">
+        <div className="space-y-6">
           {/* Summary Alert */}
           {health.status !== 'healthy' && (
-            <Alert
-              status={health.status === 'degraded' ? 'warning' : 'error'}
-              borderRadius="md"
-            >
-              <AlertIcon />
-              <Box>
-                <AlertTitle>System Issues Detected</AlertTitle>
-                <AlertDescription>
-                  {
-                    Object.entries(health.checks).filter(
-                      ([_, check]) => check.status !== 'healthy'
-                    ).length
-                  }{' '}
-                  component(s) are experiencing issues
-                </AlertDescription>
-              </Box>
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>System Issues Detected</AlertTitle>
+              <AlertDescription>
+                {
+                  Object.entries(health.checks).filter(
+                    ([_, check]) => check.status !== 'healthy'
+                  ).length
+                }{' '}
+                component(s) are experiencing issues
+              </AlertDescription>
             </Alert>
           )}
 
           {/* Health Check Cards */}
-          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
+          <div className="grid gap-6 md:grid-cols-2">
             {Object.entries(health.checks).map(([name, check]) => {
               const CheckIcon = getCheckIcon(name);
               const statusColor = getStatusColor(check.status);
               const StatusCheckIcon = getStatusIcon(check.status);
+              const isOpen = openDetails[name] || false;
 
               return (
-                <Card
-                  key={name}
-                  bg={cardBg}
-                  borderWidth={1}
-                  borderColor={borderColor}
-                >
-                  <CardHeader pb={3}>
-                    <HStack justify="space-between">
-                      <HStack spacing={3}>
-                        <Icon as={CheckIcon} boxSize={5} />
-                        <Heading size="md" textTransform="capitalize">
+                <Card key={name}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <CheckIcon className="h-5 w-5" />
+                        <CardTitle className="text-base capitalize">
                           {name.replace('-', ' ')}
-                        </Heading>
-                      </HStack>
-                      <Badge colorScheme={statusColor} fontSize="sm">
-                        <HStack spacing={1}>
-                          <Icon as={StatusCheckIcon} />
-                          <Text>{check.status}</Text>
-                        </HStack>
+                        </CardTitle>
+                      </div>
+                      <Badge
+                        variant={statusColor as any}
+                        className="flex items-center gap-1"
+                      >
+                        <StatusCheckIcon className="h-3 w-3" />
+                        <span>{check.status}</span>
                       </Badge>
-                    </HStack>
+                    </div>
                   </CardHeader>
-                  <CardBody pt={0}>
-                    <VStack align="stretch" spacing={3}>
-                      {check.message && (
-                        <Text fontSize="sm" color="gray.600">
-                          {check.message}
-                        </Text>
-                      )}
+                  <CardContent className="space-y-3">
+                    {check.message && (
+                      <p className="text-sm text-muted-foreground">
+                        {check.message}
+                      </p>
+                    )}
 
-                      {check.duration && (
-                        <HStack justify="space-between">
-                          <Text fontSize="sm" color="gray.500">
-                            Response Time:
-                          </Text>
-                          <Code fontSize="sm">
-                            {formatDuration(check.duration)}
-                          </Code>
-                        </HStack>
-                      )}
+                    {check.duration && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">
+                          Response Time:
+                        </span>
+                        <code className="text-sm">
+                          {formatDuration(check.duration)}
+                        </code>
+                      </div>
+                    )}
 
-                      {check.details &&
-                        Object.keys(check.details).length > 0 && (
-                          <>
-                            <Divider />
-                            <Accordion allowToggle>
-                              <AccordionItem border="none">
-                                <AccordionButton px={0}>
-                                  <Box flex="1" textAlign="left">
-                                    <Text fontSize="sm" fontWeight="medium">
-                                      Details
-                                    </Text>
-                                  </Box>
-                                  <AccordionIcon />
-                                </AccordionButton>
-                                <AccordionPanel px={0}>
-                                  <VStack align="stretch" spacing={2}>
-                                    {Object.entries(check.details).map(
-                                      ([key, value]) => (
-                                        <HStack
-                                          key={key}
-                                          justify="space-between"
-                                        >
-                                          <Text fontSize="sm" color="gray.500">
-                                            {key}:
-                                          </Text>
-                                          <Code fontSize="xs">
-                                            {typeof value === 'object'
-                                              ? JSON.stringify(value, null, 2)
-                                              : String(value)}
-                                          </Code>
-                                        </HStack>
-                                      )
-                                    )}
-                                  </VStack>
-                                </AccordionPanel>
-                              </AccordionItem>
-                            </Accordion>
-                          </>
-                        )}
+                    {check.details && Object.keys(check.details).length > 0 && (
+                      <>
+                        <div className="border-t pt-3" />
+                        <Collapsible
+                          open={isOpen}
+                          onOpenChange={() => toggleDetails(name)}
+                        >
+                          <CollapsibleTrigger className="flex w-full items-center justify-between py-2 text-sm font-medium hover:underline">
+                            Details
+                            {isOpen ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="space-y-2 pt-2">
+                            {Object.entries(check.details).map(
+                              ([key, value]) => (
+                                <div key={key} className="flex justify-between">
+                                  <span className="text-sm text-muted-foreground">
+                                    {key}:
+                                  </span>
+                                  <code className="text-xs">
+                                    {typeof value === 'object'
+                                      ? JSON.stringify(value, null, 2)
+                                      : String(value)}
+                                  </code>
+                                </div>
+                              )
+                            )}
+                          </CollapsibleContent>
+                        </Collapsible>
+                      </>
+                    )}
 
-                      {/* Special handling for memory check */}
-                      {(() => {
-                        if (
-                          name === 'memory' &&
-                          check.details &&
-                          'heapPercentage' in check.details &&
-                          typeof check.details.heapPercentage === 'number'
-                        ) {
-                          const heapPercentage = check.details
-                            .heapPercentage as number;
-                          return (
-                            <Box>
-                              <HStack justify="space-between" mb={2}>
-                                <Text fontSize="sm">Heap Usage</Text>
-                                <Text fontSize="sm">{heapPercentage}%</Text>
-                              </HStack>
-                              <Progress
-                                value={heapPercentage}
-                                colorScheme={
-                                  heapPercentage > 90
-                                    ? 'red'
-                                    : heapPercentage > 75
-                                      ? 'yellow'
-                                      : 'green'
-                                }
-                                size="sm"
-                                borderRadius="full"
-                              />
-                            </Box>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </VStack>
-                  </CardBody>
+                    {/* Special handling for memory check */}
+                    {(() => {
+                      if (
+                        name === 'memory' &&
+                        check.details &&
+                        'heapPercentage' in check.details &&
+                        typeof check.details.heapPercentage === 'number'
+                      ) {
+                        const heapPercentage = check.details
+                          .heapPercentage as number;
+                        return (
+                          <div>
+                            <div className="mb-2 flex justify-between">
+                              <span className="text-sm">Heap Usage</span>
+                              <span className="text-sm">{heapPercentage}%</span>
+                            </div>
+                            <Progress
+                              value={heapPercentage}
+                              className={cn(
+                                heapPercentage > 90
+                                  ? 'bg-destructive'
+                                  : heapPercentage > 75
+                                    ? 'bg-warning'
+                                    : 'bg-success'
+                              )}
+                            />
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </CardContent>
                 </Card>
               );
             })}
-          </SimpleGrid>
+          </div>
 
           {/* API Documentation Link */}
-          <Box pt={4}>
-            <Text fontSize="sm" color="gray.500" textAlign="center">
+          <div className="pt-4">
+            <p className="text-center text-sm text-muted-foreground">
               This page automatically refreshes every 30 seconds. For API
-              access, use <Code>/api/health</Code> endpoint.
-            </Text>
-          </Box>
-        </VStack>
-      </Box>
-    </Box>
+              access, use{' '}
+              <code className="rounded bg-muted px-1">/api/health</code>{' '}
+              endpoint.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

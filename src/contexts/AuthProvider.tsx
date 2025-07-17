@@ -2,7 +2,7 @@ import React, { useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import AuthContext, { AuthContextType } from './AuthContext';
 import { useSessionQuery, useSwitchTenantMutation } from '@/hooks/api/useAuth';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 interface AuthProviderProps {
   children: React.ReactNode;

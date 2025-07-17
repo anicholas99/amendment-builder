@@ -1,14 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Box,
-  Text,
-  IconButton,
-  Input,
-  Flex,
-  Icon,
-  Textarea,
-} from '@chakra-ui/react';
-import { FiEdit, FiX, FiCheck } from 'react-icons/fi';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Edit, X, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface EditableFieldProps {
   value: string;
@@ -65,100 +60,116 @@ const EditableField = ({
     setIsEditing(false);
   };
 
+  // Font size mapping
+  const getFontSizeClass = () => {
+    switch (fontSize) {
+      case 'sm':
+        return 'text-sm';
+      case 'md':
+        return 'text-base';
+      case 'lg':
+        return 'text-lg';
+      case 'xl':
+        return 'text-xl';
+      default:
+        return 'text-base';
+    }
+  };
+
+  // Font weight mapping
+  const getFontWeightClass = () => {
+    if (fontWeight === 'bold' || fontWeight === 700) return 'font-bold';
+    if (fontWeight === 'semibold' || fontWeight === 600) return 'font-semibold';
+    if (fontWeight === 'medium' || fontWeight === 500) return 'font-medium';
+    return 'font-normal';
+  };
+
   return (
-    <Box position="relative" width="100%">
+    <div className="relative w-full">
       {!isEditing ? (
-        <Flex align="center" width="100%">
-          <Box
-            flex="1"
+        <div className="flex items-center w-full">
+          <div
+            className={cn(
+              'flex-1 p-1.5 rounded-md min-h-[32px] w-full transition-colors duration-200',
+              !isReadOnly &&
+                'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800'
+            )}
             onDoubleClick={() => !isReadOnly && setIsEditing(true)}
-            style={{
-              cursor: isReadOnly ? 'default' : 'pointer',
-              padding: '6px',
-              borderRadius: '6px',
-              minHeight: '32px',
-              width: '100%',
-              transition: 'background-color 0.2s',
-            }}
-            onMouseEnter={(e: React.MouseEvent<HTMLDivElement>) => {
-              if (!isReadOnly) {
-                e.currentTarget.style.backgroundColor = '#F7FAFC'; // gray.50
-              }
-            }}
-            onMouseLeave={(e: React.MouseEvent<HTMLDivElement>) => {
-              if (!isReadOnly) {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }
-            }}
             ref={textContainerRef}
           >
-            <Text fontSize={fontSize} fontWeight={String(fontWeight)}>
+            <p
+              className={cn(
+                getFontSizeClass(),
+                getFontWeightClass(),
+                !value && 'text-muted-foreground italic'
+              )}
+            >
               {value || placeholder}
-            </Text>
-          </Box>
+            </p>
+          </div>
           {!isReadOnly && (
-            <IconButton
-              aria-label="Edit"
-              icon={<Icon as={FiEdit} />}
-              size="sm"
+            <Button
               variant="ghost"
+              size="sm"
+              className="ml-1 h-8 w-8 p-0"
               onClick={() => setIsEditing(true)}
-              className="ml-1"
-            />
+              aria-label="Edit"
+            >
+              <Edit className="h-4 w-4" />
+            </Button>
           )}
-        </Flex>
+        </div>
       ) : (
-        <Flex direction="column" width="100%">
+        <div className="flex flex-col w-full">
           {isTextarea ? (
             <Textarea
+              ref={inputRef as React.RefObject<HTMLTextAreaElement>}
               value={tempValue}
               onChange={e => setTempValue(e.target.value)}
-              size="md"
-              minH="80px"
-              h={textHeight && textHeight > 80 ? `${textHeight}px` : undefined}
-              resize="vertical"
+              className={cn('min-h-[80px] p-3 resize-y', getFontSizeClass())}
               style={{
-                fontSize,
-                padding: '12px',
-                borderRadius: '6px',
+                height:
+                  textHeight && textHeight > 80 ? `${textHeight}px` : undefined,
                 lineHeight: '1.5',
-                width: '100%',
               }}
             />
           ) : (
             <Input
+              ref={inputRef as React.RefObject<HTMLInputElement>}
               value={tempValue}
               onChange={e => setTempValue(e.target.value)}
-              size="md"
+              className={cn(
+                'min-h-[32px] px-1.5',
+                getFontSizeClass(),
+                getFontWeightClass()
+              )}
               style={{
-                fontSize,
-                minHeight: '32px',
                 height: textHeight ? `${textHeight}px` : undefined,
-                padding: '6px',
-                width: '100%',
-                fontWeight: String(fontWeight),
               }}
             />
           )}
-          <Flex mt={2} justify="flex-end">
-            <IconButton
-              aria-label="Cancel"
-              icon={<Icon as={FiX} />}
+          <div className="flex mt-2 justify-end">
+            <Button
+              variant="ghost"
               size="sm"
-              className="mr-2"
+              className="mr-2 h-8 w-8 p-0"
               onClick={handleCancel}
-            />
-            <IconButton
-              aria-label="Save"
-              icon={<Icon as={FiCheck} />}
+              aria-label="Cancel"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            <Button
               size="sm"
-              colorScheme="blue"
+              className="h-8 w-8 p-0 bg-blue-600 hover:bg-blue-700"
               onClick={handleSubmit}
-            />
-          </Flex>
-        </Flex>
+              aria-label="Save"
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       )}
-    </Box>
+    </div>
   );
 };
 

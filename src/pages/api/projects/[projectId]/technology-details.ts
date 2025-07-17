@@ -1,9 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { inventionDataService } from '@/server/services/invention-data.server-service';
-import { logger } from '@/lib/monitoring/logger';
+import { RequestWithServices } from '@/types/middleware';
+import { logger } from '@/server/logger';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Validation schema for updating technology details
 const updateTechnologyDetailsSchema = z.object({
@@ -20,7 +21,8 @@ const updateTechnologyDetailsSchema = z.object({
   patentCategory: z.string().optional(),
 });
 
-async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { inventionService } = (req as RequestWithServices).services;
   const { projectId } = req.query;
 
   if (!projectId || typeof projectId !== 'string') {
@@ -33,24 +35,24 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       updateKeys: Object.keys(req.body),
     });
 
-    await inventionDataService.updateMultipleFields(projectId, req.body);
+    await inventionService.updateMultipleFields(projectId, req.body);
 
     // Return the updated data
-    const updatedData = await inventionDataService.getInventionData(projectId);
+    const updatedData = await inventionService.getInventionData(projectId);
 
     logger.info('[API] Technology details updated successfully', {
       projectId,
     });
 
-    return res.status(200).json(updatedData);
+    return apiResponse.ok(res, updatedData);
   } catch (error) {
     logger.error('[API] Error updating technology details', {
       projectId,
       error,
     });
-    return res
-      .status(500)
-      .json({ error: 'Failed to update technology details' });
+    return apiResponse.serverError(res, {
+      error: 'Failed to update technology details',
+    });
   }
 }
 

@@ -1,17 +1,14 @@
 import React from 'react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import {
-  AlertDialog,
-  AlertDialogBody,
-  AlertDialogContent,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogOverlay,
-  Box,
-  Button,
-  Flex,
-  Text,
-  VStack,
-} from '@chakra-ui/react';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 // Define the PatentVersion interface
 export interface PatentVersion {
@@ -33,64 +30,76 @@ const PatentVersionHistoryModal: React.FC<PatentVersionHistoryModalProps> = ({
   versions,
   onRevertToVersion,
 }) => {
-  const cancelRef = React.useRef<HTMLButtonElement>(null);
+  const { isDarkMode } = useThemeContext();
 
   return (
-    <AlertDialog
-      isOpen={isOpen}
-      onClose={onClose}
-      leastDestructiveRef={cancelRef}
-      size="xl"
-    >
-      <AlertDialogOverlay>
-        <AlertDialogContent maxW="800px">
-          <AlertDialogHeader fontSize="lg" fontWeight="semibold">
+    <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <DialogContent className="sm:max-w-[800px]">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold">
             Version History
-          </AlertDialogHeader>
+          </DialogTitle>
+        </DialogHeader>
 
-          <AlertDialogBody>
-            <VStack spacing={4} align="stretch" maxH="60vh" overflowY="auto">
-              {versions.length === 0 ? (
-                <Text color="gray.500" textAlign="center" py={4}>
-                  No versions saved yet
-                </Text>
-              ) : (
-                versions.map(version => (
-                  <Box
-                    key={version.timestamp}
-                    p={4}
-                    borderWidth={1}
-                    borderRadius="md"
-                    borderColor="gray.200"
-                  >
-                    <Flex justify="space-between" align="center" mb={2}>
-                      <Text fontWeight="semibold">{version.description}</Text>
-                      <Text color="gray.500" fontSize="sm">
-                        {new Date(version.timestamp).toLocaleString()}
-                      </Text>
-                    </Flex>
-                    <Text noOfLines={2} color="gray.600" mb={3}>
-                      {version.content.substring(0, 150)}...
-                    </Text>
-                    <Button
-                      size="sm"
-                      colorScheme="blue"
-                      onClick={() => onRevertToVersion(version)}
-                    >
-                      Restore This Version
-                    </Button>
-                  </Box>
-                ))
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+          {versions.length === 0 ? (
+            <div
+              className={cn(
+                'text-center py-4',
+                isDarkMode ? 'text-gray-400' : 'text-gray-500'
               )}
-            </VStack>
-          </AlertDialogBody>
+            >
+              No versions saved yet
+            </div>
+          ) : (
+            versions.map(version => (
+              <div
+                key={version.timestamp}
+                className={cn(
+                  'p-4 border rounded-md',
+                  isDarkMode
+                    ? 'border-gray-600 bg-gray-800'
+                    : 'border-gray-200 bg-white'
+                )}
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-semibold">{version.description}</span>
+                  <span
+                    className={cn(
+                      'text-sm',
+                      isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                    )}
+                  >
+                    {new Date(version.timestamp).toLocaleString()}
+                  </span>
+                </div>
+                <p
+                  className={cn(
+                    'line-clamp-2 mb-3',
+                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                  )}
+                >
+                  {version.content.substring(0, 150)}...
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => onRevertToVersion(version)}
+                  className="bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  Restore This Version
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
 
-          <AlertDialogFooter>
-            <Button onClick={onClose}>Close</Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialogOverlay>
-    </AlertDialog>
+        <DialogFooter>
+          <Button onClick={onClose} variant="outline">
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

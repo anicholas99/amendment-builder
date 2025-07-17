@@ -1,47 +1,40 @@
-import { useEffect } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import React, { useEffect } from 'react';
+import { logger } from '@/utils/clientLogger';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/hooks/useAuth';
-import {
-  Box,
-  Button,
-  Heading,
-  Text,
-  VStack,
-  Center,
-  Icon,
-  Container,
-  useColorModeValue,
-  Spinner,
-} from '@chakra-ui/react';
-import { FaLock } from 'react-icons/fa';
+import { Lock } from 'lucide-react';
 import { redirectToLogin } from '@/lib/auth/redirects';
+import { LoadingState } from '@/components/common/LoadingState';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 export default function LoginPage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const { returnTo } = router.query;
+  const { isDarkMode } = useThemeContext();
 
-  // Redirect to projects page if already authenticated
+  // Redirect to homepage if already authenticated (homepage handles tenant routing)
   useEffect(() => {
     if (user) {
-      router.push((returnTo as string) || '/projects');
+      router.push((returnTo as string) || '/');
     }
   }, [user, router, returnTo]);
 
   // Show loading spinner while checking auth status
   if (isLoading) {
     return (
-      <Center h="100vh">
-        <Spinner size="xl" />
-      </Center>
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingState
+          variant="spinner"
+          size="xl"
+          message="Checking authentication..."
+          fullScreen={true}
+        />
+      </div>
     );
   }
-
-  // Color mode values
-  const bgColor = useColorModeValue('gray.50', 'gray.900');
-  const cardBgColor = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
 
   // Handle login button click
   const handleLogin = async () => {
@@ -53,50 +46,59 @@ export default function LoginPage() {
   };
 
   return (
-    <Box minH="100vh" py="48px" bg={bgColor}>
-      <Container maxW="lg">
-        <Box
-          bg={cardBgColor}
-          p="8"
-          borderWidth="1px"
-          borderColor={borderColor}
-          borderRadius="lg"
-          boxShadow="xl"
+    <div
+      className={cn(
+        'min-h-screen py-12',
+        isDarkMode ? 'bg-gray-900' : 'bg-gray-50'
+      )}
+    >
+      <div className="container max-w-lg mx-auto px-4">
+        <div
+          className={cn(
+            'p-8 border rounded-lg shadow-xl',
+            isDarkMode
+              ? 'bg-gray-800 border-gray-700'
+              : 'bg-white border-gray-200'
+          )}
         >
-          <VStack spacing={6} align="center">
-            <Box
-              bg="blue.500"
-              p="4"
-              borderRadius="full"
-              color={useColorModeValue('white', 'white')}
-            >
-              <Icon as={FaLock} w="24px" h="24px" />
-            </Box>
+          <div className="flex flex-col items-center space-y-6">
+            <div className="bg-blue-500 p-4 rounded-full text-white">
+              <Lock size={24} />
+            </div>
 
-            <Heading size="xl">Welcome to Patent Drafter</Heading>
-            <Text color="gray.500" textAlign="center">
+            <h1 className="text-3xl font-semibold">
+              Welcome to Patent Drafter
+            </h1>
+            <p
+              className={cn(
+                'text-center',
+                isDarkMode ? 'text-gray-400' : 'text-gray-600'
+              )}
+            >
               Sign in to start drafting innovative patents with AI assistance
-            </Text>
+            </p>
 
             <Button
-              colorScheme="blue"
+              className="w-full h-[50px] text-base"
               size="lg"
-              w="100%"
-              h="50px"
-              fontSize="16px"
               onClick={handleLogin}
-              leftIcon={<Icon as={FaLock} />}
             >
+              <Lock className="mr-2 h-4 w-4" />
               Sign in with IP Dashboard
             </Button>
 
-            <Text fontSize="sm" color="gray.500">
+            <p
+              className={cn(
+                'text-sm text-center',
+                isDarkMode ? 'text-gray-400' : 'text-gray-600'
+              )}
+            >
               By signing in, you agree to our Terms of Service and Privacy
               Policy
-            </Text>
-          </VStack>
-        </Box>
-      </Container>
-    </Box>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

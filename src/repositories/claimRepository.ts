@@ -1,6 +1,10 @@
 import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
+import {
+  generateClaimHash,
+  CURRENT_PARSER_VERSION,
+} from '@/utils/claimVersioning';
 
 export interface ClaimData {
   id?: string;
@@ -116,7 +120,7 @@ export class ClaimRepository {
    * Updates the text of a single claim.
    * @param claimId - The ID of the claim to update.
    * @param text - The new text for the claim.
-   * @param userId - Optional user ID for tracking history. If not provided, history won't be tracked.
+   * @param userId - Optional user ID (no longer used for history tracking).
    * @returns The updated claim object.
    */
   static async update(claimId: string, text: string, userId?: string) {
@@ -125,39 +129,171 @@ export class ClaimRepository {
         ErrorCode.DB_CONNECTION_ERROR,
         'Database client not initialized'
       );
-    logger.debug(
-      `[ClaimRepository] Updating claim ${claimId}${userId ? ` by user ${userId}` : ' (system operation)'}`
-    );
+    logger.debug(`[ClaimRepository] Updating claim ${claimId}`);
 
-    const originalClaim = await prisma.claim.findUnique({
+    // Check if this is claim 1 to update the hash
+    const claim = await prisma.claim.findUnique({
       where: { id: claimId },
+      select: { number: true, inventionId: true },
     });
 
-    if (!originalClaim) {
+    if (!claim) {
       throw new ApplicationError(
         ErrorCode.DB_RECORD_NOT_FOUND,
         `Claim with ID ${claimId} not found.`
       );
     }
 
-    return prisma.$transaction(async tx => {
-      const updatedClaim = await tx.claim.update({
-        where: { id: claimId },
-        data: { text },
+    // Update the claim
+    const updatedClaim = await prisma.claim.update({
+      where: { id: claimId },
+      data: { text },
+    });
+
+    // If this is claim 1, update the invention hash
+    if (claim.number === 1) {
+      logger.info('[ClaimRepository] Updating claim 1 hash in invention', {
+        inventionId: claim.inventionId,
       });
 
-      // Only create history if userId is provided
-      if (userId) {
-        await tx.claimHistory.create({
-          data: {
-            claimId: claimId,
-            userId: userId,
-            previousText: originalClaim.text,
-            newText: text,
+      try {
+        const claim1Hash = generateClaimHash(text);
+
+        // Try to update with new fields - this will fail if migration hasn't been applied yet
+        await prisma.$executeRaw`
+          UPDATE inventions 
+          SET claim1Hash = ${claim1Hash},
+              claim1ParsedAt = ${new Date()},
+              parserVersion = ${CURRENT_PARSER_VERSION}
+          WHERE id = ${claim.inventionId}
+        `;
+      } catch (error) {
+        logger.warn(
+          '[ClaimRepository] Could not update claim 1 hash - migration may not be applied yet',
+          {
+            error,
+            inventionId: claim.inventionId,
+          }
+        );
+        // Don't fail the claim update if hash update fails
+      }
+    }
+
+    return updatedClaim;
+  }
+
+  /**
+   * Updates the claim number for a single claim.
+   *
+   * Behavior:
+   * - If the target number is empty (gap) → simply moves the claim to that number
+   * - If the target number is occupied → swaps the two claims
+   *
+   * This allows intuitive reordering where gaps are filled before swapping occurs.
+   *
+   * @param claimId - The ID of the claim to update.
+   * @param newNumber - The new claim number.
+   * @param userId - Optional user ID for tracking history.
+   * @returns The updated claim object.
+   */
+  static async updateClaimNumber(
+    claimId: string,
+    newNumber: number,
+    userId?: string
+  ) {
+    if (!prisma)
+      throw new ApplicationError(
+        ErrorCode.DB_CONNECTION_ERROR,
+        'Database client not initialized'
+      );
+
+    logger.info('[ClaimRepository] Updating claim number', {
+      claimId,
+      newNumber,
+    });
+
+    return prisma.$transaction(async tx => {
+      // Get the claim to update
+      const claimToUpdate = await tx.claim.findUnique({
+        where: { id: claimId },
+        include: { invention: true },
+      });
+
+      if (!claimToUpdate) {
+        throw new ApplicationError(
+          ErrorCode.DB_RECORD_NOT_FOUND,
+          `Claim with ID ${claimId} not found.`
+        );
+      }
+
+      const oldNumber = claimToUpdate.number;
+      const inventionId = claimToUpdate.inventionId;
+
+      // If the number isn't changing, return early
+      if (oldNumber === newNumber) {
+        return claimToUpdate;
+      }
+
+      // Check if another claim already has the target number
+      const existingClaimWithNumber = await tx.claim.findFirst({
+        where: {
+          inventionId,
+          number: newNumber,
+          id: { not: claimId },
+        },
+      });
+
+      let updatedClaim;
+
+      if (existingClaimWithNumber) {
+        // Swap the numbers
+        logger.info('[ClaimRepository] Swapping claim numbers', {
+          claim1: { id: claimId, oldNumber, newNumber },
+          claim2: {
+            id: existingClaimWithNumber.id,
+            oldNumber: newNumber,
+            newNumber: oldNumber,
           },
         });
+
+        // To avoid unique constraint violations, we need to use a temporary number
+        // First, update our claim to a temporary negative number
+        const tempNumber = -999999; // Use a negative number that won't conflict
+
+        await tx.claim.update({
+          where: { id: claimId },
+          data: { number: tempNumber },
+        });
+
+        // Update the other claim to have the old number
+        await tx.claim.update({
+          where: { id: existingClaimWithNumber.id },
+          data: { number: oldNumber },
+        });
+
+        // Finally, update our claim to have the new number
+        updatedClaim = await tx.claim.update({
+          where: { id: claimId },
+          data: { number: newNumber },
+        });
+
+        // NOTE: We don't create history entries for number changes
+        // History should only track actual text content changes, not metadata
+        logger.info(
+          '[ClaimRepository] Claim numbers swapped - no history entry created for number change'
+        );
       } else {
-        logger.info('[ClaimRepository] Skipping history creation for system operation');
+        // Simple update - no conflict
+        updatedClaim = await tx.claim.update({
+          where: { id: claimId },
+          data: { number: newNumber },
+        });
+
+        // NOTE: We don't create history entries for number changes
+        // History should only track actual text content changes, not metadata
+        logger.info(
+          '[ClaimRepository] Claim number updated - no history entry created for number change'
+        );
       }
 
       return updatedClaim;
@@ -179,6 +315,267 @@ export class ClaimRepository {
     return prisma.claim.delete({
       where: { id: claimId },
     });
+  }
+
+  /**
+   * Efficiently deletes multiple claims by their IDs in a single transaction.
+   * @param claimIds - Array of claim IDs to delete.
+   * @param tenantId - Tenant ID for security validation.
+   * @returns The count of deleted claims.
+   */
+  static async deleteMany(
+    claimIds: string[],
+    tenantId: string
+  ): Promise<number> {
+    if (!prisma)
+      throw new ApplicationError(
+        ErrorCode.DB_CONNECTION_ERROR,
+        'Database client not initialized'
+      );
+
+    logger.info(`[ClaimRepository] Batch deleting ${claimIds.length} claims`);
+
+    try {
+      const result = await prisma.claim.deleteMany({
+        where: {
+          id: { in: claimIds },
+          invention: {
+            project: {
+              tenantId: tenantId,
+            },
+          },
+        },
+      });
+
+      logger.info(
+        `[ClaimRepository] Successfully batch deleted ${result.count} claims`
+      );
+      return result.count;
+    } catch (error) {
+      logger.error('[ClaimRepository] Error batch deleting claims:', { error });
+      throw new ApplicationError(
+        ErrorCode.DB_QUERY_ERROR,
+        'Failed to batch delete claims'
+      );
+    }
+  }
+
+  /**
+   * Deletes a claim and renumbers all subsequent claims, updating dependencies.
+   * @param claimId - The ID of the claim to delete.
+   * @param userId - Optional user ID for tracking history.
+   * @returns Object containing deleted claim info and renumbered claims.
+   */
+  static async deleteWithRenumbering(claimId: string, userId?: string) {
+    if (!prisma)
+      throw new ApplicationError(
+        ErrorCode.DB_CONNECTION_ERROR,
+        'Database client not initialized'
+      );
+
+    logger.info('[ClaimRepository] Deleting claim with renumbering', {
+      claimId,
+      userId,
+    });
+
+    // Import dependency updater functions
+    const {
+      createClaimNumberMapping,
+      batchUpdateClaimDependencies,
+      validateClaimDependencies,
+    } = await import('@/utils/claimDependencyUpdater');
+
+    return prisma.$transaction(
+      async tx => {
+        // Get the claim to delete
+        const claimToDelete = await tx.claim.findUnique({
+          where: { id: claimId },
+          include: { invention: true },
+        });
+
+        if (!claimToDelete) {
+          throw new ApplicationError(
+            ErrorCode.DB_RECORD_NOT_FOUND,
+            `Claim with ID ${claimId} not found.`
+          );
+        }
+
+        const deletedNumber = claimToDelete.number;
+        const inventionId = claimToDelete.inventionId;
+
+        // Delete the claim
+        await tx.claim.delete({
+          where: { id: claimId },
+        });
+
+        // Get all remaining claims for this invention
+        const remainingClaims = await tx.claim.findMany({
+          where: { inventionId },
+          orderBy: { number: 'asc' },
+        });
+
+        // Build renumbering updates for claims that need to shift down
+        const updates = remainingClaims
+          .filter(claim => claim.number > deletedNumber)
+          .map(claim => ({
+            claimId: claim.id,
+            oldNumber: claim.number,
+            newNumber: claim.number - 1,
+          }));
+
+        // If no claims need renumbering, we're done
+        if (updates.length === 0) {
+          logger.info(
+            '[ClaimRepository] No claims need renumbering after deletion'
+          );
+          return {
+            deletedClaim: claimToDelete,
+            renumberedCount: 0,
+            updatedClaims: [],
+          };
+        }
+
+        // Create the number mapping for dependency updates
+        const numberMapping = createClaimNumberMapping(updates);
+
+        // Update claim numbers using temporary negative numbers to avoid conflicts
+        let tempNumber = -1000000;
+        for (const update of updates) {
+          await tx.claim.update({
+            where: { id: update.claimId },
+            data: { number: tempNumber-- },
+          });
+        }
+
+        // Update to final numbers
+        for (const update of updates) {
+          await tx.claim.update({
+            where: { id: update.claimId },
+            data: { number: update.newNumber },
+          });
+
+          // NOTE: We don't create history entries for number changes due to deletions
+          // History should only track actual text content changes, not metadata
+          logger.info(
+            '[ClaimRepository] Claim renumbered after deletion - no history entry created',
+            {
+              claimId: update.claimId,
+              oldNumber: update.oldNumber,
+              newNumber: update.newNumber,
+              deletedNumber: deletedNumber,
+            }
+          );
+        }
+
+        // Get all claims again with updated numbers
+        const allClaimsAfterRenumber = await tx.claim.findMany({
+          where: { inventionId },
+          orderBy: { number: 'asc' },
+        });
+
+        // Update dependencies in all claims
+        const claimsWithUpdatedDeps = batchUpdateClaimDependencies(
+          allClaimsAfterRenumber.map(c => ({
+            id: c.id,
+            number: c.number,
+            text: c.text,
+          })),
+          numberMapping
+        );
+
+        // Update claims that had dependency changes
+        for (const claim of claimsWithUpdatedDeps) {
+          if (claim.textUpdated) {
+            await tx.claim.update({
+              where: { id: claim.id },
+              data: { text: claim.text },
+            });
+
+            // NOTE: We don't create history entries for dependency renumbering
+            // History should only track intentional text changes, not automatic updates
+            logger.info(
+              '[ClaimRepository] Updated dependencies in claim - no history entry created',
+              {
+                claimId: claim.id,
+                claimNumber: claim.number,
+                deletedNumber: deletedNumber,
+              }
+            );
+          }
+        }
+
+        // Final validation
+        const finalClaims = await tx.claim.findMany({
+          where: { inventionId },
+          orderBy: { number: 'asc' },
+        });
+
+        const validationErrors = validateClaimDependencies(
+          finalClaims.map(c => ({ number: c.number, text: c.text }))
+        );
+
+        if (validationErrors.length > 0) {
+          // Separate self-reference errors from other errors
+          const selfReferenceErrors = validationErrors.filter(
+            error =>
+              error.includes('forward reference') &&
+              error.match(/Claim (\d+) has forward reference to claim (\1)/)
+          );
+          const otherErrors = validationErrors.filter(
+            error =>
+              !error.includes('forward reference') ||
+              !error.match(/Claim (\d+) has forward reference to claim (\1)/)
+          );
+
+          // Log self-reference warnings
+          if (selfReferenceErrors.length > 0) {
+            logger.warn(
+              '[ClaimRepository] Self-referencing claims detected (allowed)',
+              {
+                selfReferences: selfReferenceErrors,
+                inventionId,
+              }
+            );
+          }
+
+          // Only throw if there are non-self-reference errors
+          if (otherErrors.length > 0) {
+            logger.error(
+              '[ClaimRepository] Dependency validation failed after deletion',
+              {
+                errors: otherErrors,
+                inventionId,
+              }
+            );
+            throw new ApplicationError(
+              ErrorCode.INVALID_INPUT,
+              `Claim dependency validation failed: ${otherErrors.join('; ')}`
+            );
+          }
+        }
+
+        logger.info(
+          '[ClaimRepository] Successfully deleted claim with renumbering',
+          {
+            deletedClaimNumber: deletedNumber,
+            renumberedCount: updates.length,
+            dependenciesUpdated: claimsWithUpdatedDeps.filter(
+              c => c.textUpdated
+            ).length,
+          }
+        );
+
+        return {
+          deletedClaim: claimToDelete,
+          renumberedCount: updates.length,
+          updatedClaims: finalClaims,
+        };
+      },
+      {
+        maxWait: 5000,
+        timeout: 10000,
+      }
+    );
   }
 
   /**
@@ -334,33 +731,6 @@ export class ClaimRepository {
   }
 
   /**
-   * Finds the history for a given claim ID.
-   * @param claimId - The ID of the claim.
-   * @returns An array of claim history entries, sorted by timestamp descending.
-   */
-  static async findHistoryByClaimId(claimId: string) {
-    if (!prisma)
-      throw new ApplicationError(
-        ErrorCode.DB_CONNECTION_ERROR,
-        'Database client not initialized'
-      );
-    logger.debug(`[ClaimRepository] Finding history for claim ${claimId}`);
-    return prisma.claimHistory.findMany({
-      where: { claimId },
-      orderBy: { timestamp: 'desc' },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-  }
-
-  /**
    * Finds multiple claims by their IDs with tenant validation
    * @param claimIds - Array of claim IDs to find
    * @param tenantId - Tenant ID for security validation
@@ -372,7 +742,7 @@ export class ClaimRepository {
         ErrorCode.DB_CONNECTION_ERROR,
         'Database client not initialized'
       );
-    
+
     logger.debug(`[ClaimRepository] Finding claims by IDs`, {
       claimCount: claimIds.length,
       tenantId,

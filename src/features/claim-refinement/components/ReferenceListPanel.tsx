@@ -1,14 +1,6 @@
 import React from 'react';
-import {
-  Box,
-  Flex,
-  Heading,
-  Text,
-  Button,
-  Spacer,
-  Stack,
-  Checkbox,
-} from '@chakra-ui/react';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { PriorArtReference } from '../../../types/claimTypes';
 import { ProcessedSearchHistoryEntry } from '@/types/domain/searchHistory';
 import ReferenceCard from '../../search/components/ReferenceCard';
@@ -65,72 +57,63 @@ export const ReferenceListPanel: React.FC<ReferenceListPanelProps> = ({
     : displayedReferences;
 
   return (
-    <Box>
-      <Flex align="center" mb={2} justify="space-between">
-        <Heading size="sm">
+    <div>
+      <div className="flex items-center mb-2 justify-between">
+        <h3 className="text-base font-medium">
           {showSavedPriorArt ? 'Saved References' : 'Search Results'}
           {!showSavedPriorArt && selectedSearch && (
-            <Text
-              as="span"
-              fontSize="sm"
-              fontWeight="normal"
-              ml={2}
-              color="gray.500"
-            >
+            <span className="text-sm font-normal ml-2 text-muted-foreground">
               {`(Search #${searchHistory.length - selectedSearchIndex}${isLatestSearch ? ' - Latest' : ''})`}
-            </Text>
+            </span>
           )}
-        </Heading>
-        <Spacer />
+        </h3>
         {referencesToDisplay.length > 0 && !showSavedPriorArt && (
-          <Flex gap={4}>
-            <Flex gap={2}>
+          <div className="flex gap-4">
+            <div className="flex gap-2">
               <Button
-                size="xs"
+                size="sm"
+                variant="outline"
                 onClick={onSelectAllReferences}
-                isDisabled={showSavedPriorArt}
+                disabled={showSavedPriorArt}
               >
                 Select All
               </Button>
               <Button
-                size="xs"
+                size="sm"
+                variant="outline"
                 onClick={onDeselectAllReferences}
-                isDisabled={showSavedPriorArt}
+                disabled={showSavedPriorArt}
               >
                 Deselect All
               </Button>
-            </Flex>
-          </Flex>
+            </div>
+          </div>
         )}
-      </Flex>
+      </div>
 
       {referencesToDisplay.length > 0 ? (
-        <Box
-          height="300px"
-          overflowY="scroll"
-          borderWidth="1px"
-          borderRadius="md"
-          borderColor="gray.200"
-          boxShadow="sm"
-          p={2}
-          className="custom-scrollbar"
+        <div
+          className="h-[300px] overflow-y-auto border border-border rounded-md shadow-sm p-2"
+          style={{
+            scrollbarWidth: 'thin',
+            msOverflowStyle: 'auto',
+          }}
         >
-          <Stack spacing={2} align="stretch" pb={1}>
+          <div className="space-y-2 pb-1">
             {referencesToDisplay.map((ref, index) => {
               return (
-                <Flex
+                <div
                   key={`${showSavedPriorArt ? 'saved' : selectedSearchId}-available-${ref.number}-${index}`}
-                  align="center"
+                  className="flex items-center"
                 >
                   {!showSavedPriorArt && (
                     <Checkbox
-                      isChecked={selectedReferenceNumbers.includes(ref.number)}
-                      onChange={() => onToggleReference(ref.number)}
-                      mr={2}
-                      colorScheme="blue"
+                      checked={selectedReferenceNumbers.includes(ref.number)}
+                      onCheckedChange={() => onToggleReference(ref.number)}
+                      className="mr-2"
                     />
                   )}
-                  <Box flex="1">
+                  <div className="flex-1">
                     <ReferenceCard
                       reference={ref}
                       colors={colors}
@@ -141,19 +124,23 @@ export const ReferenceListPanel: React.FC<ReferenceListPanelProps> = ({
                       onExclude={onExcludeReference}
                       resultIndex={index}
                     />
-                  </Box>
-                </Flex>
+                  </div>
+                </div>
               );
             })}
-          </Stack>
-        </Box>
+          </div>
+        </div>
       ) : showSavedPriorArt ? (
-        <Text>No saved references to display.</Text>
+        <p className="text-muted-foreground">No saved references to display.</p>
       ) : selectedSearchId ? (
-        <Text>No references found in this search entry or all are hidden.</Text>
+        <p className="text-muted-foreground">
+          No references found in this search entry or all are hidden.
+        </p>
       ) : (
-        <Text>Please select a search to view references.</Text>
+        <p className="text-muted-foreground">
+          Please select a search to view references.
+        </p>
       )}
-    </Box>
+    </div>
   );
 };

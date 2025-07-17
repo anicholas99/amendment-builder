@@ -2,8 +2,8 @@ import { AuthenticatedRequest } from '@/types/middleware';
 import { findWithTenantInfo } from '@/repositories/citationJobRepository';
 import { getProjectTenantId } from '@/repositories/project';
 import { findSearchHistoryById } from '@/repositories/search';
-import { logger } from '@/lib/monitoring/logger';
-import { resolveTenantIdFromCitation } from '@/utils/object-utils';
+import { logger } from '@/server/logger';
+import { resolveTenantIdFromCitation } from '@/utils/objectUtils';
 
 /**
  * Common tenant resolver functions to be used with withTenantGuard middleware.

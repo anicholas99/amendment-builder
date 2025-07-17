@@ -1,6 +1,6 @@
 import { NextApiResponse, NextApiRequest } from 'next';
 import { z } from 'zod';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import {
   findWithResult,
   update as updateCitationJob,
@@ -14,7 +14,8 @@ import { CustomApiRequest } from '@/types/api';
 import { idQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { AuthenticatedRequest } from '@/types/middleware';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Define request body type
 interface CitationJobUpdateBody {
@@ -67,17 +68,13 @@ async function handler(
     });
 
     apiLogger.logResponse(200, { success: true });
-    res.status(200).json(serializedJob);
-    return;
+    return apiResponse.ok(res, serializedJob);
   }
 
   if (req.method === 'PATCH') {
     const validationResult = patchSchema.safeParse(req.body);
     if (!validationResult.success) {
-      return res.status(400).json({
-        error: 'Invalid request body for PATCH',
-        details: validationResult.error.flatten(),
-      });
+      return apiResponse.badRequest(res, 'Invalid request body for PATCH');
     }
     const { status } = validationResult.data;
 
@@ -97,13 +94,11 @@ async function handler(
     const processedJob = processCitationJob(updatedJob);
     const serializedJob = serializeCitationJob(processedJob);
     apiLogger.logResponse(200, { success: true });
-    res.status(200).json(serializedJob);
-    return;
+    return apiResponse.ok(res, serializedJob);
   }
 
   // Method not allowed
-  res.setHeader('Allow', ['GET', 'PATCH']);
-  res.status(405).end(`Method ${req.method} Not Allowed`);
+  return apiResponse.methodNotAllowed(res, ['GET', 'PATCH']);
 }
 
 // Custom tenant resolver for citation jobs

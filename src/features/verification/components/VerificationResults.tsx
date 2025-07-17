@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text, VStack } from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
 
 interface VerificationResultsProps {
   verificationResults: {
@@ -22,69 +22,75 @@ const VerificationResults: React.FC<VerificationResultsProps> = ({
   }
 
   return (
-    <Box
-      mt="16px"
-      p="16px"
-      borderWidth="1px"
-      borderRadius="md"
-      borderColor="orange.300"
-      bg="orange.50"
+    <div
+      className={cn(
+        'mt-4 p-4 border border-orange-300 rounded-md bg-orange-50 dark:bg-orange-950/20 dark:border-orange-700'
+      )}
     >
-      <Text fontSize="lg" fontWeight="semibold" mb="8px">
+      <h3 className="text-lg font-semibold mb-2 text-orange-900 dark:text-orange-100">
         Verification Results
-      </Text>
+      </h3>
 
       {verificationResults.elementDiscrepancies.length > 0 && (
-        <Box mb="12px">
-          <Text fontWeight="normal" color="orange.800">
+        <div className="mb-3">
+          <p className="font-normal text-orange-800 dark:text-orange-200 mb-2">
             Element Discrepancies:
-          </Text>
-          <VStack as="ul" m="8px 0" pl="20px" alignItems="flex-start">
+          </p>
+          <ul className="my-2 pl-5 space-y-1">
             {verificationResults.elementDiscrepancies.map(
               (discrepancy, index) => (
-                <Box as="li" key={index} color="orange.800" mb="4px">
+                <li
+                  key={index}
+                  className="text-orange-800 dark:text-orange-200 list-disc"
+                >
                   {discrepancy}
-                </Box>
+                </li>
               )
             )}
-          </VStack>
-        </Box>
+          </ul>
+        </div>
       )}
 
       {verificationResults.figureDiscrepancies.length > 0 && (
-        <Box mb="12px">
-          <Text fontWeight="normal" color="orange.800">
+        <div className="mb-3">
+          <p className="font-normal text-orange-800 dark:text-orange-200 mb-2">
             Figure Discrepancies:
-          </Text>
-          <VStack as="ul" m="8px 0" pl="20px" alignItems="flex-start">
+          </p>
+          <ul className="my-2 pl-5 space-y-1">
             {verificationResults.figureDiscrepancies.map(
               (discrepancy, index) => (
-                <Box as="li" key={index} color="orange.800" mb="4px">
+                <li
+                  key={index}
+                  className="text-orange-800 dark:text-orange-200 list-disc"
+                >
                   {discrepancy}
-                </Box>
+                </li>
               )
             )}
-          </VStack>
-        </Box>
+          </ul>
+        </div>
       )}
 
       {verificationResults.claimDiscrepancies.length > 0 && (
-        <Box>
-          <Text fontWeight="normal" color="orange.800">
+        <div>
+          <p className="font-normal text-orange-800 dark:text-orange-200 mb-2">
             Claim Discrepancies:
-          </Text>
-          <VStack as="ul" m="8px 0" pl="20px" alignItems="flex-start">
+          </p>
+          <ul className="my-2 pl-5 space-y-1">
             {verificationResults.claimDiscrepancies.map(
               (discrepancy, index) => (
-                <Box as="li" key={index} color="orange.800" mb="4px">
+                <li
+                  key={index}
+                  className="text-orange-800 dark:text-orange-200 list-disc"
+                >
                   {discrepancy}
-                </Box>
+                </li>
               )
             )}
-          </VStack>
-        </Box>
+          </ul>
+        </div>
       )}
-    </Box>
+    </div>
   );
 };
 

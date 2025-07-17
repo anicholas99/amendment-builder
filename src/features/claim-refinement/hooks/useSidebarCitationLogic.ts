@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useCitationStore } from '../../citation-extraction/store';
 import { useCitationsTabLogic } from '../../citation-extraction/hooks/useCitationsTabLogic';
 

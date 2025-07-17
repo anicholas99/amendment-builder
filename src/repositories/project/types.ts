@@ -49,10 +49,44 @@ export const basicProjectSelect = Prisma.validator<Prisma.ProjectSelect>()({
   status: true,
   userId: true,
   tenantId: true,
+  hasPatentContent: true,
+  hasProcessedInvention: true,
   createdAt: true,
   updatedAt: true,
   textInput: false, // Exclude large fields from list view
-  invention: true, // Include normalized invention data
+  invention: {
+    select: {
+      id: true,
+      title: true,
+      summary: true,
+      abstract: true,
+      technicalField: true,
+      patentCategory: true,
+      noveltyStatement: true,
+      advantagesJson: true,
+      featuresJson: true,
+      useCasesJson: true,
+      processStepsJson: true,
+      futureDirectionsJson: true,
+      backgroundJson: true,
+      definitionsJson: true,
+      technicalImplementationJson: true,
+      priorArtJson: true,
+      claimsJson: true,
+      parsedClaimElementsJson: true,
+      searchQueriesJson: true,
+      claimSyncedAt: true,
+      lastSyncedClaim: true,
+      applicationType: true,
+      parentApplicationsJson: true,
+      linkedFileIdsJson: true,
+      claim1Hash: true,
+      claim1ParsedAt: true,
+      parserVersion: true,
+      createdAt: true,
+      updatedAt: true,
+    }
+  }, // Include normalized invention data with proper field selection
   // documents: true, // REMOVED: Documents are now linked via ApplicationVersion
 });
 
@@ -71,10 +105,44 @@ export const projectSelectWithDetails =
     status: true,
     userId: true,
     tenantId: true,
+    hasPatentContent: true,
+    hasProcessedInvention: true,
     createdAt: true,
     updatedAt: true,
     textInput: true,
-    invention: true, // Include normalized invention data
+    invention: {
+      select: {
+        id: true,
+        title: true,
+        summary: true,
+        abstract: true,
+        technicalField: true,
+        patentCategory: true,
+        noveltyStatement: true,
+        advantagesJson: true,
+        featuresJson: true,
+        useCasesJson: true,
+        processStepsJson: true,
+        futureDirectionsJson: true,
+        backgroundJson: true,
+        definitionsJson: true,
+        technicalImplementationJson: true,
+        priorArtJson: true,
+        claimsJson: true,
+        parsedClaimElementsJson: true,
+        searchQueriesJson: true,
+        claimSyncedAt: true,
+        lastSyncedClaim: true,
+        applicationType: true,
+        parentApplicationsJson: true,
+        linkedFileIdsJson: true,
+        claim1Hash: true,
+        claim1ParsedAt: true,
+        parserVersion: true,
+        createdAt: true,
+        updatedAt: true,
+      }
+    }, // Include normalized invention data with proper field selection
     // documents: true, // REMOVED
     savedPriorArtItems: true, // Keep this if needed when loading a single project
     // applicationVersions: {} // We'll add logic here later when fetching a single project

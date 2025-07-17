@@ -1,15 +1,13 @@
 import React from 'react';
-import {
-  Flex,
-  Text,
-  IconButton,
-  Icon,
-  Box,
-  HStack,
-  Spacer,
-  Tooltip,
-} from '@chakra-ui/react';
 import { FiChevronLeft, FiChevronRight, FiChevronsLeft } from 'react-icons/fi';
+import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 export interface SidebarHeaderProps {
   isSidebarCollapsed: boolean;
@@ -37,88 +35,77 @@ const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   isPreloading: _isPreloading,
 }) => {
   return (
-    <Flex
-      align="center"
-      h="48px"
-      px={isSidebarCollapsed ? 1 : 4}
-      borderBottomWidth="1px"
-      borderBottomColor="border.primary"
-      bg="bg.card"
-      position="relative"
-      zIndex={1}
+    <div
+      className={cn(
+        'flex items-center h-12 border-b bg-background border-border relative z-[1]',
+        isSidebarCollapsed ? 'px-1' : 'px-4'
+      )}
     >
       {!isSidebarCollapsed && (
-        <Box pl={2}>
-          <HStack spacing={1} alignItems="baseline">
-            <Text
-              fontSize="sm"
-              fontWeight="semibold"
-              color={isDarkMode ? 'white' : 'gray.800'}
-              lineHeight="1.2"
-            >
+        <div className="pl-2">
+          <div className="flex items-baseline space-x-1">
+            <span className="text-sm font-semibold text-foreground leading-tight">
               Projects
-            </Text>
-            <Text
-              fontSize="xs"
-              color={isDarkMode ? 'gray.500' : 'gray.600'}
-              lineHeight="1.2"
-            >
+            </span>
+            <span className="text-xs text-muted-foreground leading-tight">
               ({projectCount})
-            </Text>
-          </HStack>
-        </Box>
+            </span>
+          </div>
+        </div>
       )}
 
-      <Spacer />
+      <div className="flex-1" />
 
-      <HStack spacing={3} pr={3}>
-        <Tooltip label="Hide sidebar">
-          <IconButton
-            aria-label="Hide sidebar completely"
-            icon={<Icon as={FiChevronsLeft} boxSize={3} />}
-            size="sm"
-            variant="ghost"
-            color={isDarkMode ? 'gray.400' : 'gray.500'}
-            onClick={toggleSidebarVisibility}
-            transition="background-color 0.15s ease-out, color 0.15s ease-out"
-            _hover={{
-              bg: isDarkMode ? 'gray.700' : 'gray.200',
-              color: isDarkMode ? 'white' : 'gray.700',
-            }}
-            minW="24px"
-            h="24px"
-            p={0}
-          />
-        </Tooltip>
-        <Tooltip
-          label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          <IconButton
-            aria-label={
-              isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'
-            }
-            icon={
-              <Icon
-                as={isSidebarCollapsed ? FiChevronRight : FiChevronLeft}
-                boxSize={3}
-              />
-            }
-            size="sm"
-            variant="ghost"
-            color={isDarkMode ? 'gray.400' : 'gray.500'}
-            onClick={toggleSidebar}
-            transition="background-color 0.15s ease-out, color 0.15s ease-out"
-            _hover={{
-              bg: isDarkMode ? 'gray.700' : 'gray.200',
-              color: isDarkMode ? 'white' : 'gray.700',
-            }}
-            minW="24px"
-            h="24px"
-            p={0}
-          />
-        </Tooltip>
-      </HStack>
-    </Flex>
+      <TooltipProvider>
+        <div className="flex items-center space-x-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Hide sidebar completely"
+                onClick={toggleSidebarVisibility}
+                className={cn(
+                  'min-w-6 h-6 p-0 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors duration-150'
+                )}
+              >
+                <FiChevronsLeft className="w-3 h-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={isSidebarCollapsed ? 'right' : 'bottom'}>
+              <p>Hide sidebar</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={
+                  isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'
+                }
+                onClick={toggleSidebar}
+                className={cn(
+                  'min-w-6 h-6 p-0 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors duration-150'
+                )}
+              >
+                {isSidebarCollapsed ? (
+                  <FiChevronRight className="w-3 h-3" />
+                ) : (
+                  <FiChevronLeft className="w-3 h-3" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={isSidebarCollapsed ? 'right' : 'bottom'}>
+              <p>
+                {isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
+    </div>
   );
 };
 

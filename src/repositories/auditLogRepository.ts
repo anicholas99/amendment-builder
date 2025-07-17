@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 
 // Re-defining necessary types here to avoid complex circular dependencies.
 // In a larger refactor, these might move to a central types location.

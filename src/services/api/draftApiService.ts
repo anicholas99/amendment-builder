@@ -1,7 +1,7 @@
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { z } from 'zod';
 
 // Draft document schema
@@ -22,14 +22,18 @@ const UpdateDraftDocumentSchema = z.object({
   content: z.string(),
 });
 
-export type UpdateDraftDocumentRequest = z.infer<typeof UpdateDraftDocumentSchema>;
+export type UpdateDraftDocumentRequest = z.infer<
+  typeof UpdateDraftDocumentSchema
+>;
 
 // Batch update schema
 const BatchUpdateDraftDocumentsSchema = z.object({
   updates: z.array(UpdateDraftDocumentSchema),
 });
 
-export type BatchUpdateDraftDocumentsRequest = z.infer<typeof BatchUpdateDraftDocumentsSchema>;
+export type BatchUpdateDraftDocumentsRequest = z.infer<
+  typeof BatchUpdateDraftDocumentsSchema
+>;
 
 // Response validation
 const DraftDocumentsResponseSchema = z.array(DraftDocumentSchema);
@@ -45,12 +49,30 @@ export class DraftApiService {
   /**
    * Get all draft documents for a project
    */
-  static async getDraftDocuments(projectId: string): Promise<DraftDocument[]> {
+  static async getDraftDocuments(
+    projectId: string,
+    skipInit = false,
+    bustCache = false
+  ): Promise<DraftDocument[]> {
     try {
-      logger.debug('[DraftApiService] Getting draft documents', { projectId });
+      logger.debug('[DraftApiService] Getting draft documents', {
+        projectId,
+        skipInit,
+        bustCache,
+      });
 
-      const response = await apiFetch(API_ROUTES.PROJECTS.DRAFT(projectId));
-      
+      let url = skipInit
+        ? `${API_ROUTES.PROJECTS.DRAFT(projectId)}?skipInit=true`
+        : API_ROUTES.PROJECTS.DRAFT(projectId);
+
+      // Add cache busting parameter if requested
+      if (bustCache) {
+        const separator = url.includes('?') ? '&' : '?';
+        url += `${separator}t=${Date.now()}`;
+      }
+
+      const response = await apiFetch(url);
+
       if (!response.ok) {
         throw new ApplicationError(
           ErrorCode.API_INVALID_RESPONSE,
@@ -59,16 +81,47 @@ export class DraftApiService {
       }
 
       const data = await response.json();
+
+      // Add detailed debug logging before validation
+      logger.debug('[DraftApiService] Raw API response', {
+        projectId,
+        skipInit,
+        bustCache,
+        dataCount: Array.isArray(data) ? data.length : 'not-array',
+        dataSample: Array.isArray(data)
+          ? data.slice(0, 2).map((doc: any) => ({
+              id: doc?.id,
+              type: doc?.type,
+              contentLength: doc?.content?.length || 0,
+              hasContent: !!(doc?.content && doc.content.trim().length > 0),
+              contentPreview: doc?.content?.substring(0, 50) + '...',
+            }))
+          : 'not-array',
+        rawData: data, // Log the entire response for debugging
+      });
+
       const validated = DraftDocumentsResponseSchema.parse(data);
 
       logger.info('[DraftApiService] Draft documents fetched', {
         projectId,
         count: validated.length,
+        skipInit,
+        bustCache,
+        validatedSample: validated.slice(0, 2).map(doc => ({
+          id: doc.id,
+          type: doc.type,
+          contentLength: doc.content?.length || 0,
+          hasContent: !!(doc.content && doc.content.trim().length > 0),
+          contentPreview: doc.content?.substring(0, 50) + '...',
+        })),
       });
 
       return validated;
     } catch (error) {
-      logger.error('[DraftApiService] Error fetching draft documents', { error, projectId });
+      logger.error('[DraftApiService] Error fetching draft documents', {
+        error,
+        projectId,
+      });
       throw error;
     }
   }
@@ -187,6 +240,61 @@ export class DraftApiService {
   }
 
   /**
+   * Delete all draft documents for a project
+   */
+  static async deleteDraftDocuments(
+    projectId: string
+  ): Promise<{ success: boolean; count: number }> {
+    try {
+      logger.debug('[DraftApiService] Deleting all draft documents', {
+        projectId,
+      });
+
+      const response = await apiFetch(API_ROUTES.PROJECTS.DRAFT(projectId), {
+        method: 'DELETE',
+      });
+
+      logger.debug('[DraftApiService] DELETE response status', {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error('[DraftApiService] DELETE failed', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText,
+        });
+
+        throw new ApplicationError(
+          ErrorCode.API_INVALID_RESPONSE,
+          `Failed to delete draft documents: ${response.status} ${response.statusText} - ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+
+      logger.info('[DraftApiService] Draft documents deleted', {
+        projectId,
+        count: data.count,
+        success: data.success,
+      });
+
+      return { success: data.success, count: data.count };
+    } catch (error) {
+      logger.error('[DraftApiService] Error deleting draft documents', {
+        error,
+        projectId,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Check if project has draft documents
    */
   static async hasDraftDocuments(projectId: string): Promise<boolean> {
@@ -201,4 +309,4 @@ export class DraftApiService {
       return false;
     }
   }
-} 
+}

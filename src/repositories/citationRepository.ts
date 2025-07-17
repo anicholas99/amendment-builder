@@ -8,7 +8,7 @@
  * New code should import directly from citationJobRepository or citationMatchRepository.
  */
 
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 
 // Re-export citation job functions from the consolidated repository
 export {
@@ -93,8 +93,8 @@ export const saveCitationResultsAndConsolidate = async (
   jobStatus: string,
   errorMessage?: string
 ): Promise<{ success: boolean; error?: string }> => {
-  // Import and delegate to the service layer
-  const { citationProcessingService } = await import(
+  // Import and create an instance of the service
+  const { CitationProcessingService } = await import(
     '@/server/services/citation-processing.server-service'
   );
 
@@ -105,6 +105,9 @@ export const saveCitationResultsAndConsolidate = async (
       jobStatus,
     }
   );
+
+  // Create a new instance of the service
+  const citationProcessingService = new CitationProcessingService();
 
   return await citationProcessingService.processCitationResults({
     jobId,

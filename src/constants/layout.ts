@@ -65,7 +65,7 @@ export const VIEW_LAYOUT_CONFIG = {
   },
 
   // Spacing
-  PANEL_GAP: 2, // Gap between panels in pixels (adjusted for slightly larger spacing)
+  PANEL_GAP: 8, // Gap between panels in pixels (reduced from 2px, was causing inconsistency with responsive gaps)
 
   // Island mode specific settings
   ISLAND_MODE: {
@@ -115,4 +115,30 @@ export const VIEW_LAYOUT_CONFIG = {
     minMainPanelWidth: 500,
     maxMainPanelWidth: '75%',
   },
+} as const;
+
+/**
+ * Productivity mode specific configuration
+ * Three-panel layout for patent editing with chat interface
+ */
+export const PRODUCTIVITY_LAYOUT_CONFIG = {
+  // Panel sizing
+  PANELS: {
+    LEFT: {
+      MIN_WIDTH: 280, // Same as sidebar panel
+    },
+    CENTER: {
+      MIN_WIDTH: 500, // Same as main panel
+      WIDTH: {
+        base: '40%', // Narrower on smaller screens for more sidebar space
+        lg: '42%', // Narrower on larger screens for better balance
+      },
+    },
+    RIGHT: {
+      MIN_WIDTH: 440, // Chat panel minimum
+    },
+  },
+
+  // Separate gap for productivity layout to maintain original spacing
+  GAP: 2, // Keep original 2px gap for productivity layout (was using VIEW_LAYOUT_CONFIG.PANEL_GAP)
 } as const;

@@ -1,33 +1,16 @@
 import React from 'react';
-import {
-  Box,
-  Flex,
-  Text,
-  Icon,
-  Heading,
-  Center,
-  IconButton,
-  Badge,
-  VStack,
-  HStack,
-  Tag,
-  TagLabel,
-  Image as ChakraImage,
-  useColorModeValue,
-  Spinner,
-  Tooltip,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-} from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { FiFileText, FiImage, FiX, FiInbox } from 'react-icons/fi';
+import { LoadingMinimal } from '@/components/common/LoadingState';
 import { UploadedFigure } from '../hooks/useTechnologyInputFileHandler';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface TechnologyUploadedFilesListProps {
   uploadedTextFiles: string[];
   uploadedFigures: UploadedFigure[];
-  onRemoveTextFile?: (fileName: string) => void;
+  onRemoveTextFile?: (fileName: string) => Promise<void>;
   onRemoveFigure?: (figureId: string) => void;
   uploadingFiles?: string[]; // New prop for files currently being uploaded
 }
@@ -44,18 +27,9 @@ export const TechnologyUploadedFilesList: React.FC<
   onRemoveFigure,
   uploadingFiles = [],
 }) => {
+  const { isDarkMode } = useThemeContext();
   const totalFiles =
     uploadedTextFiles.length + uploadedFigures.length + uploadingFiles.length;
-  const itemBg = useColorModeValue('white', 'gray.800');
-  const itemHoverBg = useColorModeValue('gray.100', 'gray.600');
-  const textColor = useColorModeValue('gray.700', 'gray.200');
-  const subtleTextColor = useColorModeValue('gray.500', 'gray.400');
-  const iconColor = useColorModeValue('gray.400', 'gray.500');
-  const removeIconHoverColor = useColorModeValue('red.500', 'red.300');
-  const placeholderColor = useColorModeValue('gray.400', 'gray.500');
-  const imageBorderColor = useColorModeValue('gray.200', 'gray.600');
-  const imageFallbackBg = useColorModeValue('gray.100', 'gray.700');
-  const spinnerColor = useColorModeValue('blue.500', 'blue.300');
 
   // State to track failed image loads
   const [failedImages, setFailedImages] = React.useState<Set<string>>(
@@ -67,205 +41,196 @@ export const TechnologyUploadedFilesList: React.FC<
   };
 
   return (
-    <VStack spacing={2} align="stretch" w="100%" h="100%">
+    <div className="w-full h-full flex flex-col space-y-2">
       {totalFiles > 0 ? (
-        <VStack spacing={2} align="stretch" flex="1" overflowY="auto" pr={1}>
+        <div className="flex-1 overflow-y-auto pr-1 space-y-2">
           {/* Files being uploaded */}
           {uploadingFiles.length > 0 && (
-            <VStack align="stretch" spacing={2}>
+            <div className="space-y-2">
               {uploadingFiles.map((fileName, index) => (
-                <Flex
+                <div
                   key={`uploading-${fileName}-${index}`}
-                  p={3}
-                  borderRadius="md"
-                  bg={itemBg}
-                  align="center"
-                  transition="background-color 0.2s"
-                  boxShadow="xs"
-                  opacity={0.8}
+                  className={cn(
+                    'p-4 rounded-md flex items-center transition-colors shadow-xs opacity-80',
+                    isDarkMode ? 'bg-gray-800' : 'bg-white'
+                  )}
                 >
-                  <Spinner size="sm" color={spinnerColor} mr={3} />
-                  <Text
-                    fontSize="sm"
-                    fontWeight="medium"
-                    color={textColor}
-                    noOfLines={1}
-                    flex="1"
+                  <LoadingMinimal size="sm" />
+                  <span
+                    className={cn(
+                      'text-sm font-medium flex-1 truncate ml-2',
+                      isDarkMode ? 'text-gray-200' : 'text-gray-700'
+                    )}
                     title={fileName}
                   >
                     {fileName}
-                  </Text>
-                  <Badge colorScheme="blue" variant="subtle" ml={2}>
+                  </span>
+                  <Badge
+                    variant="secondary"
+                    className="ml-2 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
+                  >
                     Uploading...
                   </Badge>
-                </Flex>
+                </div>
               ))}
-            </VStack>
+            </div>
           )}
 
           {/* Uploaded text files */}
           {uploadedTextFiles.length > 0 && (
-            <VStack align="stretch" spacing={2}>
+            <div className="space-y-2">
               {uploadedTextFiles.map(fileName => (
-                <Flex
+                <div
                   key={fileName}
-                  p={3}
-                  borderRadius="md"
-                  bg={itemBg}
-                  align="center"
-                  transition="background-color 0.2s"
-                  boxShadow="xs"
-                  _hover={{ bg: itemHoverBg, boxShadow: 'sm' }}
+                  className={cn(
+                    'p-4 rounded-md flex items-center transition-colors shadow-xs group',
+                    isDarkMode
+                      ? 'bg-gray-800 hover:bg-gray-600'
+                      : 'bg-white hover:bg-gray-100'
+                  )}
                 >
-                  <Box as={FiFileText} color={iconColor} boxSize={5} mr={3} />
-                  <Text
-                    fontSize="sm"
-                    fontWeight="medium"
-                    color={textColor}
-                    noOfLines={1}
-                    flex="1"
+                  <FiFileText
+                    className={cn(
+                      'h-5 w-5 mr-3',
+                      isDarkMode ? 'text-gray-500' : 'text-gray-400'
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      'text-sm font-medium flex-1 truncate',
+                      isDarkMode ? 'text-gray-200' : 'text-gray-700'
+                    )}
                     title={fileName}
                   >
                     {fileName}
-                  </Text>
-                  <Tag
-                    size="sm"
-                    colorScheme="blue"
-                    variant="subtle"
-                    ml={2}
-                    flexShrink={0}
+                  </span>
+                  <Badge
+                    variant="secondary"
+                    className="ml-2 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 flex-shrink-0"
                   >
                     Text
-                  </Tag>
+                  </Badge>
                   {onRemoveTextFile && (
-                    <IconButton
-                      aria-label={`Remove ${fileName}`}
-                      icon={<Icon as={FiX} />}
+                    <Button
                       size="sm"
                       variant="ghost"
-                      color={subtleTextColor}
-                      marginLeft={2}
-                      _hover={{
-                        color: removeIconHoverColor,
-                        bg: 'transparent',
-                      }}
-                      onClick={() => onRemoveTextFile(fileName)}
-                    />
+                      onClick={() => onRemoveTextFile?.(fileName)}
+                      className={cn(
+                        'ml-2 h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity',
+                        isDarkMode
+                          ? 'text-gray-400 hover:text-red-300 hover:bg-transparent'
+                          : 'text-gray-500 hover:text-red-500 hover:bg-transparent'
+                      )}
+                    >
+                      <FiX className="h-4 w-4" />
+                    </Button>
                   )}
-                </Flex>
+                </div>
               ))}
-            </VStack>
+            </div>
           )}
 
           {uploadedFigures.length > 0 && (
-            <VStack
-              align="stretch"
-              spacing={2}
-              mt={uploadedTextFiles.length > 0 ? 4 : 0}
+            <div
+              className={cn(
+                'space-y-2',
+                uploadedTextFiles.length > 0 && 'mt-4'
+              )}
             >
               {uploadedFigures.map(figure => (
-                <Flex
+                <div
                   key={figure.id}
-                  p={3}
-                  borderRadius="md"
-                  bg={itemBg}
-                  align="center"
-                  transition="background-color 0.2s"
-                  boxShadow="xs"
-                  _hover={{ bg: itemHoverBg, boxShadow: 'sm' }}
+                  className={cn(
+                    'p-4 rounded-md flex items-center transition-colors shadow-xs group',
+                    isDarkMode
+                      ? 'bg-gray-800 hover:bg-gray-600'
+                      : 'bg-white hover:bg-gray-100'
+                  )}
                 >
                   {/* Image preview with fallback */}
                   {!failedImages.has(figure.id) ? (
-                    <ChakraImage
+                    <img
                       src={figure.url}
                       alt={`Preview of ${figure.fileName}`}
-                      boxSize="40px"
-                      objectFit="cover"
-                      borderRadius="sm"
-                      borderWidth="1px"
-                      borderColor={imageBorderColor}
-                      mr={3}
+                      className={cn(
+                        'w-10 h-10 object-cover rounded-sm border mr-3',
+                        isDarkMode ? 'border-gray-600' : 'border-gray-200'
+                      )}
                       onError={() => handleImageError(figure.id)}
-                      fallback={
-                        <Box
-                          width="40px"
-                          height="40px"
-                          borderRadius="sm"
-                          borderWidth="1px"
-                          borderColor={imageBorderColor}
-                          mr={3}
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                          bg={imageFallbackBg}
-                        >
-                          <Icon as={FiImage} color={iconColor} boxSize={5} />
-                        </Box>
-                      }
+                      onLoad={() => {
+                        // Remove from failed images if it loads successfully
+                        setFailedImages(prev => {
+                          const newSet = new Set(prev);
+                          newSet.delete(figure.id);
+                          return newSet;
+                        });
+                      }}
                     />
                   ) : (
-                    <Box
-                      width="40px"
-                      height="40px"
-                      borderRadius="sm"
-                      borderWidth="1px"
-                      borderColor={imageBorderColor}
-                      mr={3}
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="center"
-                      bg={imageFallbackBg}
+                    <div
+                      className={cn(
+                        'w-10 h-10 rounded-sm border mr-3 flex items-center justify-center',
+                        isDarkMode
+                          ? 'border-gray-600 bg-gray-700'
+                          : 'border-gray-200 bg-gray-100'
+                      )}
                     >
-                      <Icon as={FiImage} color={iconColor} boxSize={5} />
-                    </Box>
+                      <FiImage
+                        className={cn(
+                          'h-5 w-5',
+                          isDarkMode ? 'text-gray-500' : 'text-gray-400'
+                        )}
+                      />
+                    </div>
                   )}
-                  <Text
-                    fontSize="sm"
-                    fontWeight="medium"
-                    color={textColor}
-                    noOfLines={1}
-                    flex="1"
+                  <span
+                    className={cn(
+                      'text-sm font-medium flex-1 truncate',
+                      isDarkMode ? 'text-gray-200' : 'text-gray-700'
+                    )}
                     title={figure.fileName}
                   >
                     {figure.fileName}
-                  </Text>
-                  <Tag
-                    size="sm"
-                    colorScheme="purple"
-                    variant="subtle"
-                    ml={2}
-                    flexShrink={0}
+                  </span>
+                  <Badge
+                    variant="secondary"
+                    className="ml-2 bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 flex-shrink-0"
                   >
                     Image
-                  </Tag>
+                  </Badge>
                   {onRemoveFigure && (
-                    <IconButton
-                      aria-label={`Remove ${figure.fileName}`}
-                      icon={<Icon as={FiX} />}
+                    <Button
                       size="sm"
                       variant="ghost"
-                      color={subtleTextColor}
-                      marginLeft={2}
-                      _hover={{
-                        color: removeIconHoverColor,
-                        bg: 'transparent',
-                      }}
                       onClick={() => onRemoveFigure(figure.id)}
-                    />
+                      className={cn(
+                        'ml-2 h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity',
+                        isDarkMode
+                          ? 'text-gray-400 hover:text-red-300 hover:bg-transparent'
+                          : 'text-gray-500 hover:text-red-500 hover:bg-transparent'
+                      )}
+                    >
+                      <FiX className="h-4 w-4" />
+                    </Button>
                   )}
-                </Flex>
+                </div>
               ))}
-            </VStack>
+            </div>
           )}
-        </VStack>
+        </div>
       ) : (
-        <Box as={Center} flex="1" h="100%">
-          <VStack spacing={2} color={placeholderColor}>
-            <Icon as={FiInbox} boxSize={8} />
-            <Text fontSize="sm">No files uploaded yet.</Text>
-          </VStack>
-        </Box>
+        <div className="flex-1 h-full flex flex-col items-center justify-center">
+          <div
+            className={cn(
+              'flex flex-col items-center space-y-2',
+              isDarkMode ? 'text-gray-500' : 'text-gray-400'
+            )}
+          >
+            <FiInbox className="h-8 w-8" />
+            <span className="text-sm">No files uploaded yet.</span>
+          </div>
+        </div>
       )}
-    </VStack>
+    </div>
   );
 };

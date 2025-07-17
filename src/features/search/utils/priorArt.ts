@@ -4,7 +4,7 @@ import {
   SavedPriorArt,
   SavedCitationUI,
 } from '@/types/domain/priorArt';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 export function processSavedPriorArt(
   savedArt: SavedPriorArt
@@ -33,33 +33,57 @@ export function serializePriorArtData(priorArt: PriorArtReference): string {
 
 // Helper to process an array of saved prior art entries
 export function processSavedPriorArtArray(
-  savedArtArray: SavedPriorArt[]
+  savedArtArray: any[]
 ): ProcessedSavedPriorArt[] {
   if (!Array.isArray(savedArtArray)) return [];
+
   return savedArtArray.map(savedArt => {
     const priorArtData = processSavedPriorArt(savedArt);
-    const { savedCitationsData, ...rest } = savedArt;
 
+    // Process savedCitations - handle both relation data and legacy JSON data
     let savedCitations: SavedCitationUI[] = [];
-    if (savedCitationsData) {
+
+    if (
+      Array.isArray(savedArt.savedCitations) &&
+      savedArt.savedCitations.length > 0
+    ) {
+      // Use the relation data (new format)
+      savedCitations = savedArt.savedCitations.map((citation: any) => ({
+        elementText: citation.elementText || '',
+        citation: citation.citationText || '', // Note: relation uses citationText, UI uses citation
+        location: citation.location || null,
+        reasoning: citation.reasoning || null,
+      }));
+    } else if (savedArt.savedCitationsData) {
+      // Fallback to legacy JSON data
       try {
-        savedCitations = JSON.parse(savedCitationsData);
-        logger.info('[processSavedPriorArtArray] Parsed saved citations:', {
-          patentNumber: savedArt.patentNumber,
-          citationsCount: savedCitations.length,
-          firstCitation: savedCitations[0],
-        });
+        const parsedCitations = JSON.parse(savedArt.savedCitationsData);
+        if (Array.isArray(parsedCitations)) {
+          savedCitations = parsedCitations.map((citation: any) => ({
+            elementText: citation.elementText || '',
+            citation: citation.citation || '',
+            location: citation.location || null,
+            reasoning: citation.reasoning || null,
+          }));
+        }
       } catch (error) {
-        logger.error('[processSavedPriorArtArray] Failed to parse savedCitationsData:', {
-          patentNumber: savedArt.patentNumber,
-          error,
-          savedCitationsData,
-        });
+        // Silently handle parse errors
       }
     }
 
     return {
-      ...rest,
+      id: savedArt.id,
+      projectId: savedArt.projectId,
+      patentNumber: savedArt.patentNumber,
+      title: savedArt.title,
+      abstract: savedArt.abstract,
+      url: savedArt.url,
+      notes: savedArt.notes,
+      authors: savedArt.authors,
+      publicationDate: savedArt.publicationDate,
+      savedAt: savedArt.savedAt,
+      claim1: savedArt.claim1,
+      summary: savedArt.summary,
       priorArtData,
       savedCitations,
     };

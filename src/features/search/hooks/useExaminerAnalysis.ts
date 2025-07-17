@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { CitationJob } from '@/types/citation';
 import { ExaminerAnalysisResult } from '@/types/domain/citation';
 import { useCitationJobDetails } from './useCitationJobDetails';

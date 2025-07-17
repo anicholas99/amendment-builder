@@ -1,35 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useTemporaryState } from '@/hooks/useTemporaryState';
+import { useToast } from '@/hooks/useToastWrapper';
 import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalFooter,
-  ModalBody,
-  ModalCloseButton,
-  Box,
-  Progress,
-  VStack,
-  Text,
-  Stepper,
-  Step,
-  StepStatus,
-  StepIcon,
-  StepIndicator,
-  StepNumber,
-  StepSeparator,
-  useClipboard,
-  useToast,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   AlertDialog,
-  AlertDialogBody,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogContent,
-  AlertDialogOverlay,
-  Button,
-} from '@chakra-ui/react';
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/contexts/ThemeContext';
+import { CheckCircle, Circle } from 'lucide-react';
 
 // Import components
 import ElementSection from './ElementSection';
@@ -59,6 +54,8 @@ const ClaimParsingModal: React.FC<ClaimParsingModalProps> = ({
   searchMode,
   onExecuteSearch,
 }) => {
+  const { isDarkMode } = useThemeContext();
+
   // State for workflow steps
   const [currentStep, setCurrentStep] = useState(0);
   const steps =
@@ -90,10 +87,10 @@ const ClaimParsingModal: React.FC<ClaimParsingModalProps> = ({
   // Reset editable content when modal opens with new data
   useEffect(() => {
     if (isOpen) {
-      logger.log('Modal opened with parsed elements:', {
+      logger.info('Modal opened with parsed elements:', {
         parsedElements: initialParsedElements,
       });
-      logger.log('Modal opened with search queries:', {
+      logger.info('Modal opened with search queries:', {
         searchQueries: initialSearchQueries,
       });
 
@@ -112,7 +109,22 @@ const ClaimParsingModal: React.FC<ClaimParsingModalProps> = ({
 
   // Create a clipboard for all queries combined
   const allQueriesText = editableSearchQueries.join('\n\n');
-  const { hasCopied, onCopy } = useClipboard(allQueriesText);
+  const [hasCopied, setHasCopied] = useState(false);
+
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(allQueriesText);
+      setHasCopied(true);
+      setTimeout(() => setHasCopied(false), 2000);
+    } catch (err) {
+      toast({
+        title: 'Copy failed',
+        description: 'Could not copy text to clipboard',
+        status: 'error',
+        duration: 2000,
+      });
+    }
+  };
 
   // Function to copy individual query
   const copyQuery = (index: number, text: string) => {
@@ -275,62 +287,73 @@ const ClaimParsingModal: React.FC<ClaimParsingModalProps> = ({
 
   return (
     <>
-      <Modal
-        isOpen={isOpen}
-        onClose={handleCloseAttempt}
-        size="xl"
-        scrollBehavior="inside"
-        closeOnOverlayClick={false}
-        closeOnEsc={false}
-      >
-        <ModalOverlay />
-        <ModalContent maxW="800px">
-          <ModalHeader as="h3">
-            {searchMode === 'advanced' ? 'Advanced Search' : 'Claim Analysis'}
-          </ModalHeader>
+      <Dialog open={isOpen} onOpenChange={() => handleCloseAttempt()}>
+        <DialogContent className="max-w-[800px] max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {searchMode === 'advanced' ? 'Advanced Search' : 'Claim Analysis'}
+            </DialogTitle>
+          </DialogHeader>
 
           {searchMode === 'advanced' && (
-            <Box px={6} pt={2}>
-              <Stepper index={currentStep} colorScheme="blue" size="sm">
+            <div className="px-6 pt-2">
+              <div className="flex items-center justify-between">
                 {steps.map((step, index) => (
-                  <Step key={index}>
-                    <StepIndicator>
-                      <StepStatus
-                        complete={<StepIcon />}
-                        incomplete={<StepNumber />}
-                        active={<StepNumber />}
+                  <React.Fragment key={index}>
+                    <div className="flex items-center">
+                      <div
+                        className={cn(
+                          'flex h-8 w-8 items-center justify-center rounded-full border-2',
+                          index < currentStep
+                            ? 'border-blue-600 bg-blue-600 text-white'
+                            : index === currentStep
+                              ? 'border-blue-600 text-blue-600'
+                              : 'border-gray-300 text-gray-400'
+                        )}
+                      >
+                        {index < currentStep ? (
+                          <CheckCircle className="h-5 w-5" />
+                        ) : (
+                          <span className="text-sm font-medium">
+                            {index + 1}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={cn(
+                          'ml-2 text-sm',
+                          index <= currentStep ? 'font-medium' : 'text-gray-500'
+                        )}
+                      >
+                        {step}
+                      </span>
+                    </div>
+                    {index < steps.length - 1 && (
+                      <div
+                        className={cn(
+                          'flex-1 mx-4 h-0.5',
+                          index < currentStep ? 'bg-blue-600' : 'bg-gray-300'
+                        )}
                       />
-                    </StepIndicator>
-                    <Box flexShrink="0">
-                      <Text fontSize="sm">{step}</Text>
-                    </Box>
-                    <StepSeparator />
-                  </Step>
+                    )}
+                  </React.Fragment>
                 ))}
-              </Stepper>
-            </Box>
+              </div>
+            </div>
           )}
 
-          <ModalBody pt={6}>
+          <div className="flex-1 overflow-y-auto px-6 py-6">
             {isLoading ? (
-              <VStack spacing={4} py={8}>
-                <Text>
-                  Analyzing claim elements and generating search queries...
-                </Text>
-                <Progress
-                  isIndeterminate
-                  width="100%"
-                  colorScheme="blue"
-                  size="sm"
-                  borderRadius="md"
-                />
-              </VStack>
+              <div className="flex flex-col items-center gap-4 py-8">
+                <p>Analyzing claim elements and generating search queries...</p>
+                <Progress className="w-full" />
+              </div>
             ) : (
               renderStepContent()
             )}
-          </ModalBody>
+          </div>
 
-          <ModalFooter>
+          <DialogFooter className="px-6 py-4 border-t">
             <FooterButtons
               currentStep={currentStep}
               searchMode={searchMode}
@@ -341,47 +364,37 @@ const ClaimParsingModal: React.FC<ClaimParsingModalProps> = ({
               generateQueries={generateQueries}
               handleExecuteWithEdited={handleExecuteWithEdited}
             />
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Warning Dialog */}
-      <AlertDialog
-        isOpen={isWarningOpen}
-        leastDestructiveRef={cancelRef}
-        onClose={handleWarningClose}
-        motionPreset="slideInBottom"
-      >
-        <AlertDialogOverlay>
-          <AlertDialogContent position="relative" zIndex="modal">
-            <AlertDialogHeader
-              fontSize="lg"
-              fontWeight="bold"
-              as="h3"
-              pb={3}
-              borderBottomWidth="1px"
-            >
+      <AlertDialog open={isWarningOpen} onOpenChange={setIsWarningOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
               {isLoading ? 'Search in Progress' : 'Cancel Search?'}
-            </AlertDialogHeader>
-
-            <AlertDialogBody pt={4}>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
               {isLoading
                 ? 'Please wait while we analyze your claim and prepare the search. This will only take a moment.'
                 : 'Are you sure you want to cancel? Your progress will be lost.'}
-            </AlertDialogBody>
-
-            <AlertDialogFooter>
-              <Button ref={cancelRef} onClick={handleWarningClose}>
-                {isLoading ? 'Wait' : 'Continue'}
-              </Button>
-              {!isLoading && (
-                <Button colorScheme="red" onClick={handleConfirmedClose} ml={3}>
-                  Cancel Search
-                </Button>
-              )}
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialogOverlay>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleWarningClose}>
+              {isLoading ? 'Wait' : 'Continue'}
+            </AlertDialogCancel>
+            {!isLoading && (
+              <AlertDialogAction
+                onClick={handleConfirmedClose}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                Cancel Search
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
       </AlertDialog>
     </>
   );

@@ -1,17 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Box,
-  Flex,
-  Heading,
-  Button,
-  Text,
-  Stack,
-  Fade,
-  Icon,
-} from '@chakra-ui/react';
+// This file manages project listing and creation within a tenant context.
+// It uses a combination of shadcn/ui components and custom hooks for data fetching.
 import { useRouter } from 'next/router';
-import { GetServerSideProps } from 'next';
-import { FiPlus } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiChevronDown } from 'react-icons/fi';
+import { IoMdClose } from 'react-icons/io';
 import dynamic from 'next/dynamic';
 
 // Layout and contexts
@@ -22,8 +14,8 @@ import { useProjectData } from '@/contexts/ProjectDataContext';
 import { useProject } from '@/hooks/api/useProjects';
 
 // Components
-import SkeletonLoader from '@/components/common/SkeletonLoader';
 import { LoadingOverlay } from '@/components/common/LoadingOverlay';
+import { LoadingProjects } from '@/components/common/MinimalSpinner';
 import {
   ProjectCard,
   ProjectSearchFilter,
@@ -34,9 +26,12 @@ import {
 // Hooks
 import { useProjectDashboard } from '@/features/projects/hooks';
 import { useProjectsDashboardTheme } from '@/features/projects/utils/themeValues';
+import { useAuth } from '@/hooks/useAuth';
 
-// Utils
-import { environment } from '@/config/environment';
+// shadcn/ui components
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 // Lazy load the modal
 const NewProjectModal = dynamic(
@@ -74,6 +69,7 @@ export default function Projects() {
 
     // Navigation
     isAnimating,
+    transitionState,
     handleSelectProject,
     handleDocumentSelect,
 
@@ -113,126 +109,122 @@ export default function Projects() {
 
   return (
     <AppLayout>
-      <Box
-        position="absolute"
-        top="0"
-        left="0"
-        right="0"
-        bottom="0"
-        bg={isDarkMode ? 'gray.900' : 'gray.50'}
-        overflow="hidden"
-        pt="60px"
+      <div
+        className={cn(
+          'absolute inset-0 overflow-hidden pt-[60px]',
+          isDarkMode ? 'bg-gray-950' : 'bg-gray-50'
+        )}
       >
-        <Fade in={isMounted} transition={{ enter: { duration: 0.4 } }}>
-          <Box
-            as="main"
-            p={5}
-            flexGrow={1}
-            width="100%"
-            maxW="1400px"
-            mx="auto"
-          >
-            <Box
-              width="100%"
-              maxWidth="1200px"
-              mx="auto"
-              style={{
-                background: 'transparent',
-              }}
-            >
-              {/* Static header - renders immediately without waiting for JS */}
-              <Box width="100%" mb={6}>
-                <Flex
-                  direction="row"
-                  justify="space-between"
-                  align="center"
-                  mb={6}
+        <div
+          className={cn(
+            'transition-all duration-300 ease-out',
+            isMounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'
+          )}
+        >
+          <main className="p-6 flex-grow w-full max-w-[1400px] mx-auto">
+            <div className="w-full max-w-[1200px] mx-auto">
+              {/* Clean Header Design */}
+              <div className="mb-8">
+                <div
+                  className={cn(
+                    'rounded-xl border p-8',
+                    isDarkMode
+                      ? 'bg-gray-900 border-gray-800'
+                      : 'bg-white border-gray-200 shadow-sm'
+                  )}
                 >
-                  <Box>
-                    <Heading
-                      as="h2"
-                      size="lg"
-                      fontWeight="700"
-                      color={isDarkMode ? 'white' : 'gray.700'}
-                      mb={1}
-                    >
-                      Projects Dashboard
-                    </Heading>
-                    <Text
-                      color={isDarkMode ? 'gray.300' : 'gray.600'}
-                      fontSize="md"
-                    >
-                      Manage your invention projects or create new ones
-                    </Text>
-                  </Box>
-                  <Box mt={4}>
-                    <Stack direction="row" spacing={6} align="center">
-                      <Box>
-                        <Text
-                          color={isDarkMode ? 'gray.400' : 'gray.500'}
-                          fontSize="sm"
-                        >
-                          Total Projects
-                        </Text>
-                        <Text
-                          color={isDarkMode ? 'white' : 'gray.700'}
-                          fontSize="xl"
-                          fontWeight="600"
-                        >
-                          {projects.length}
-                        </Text>
-                      </Box>
-                      <Button
-                        leftIcon={<Icon as={FiPlus} />}
-                        colorScheme="blue"
-                        onClick={onOpenNewProjectModal}
-                        size="md"
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                    <div className="space-y-3">
+                      <h1
+                        className={cn(
+                          'text-3xl font-semibold tracking-tight',
+                          isDarkMode ? 'text-white' : 'text-gray-900'
+                        )}
                       >
+                        Projects Dashboard
+                      </h1>
+                      <p
+                        className={cn(
+                          'text-base',
+                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        )}
+                      >
+                        Manage your invention projects and generate patent
+                        documents
+                      </p>
+                      <div className="flex items-center gap-6 pt-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-blue-600"></div>
+                          <span
+                            className={cn(
+                              'text-sm font-medium',
+                              isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                            )}
+                          >
+                            {projects?.length || 0} Projects
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <Button
+                        onClick={onOpenNewProjectModal}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 font-medium rounded-lg shadow-sm hover:shadow transition-all duration-200"
+                      >
+                        <FiPlus className="mr-2 h-4 w-4" />
                         New Project
                       </Button>
-                    </Stack>
-                  </Box>
-                </Flex>
-              </Box>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-              {/* Interactive components load after initial paint */}
               {isMounted && (
                 <>
-                  {/* Search and Filter Bar */}
-                  <ProjectSearchFilter
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
-                    sortBy={sortBy}
-                    onSortChange={handleSortChange}
-                    filterBy={filterBy}
-                    onFilterChange={handleFilterChange}
-                    projectCount={projects.length}
-                    filteredCount={projects.length}
-                  />
+                  {/* Clean Search and Filter Bar */}
+                  <div className="mb-6 transition-opacity duration-300 ease-out">
+                    <div
+                      className={cn(
+                        'rounded-xl border',
+                        isDarkMode
+                          ? 'bg-gray-900 border-gray-800'
+                          : 'bg-white border-gray-200 shadow-sm'
+                      )}
+                    >
+                      <ProjectSearchFilter
+                        searchQuery={searchQuery}
+                        onSearchChange={setSearchQuery}
+                        sortBy={sortBy}
+                        onSortChange={handleSortChange}
+                        filterBy={filterBy}
+                        onFilterChange={handleFilterChange}
+                        projectCount={projects.length}
+                        filteredCount={projects.length}
+                      />
+                    </div>
+                  </div>
 
                   {/* Project List Section */}
-                  <Box
-                    mt={6}
-                    width="100%"
-                    maxHeight="calc(100vh - 240px)"
-                    overflowY="auto"
-                    pr={4}
-                    className="custom-scrollbar"
-                  >
-                    {/* Loading state - show skeleton while actually loading */}
-                    {isLoadingProjects && (
-                      <SkeletonLoader type="projects-dashboard" count={6} />
+                  <div
+                    className={cn(
+                      'w-full max-h-[calc(100vh-420px)] overflow-y-auto px-2 pt-4',
+                      'custom-scrollbar scroll-smooth'
                     )}
+                  >
+                    {/* Minimal loading state */}
+                    {isLoadingProjects && <LoadingProjects />}
 
                     {/* Main project list - only show when not loading */}
                     {!isLoadingProjects &&
                       (projects.length === 0 ? (
-                        <EmptyProjectState
-                          onOpenNewProjectModal={onOpenNewProjectModal}
-                        />
+                        <div className="animate-fade-in duration-300">
+                          <EmptyProjectState
+                            onOpenNewProjectModal={onOpenNewProjectModal}
+                          />
+                        </div>
                       ) : (
-                        <Stack spacing={4} align="stretch" pb={6}>
-                          {projects.map(project => (
+                        <div className="space-y-4 pb-6">
+                          {projects.map((project, index) => (
                             <ProjectCard
                               key={project.id}
                               project={{
@@ -249,17 +241,30 @@ export default function Projects() {
                               handleDeleteProject={handleDeleteProject}
                               handleDocumentSelect={handleDocumentSelect}
                               isDarkMode={isDarkMode}
+                              index={index}
                             />
                           ))}
-                        </Stack>
+                        </div>
                       ))}
-                  </Box>
+                  </div>
                 </>
               )}
-            </Box>
+            </div>
 
-            {/* Loading overlay for project switching */}
-            {isAnimating && <LoadingOverlay />}
+            {/* Enhanced loading overlay for project switching */}
+            {isAnimating && (
+              <LoadingOverlay
+                title={
+                  transitionState?.targetProjectName
+                    ? `Loading ${transitionState.targetProjectName}`
+                    : 'Loading Project'
+                }
+                subtitle={
+                  transitionState?.targetView ||
+                  'Preparing your project data...'
+                }
+              />
+            )}
 
             {/* New Project Modal */}
             <NewProjectModal
@@ -277,34 +282,9 @@ export default function Projects() {
               cancelRef={cancelRef}
               isDeleting={isDeleting}
             />
-          </Box>
-        </Fade>
-      </Box>
+          </main>
+        </div>
+      </div>
     </AppLayout>
   );
 }
-
-// Server-side props to handle authentication
-export const getServerSideProps: GetServerSideProps = async () => {
-  // In development, skip auth and return mock session
-  if (environment.isDevelopment) {
-    return {
-      props: {
-        sessionData: {
-          user: {
-            id: 'dev-user',
-            email: 'dev@example.com',
-            name: 'Development User',
-          },
-        },
-      },
-    };
-  }
-
-  // Production auth logic here...
-  return {
-    props: {
-      sessionData: null,
-    },
-  };
-};

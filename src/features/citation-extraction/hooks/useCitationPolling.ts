@@ -1,10 +1,8 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCitationStatus } from './useCitationStatus';
 import { useCitationStore } from '../store';
-import { logger } from '@/lib/monitoring/logger';
-import { citationKeys } from '@/lib/queryKeys';
-import { useToast } from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
 
 // Maximum time to keep showing optimistic refs before clearing them
 const OPTIMISTIC_REF_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
@@ -15,7 +13,6 @@ const OPTIMISTIC_REF_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
  */
 export function useCitationPolling() {
   const queryClient = useQueryClient();
-  const toast = useToast();
   const activeSearchId = useCitationStore(state => state.activeSearchId);
   const getOptimisticRefsForSearch = useCitationStore(
     state => state.getOptimisticRefsForSearch
@@ -24,7 +21,6 @@ export function useCitationPolling() {
     state => state.clearStaleOptimisticRefs
   );
   const [pollInterval, setPollInterval] = useState(10000); // Optimized from 3000ms to reduce CPU usage
-  const hasShownToastRef = useRef<Set<string>>(new Set());
 
   // Get optimistic refs for the active search - memoized to prevent dependency issues
   const optimisticRefs = useMemo(
@@ -64,50 +60,8 @@ export function useCitationPolling() {
     }
   }, [error, pollInterval]);
 
-  // Show toast when citations are ready
-  useEffect(() => {
-    if (!citationJobsData || !activeSearchId) return;
+  // Note: Toast notifications are now handled in CitationsTabContainer
+  // to show a single toast when all citation extraction completes with matches
 
-    const realJobs = Array.isArray(citationJobsData)
-      ? citationJobsData
-      : citationJobsData?.jobs || [];
-
-    // Check for completed jobs that we haven't toasted yet
-    realJobs.forEach(job => {
-      if (job.status === 'COMPLETED' && job.referenceNumber) {
-        const toastKey = `${activeSearchId}-${job.referenceNumber}`;
-        if (!hasShownToastRef.current.has(toastKey)) {
-          // Check if we have citation matches for this reference
-          const queryKey = citationKeys.matches.bySearchHistory(activeSearchId);
-          const matches = queryClient.getQueryData<any>(queryKey);
-
-          let hasMatches = false;
-          if (matches?.groupedResults) {
-            hasMatches = matches.groupedResults.some((group: any) =>
-              group.matches?.some(
-                (match: any) => match.referenceNumber === job.referenceNumber
-              )
-            );
-          }
-
-          if (hasMatches) {
-            hasShownToastRef.current.add(toastKey);
-            toast({
-              title: 'Citation extraction complete',
-              description: `Reference ${job.referenceNumber} has been processed`,
-              status: 'success',
-              duration: 3000,
-              isClosable: true,
-              position: 'bottom-right',
-            });
-          }
-        }
-      }
-    });
-  }, [citationJobsData, activeSearchId, queryClient, toast]);
-
-  // Reset toast tracking when search changes
-  useEffect(() => {
-    hasShownToastRef.current.clear();
-  }, [activeSearchId]);
+  // Note: Toast tracking is now handled in CitationsTabContainer
 }

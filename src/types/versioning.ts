@@ -1,4 +1,4 @@
-import { ApplicationVersion, Document } from '@prisma/client';
+import type { ApplicationVersion, Document } from '@prisma/client';
 
 // Represents a Document record's data
 export type DocumentData = Pick<

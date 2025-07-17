@@ -14,16 +14,17 @@
  * ✅ MAINTAINED: Identical UI/UX and functionality
  */
 import React, { useEffect } from 'react';
-import { Box, Flex, Icon } from '@chakra-ui/react';
-import ChatInterface from '../../chat/components/ChatInterface';
+import { cn } from '@/lib/utils';
+import EnhancedChatInterface from '../../chat/components/EnhancedChatInterface';
 import { SidebarContainer } from '../../../components/layouts/containers';
-import { FiMessageCircle, FiImage } from 'react-icons/fi';
+import { Image, MessageCircle } from 'lucide-react';
 import { useCurrentProjectId } from '@/hooks/useCurrentProjectId';
 import { useProject } from '@/hooks/api/useProjects';
 import { useInventionData } from '@/hooks/useInventionData';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { usePatentFigures, usePatentElements } from '../hooks/usePatentSidebar';
 import { FiguresTab } from '@/components';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface PatentSidebarProps {
   currentFigure: string;
@@ -36,6 +37,7 @@ interface PatentSidebarProps {
   setContent: (content: string) => void;
   setPreviousContent: (content: string | null) => void;
   refreshContent: () => void;
+  onSearchReferenceNumeral?: (numeralId: string) => void;
 }
 
 const PatentSidebar: React.FC<PatentSidebarProps> = ({
@@ -49,7 +51,10 @@ const PatentSidebar: React.FC<PatentSidebarProps> = ({
   setContent,
   setPreviousContent,
   refreshContent,
+  onSearchReferenceNumeral,
 }) => {
+  const { isDarkMode } = useThemeContext();
+
   // Get project data using the modern pattern (replaces complex project data construction)
   const projectId = useCurrentProjectId();
   const { data: projectData } = useProject(projectId);
@@ -59,25 +64,30 @@ const PatentSidebar: React.FC<PatentSidebarProps> = ({
     isError,
   } = useInventionData(projectId || undefined);
 
-  // Use the modern hooks for focused component concerns
-  const { figures, onUpdate, onFigureChange, isUpdating } = usePatentFigures({
+  // Memoize props to prevent infinite re-renders
+  const figuresProps = React.useMemo(() => ({
     projectId: projectId ? projectId : undefined,
     inventionData: inventionData || null,
     currentFigure,
     setCurrentFigure,
-  });
+  }), [projectId, inventionData, currentFigure, setCurrentFigure]);
+
+  const elementsProps = React.useMemo(() => ({
+    projectId: projectId ? projectId : undefined,
+    inventionData: inventionData || null,
+    currentFigure,
+    setCurrentFigure,
+  }), [projectId, inventionData, currentFigure, setCurrentFigure]);
+
+  // Use the modern hooks for focused component concerns
+  const { figures, onUpdate, onFigureChange, isUpdating } = usePatentFigures(figuresProps);
 
   const {
     analyzedInvention,
     elements,
     onUpdate: onElementUpdate,
     isLoading: isElementLoading,
-  } = usePatentElements({
-    projectId: projectId ? projectId : undefined,
-    inventionData: inventionData || null,
-    currentFigure,
-    setCurrentFigure,
-  });
+  } = usePatentElements(elementsProps);
 
   useEffect(() => {
     logger.debug('[PatentSidebar] Data State Update:', {
@@ -90,9 +100,11 @@ const PatentSidebar: React.FC<PatentSidebarProps> = ({
 
   if (!projectId) {
     return (
-      <Box p={4} color="gray.500">
+      <div
+        className={cn('p-4', isDarkMode ? 'text-gray-400' : 'text-gray-500')}
+      >
         Loading Project...
-      </Box>
+      </div>
     );
   }
 
@@ -103,17 +115,25 @@ const PatentSidebar: React.FC<PatentSidebarProps> = ({
       inventionData={inventionData || null}
       currentFigure={currentFigure}
       setCurrentFigure={setCurrentFigure}
+      onSearchReferenceNumeral={onSearchReferenceNumeral}
     />
   );
 
   const chatTabContent = (
-    <Box height="100%" overflow="hidden">
+    <div className="h-full overflow-hidden">
       {projectId ? (
-        <ChatInterface
+        <EnhancedChatInterface
           projectData={projectData || null}
           onContentUpdate={(action: string) => {
-            if (action === 'refresh') {
+            if (action === 'sync-patent-section') {
               // Trigger content refresh from database without introducing unsaved changes
+              logger.info('[PatentSidebar] Syncing patent section content');
+              if (refreshContent) {
+                refreshContent();
+              }
+            } else if (action === 'refresh') {
+              // Legacy refresh action - also use the new cache invalidation
+              logger.info('[PatentSidebar] Refreshing content (legacy)');
               if (refreshContent) {
                 refreshContent();
               }
@@ -127,21 +147,23 @@ const PatentSidebar: React.FC<PatentSidebarProps> = ({
           projectId={projectId}
         />
       ) : (
-        <Box p={4} color="gray.500">
+        <div
+          className={cn('p-4', isDarkMode ? 'text-gray-400' : 'text-gray-500')}
+        >
           Loading project...
-        </Box>
+        </div>
       )}
-    </Box>
+    </div>
   );
 
   // Icons for tabs
   const tabIcons = [
-    <Flex key="figuresIcon" align="center" justify="center" height="24px">
-      <Icon as={FiImage} boxSize="16px" />
-    </Flex>,
-    <Flex key="chatIcon" align="center" justify="center" height="24px">
-      <Icon as={FiMessageCircle} boxSize="16px" />
-    </Flex>,
+    <div key="figuresIcon" className="flex items-center justify-center h-6">
+      <Image className="h-4 w-4" />
+    </div>,
+    <div key="chatIcon" className="flex items-center justify-center h-6">
+      <MessageCircle className="h-4 w-4" />
+    </div>,
   ];
 
   return (

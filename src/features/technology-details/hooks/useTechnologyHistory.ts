@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { InventionData } from '../../../types';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useDebounce } from '@/hooks/useDebounce';
 
 interface HistoryEntry {
@@ -80,7 +80,7 @@ export const useTechnologyHistory = (
 
       setCurrentIndex(prev => Math.min(prev + 1, maxHistorySize - 1));
 
-      logger.log('[TechnologyHistory] Added history entry:', {
+      logger.info('[TechnologyHistory] Added history entry:', {
         description,
         historyLength: history.length + 1,
         currentIndex: currentIndex + 1,
@@ -92,7 +92,7 @@ export const useTechnologyHistory = (
   // Undo the last change
   const undo = useCallback(() => {
     if (currentIndex <= 0 || !analyzedInvention) {
-      logger.log('[TechnologyHistory] Cannot undo - no previous state');
+      logger.info('[TechnologyHistory] Cannot undo - no previous state');
       return false;
     }
 
@@ -104,7 +104,7 @@ export const useTechnologyHistory = (
     setCurrentIndex(currentIndex - 1);
     isUndoRedoOperation.current = false;
 
-    logger.log('[TechnologyHistory] Undo performed:', {
+    logger.info('[TechnologyHistory] Undo performed:', {
       description: previousEntry.description,
       newIndex: currentIndex - 1,
     });
@@ -115,7 +115,7 @@ export const useTechnologyHistory = (
   // Redo the next change
   const redo = useCallback(() => {
     if (currentIndex >= history.length - 1 || !analyzedInvention) {
-      logger.log('[TechnologyHistory] Cannot redo - no next state');
+      logger.info('[TechnologyHistory] Cannot redo - no next state');
       return false;
     }
 
@@ -127,7 +127,7 @@ export const useTechnologyHistory = (
     setCurrentIndex(currentIndex + 1);
     isUndoRedoOperation.current = false;
 
-    logger.log('[TechnologyHistory] Redo performed:', {
+    logger.info('[TechnologyHistory] Redo performed:', {
       description: nextEntry.description,
       newIndex: currentIndex + 1,
     });
@@ -139,7 +139,7 @@ export const useTechnologyHistory = (
   const clearHistory = useCallback(() => {
     setHistory([]);
     setCurrentIndex(-1);
-    logger.log('[TechnologyHistory] History cleared');
+    logger.info('[TechnologyHistory] History cleared');
   }, []);
 
   // Get the current state info
@@ -165,7 +165,7 @@ export const useTechnologyHistory = (
       };
       setHistory([initialEntry]);
       setCurrentIndex(0);
-      logger.log('[TechnologyHistory] Initialized with current data');
+      logger.info('[TechnologyHistory] Initialized with current data');
     }
   }, [analyzedInvention, history.length]);
 

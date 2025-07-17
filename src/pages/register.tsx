@@ -1,27 +1,23 @@
 import React from 'react';
 import { useRouter } from 'next/router';
-import { Box, Button, Text, VStack, Heading } from '@chakra-ui/react';
+import { Button } from '@/components/ui/button';
 
 // This is a simplified stub to enable building
 const RegisterPage = () => {
   const router = useRouter();
 
   return (
-    <Box maxW="768px" mx="auto" px="16px" py="40px">
-      <VStack spacing={8} align="stretch">
-        <Heading as="h1" size="xl" textAlign="center">
-          Register Account
-        </Heading>
-        <Text textAlign="center">
+    <div className="mx-auto max-w-3xl px-4 py-10">
+      <div className="space-y-8 text-center">
+        <h1 className="text-3xl font-bold">Register Account</h1>
+        <p className="text-muted-foreground">
           Registration is handled through our Auth system.
-        </Text>
-        <Box textAlign="center" pt="16px">
-          <Button colorScheme="blue" onClick={() => router.push('/login')}>
-            Go to Login
-          </Button>
-        </Box>
-      </VStack>
-    </Box>
+        </p>
+        <div className="pt-4">
+          <Button onClick={() => router.push('/login')}>Go to Login</Button>
+        </div>
+      </div>
+    </div>
   );
 };
 

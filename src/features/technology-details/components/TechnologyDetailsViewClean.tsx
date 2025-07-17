@@ -6,16 +6,16 @@ import React, {
   useEffect,
 } from 'react';
 import { useCurrentProjectId } from '@/hooks/useCurrentProjectId';
-import { Box, useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
-import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 
 // Layout components
 import ViewLayout from '../../../components/layouts/ViewLayout';
-import SkeletonLoader from '../../../components/common/SkeletonLoader';
-import ProfessionalLoadingModal from '../../../components/ui/ProfessionalLoadingModal';
+import { LoadingState } from '../../../components/common/LoadingState';
+import ProfessionalLoadingModal from '../../../components/ui/professional-loading-modal';
 import TechnologyHeader from './TechnologyHeader';
 import TechMainPanel from './TechMainPanel';
+import { TechnologyDetailsSkeleton } from './TechnologyDetailsSkeleton';
 
 // Import the original sidebar
 import TechDetailsSidebar from './figures/TechDetailsSidebar';
@@ -51,7 +51,6 @@ import { TechnologyDetailsInput } from './TechnologyDetailsInput';
  */
 const TechnologyDetailsViewClean: React.FC = () => {
   const toast = useToast();
-  const queryClient = useQueryClient();
 
   const currentProjectId = useCurrentProjectId();
   const [currentFigure, setCurrentFigure] = useState('FIG. 1');
@@ -63,29 +62,12 @@ const TechnologyDetailsViewClean: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const effectiveProjectId = currentProjectId || '';
-  
-  // Check if this is likely a new project based on URL or navigation
-  const isLikelyNewProject = useRef(false);
-  useEffect(() => {
-    if (typeof window !== 'undefined' && effectiveProjectId) {
-      // Check if we came from project creation
-      const referrer = document.referrer;
-      const fromProjectDashboard = referrer.includes('/projects') && !referrer.includes('/projects/');
-      
-      // Check query cache to see if project was just created
-      const cachedInvention = queryClient.getQueryData(['invention', effectiveProjectId]);
-      
-      if (fromProjectDashboard && cachedInvention === null) {
-        isLikelyNewProject.current = true;
-      }
-    }
-  }, [effectiveProjectId, queryClient]);
 
   const {
     data: inventionData,
     isLoading: isLoadingData,
     isFetching,
-    refetch: refetchInventionData,
+    refetch: _refetchInventionData,
   } = useInventionQuery(effectiveProjectId);
 
   // Track if this is potentially a new project without invention data
@@ -104,9 +86,18 @@ const TechnologyDetailsViewClean: React.FC = () => {
     }
   }, [isLoadingData, isFetching]);
 
+  // Reset hasCheckedForInvention when project changes
+  useEffect(() => {
+    setHasCheckedForInvention(false);
+  }, [effectiveProjectId]);
+
   // Clear waiting state when invention data is loaded
   useEffect(() => {
-    if (inventionData && hasInventionBeenProcessed(inventionData) && isWaitingForData) {
+    if (
+      inventionData &&
+      hasInventionBeenProcessed(inventionData) &&
+      isWaitingForData
+    ) {
       setIsWaitingForData(false);
     }
   }, [inventionData, isWaitingForData]);
@@ -115,24 +106,37 @@ const TechnologyDetailsViewClean: React.FC = () => {
   const deleteFigureMutation = useDeleteFigureMutation();
 
   // Use the file management hook for text files
-  const { uploadedFiles, handleTextFileUpload, handleRemoveTextFile } =
-    useFileManagement(textInput, setTextInput);
-
-  // State for uploaded figures
-  const [uploadedFigures, setUploadedFigures] = useState<UploadedFigure[]>([]);
+  const {
+    uploadedFiles,
+    handleTextFileUpload,
+    handleRemoveTextFile,
+    toggleFileInProcessing,
+    getFilesForProcessing,
+  } = useFileManagement(currentProjectId ?? undefined, textInput, setTextInput);
 
   // Use the existing file handler hook for figure uploads
-  const { handleFileUpload: handleFigureUpload, isUploading } =
-    useTechnologyInputFileHandler({
-      projectId: currentProjectId || '',
-      onFigureUpload: figure => {
-        setUploadedFigures(prev => [...prev, figure]);
-      },
-    });
+  const {
+    handleFileUpload: handleFigureUpload,
+    isUploading: _isUploading,
+    uploadedFigures,
+    resetFigureNumbering,
+    clearUploadedFile: clearUploadedFigure,
+    reorderUploadedFigures,
+    updateFigureNumber,
+  } = useTechnologyInputFileHandler({
+    projectId: currentProjectId || '',
+    onFigureUpload: figure => {
+      // No need to update state here as it's managed in the hook
+    },
+  });
+
+  // State for uploaded figures is now managed in the hook, remove the local state
+  // const [uploadedFigures, setUploadedFigures] = useState<UploadedFigure[]>([]);
 
   const { isProcessing, analyzeInventionText } = useInventionAnalysis(
     textInput,
-    undefined
+    currentProjectId || undefined,
+    uploadedFigures
   );
 
   // Combined file upload handler
@@ -149,15 +153,12 @@ const TechnologyDetailsViewClean: React.FC = () => {
         }
       } catch (error) {
         logger.error('Error in file upload:', error);
-        toast({
+        toast.error({
           title: 'File Upload Error',
           description:
             error instanceof Error
               ? error.message
               : 'An unexpected error occurred',
-          status: 'error',
-          duration: 5000,
-          position: 'bottom-right',
         });
         throw error;
       }
@@ -166,7 +167,7 @@ const TechnologyDetailsViewClean: React.FC = () => {
   );
 
   const updateHandlers = useMemo(() => {
-    const handleUpdateInventionData = (field: string, value: string | number | boolean | Record<string, unknown>) => {
+    const handleUpdateInventionData = (field: string, value: unknown) => {
       if (!currentProjectId) return;
       updateInventionMutation.mutate({
         projectId: currentProjectId,
@@ -174,7 +175,7 @@ const TechnologyDetailsViewClean: React.FC = () => {
       });
     };
 
-    const handleUpdateBackgroundField = (field: string, value: string | number | boolean | Record<string, unknown>) => {
+    const handleUpdateBackgroundField = (field: string, value: unknown) => {
       if (!currentProjectId) return;
       const currentInvention = updateInventionMutation.data || inventionData;
       const currentBackground = currentInvention?.background;
@@ -195,7 +196,7 @@ const TechnologyDetailsViewClean: React.FC = () => {
 
     const handleUpdateTechnicalImplementationField = (
       field: string,
-      value: string | number | boolean | Record<string, unknown>
+      value: unknown
     ) => {
       if (!currentProjectId) return;
       const currentInvention = updateInventionMutation.data || inventionData;
@@ -231,20 +232,20 @@ const TechnologyDetailsViewClean: React.FC = () => {
   );
 
   const handleProceedFromUpload = useCallback(async () => {
+    const filesToProcess = getFilesForProcessing();
+
     if (
       !textInput.trim() &&
-      uploadedFiles.length === 0 &&
+      filesToProcess.length === 0 &&
       uploadedFigures.length === 0
     ) {
-      toast({
+      toast.warning({
         title: 'No Content',
         description: 'Please upload files or enter text before analyzing',
-        status: 'warning',
-        duration: 3000,
-        position: 'bottom-right',
       });
       return;
     }
+
     setIsWaitingForData(true);
     const success = await analyzeInventionText();
     if (!success) {
@@ -253,7 +254,7 @@ const TechnologyDetailsViewClean: React.FC = () => {
     }
   }, [
     textInput,
-    uploadedFiles.length,
+    getFilesForProcessing,
     uploadedFigures.length,
     analyzeInventionText,
     toast,
@@ -263,10 +264,10 @@ const TechnologyDetailsViewClean: React.FC = () => {
     (figureId: string) => {
       const figure = uploadedFigures.find(f => f.id === figureId);
 
-      // Optimistically remove from UI regardless of server result.
-      setUploadedFigures(prev => prev.filter(f => f.id !== figureId));
-
       if (!figure || !currentProjectId) return;
+
+      // Remove from UI first
+      clearUploadedFigure(figure.fileName);
 
       // Extract server-side figureId from the signed URL pattern.
       const match = figure.url.match(/figures\/([a-zA-Z0-9-]+)\/download/);
@@ -281,80 +282,50 @@ const TechnologyDetailsViewClean: React.FC = () => {
         { projectId: currentProjectId, figureId: serverFigureId },
         {
           onSuccess: () => {
-            toast({
+            toast.info({
               title: 'Figure Deleted',
               description: 'Figure deleted successfully',
-              status: 'info',
-              duration: 2000,
-              position: 'bottom-right',
             });
           },
           onError: error => {
             logger.error('Failed to delete figure:', error);
-            toast({
+            toast.error({
               title: 'Delete Failed',
               description: 'Failed to delete figure',
-              status: 'error',
-              duration: 5000,
-              position: 'bottom-right',
             });
           },
         }
       );
     },
-    [deleteFigureMutation, toast, currentProjectId, uploadedFigures]
+    [
+      deleteFigureMutation,
+      toast,
+      currentProjectId,
+      uploadedFigures,
+      clearUploadedFigure,
+    ]
   );
 
   // Use the utility function to check if invention has been processed
   const hasBeenProcessed = hasInventionBeenProcessed(inventionData || null);
 
-  // Optimize loading logic - don't show loading if we've already checked and found no invention
-  // or if this is likely a new project
-  const isActuallyLoading =
-    (isLoadingData ||
-    (isFetching && !hasCheckedForInvention) ||
-    (!hasCheckedForInvention && inventionData === undefined && !!currentProjectId)) &&
-    !isLikelyNewProject.current;
+  // Check if this is an initial load (no data at all)
+  const isInitialLoad = isLoadingData && inventionData === undefined;
+  
+  // Show input view when we have data but invention hasn't been processed
+  const shouldShowInputView = !isInitialLoad && !hasBeenProcessed && !!currentProjectId;
+  
+  // Show main content when invention has been processed
+  const shouldShowMainContent = !isInitialLoad && hasBeenProcessed && !!currentProjectId;
 
-  const shouldShowInputView =
-    !hasBeenProcessed && !isActuallyLoading && !!currentProjectId;
-
+  // Loading state with no project context - show custom skeleton
   if (!currentProjectId) {
-    return (
-      <ViewLayout
-        header={<TechnologyHeader />}
-        mainContent={
-          <Box p={{ base: 4, md: 6 }} h="100%" overflowY="auto">
-            <SkeletonLoader type="document" />
-          </Box>
-        }
-        sidebarContent={
-          <Box p={{ base: 3, md: 4 }} h="100%" overflowY="auto">
-            <SkeletonLoader type="sidebar" />
-          </Box>
-        }
-        {...VIEW_LAYOUT_CONFIG.DEFAULT_PROPS}
-      />
-    );
+    return <TechnologyDetailsSkeleton />;
   }
 
-  if (isActuallyLoading) {
-    return (
-      <ViewLayout
-        header={<TechnologyHeader />}
-        mainContent={
-          <Box p={{ base: 4, md: 6 }} h="100%" overflowY="auto">
-            <SkeletonLoader type="document" />
-          </Box>
-        }
-        sidebarContent={
-          <Box p={{ base: 3, md: 4 }} h="100%" overflowY="auto">
-            <SkeletonLoader type="sidebar" />
-          </Box>
-        }
-        {...VIEW_LAYOUT_CONFIG.DEFAULT_PROPS}
-      />
-    );
+  // Only show skeleton on initial load when there's no cached data
+  if (isInitialLoad) {
+    return <TechnologyDetailsSkeleton />;
   }
 
   if (shouldShowInputView) {
@@ -369,18 +340,24 @@ const TechnologyDetailsViewClean: React.FC = () => {
           uploadedFiles={uploadedFiles}
           uploadedFigures={uploadedFigures}
           onRemoveTextFile={handleRemoveTextFile}
+          onToggleFileInProcessing={toggleFileInProcessing}
           onRemoveFigure={handleRemoveFigure}
+          onResetFigureNumbers={resetFigureNumbering}
+          onReorderFigures={reorderUploadedFigures}
+          onUpdateFigureNumber={updateFigureNumber}
           fileInputRef={fileInputRef}
         />
 
         {/* Show processing modal when analyzing */}
         <ProfessionalLoadingModal
           isOpen={isProcessing || isWaitingForData}
-          title={isProcessing ? "AI Analysis in Progress" : "Loading Your Invention"}
+          title={
+            isProcessing ? 'AI Analysis in Progress' : 'Loading Your Invention'
+          }
           message={
-            isProcessing 
-              ? "Analyzing your invention details. This may take a moment..." 
-              : "Preparing your invention data..."
+            isProcessing
+              ? 'Analyzing your invention details. This may take a moment...'
+              : 'Preparing your invention data...'
           }
           showProgress={true}
         />

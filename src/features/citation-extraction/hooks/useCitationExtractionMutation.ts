@@ -3,13 +3,14 @@ import { useApiMutation } from '@/lib/api/queryClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { useCitationStore } from '../store';
 import { citationJobKeys, citationKeys } from '@/lib/queryKeys/citationKeys';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { CitationClientService } from '@/client/services/citation.client-service';
 
 export function useCitationExtractionMutation() {
   const queryClient = useQueryClient();
   const activeSearchId = useCitationStore(state => state.activeSearchId);
   const addOptimisticRefs = useCitationStore(state => state.addOptimisticRefs);
+  const clearSpecificOptimisticRefs = useCitationStore(state => state.clearSpecificOptimisticRefs);
 
   return useApiMutation({
     mutationFn: async (reference: string) => {
@@ -55,10 +56,25 @@ export function useCitationExtractionMutation() {
       }
     },
     onError: (error, variables) => {
-      logger.error('[useCitationExtractionMutation] Extraction failed', {
-        reference: variables,
-        error,
-      });
+      logger.error(
+        '[useCitationExtractionMutation] Extraction failed',
+        {
+          reference: variables,
+          error: error.message,
+        }
+      );
+
+      // Clear the optimistic ref for the failed extraction
+      if (activeSearchId) {
+        clearSpecificOptimisticRefs(activeSearchId, [variables]);
+        logger.debug(
+          '[useCitationExtractionMutation] Cleared optimistic ref for failed extraction',
+          {
+            reference: variables,
+            activeSearchId,
+          }
+        );
+      }
     },
   });
 }

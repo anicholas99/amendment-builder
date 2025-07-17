@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Flex, Icon, Text, Box } from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
 import {
   FiFileText,
   FiLayers,
@@ -56,68 +56,45 @@ const DocumentLink: React.FC<DocumentLinkProps> = React.memo(
     const IconComponent = documentIcons[documentType] || FiFileText;
 
     return (
-      <Flex
-        align="center"
-        py={1.5}
-        px={3}
-        fontSize="13px"
-        borderRadius="md"
-        cursor={isDisabled ? 'not-allowed' : 'pointer'}
-        opacity={isDisabled ? 0.5 : 1}
-        onClick={handleClick}
-        bg={isActive ? (isDarkMode ? 'blue.800' : 'blue.50') : 'transparent'}
-        color={
+      <div
+        className={cn(
+          'flex items-center py-1.5 px-4 text-[13px] rounded-md transition-all duration-150 ease-out w-full',
+          isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
           isActive
             ? isDarkMode
-              ? 'blue.200'
-              : 'blue.600'
+              ? 'bg-blue-800 text-blue-200'
+              : 'bg-blue-50 text-blue-600'
             : isDisabled
               ? isDarkMode
-                ? 'gray.600'
-                : 'gray.400'
+                ? 'text-gray-600'
+                : 'text-gray-400'
               : isDarkMode
-                ? 'gray.400'
-                : 'gray.600'
-        }
-        _hover={
-          isDisabled
-            ? {}
-            : {
-                bg: isDarkMode ? 'gray.700' : 'gray.100',
-                color: isDarkMode ? 'gray.100' : 'gray.800',
-              }
-        }
-        transition="background-color 0.15s ease-out, color 0.15s ease-out"
-        width="100%"
-        sx={{
-          '&:hover svg': isDisabled
-            ? {}
-            : {
-                transition: 'color 0.15s ease-out',
-                color: isDarkMode ? 'gray.100' : 'gray.800',
-              },
-        }}
+                ? 'text-gray-400'
+                : 'text-gray-600',
+          !isDisabled &&
+            'hover:bg-accent hover:text-gray-800 dark:hover:text-gray-100'
+        )}
+        onClick={handleClick}
       >
-        <Icon as={IconComponent} boxSize={3} mr={2} flexShrink={0} />
-        <Text
-          fontSize="13px"
-          flex="1"
-          whiteSpace="nowrap"
-          overflow="hidden"
-          textOverflow="ellipsis"
-        >
+        <IconComponent
+          className={cn(
+            'w-3 h-3 mr-2 flex-shrink-0 transition-colors duration-150',
+            !isDisabled &&
+              'group-hover:text-gray-800 dark:group-hover:text-gray-100'
+          )}
+        />
+        <span className="text-[13px] flex-1 whitespace-nowrap overflow-hidden text-ellipsis">
           {label}
-        </Text>
+        </span>
         {isActive && (
-          <Icon
-            as={HiChevronRight}
-            boxSize={3}
-            ml={1}
-            flexShrink={0}
-            color={isDarkMode ? 'blue.200' : 'blue.600'}
+          <HiChevronRight
+            className={cn(
+              'w-3 h-3 ml-1 flex-shrink-0',
+              isDarkMode ? 'text-blue-200' : 'text-blue-600'
+            )}
           />
         )}
-      </Flex>
+      </div>
     );
   },
   (prevProps, nextProps) => {

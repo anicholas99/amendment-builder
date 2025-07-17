@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { STALE_TIME } from '@/constants/time';
 
 interface ProjectElement {
@@ -26,7 +26,9 @@ export function useProjectElements(projectId: string | null | undefined) {
         projectId,
       });
 
-      const response = await apiFetch(API_ROUTES.PROJECTS.ELEMENTS.LIST(projectId));
+      const response = await apiFetch(
+        API_ROUTES.PROJECTS.ELEMENTS.LIST(projectId)
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -34,11 +36,14 @@ export function useProjectElements(projectId: string | null | undefined) {
       }
 
       const data = await response.json();
-      
-      logger.info('[useProjectElements] Fetched project elements successfully', {
-        projectId,
-        elementCount: data.elements.length,
-      });
+
+      logger.info(
+        '[useProjectElements] Fetched project elements successfully',
+        {
+          projectId,
+          elementCount: data.elements.length,
+        }
+      );
 
       return data.elements;
     },
@@ -46,4 +51,4 @@ export function useProjectElements(projectId: string | null | undefined) {
     staleTime: STALE_TIME.DEFAULT,
     refetchOnWindowFocus: false,
   });
-} 
+}

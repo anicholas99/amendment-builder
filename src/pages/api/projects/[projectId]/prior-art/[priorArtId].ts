@@ -1,10 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { CustomApiRequest } from '@/types/api';
 import { z } from 'zod';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { projectIdQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
 import { PriorArtServerService } from '@/server/services/prior-art.server-service';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Schema for path parameters
 const priorArtIdQuerySchema = projectIdQuerySchema.extend({
@@ -43,14 +44,10 @@ async function handler(
         );
 
         if (!removed) {
-          res.status(404).json({
-            success: false,
-            error: 'Prior art not found',
-          });
-          return;
+          return apiResponse.notFound(res, 'Prior art not found');
         }
 
-        res.status(200).json({
+        return apiResponse.ok(res, {
           success: true,
           message: 'Prior art removed successfully',
         });
@@ -62,16 +59,15 @@ async function handler(
           userId,
           tenantId,
         });
-        res.status(500).json({
-          success: false,
-          error: 'Failed to remove prior art',
-        });
+        return apiResponse.serverError(
+          res,
+          new Error('Failed to remove prior art')
+        );
       }
       break;
 
     default:
-      res.setHeader('Allow', ['DELETE']);
-      res.status(405).json({ error: `Method ${req.method} Not Allowed` });
+      return apiResponse.methodNotAllowed(res, ['DELETE']);
   }
 }
 

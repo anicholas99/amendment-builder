@@ -1,5 +1,5 @@
 import { useApiQuery, ApiQueryOptions } from '@/lib/api/queryClient';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { exclusionKeys } from '@/lib/queryKeys/projectKeys';
 import { normalizePatentNumber } from '@/features/patent-application/utils/patentUtils';
@@ -20,6 +20,15 @@ interface ExclusionsResponse {
   count: number;
 }
 
+// New standardized response format
+interface StandardizedExclusionsResponse {
+  success: boolean;
+  data: {
+    exclusions: ProjectExclusion[];
+    count: number;
+  };
+}
+
 /**
  * Hook to fetch project exclusions.
  * Returns a Set of normalized patent numbers for efficient lookup.
@@ -37,12 +46,17 @@ export function useProjectExclusions(
     url: API_ROUTES.PROJECTS.EXCLUSIONS(projectId ?? ''),
     enabled: !!projectId,
     select: data => {
-      if (!data?.exclusions) {
+      // Handle both legacy and new standardized response formats
+      const exclusions =
+        (data as any)?.data?.exclusions || (data as any)?.exclusions;
+      if (!exclusions) {
         return new Set<string>();
       }
       return new Set<string>(
-        data.exclusions
-          .map(exclusion => normalizePatentNumber(exclusion.patentNumber || ''))
+        exclusions
+          .map((exclusion: ProjectExclusion) =>
+            normalizePatentNumber(exclusion.patentNumber || '')
+          )
           .filter(Boolean)
       );
     },

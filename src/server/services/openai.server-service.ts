@@ -8,10 +8,12 @@
  * cost calculation, and standardized error handling.
  */
 import OpenAI from 'openai';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { env } from '@/config/env';
 import { environment } from '@/config/environment';
+import { serverFetch } from '@/lib/api/serverFetch';
+import { sanitizePrompt, validateAIResponse } from '@/utils/ai/promptSanitizer';
 
 // Types
 import type { ChatCompletion } from 'openai/resources/chat/completions';
@@ -41,7 +43,9 @@ interface ChatCompletionRequest {
 
 // Pricing (cost per 1K tokens)
 const MODEL_PRICING: { [key: string]: { input: number; output: number } } = {
-  'gpt-4.1': { input: 0.01, output: 0.03 },
+  'gpt-4.1': { input: 0.002, output: 0.008 }, // $2.00/1M input, $8.00/1M output (July 2025)
+  'gpt-4.1-mini': { input: 0.0004, output: 0.0016 }, // $0.40/1M input, $1.60/1M output
+  'gpt-4.1-nano': { input: 0.0001, output: 0.0004 }, // $0.10/1M input, $0.40/1M output
   'gpt-35-turbo': { input: 0.0005, output: 0.0015 },
   'gpt-4-turbo-preview': { input: 0.01, output: 0.03 },
   'gpt-4-turbo': { input: 0.01, output: 0.03 },
@@ -140,6 +144,39 @@ export class OpenaiServerService {
       response_format,
     } = request;
 
+    // Sanitize user messages to prevent prompt injection with context-aware limits
+    const sanitizedMessages = messages.map(msg => {
+      if (msg.role !== 'user') return msg;
+
+      // Auto-detect prompt type for better context selection
+      const content = msg.content.toLowerCase();
+      let context: 'INVENTION' | 'CLAIMS' | 'PRIOR_ART' | 'CHAT' | 'DEFAULT' =
+        'DEFAULT';
+
+      if (content.includes('claim') && content.includes('prior art')) {
+        context = 'PRIOR_ART';
+      } else if (
+        content.includes('invention') ||
+        content.includes('disclosure') ||
+        content.includes('embodiment')
+      ) {
+        context = 'INVENTION';
+      } else if (
+        content.includes('claim') &&
+        (content.includes('independent') || content.includes('dependent'))
+      ) {
+        context = 'CLAIMS';
+      } else if (content.length > 20000) {
+        // Large prompts are likely invention or prior art related
+        context = 'INVENTION';
+      }
+
+      return {
+        ...msg,
+        content: sanitizePrompt(msg.content, context),
+      };
+    });
+
     const primaryModel =
       request.model ||
       (this.aiProvider === 'azure'
@@ -155,7 +192,7 @@ export class OpenaiServerService {
     try {
       return await this.executeRequest(
         primaryModel,
-        messages,
+        sanitizedMessages,
         temperature,
         max_tokens,
         response_format
@@ -225,7 +262,7 @@ export class OpenaiServerService {
         const apiVersion = environment.azure.openai.apiVersion;
         const azureApiKey = environment.azure.openai.apiKey;
         const azureUrl = `${this.openai.baseURL}deployments/${model}/chat/completions?api-version=${apiVersion}`;
-        const response = await fetch(azureUrl, {
+        const response = await serverFetch(azureUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -253,6 +290,18 @@ export class OpenaiServerService {
         throw new ApplicationError(
           ErrorCode.AI_INVALID_RESPONSE,
           'Received invalid or empty response from AI API.'
+        );
+      }
+
+      // Validate AI response for security issues
+      if (!validateAIResponse(content)) {
+        logger.error('[OpenaiServerService] Suspicious AI response detected', {
+          model,
+          contentPreview: content.substring(0, 100),
+        });
+        throw new ApplicationError(
+          ErrorCode.AI_INVALID_RESPONSE,
+          'AI response failed security validation'
         );
       }
 
@@ -297,6 +346,39 @@ export class OpenaiServerService {
       response_format,
     } = request;
 
+    // Sanitize user messages to prevent prompt injection with context-aware limits
+    const sanitizedMessages = messages.map(msg => {
+      if (msg.role !== 'user') return msg;
+
+      // Auto-detect prompt type for better context selection
+      const content = msg.content.toLowerCase();
+      let context: 'INVENTION' | 'CLAIMS' | 'PRIOR_ART' | 'CHAT' | 'DEFAULT' =
+        'DEFAULT';
+
+      if (content.includes('claim') && content.includes('prior art')) {
+        context = 'PRIOR_ART';
+      } else if (
+        content.includes('invention') ||
+        content.includes('disclosure') ||
+        content.includes('embodiment')
+      ) {
+        context = 'INVENTION';
+      } else if (
+        content.includes('claim') &&
+        (content.includes('independent') || content.includes('dependent'))
+      ) {
+        context = 'CLAIMS';
+      } else if (content.length > 20000) {
+        // Large prompts are likely invention or prior art related
+        context = 'INVENTION';
+      }
+
+      return {
+        ...msg,
+        content: sanitizePrompt(msg.content, context),
+      };
+    });
+
     const primaryModel =
       request.model ||
       (this.aiProvider === 'azure'
@@ -314,8 +396,8 @@ export class OpenaiServerService {
         const apiVersion = environment.azure.openai.apiVersion;
         const azureApiKey = environment.azure.openai.apiKey;
         const azureUrl = `${this.openai.baseURL}deployments/${primaryModel}/chat/completions?api-version=${apiVersion}`;
-        
-        const response = await fetch(azureUrl, {
+
+        const response = await serverFetch(azureUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -323,7 +405,7 @@ export class OpenaiServerService {
           },
           body: JSON.stringify({
             model: primaryModel,
-            messages,
+            messages: sanitizedMessages,
             temperature,
             max_tokens: max_tokens,
             response_format,
@@ -401,7 +483,7 @@ export class OpenaiServerService {
         // Standard OpenAI streaming
         const stream = await this.openai.chat.completions.create({
           model: primaryModel,
-          messages,
+          messages: sanitizedMessages,
           temperature,
           max_tokens: max_tokens,
           response_format,
@@ -418,12 +500,14 @@ export class OpenaiServerService {
         }
 
         // Estimate usage for streaming
+        const promptText = sanitizedMessages.map(m => m.content).join(' ');
+        const estimatedPromptTokens = Math.round(promptText.length / 4);
         const usage: TokenUsage = {
-          prompt_tokens: Math.round(messages.join(' ').length / 4),
+          prompt_tokens: estimatedPromptTokens,
           completion_tokens: totalTokens,
-          total_tokens: Math.round(messages.join(' ').length / 4) + totalTokens,
+          total_tokens: estimatedPromptTokens + totalTokens,
           estimated_cost: this.calculateCost(
-            Math.round(messages.join(' ').length / 4),
+            estimatedPromptTokens,
             totalTokens,
             primaryModel
           ),

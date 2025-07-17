@@ -2,11 +2,10 @@ import React, { useState, useRef } from 'react';
 import { Editor } from '@tiptap/react';
 import PatentEditor from './TiptapPatentEditorLazy';
 import PatentGenerationPlaceholder from './PatentGenerationPlaceholder';
-import { SimpleMainPanel } from '@/components/common/SimpleMainPanel';
 import VersionsHistoryModal from './VersionsHistoryModal';
 import { InventionData } from '@/types/invention';
 import { PatentEditorHeader } from './PatentEditorHeader';
-import { PatentEditorFooter } from './PatentEditorFooter';
+import { SimpleMainPanel } from '@/components/common/SimpleMainPanel';
 import {
   usePatentEditorToolbar,
   useResponsiveToolbar,
@@ -21,15 +20,31 @@ interface PatentEditorRef {
   handleUndo: () => void;
   handleRedo: () => void;
   getEditor: () => Editor | null;
+  triggerSearch: (searchTerm: string) => void;
+  applyAgentSectionContent: (sectionType: string, newContent: string) => void;
+  flushPendingUpdates: () => void;
 }
+
+type SavedPriorArt = {
+  id: string;
+  patentNumber: string;
+  title?: string | null;
+  abstract?: string | null;
+  authors?: string | null;
+  year?: string | null;
+  notes?: string | null;
+  claim1?: string | null;
+  summary?: string | null;
+};
 
 interface PatentMainPanelProps {
   content: string | null;
+  hasGenerated?: boolean;
   setContent: (content: string) => void;
   previousContent: string | null;
   onContentUpdate: (newContent: string) => void;
   onUndoContent: () => void;
-  handleGenerateButtonClick: () => void;
+  handleGenerateButtonClick: (selectedRefs?: string[]) => void;
   isGenerating: boolean;
   patentTitle?: string;
   analyzedInvention?: InventionData | null;
@@ -41,6 +56,10 @@ interface PatentMainPanelProps {
   isSaving?: boolean;
   hasUnsavedChanges?: boolean;
   onBlur?: () => void;
+  priorArtItems?: SavedPriorArt[];
+  onEditorReady?: (editorRef: PatentEditorRef) => void;
+  editorSyncKey?: number;
+  completeProgress?: (showSuccessToast?: boolean) => void;
 }
 
 /**
@@ -48,6 +67,7 @@ interface PatentMainPanelProps {
  */
 const PatentMainPanel: React.FC<PatentMainPanelProps> = ({
   content,
+  hasGenerated = false,
   setContent,
   previousContent: _previousContent,
   onContentUpdate: _onContentUpdate,
@@ -56,7 +76,7 @@ const PatentMainPanel: React.FC<PatentMainPanelProps> = ({
   isGenerating,
   patentTitle = 'Patent Application',
   analyzedInvention,
-  generationProgress: _generationProgress = 0,
+  generationProgress = 0,
   onSaveVersion,
   onLoadVersion,
   projectId,
@@ -64,6 +84,10 @@ const PatentMainPanel: React.FC<PatentMainPanelProps> = ({
   isSaving = false,
   hasUnsavedChanges = false,
   onBlur,
+  priorArtItems = [],
+  onEditorReady,
+  editorSyncKey = 0,
+  completeProgress,
 }) => {
   // We now assume we're always in edit mode for individual sections
   const [isEditMode] = useState(true);
@@ -75,6 +99,13 @@ const PatentMainPanel: React.FC<PatentMainPanelProps> = ({
   const editorRef = useRef<PatentEditorRef | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Call onEditorReady when editor is mounted
+  React.useEffect(() => {
+    if (editorRef.current && onEditorReady) {
+      onEditorReady(editorRef.current);
+    }
+  }, [editorRef, onEditorReady]);
+
   // Set this to false in production
   const FORCE_SHOW_VERSION_UI = false;
 
@@ -85,15 +116,8 @@ const PatentMainPanel: React.FC<PatentMainPanelProps> = ({
   const canShowVersionUI = !!actualProjectId || FORCE_SHOW_VERSION_UI;
 
   // Use custom hooks
-  const {
-    editor,
-    zoomLevel,
-    handleZoomIn,
-    handleZoomOut,
-    handleResetZoom,
-    characterCount,
-    wordCount,
-  } = usePatentEditorToolbar({ editorRef });
+  const { editor, zoomLevel, handleZoomIn, handleZoomOut, handleResetZoom } =
+    usePatentEditorToolbar({ editorRef });
 
   const { visibleButtons } = useResponsiveToolbar(containerRef);
 
@@ -104,67 +128,66 @@ const PatentMainPanel: React.FC<PatentMainPanelProps> = ({
 
   // Export handler
   const handleExportDocx = () => {
-    handlePatentExport(content, patentTitle, analyzedInvention || null);
+    // Get the editor instance from the ref
+    const editorInstance = editorRef.current?.getEditor();
+    handlePatentExport(
+      content || '', // Use the current content directly
+      patentTitle,
+      analyzedInvention || null,
+      editorInstance
+    );
   };
 
-  if (!content) {
-    return (
-      <SimpleMainPanel contentPadding={false}>
-        <PatentGenerationPlaceholder
-          onGenerate={handleGenerateButtonClick}
-          isGenerating={isGenerating}
-        />
-      </SimpleMainPanel>
-    );
-  }
+  // Header content - consistent with other views
+  const headerContent = (
+    <div className="relative">
+      <PatentEditorHeader
+        editor={editor}
+        zoomLevel={zoomLevel}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onResetZoom={handleResetZoom}
+        onExportDocx={handleExportDocx}
+        onResetApplication={handleResetApplication}
+        onOpenVersionHistory={() => setIsVersionHistoryOpen(true)}
+        onSaveVersion={
+          onSaveVersion
+            ? async (description?: string) => {
+                await onSaveVersion(description || 'Version saved');
+              }
+            : undefined
+        }
+        canShowVersionUI={canShowVersionUI}
+        visibleButtons={visibleButtons}
+        isSaving={isSaving}
+        showSaved={showSaved}
+        hasUnsavedChanges={hasUnsavedChanges}
+        actualProjectId={actualProjectId ?? undefined}
+      />
+    </div>
+  );
 
+  // Always render the editor container - parent decides what content to show
   return (
     <>
       <SimpleMainPanel
-        header={
-          <PatentEditorHeader
-            editor={editor}
-            zoomLevel={zoomLevel}
-            onZoomIn={handleZoomIn}
-            onZoomOut={handleZoomOut}
-            onResetZoom={handleResetZoom}
-            onExportDocx={handleExportDocx}
-            onResetApplication={handleResetApplication}
-            onOpenVersionHistory={() => setIsVersionHistoryOpen(true)}
-            onSaveVersion={
-              onSaveVersion
-                ? async (description?: string) => {
-                    await onSaveVersion(description || 'Version saved');
-                  }
-                : undefined
-            }
-            canShowVersionUI={canShowVersionUI}
-            visibleButtons={visibleButtons}
-            isSaving={isSaving}
-            showSaved={showSaved}
-            hasUnsavedChanges={hasUnsavedChanges}
-            actualProjectId={actualProjectId}
-          />
-        }
+        header={headerContent}
+        reserveScrollbarGutter={false}
         contentPadding={false}
-        footer={
-          editor && (
-            <PatentEditorFooter
-              wordCount={wordCount}
-              characterCount={characterCount}
-            />
-          )
-        }
+        contentStyles={{ overflow: 'hidden' }}
       >
         <PatentEditor
+          key={`patent-editor-${projectId || 'default'}`}
           ref={editorRef}
-          content={content}
+          content={content || ''} // Pass the current content directly
           setContent={setContent}
           isEditMode={isEditMode}
-          hasGenerated={true}
+          hasGenerated={hasGenerated}
           zoomLevel={zoomLevel}
           containerRef={containerRef}
           onBlur={onBlur}
+          projectId={projectId ? projectId : undefined}
+          completeProgress={completeProgress}
         />
       </SimpleMainPanel>
 

@@ -1,26 +1,25 @@
-import React, { useState, useEffect, useCallback, startTransition } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  startTransition,
+} from 'react';
+import { logger } from '@/utils/clientLogger';
 import { useTimeout } from '@/hooks/useTimeout';
 import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
-  ModalFooter,
-  FormControl,
-  FormLabel,
-  Input,
-  Button,
-  Text,
-  Box,
-  Icon,
-  Spinner,
-  VStack,
-  useToast,
-  FormErrorMessage,
-} from '@chakra-ui/react';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Text } from '@/components/ui/text';
+import { Box } from '@/components/ui/box';
+import { VStack } from '@/components/ui/stack';
+import { useToast } from '@/hooks/useToastWrapper';
 import { FiPlus, FiCheck } from 'react-icons/fi';
 
 interface NewProjectModalProps {
@@ -150,72 +149,86 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
     }
   }, [isOpen]);
 
+  // Focus input when modal opens
+  useEffect(() => {
+    if (isOpen && initialRef.current) {
+      setTimeout(() => {
+        initialRef.current?.focus();
+      }, 100);
+    }
+  }, [isOpen]);
+
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      initialFocusRef={initialRef}
-      isCentered
-    >
-      <ModalOverlay bg="blackAlpha.600" />
-      <ModalContent>
-        <ModalHeader as="h3">
-          {isSuccess ? 'Project Created!' : 'Create New Project'}
-        </ModalHeader>
-        <ModalCloseButton isDisabled={isCreating || isSuccess} />
-        <ModalBody pb={6}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {isSuccess ? 'Project Created!' : 'Create New Project'}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="pb-6">
           {isSuccess ? (
-            <VStack spacing={4} align="center" py={4}>
-              <Box bg="green.100" borderRadius="full" p={3} color="green.500">
-                <Icon as={FiCheck} boxSize={6} />
+            <VStack spacing={4} align="center" className="py-4">
+              <Box className="bg-green-100 dark:bg-green-900 rounded-full p-4 text-green-500">
+                <FiCheck className="h-6 w-6" />
               </Box>
-              <Text color="green.600" fontWeight="medium">
+              <Text className="text-green-600 dark:text-green-400 font-medium">
                 Project "{projectName}" created successfully!
               </Text>
-              <Text fontSize="sm" color="gray.600">
+              <Text size="sm" className="text-muted-foreground">
                 Opening technology details...
               </Text>
             </VStack>
           ) : (
-            <FormControl isInvalid={!!error}>
-              <FormLabel>Project Name</FormLabel>
-              <Input
-                ref={initialRef}
-                placeholder="Enter project name"
-                value={projectName}
-                onChange={handleInputChange}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !isCreating) {
-                    handleSubmit();
-                  }
-                }}
-              />
-              {error && <FormErrorMessage>{error}</FormErrorMessage>}
-            </FormControl>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="project-name">Project Name</Label>
+                <Input
+                  id="project-name"
+                  ref={initialRef}
+                  placeholder="Enter project name"
+                  value={projectName}
+                  onChange={handleInputChange}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !isCreating) {
+                      handleSubmit();
+                    }
+                  }}
+                />
+                {error && (
+                  <Text size="sm" className="text-destructive">
+                    {error}
+                  </Text>
+                )}
+              </div>
+            </div>
           )}
-        </ModalBody>
+        </div>
 
-        <ModalFooter>
-          {!isSuccess && (
-            <>
-              <Button
-                colorScheme="blue"
-                mr={3}
-                onClick={handleSubmit}
-                isLoading={isCreating}
-                loadingText="Creating..."
-                isDisabled={!projectName.trim() || isCreating}
-              >
-                {isCreating ? 'Creating Project...' : 'Create Project'}
-              </Button>
-              <Button onClick={onClose} isDisabled={isCreating}>
-                Cancel
-              </Button>
-            </>
-          )}
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        {!isSuccess && (
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose} disabled={isCreating}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={!projectName.trim() || isCreating}
+              className="gap-2"
+            >
+              {isCreating ? (
+                <>Creating...</>
+              ) : (
+                <>
+                  <FiPlus className="h-4 w-4" />
+                  Create Project
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 };
 

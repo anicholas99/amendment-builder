@@ -1,18 +1,15 @@
 import React from 'react';
-import {
-  Box,
-  Text,
-  VStack,
-  HStack,
-  Button,
-  Icon,
-  Flex,
-  Badge,
-  Link,
-  Divider,
-  Tooltip,
-} from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
 import { FiExternalLink, FiTrash2, FiInfo } from 'react-icons/fi';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface PriorArtReference {
   id: string;
@@ -40,107 +37,132 @@ const PriorArtSection: React.FC<PriorArtSectionProps> = ({
   onDeletePriorArt,
   onOpenPriorArtModal,
 }) => {
+  const { isDarkMode } = useThemeContext();
+
   return (
-    <Box w="100%" p={4}>
-      <Flex justifyContent="space-between" alignItems="center" mb={4}>
-        <Text fontSize="xl" fontWeight="bold">
-          Prior Art References
-        </Text>
-        <Button
-          colorScheme="blue"
-          variant="outline"
-          onClick={onOpenPriorArtModal}
-        >
+    <div className="w-full p-4">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">Prior Art References</h2>
+        <Button variant="outline" onClick={onOpenPriorArtModal}>
           Add Reference
         </Button>
-      </Flex>
+      </div>
 
       {priorArtReferences.length === 0 ? (
-        <Box p={4} borderWidth="1px" borderRadius="md" bg="gray.50">
-          <Text color="gray.500" textAlign="center">
+        <div
+          className={cn(
+            'p-4 border rounded-md',
+            isDarkMode
+              ? 'border-gray-700 bg-gray-800'
+              : 'border-gray-200 bg-gray-50'
+          )}
+        >
+          <p
+            className={cn(
+              'text-center',
+              isDarkMode ? 'text-gray-400' : 'text-gray-600'
+            )}
+          >
             No prior art references added yet. Click "Add Reference" to add one.
-          </Text>
-        </Box>
+          </p>
+        </div>
       ) : (
-        <VStack spacing={3} align="stretch">
+        <div className="flex flex-col gap-3">
           {priorArtReferences.map(reference => (
-            <Box
+            <div
               key={reference.id}
-              p={3}
-              borderWidth="1px"
-              borderRadius="md"
-              boxShadow="sm"
-              bg={selectedPriorArt === reference.id ? 'blue.50' : 'white'}
+              className={cn(
+                'p-4 border rounded-md shadow-sm cursor-pointer transition-colors',
+                selectedPriorArt === reference.id
+                  ? isDarkMode
+                    ? 'bg-blue-900/30 border-blue-600'
+                    : 'bg-blue-50 border-blue-300'
+                  : isDarkMode
+                    ? 'bg-gray-800 border-gray-700 hover:border-gray-600'
+                    : 'bg-white border-gray-200 hover:border-blue-300'
+              )}
               onClick={() =>
                 onSelectPriorArt(
                   selectedPriorArt === reference.id ? null : reference.id
                 )
               }
-              cursor="pointer"
-              _hover={{ borderColor: 'blue.300' }}
             >
-              <Flex justifyContent="space-between" alignItems="flex-start">
-                <VStack align="start" spacing={1}>
-                  <Text fontWeight="bold">{reference.title}</Text>
+              <div className="flex justify-between items-start">
+                <div className="flex flex-col gap-1">
+                  <h3 className="font-bold">{reference.title}</h3>
 
                   {reference.url && (
-                    <HStack spacing={1}>
-                      <Link
+                    <div className="flex items-center gap-1">
+                      <a
                         href={reference.url}
-                        isExternal
-                        color="blue.500"
-                        fontSize="sm"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:text-blue-600 text-sm"
+                        onClick={e => e.stopPropagation()}
                       >
                         {reference.url.substring(0, 50)}
                         {reference.url.length > 50 ? '...' : ''}
-                      </Link>
-                      <Icon
-                        as={FiExternalLink}
-                        color="blue.500"
-                        boxSize="14px"
-                      />
-                    </HStack>
+                      </a>
+                      <FiExternalLink className="w-3.5 h-3.5 text-blue-500" />
+                    </div>
                   )}
 
-                  <Text fontSize="sm" color="gray.600" noOfLines={2}>
+                  <p
+                    className={cn(
+                      'text-sm line-clamp-2',
+                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                    )}
+                  >
                     {reference.description}
-                  </Text>
+                  </p>
 
                   {reference.relevance && reference.relevance.length > 0 && (
-                    <HStack mt={1} wrap="wrap">
-                      <Tooltip label="Relevance to the invention">
-                        <Icon as={FiInfo} color="gray.500" />
-                      </Tooltip>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <FiInfo
+                              className={cn(
+                                'w-4 h-4',
+                                isDarkMode ? 'text-gray-500' : 'text-gray-400'
+                              )}
+                            />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Relevance to the invention</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       {reference.relevance.map((item, index) => (
                         <Badge
                           key={index}
-                          colorScheme="purple"
-                          variant="subtle"
+                          variant="secondary"
+                          className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
                         >
                           {item}
                         </Badge>
                       ))}
-                    </HStack>
+                    </div>
                   )}
-                </VStack>
+                </div>
 
                 <Button
                   size="sm"
                   variant="ghost"
-                  colorScheme="red"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
                   onClick={e => {
                     e.stopPropagation();
                     onDeletePriorArt(reference.id);
                   }}
                 >
-                  <Icon as={FiTrash2} />
+                  <FiTrash2 className="w-4 h-4" />
                 </Button>
-              </Flex>
-            </Box>
+              </div>
+            </div>
           ))}
-        </VStack>
+        </div>
       )}
-    </Box>
+    </div>
   );
 };
 

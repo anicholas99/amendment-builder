@@ -3,7 +3,7 @@ import {
   useCitationMatchesQuery,
   useCitationMatchesPollingQuery,
 } from '@/hooks/api/useSearchHistory';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 // Defines the structure of a single citation match
 export interface CitationMatch {

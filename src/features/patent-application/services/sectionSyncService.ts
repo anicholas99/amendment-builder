@@ -1,4 +1,4 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { extractSections } from '../utils/patent-sections';
 import { ApplicationVersionWithDocuments } from '@/types/versioning';
 
@@ -14,14 +14,6 @@ interface SectionUpdate {
  * Centralizes section extraction and matching logic
  */
 export class SectionSyncService {
-  // Map common section name variations to database document types
-  private static readonly SECTION_TYPE_MAP: Record<string, string> = {
-    CLAIMS: 'CLAIM_SET',
-    CLAIM: 'CLAIM_SET',
-    CLAIM_SET: 'CLAIM_SET',
-    // Add other mappings if needed
-  };
-
   /**
    * Extract sections from content and prepare updates for changed sections
    */
@@ -43,7 +35,7 @@ export class SectionSyncService {
         ([sectionName, sectionContent]) => {
           const docType = this.normalizeDocumentType(sectionName);
           const sectionDoc = currentVersion.documents.find(
-            d => d.type === docType
+            (d: any) => d.type === docType
           );
 
           if (sectionDoc) {
@@ -70,7 +62,7 @@ export class SectionSyncService {
             logger.debug('[SectionSyncService] Section document not found', {
               sectionName,
               attemptedDocType: docType,
-              availableTypes: currentVersion.documents.map(d => d.type),
+              availableTypes: currentVersion.documents.map((d: any) => d.type),
             });
           }
         }
@@ -87,14 +79,7 @@ export class SectionSyncService {
    * Normalize section names to match database document types
    */
   private static normalizeDocumentType(sectionName: string): string {
-    const upperName = sectionName.toUpperCase().replace(/\s+/g, '_');
-
-    // Check if we have a mapping for this section
-    if (this.SECTION_TYPE_MAP[upperName]) {
-      return this.SECTION_TYPE_MAP[upperName];
-    }
-
-    // Default transformation
-    return upperName;
+    // Simply normalize to uppercase with underscores
+    return sectionName.toUpperCase().replace(/\s+/g, '_');
   }
 }

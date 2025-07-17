@@ -4,7 +4,7 @@
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 export class ClaimApiService {
   static async updateClaim(
@@ -13,16 +13,13 @@ export class ClaimApiService {
     text: string
   ): Promise<any> {
     try {
-      const response = await apiFetch(
-        API_ROUTES.CLAIMS.DETAILS(claimId),
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ text }),
-        }
-      );
+      const response = await apiFetch(API_ROUTES.CLAIMS.DETAILS(claimId), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      });
 
       if (!response.ok) {
         throw new ApplicationError(
@@ -42,9 +39,16 @@ export class ClaimApiService {
     }
   }
 
-  static async deleteClaim(claimId: string): Promise<any> {
+  static async deleteClaim(
+    claimId: string,
+    renumber: boolean = false
+  ): Promise<any> {
     try {
-      const response = await apiFetch(API_ROUTES.CLAIMS.DETAILS(claimId), {
+      const url = renumber
+        ? `${API_ROUTES.CLAIMS.DETAILS(claimId)}?renumber=true`
+        : API_ROUTES.CLAIMS.DETAILS(claimId);
+
+      const response = await apiFetch(url, {
         method: 'DELETE',
       });
 
@@ -59,6 +63,7 @@ export class ClaimApiService {
     } catch (error) {
       logger.error('[ClaimApiService] Error deleting claim', {
         claimId,
+        renumber,
         error,
       });
       throw error;
@@ -115,4 +120,7 @@ class ClaimClientService {
   }
 }
 
-export const claimClientService = new ClaimClientService();
+// Export the class for context-based instantiation
+export { ClaimClientService };
+
+// REMOVED: Singleton export that could cause session isolation issues

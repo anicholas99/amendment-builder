@@ -1,11 +1,18 @@
 import React, { useCallback } from 'react';
-import { HStack, Text, Badge, Tooltip } from '@chakra-ui/react';
+import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import {
   FamilyMemberReference,
   PriorArtReference,
 } from '../../../types/claimTypes';
 import {
-  getRelevancyColor,
+  getRelevanceBadgeClasses,
   formatRelevancePercentage,
 } from '../utils/searchHistoryUtils';
 import { ReferenceActionButtons } from './ReferenceActionButtons';
@@ -41,10 +48,6 @@ export const FamilyMemberItem: React.FC<FamilyMemberItemProps> = React.memo(
     const memberNumber = member.number;
     // Check both relevance and relevancy fields
     const memberRelevanceScore = member.relevance ?? member.relevancy;
-    const badgeColor =
-      memberRelevanceScore !== undefined
-        ? getRelevancyColor(memberRelevanceScore)
-        : 'gray';
 
     const handleSave = useCallback(() => {
       onSave({
@@ -61,52 +64,50 @@ export const FamilyMemberItem: React.FC<FamilyMemberItemProps> = React.memo(
     if (!memberNumber) return null;
 
     return (
-      <HStack
+      <div
         key={`${memberNumber}-${index}`}
-        justifyContent="space-between"
-        alignItems="center"
-        w="100%"
-        py={0.5}
-        opacity={isExcluded ? 0.5 : 1}
-        _hover={{ bg: colors.hoverBg }}
-        borderRadius="sm"
-        px={1}
+        className={cn(
+          'flex justify-between items-center w-full py-0.5 px-1 rounded-sm transition-colors',
+          'hover:bg-accent/50',
+          isExcluded && 'opacity-50'
+        )}
       >
         {/* Left side: Number and Badge */}
-        <HStack spacing={2} flex={1} overflow="hidden" minWidth={0}>
-          <Text
-            fontSize="xs"
-            color={colors.textColor}
-            textDecoration={isExcluded ? 'line-through' : 'none'}
-            noOfLines={1}
+        <div className="flex items-center space-x-2 flex-1 overflow-hidden min-w-0">
+          <span
+            className={cn(
+              'text-xs text-foreground mr-1 flex-shrink truncate',
+              isExcluded && 'line-through'
+            )}
+            style={{ color: colors.textColor }}
             title={memberNumber}
-            flexShrink={1}
-            mr={1}
           >
             {memberNumber.replace(/-/g, '')}
-          </Text>
+          </span>
           {memberRelevanceScore !== undefined && (
-            <Tooltip
-              label={`Relevance: ${formatRelevancePercentage(memberRelevanceScore)}`}
-              placement="top"
-            >
-              <Badge
-                px={1.5}
-                py={0.5}
-                fontSize="2xs"
-                fontWeight="medium"
-                borderRadius="sm"
-                colorScheme={badgeColor}
-                variant="solid"
-                flexShrink={0}
-              >
-                {formatRelevancePercentage(memberRelevanceScore)}
-              </Badge>
-            </Tooltip>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      'text-xs px-2 py-1 flex-shrink-0',
+                      getRelevanceBadgeClasses(memberRelevanceScore)
+                    )}
+                  >
+                    {formatRelevancePercentage(memberRelevanceScore)}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>
+                    Relevance: {formatRelevancePercentage(memberRelevanceScore)}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
-        </HStack>
+        </div>
 
-        {/* Right side: Action buttons */}
         <ReferenceActionButtons
           referenceNumber={memberNumber}
           isSaved={isSaved}
@@ -116,7 +117,7 @@ export const FamilyMemberItem: React.FC<FamilyMemberItemProps> = React.memo(
           getCitationIcon={getCitationIcon}
           isDisabled={false}
         />
-      </HStack>
+      </div>
     );
   }
 );

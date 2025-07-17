@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TenantsApiService } from '@/client/services/tenants.client-service';
 import { tenantQueryKeys } from '@/lib/queryKeys';
-import { useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import { STALE_TIME } from '@/constants/time';
 
 interface Tenant {

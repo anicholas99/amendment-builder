@@ -12,10 +12,10 @@
  */
 
 import { useCallback, useRef, useEffect } from 'react';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import { useUpdateInventionMutation } from '@/hooks/api/useInvention';
 import { InventionData } from '@/types/invention';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import {
   getDbFieldName,
   validateField,

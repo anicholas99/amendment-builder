@@ -1,18 +1,18 @@
 import React, { useRef } from 'react';
+import { cn } from '@/lib/utils';
+import { FiInfo, FiAlertTriangle } from 'react-icons/fi';
 import {
-  Box,
-  VStack,
-  Button,
-  Text,
-  Alert,
-  AlertIcon,
   AlertDialog,
-  AlertDialogBody,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogContent,
-  AlertDialogOverlay,
-} from '@chakra-ui/react';
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface OutOfSyncConfirmationDialogProps {
   isOpen: boolean;
@@ -34,79 +34,71 @@ export const OutOfSyncConfirmationDialog: React.FC<
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <AlertDialog
-      isOpen={isOpen}
-      leastDestructiveRef={cancelRef}
-      onClose={onClose}
-      isCentered
-    >
-      <AlertDialogOverlay>
-        <AlertDialogContent>
-          <AlertDialogHeader fontSize="lg" fontWeight="bold">
+    <AlertDialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-lg font-bold">
             Claim 1 Has Changed
-          </AlertDialogHeader>
+          </AlertDialogTitle>
+        </AlertDialogHeader>
 
-          <AlertDialogBody>
-            <VStack spacing={4} align="start">
-              <Text>
-                Your Claim 1 has been modified since the last search analysis.
-              </Text>
-              <Text>You have two options:</Text>
-              <Box pl={4}>
-                <Text>
-                  <strong>1. Re-sync Claim 1</strong> - Analyze the updated
-                  claim text to generate new search queries (recommended)
-                </Text>
-                <Text mt={2}>
-                  <strong>2. Search with Previous Data</strong> - Use the search
-                  queries from the last sync
-                  {hasQueries
-                    ? ' (queries available)'
-                    : ' (no queries available)'}
-                </Text>
-              </Box>
-              <Alert status="info" borderRadius="md">
-                <AlertIcon />
-                <Text fontSize="sm">
-                  Re-syncing ensures your search results match your current
-                  claim language.
-                </Text>
+        <AlertDialogDescription asChild>
+          <div className="space-y-4">
+            <p>
+              Your Claim 1 has been modified since the last search analysis.
+            </p>
+            <p>You have two options:</p>
+            <div className="pl-4 space-y-2">
+              <p>
+                <strong>1. Re-sync Claim 1</strong> - Analyze the updated claim
+                text to generate new search queries (recommended)
+              </p>
+              <p>
+                <strong>2. Search with Previous Data</strong> - Use the search
+                queries from the last sync
+                {hasQueries
+                  ? ' (queries available)'
+                  : ' (no queries available)'}
+              </p>
+            </div>
+            <Alert className="bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-300">
+              <FiInfo className="h-4 w-4" />
+              <AlertDescription className="text-sm">
+                Re-syncing ensures your search results match your current claim
+                language.
+              </AlertDescription>
+            </Alert>
+            {!hasQueries && (
+              <Alert className="bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:border-yellow-700 dark:text-yellow-300">
+                <FiAlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-sm">
+                  No search queries are available from the previous sync. You
+                  may need to re-sync first.
+                </AlertDescription>
               </Alert>
-              {!hasQueries && (
-                <Alert status="warning" borderRadius="md">
-                  <AlertIcon />
-                  <Text fontSize="sm">
-                    No search queries are available from the previous sync. You
-                    may need to re-sync first.
-                  </Text>
-                </Alert>
-              )}
-            </VStack>
-          </AlertDialogBody>
+            )}
+          </div>
+        </AlertDialogDescription>
 
-          <AlertDialogFooter>
-            <Button ref={cancelRef} onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              colorScheme="gray"
-              onClick={onProceedWithOldData}
-              ml={3}
-              isDisabled={!hasQueries}
-              title={
-                !hasQueries
-                  ? 'No search queries available from previous sync'
-                  : undefined
-              }
-            >
-              Use Old Queries
-            </Button>
-            <Button colorScheme="blue" onClick={onSyncBeforeSearch} ml={3}>
-              Re-sync & Search
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialogOverlay>
+        <AlertDialogFooter className="gap-2">
+          <AlertDialogCancel ref={cancelRef}>Cancel</AlertDialogCancel>
+          <Button
+            variant="outline"
+            onClick={onProceedWithOldData}
+            disabled={!hasQueries}
+            title={
+              !hasQueries
+                ? 'No search queries available from previous sync'
+                : undefined
+            }
+          >
+            Use Old Queries
+          </Button>
+          <AlertDialogAction onClick={onSyncBeforeSearch}>
+            Re-sync & Search
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
     </AlertDialog>
   );
 };

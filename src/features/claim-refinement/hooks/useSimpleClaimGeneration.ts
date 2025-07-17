@@ -1,8 +1,8 @@
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import { useApiMutation } from '@/lib/api/queryClient';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { ClaimsClientService } from '@/client/services/claims.client-service';
-import { ApplicationError } from '@/lib/error';
+import { ApplicationError, ErrorCode } from '@/lib/error';
 import { InventionData } from '@/types';
 
 interface UseSimpleClaimGenerationProps {
@@ -27,8 +27,15 @@ export const useSimpleClaimGeneration = ({
     { claim: string; critique?: string },
     GenerateClaimPayload
   >({
-    mutationFn: ({ projectId, invention }: GenerateClaimPayload) =>
-      ClaimsClientService.generateClaim1(projectId, invention),
+    mutationFn: ({ projectId, invention }: GenerateClaimPayload) => {
+      if (!invention) {
+        throw new ApplicationError(
+          ErrorCode.VALIDATION_REQUIRED_FIELD,
+          'No invention data available'
+        );
+      }
+      return ClaimsClientService.generateClaim1(projectId, invention);
+    },
     onSuccess: data => {
       if (!data.claim) {
         throw new Error('No claim text in response');

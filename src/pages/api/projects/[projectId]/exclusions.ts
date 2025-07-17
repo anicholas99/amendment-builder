@@ -2,14 +2,14 @@ import { NextApiResponse, NextApiRequest } from 'next';
 import { CustomApiRequest } from '@/types/api';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z, ZodError } from 'zod';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import {
   projectIdQuerySchema,
   exclusionQuerySchema,
 } from '@/lib/validation/schemas/shared/querySchemas';
 
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import {
   addProjectExclusions,
   findProjectExclusions,
@@ -19,7 +19,7 @@ import {
   getProjectTenantId,
 } from '../../../../repositories/project';
 import { ProjectExclusionMetadata } from '../../../../repositories/project/types';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 /**
  * API endpoint for managing patent exclusions for a project
@@ -94,9 +94,12 @@ async function handler(
       updatedAt: exc.createdAt.toISOString(), // Using createdAt since we don't fetch updatedAt
     }));
 
-    res.status(200).json({
-      exclusions: transformedExclusions,
-      projectId,
+    return res.status(200).json({
+      success: true,
+      data: {
+        exclusions: transformedExclusions,
+        projectId,
+      },
     });
   } else if (req.method === 'POST') {
     // Add new exclusions - body is already validated by middleware

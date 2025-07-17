@@ -1,6 +1,7 @@
 import React, { ReactNode } from 'react';
-import { Box, Tabs, TabList, Tab, TabPanels, TabPanel } from '@chakra-ui/react';
-import { environment } from '@/config/environment';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
+import { isDevelopment } from '@/config/environment.client';
 
 interface SidebarContainerProps {
   children?: ReactNode;
@@ -30,109 +31,65 @@ const SidebarContainer: React.FC<SidebarContainerProps> = ({
   style,
   className,
 }) => {
-  const isDev = environment.isDevelopment;
+  const isDev = isDevelopment;
 
   // Render with tabs if tabTitles are provided
   if (hasTabs && tabTitles.length > 0 && tabContents.length > 0) {
     return (
-      <Box
-        height="100%"
-        position="relative"
-        style={style}
-        className={className}
-      >
-        <Box
-          position="absolute"
-          top="0"
-          left="0"
-          right="0"
-          height="100%"
-          borderWidth="1px"
-          borderRadius="lg"
-          overflow="hidden"
-          boxShadow="sm"
-          bg="bg.primary"
-          borderColor="border.primary"
-          width="100%"
-        >
+      <div className={cn('h-full relative', className)} style={style}>
+        <div className="absolute inset-0 border border-border rounded-lg overflow-hidden shadow-sm bg-background w-full">
           <Tabs
-            index={activeTab}
-            onChange={onTabChange}
-            colorScheme="blue"
-            variant="line"
-            size="sm"
-            w="100%"
-            h="100%"
-            display="flex"
-            flexDirection="column"
+            value={activeTab.toString()}
+            onValueChange={value => onTabChange?.(parseInt(value))}
+            className="w-full h-full flex flex-col"
           >
-            <TabList
-              w="100%"
-              minH="48px"
-              flexShrink={0}
-              bg="bg.card"
-              borderBottomWidth="1px"
-              borderBottomColor="border.primary"
-              _dark={{ bg: 'bg.card', borderBottomColor: 'border.primary' }}
-            >
+            <TabsList className="w-full min-h-[48px] flex-shrink-0 bg-muted/50 border-b rounded-none justify-start px-0">
               {tabTitles.map((title, index) => (
-                <Tab
+                <TabsTrigger
                   key={index}
-                  p="12px 20px"
-                  fontWeight="medium"
-                  fontSize="sm"
+                  value={index.toString()}
+                  className="px-5 py-3 font-medium text-sm data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
                 >
                   {tabIcons[index] ? (
-                    <Box display="flex" alignItems="center" gap={1}>
+                    <div className="flex items-center gap-1">
                       {tabIcons[index]}
                       <span>{title}</span>
-                    </Box>
+                    </div>
                   ) : (
                     title
                   )}
-                </Tab>
+                </TabsTrigger>
               ))}
-            </TabList>
+            </TabsList>
 
-            <TabPanels flex="1" overflow="hidden">
+            <div className="flex-1 overflow-hidden">
               {tabContents.map((content, index) => (
-                <TabPanel
+                <TabsContent
                   key={index}
-                  p={0}
-                  h="100%"
-                  overflow="auto"
-                  display={activeTab === index ? 'block' : 'none'}
+                  value={index.toString()}
+                  className={cn(
+                    'h-full overflow-auto p-0',
+                    activeTab === index ? 'block' : 'hidden'
+                  )}
+                  forceMount
                 >
                   {content}
-                </TabPanel>
+                </TabsContent>
               ))}
-            </TabPanels>
+            </div>
           </Tabs>
-        </Box>
-      </Box>
+        </div>
+      </div>
     );
   }
 
   // Render without tabs, just the container with children
   return (
-    <Box height="100%" position="relative" style={style} className={className}>
-      <Box
-        position="absolute"
-        top="0"
-        left="0"
-        right="0"
-        height="100%"
-        borderWidth="1px"
-        borderRadius="lg"
-        overflow="hidden"
-        boxShadow="sm"
-        bg="bg.primary"
-        borderColor="border.primary"
-        width="100%"
-      >
+    <div className={cn('h-full relative', className)} style={style}>
+      <div className="absolute inset-0 border border-border rounded-lg overflow-hidden shadow-sm bg-background w-full">
         {children}
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 };
 

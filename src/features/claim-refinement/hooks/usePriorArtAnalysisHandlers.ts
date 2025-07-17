@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useAnalyzePriorArtMutation } from '@/hooks/api/usePriorArt';
-import { useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import { InventionData } from '@/types';
 import { FullAnalysisResponse } from '@/types/priorArtAnalysisTypes';
 import {
@@ -46,7 +46,7 @@ export function usePriorArtAnalysisHandlers({
       selectedReferenceNumbers: string[],
       forceRefresh: boolean
     ) => {
-      logger.log('[handleAnalyzePriorArt] Triggered', {
+      logger.info('[handleAnalyzePriorArt] Triggered', {
         searchHistoryId,
         selectedReferenceNumbers,
         forceRefresh,
@@ -93,7 +93,7 @@ export function usePriorArtAnalysisHandlers({
         const responseData =
           await analyzePriorArtMutation.mutateAsync(variables);
 
-        logger.log('[Analyze] API Success:', { responseData });
+        logger.info('[Analyze] API Success:', { responseData });
         setAnalysisData(responseData as unknown as FullAnalysisResponse);
 
         // Show warning if not all references were analyzed

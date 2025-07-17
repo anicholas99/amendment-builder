@@ -2,7 +2,7 @@
  * Business logic utilities for PatentSidebar component
  * Extracted complex logic following the architectural blueprint
  */
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { InventionData } from '@/types/invention';
 import {
   Figures,
@@ -327,7 +327,7 @@ export const logPatentSidebarOperation = (
   operation: string,
   data: Record<string, any>
 ): void => {
-  logger.log(`[PatentSidebar] ${operation}`, data);
+  logger.info(`[PatentSidebar] ${operation}`, data);
 };
 
 export const logFigureOperation = (
@@ -335,7 +335,7 @@ export const logFigureOperation = (
   figureKey: string,
   data: Record<string, any>
 ): void => {
-  logger.log(`[PatentSidebar Figure] ${operation} - ${figureKey}`, data);
+  logger.info(`[PatentSidebar Figure] ${operation} - ${figureKey}`, data);
 };
 
 export const logFigureAction = (
@@ -343,5 +343,5 @@ export const logFigureAction = (
   figureKey: string,
   data?: any
 ) => {
-  logger.log(`[PatentSidebar Figure] ${operation} - ${figureKey}`, data);
+  logger.info(`[PatentSidebar Figure] ${operation} - ${figureKey}`, data);
 };

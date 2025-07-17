@@ -2,8 +2,8 @@ import { NextApiResponse } from 'next';
 import { z } from 'zod';
 import axios from 'axios';
 import https from 'https';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
-import { safeStringify } from '@/lib/monitoring/logger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
+import { safeStringify } from '@/server/logger';
 import {
   updateCitationMatchLocationSuccess,
   updateCitationMatchLocationFailure,
@@ -11,7 +11,8 @@ import {
 import { AuthenticatedRequest } from '@/types/middleware';
 import { environment } from '@/config/environment';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Initialize apiLogger
 const apiLogger = createApiLogger('citation-location/result/:id');
@@ -181,7 +182,7 @@ const handler = async (req: AuthenticatedRequest, res: NextApiResponse) => {
 
   // --- Return Original External Response ---
   apiLogger.logResponse(200, externalData);
-  return res.status(200).json(externalData);
+  return apiResponse.ok(res, externalData);
 };
 
 // Use the new secure preset

@@ -4,7 +4,7 @@
  */
 import { apiFetch } from '@/lib/api/apiClient';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import {
   CitationMatch,
@@ -48,12 +48,19 @@ export class CitationClientService {
       logger.debug(`Getting citation matches for searchId: ${searchId}`);
       const url = API_ROUTES.SEARCH_HISTORY.CITATION_MATCHES(searchId);
       const response = await apiFetch(url, { method: 'GET' });
-      const data = await response.json();
+
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: matches }
+      const unwrappedResult = result.data || result;
+
       logger.debug('Citation matches fetched', {
         searchId,
-        count: data.length,
+        count: unwrappedResult.length,
+        isWrapped: !!result.data,
       });
-      return validateApiResponse(data, CitationMatchesListSchema);
+
+      return validateApiResponse(unwrappedResult, CitationMatchesListSchema);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -78,6 +85,16 @@ export class CitationClientService {
     try {
       // If parsedElements not provided, we need to get them from the project
       let searchInputs = parsedElements || [];
+
+      logger.debug('[CitationClientService] Starting citation job creation', {
+        searchId,
+        referenceNumber,
+        referenceNumberProvided: !!referenceNumber,
+        referenceNumberType: typeof referenceNumber,
+        parsedElementsProvided: !!parsedElements,
+        parsedElementsCount: parsedElements?.length || 0,
+        threshold,
+      });
 
       if (searchInputs.length === 0) {
         logger.debug(
@@ -107,11 +124,16 @@ export class CitationClientService {
               );
             }
           } else {
-            const searchData = await searchResponse.json();
+            const searchResult = await searchResponse.json();
+
+            // Handle wrapped response format - API returns { data: searchData }
+            const searchData = searchResult.data || searchResult;
+
             logger.debug('[CitationClientService] Search history data', {
               searchId,
               projectId: searchData.projectId,
               hasProject: !!searchData.projectId,
+              isWrapped: !!searchResult.data,
             });
 
             // Get parsed elements from the project
@@ -163,25 +185,59 @@ export class CitationClientService {
         );
       }
 
-      const response = await apiFetch(API_ROUTES.CITATION_JOBS.CREATE, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          searchInputs,
-          filterReferenceNumber: referenceNumber,
-          searchHistoryId: searchId,
-          threshold, // Use the passed threshold parameter
-        }),
+      // Create the job with the search inputs
+      const jobData = {
+        searchHistoryId: searchId,
+        filterReferenceNumber: referenceNumber,
+        searchInputs,
+        threshold,
+      };
+
+      logger.debug('[CitationClientService] Sending citation job request', {
+        endpoint: API_ROUTES.CITATION_JOBS.CREATE,
+        payload: jobData,
+        searchInputsCount: searchInputs.length,
+        searchInputsSample: searchInputs
+          .slice(0, 2)
+          .map(s => (s ? s.substring(0, 50) + '...' : 'empty')),
+        referenceNumberLength: referenceNumber?.length || 0,
       });
 
-      return response.json();
+      const response = await apiFetch(API_ROUTES.CITATION_JOBS.CREATE, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(jobData),
+      });
+
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: { success, jobId } }
+      const unwrappedResult = result.data || result;
+
+      logger.debug('[CitationClientService] Citation job creation response', {
+        success: unwrappedResult.success,
+        jobId: unwrappedResult.jobId,
+        responseStatus: response.status,
+        hasError: !!unwrappedResult.error,
+        error: unwrappedResult.error,
+        isWrapped: !!result.data,
+      });
+
+      return {
+        success: unwrappedResult.success === true,
+        jobId: unwrappedResult.jobId,
+      };
     } catch (error) {
       logger.error('[CitationClientService] Failed to create citation job', {
-        error,
+        error: error instanceof Error ? error.message : String(error),
+        errorType: error?.constructor?.name,
         searchId,
         referenceNumber,
       });
-      throw error;
+
+      return { success: false };
     }
   }
 
@@ -198,7 +254,12 @@ export class CitationClientService {
           'Failed to fetch citation jobs'
         );
       }
-      return response.json();
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: [...] }
+      const unwrappedResult = result.data || result;
+
+      return unwrappedResult;
     } catch (error) {
       logger.error(
         '[CitationClientService] Error fetching citation jobs by search history id',
@@ -224,7 +285,11 @@ export class CitationClientService {
               `Failed to fetch citation jobs for search history ${searchHistoryId}`
             );
           }
-          const jobs = await response.json();
+          const result = await response.json();
+
+          // Handle wrapped response format - API returns { data: [...] }
+          const jobs = result.data || result;
+
           return { searchHistoryId, jobs };
         } catch (error) {
           logger.warn(
@@ -270,7 +335,12 @@ export class CitationClientService {
           'Failed to sync job status'
         );
       }
-      return response.json();
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: { success } }
+      const unwrappedResult = result.data || result;
+
+      return unwrappedResult;
     } catch (error) {
       logger.error('[CitationClientService] Error syncing job status', {
         error,
@@ -350,7 +420,11 @@ export class CitationClientService {
         return [];
       }
 
-      const data = await response.json();
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: claimSyncData }
+      const data = result.data || result;
+
       logger.debug('[CitationClientService] Claim sync data received', {
         projectId,
         hasData: !!data,
@@ -358,6 +432,7 @@ export class CitationClientService {
         parsedElementsLength: data.parsedElements?.length || 0,
         firstElement: data.parsedElements?.[0],
         dataKeys: Object.keys(data || {}),
+        isWrapped: !!result.data,
       });
 
       // V2 format returns string array directly
@@ -403,7 +478,12 @@ export class CitationClientService {
         );
       }
 
-      return await response.json();
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: metadata }
+      const unwrappedResult = result.data || result;
+
+      return unwrappedResult;
     } catch (error) {
       logger.error(
         '[CitationClientService] Error fetching reference metadata',
@@ -438,7 +518,12 @@ export class CitationClientService {
         );
       }
 
-      return await response.json();
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: metadata }
+      const unwrappedResult = result.data || result;
+
+      return unwrappedResult;
     } catch (error) {
       logger.error(
         '[CitationClientService] Error fetching reference metadata batch',

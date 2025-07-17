@@ -12,12 +12,15 @@ export * from './types';
 export {
   findProjectById,
   findProjectsByTenant,
+  findAccessibleProjectsForUser,
   findProjectsByTenantPaginated,
+  findAccessibleProjectsForUserPaginated,
   createProject,
   findMostRecentProjectIdForTenantUser,
   findProjectByIdForTenantUser,
   findProjectByIdAndTenant,
   getProjectWorkspace,
+  resetPatentApplicationContent,
 } from './core.repository';
 
 // Export prior art operations
@@ -65,7 +68,18 @@ export {
   secureDeleteProject,
   getProjectTenantId,
   findProjectForAccess,
+  checkUserProjectAccess,
 } from './security.repository';
 
 // Export admin operations
 export { getAllProjectsForAdmin } from './admin.repository';
+
+// Export sharing operations
+export {
+  checkProjectAccess,
+  getProjectCollaborators,
+  addProjectCollaborator,
+  removeProjectCollaborator,
+  updateCollaboratorRole,
+  getUserProjectRole,
+} from './sharing.repository';

@@ -1,24 +1,20 @@
 import React, { useState } from 'react';
+import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/contexts/ThemeContext';
 import {
-  Box,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  Button,
-  Checkbox,
-  VStack,
-  Text,
-  HStack,
-  Flex,
-  useColorModeValue,
-} from '@chakra-ui/react';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface ReferenceOption {
   referenceNumber: string;
   title?: string;
+  applicant?: string;
 }
 
 interface CombinedAnalysisSelectionModalProps {
@@ -32,7 +28,7 @@ const CombinedAnalysisSelectionModal: React.FC<
   CombinedAnalysisSelectionModalProps
 > = ({ isOpen, onClose, references, onRunAnalysis }) => {
   const [selected, setSelected] = useState<string[]>([]);
-  const bgColor = useColorModeValue('bg.card', 'bg.card');
+  const { isDarkMode } = useThemeContext();
 
   const handleToggle = (refNum: string) => {
     setSelected(prev =>
@@ -44,71 +40,78 @@ const CombinedAnalysisSelectionModal: React.FC<
     onRunAnalysis(selected);
   };
 
-  if (!isOpen) return null;
-
   return (
-    <Box
-      position="fixed"
-      top={0}
-      left={0}
-      right={0}
-      bottom={0}
-      zIndex={2000}
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      backgroundColor="rgba(0,0,0,0.5)"
-    >
-      <Box
-        bg={bgColor}
-        p={6}
-        borderRadius="md"
-        boxShadow="xl"
-        minWidth="350px"
-        maxWidth="95vw"
-        maxHeight="90vh"
-        overflowY="auto"
-      >
-        <Text fontSize="lg" fontWeight="bold" mb={2}>
-          Select References for Combined Analysis
-        </Text>
-        <Text fontSize="sm" color="gray.600" mb={4}>
-          Select 2 or more references with deep analysis:
-        </Text>
-        <VStack
-          align="start"
-          spacing={2}
-          mb={4}
-          maxHeight="40vh"
-          overflowY="auto"
-        >
-          {references.length === 0 && (
-            <Text color="gray.500">No references available.</Text>
-          )}
-          {references.map(ref => (
-            <Checkbox
-              key={ref.referenceNumber}
-              isChecked={selected.includes(ref.referenceNumber)}
-              onChange={() => handleToggle(ref.referenceNumber)}
-            >
-              {ref.referenceNumber} {ref.title && `- ${ref.title}`}
-            </Checkbox>
-          ))}
-        </VStack>
-        <Flex justifyContent="flex-end" gap={2}>
-          <Button onClick={onClose} variant="outline">
+    <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <DialogContent className="min-w-[350px] max-w-[95vw] max-h-[90vh] overflow-hidden">
+        <DialogHeader className="border-b pb-3">
+          <DialogTitle className="text-lg font-bold">
+            Select References for Combined Analysis
+          </DialogTitle>
+          <p
+            className={cn(
+              'text-sm mt-2',
+              isDarkMode ? 'text-gray-400' : 'text-gray-600'
+            )}
+          >
+            Select 2 or more references with deep analysis:
+          </p>
+        </DialogHeader>
+
+        <div className="py-4">
+          <div className="max-h-[40vh] overflow-y-auto space-y-2">
+            {references.length === 0 ? (
+              <p className={cn(isDarkMode ? 'text-gray-500' : 'text-gray-400')}>
+                No references available.
+              </p>
+            ) : (
+              references.map(ref => (
+                <div
+                  key={ref.referenceNumber}
+                  className="flex items-center space-x-2"
+                >
+                  <Checkbox
+                    id={ref.referenceNumber}
+                    checked={selected.includes(ref.referenceNumber)}
+                    onCheckedChange={() => handleToggle(ref.referenceNumber)}
+                  />
+                  <div className="flex-1">
+                    <label
+                      htmlFor={ref.referenceNumber}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer block"
+                    >
+                      {ref.referenceNumber.replace(/-/g, '')}
+                    </label>
+                    {ref.title && (
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {ref.title}
+                      </p>
+                    )}
+                    {ref.applicant && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Applicant: {ref.applicant}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <DialogFooter className="border-t pt-3 gap-2">
+          <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button
-            colorScheme="blue"
             onClick={handleRun}
-            isDisabled={selected.length < 2}
+            disabled={selected.length < 2}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             Run Analysis
           </Button>
-        </Flex>
-      </Box>
-    </Box>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

@@ -3,7 +3,7 @@
  */
 import { apiFetch } from '@/lib/api/apiClient';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { FigureApiService } from '@/services/api/figureApiService';
 
@@ -123,13 +123,31 @@ class FigureClientService {
     description?: string,
     title?: string
   ): Promise<{ id: string; figureKey: string; status: string }> {
-    return FigureApiService.createPendingFigure(
+    const result = await FigureApiService.createPendingFigure(
       projectId,
       figureKey,
       description,
       title
     );
+
+    // createPendingFigure always returns a figureKey since it's validated as required
+    // but the type allows null for other endpoints, so we assert it here
+    if (!result.figureKey) {
+      throw new ApplicationError(
+        ErrorCode.API_INVALID_RESPONSE,
+        'Invalid response: figureKey is required'
+      );
+    }
+
+    return {
+      id: result.id,
+      figureKey: result.figureKey,
+      status: result.status || 'PENDING',
+    };
   }
 }
 
-export const figureClientService = new FigureClientService();
+// Export the class for context-based instantiation
+export { FigureClientService };
+
+// REMOVED: Singleton export that could cause session isolation issues

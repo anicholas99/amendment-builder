@@ -75,7 +75,7 @@ The system maintains draft documents with individual sections:
 - SUMMARY: Summary section
 - DETAILED_DESCRIPTION: Detailed description
 - ABSTRACT: Abstract section
-- CLAIM_SET: Claims section
+- CLAIMS: Claims section
 - BRIEF_DESCRIPTION_OF_THE_DRAWINGS: Drawings description
 ```
 

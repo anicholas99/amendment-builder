@@ -4,7 +4,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { usePrefetchViewData } from './usePrefetchViewData';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 export const useViewTransition = () => {
   const router = useRouter();

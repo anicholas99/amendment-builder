@@ -1,15 +1,17 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
+import { cn } from '@/lib/utils';
+import { FiFileText, FiZap, FiCpu } from 'react-icons/fi';
+import { LoadingMinimal } from '@/components/common/LoadingState';
+import { logger } from '@/utils/clientLogger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { useThemeContext } from '@/contexts/ThemeContext';
+import { Button } from '@/components/ui/button';
 import {
-  Box,
   Tooltip,
-  Spinner,
-  IconButton,
-  Icon,
-  useToast,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import { FiEye, FiList } from 'react-icons/fi';
-import { logger } from '@/lib/monitoring/logger';
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
 import { ReferenceCardActionsProps } from '../../types/searchHistoryRow';
 import { normalizeReferenceNumber } from '../../utils/searchHistoryRowUtils';
 import {
@@ -33,27 +35,23 @@ export const ReferenceCardActions: React.FC<ReferenceCardActionsProps> =
       setCitationJobNumbers,
       extractingReferenceNumber,
       setExtractingReferenceNumber,
-      isLoadingJobs = false,
     }) => {
       const toast = useToast();
+      const { isDarkMode } = useThemeContext();
       const extractingReferenceRef = useRef<string | null>(null);
       const [extractionTrigger, setExtractionTrigger] = useState(0);
       const nextTickUtils = useNextTick();
 
       // Define high-contrast colors for icons
-      const iconColor = useColorModeValue('gray.600', 'blue.300');
-      const iconHoverColor = useColorModeValue('gray.800', 'blue.100');
+      const iconColorClass = isDarkMode ? 'text-blue-300' : 'text-gray-600';
+      const iconHoverColorClass = isDarkMode
+        ? 'text-blue-100'
+        : 'text-gray-800';
 
       // Cleanup nextTick on unmount
       useEffect(() => {
         return nextTickUtils.cleanup;
       }, [nextTickUtils]);
-
-      // Common button props
-      const commonProps = {
-        variant: 'ghost' as const,
-        size: 'xs' as const,
-      };
 
       const normalizedRefNumber = normalizeReferenceNumber(referenceNumber);
       const hasJobLocal = citationJobNumbers.has(normalizedRefNumber);
@@ -130,12 +128,10 @@ export const ReferenceCardActions: React.FC<ReferenceCardActionsProps> =
                   `[ReferenceCardActions] Extraction initiation explicitly failed for ${referenceNumber}, result:`,
                   result
                 );
-                toast({
+                toast.error({
                   title: 'Extraction Failed',
                   description: `Could not start citation extraction for ${referenceNumber}. Please try again.`,
-                  status: 'error',
                   duration: 5000,
-                  isClosable: true,
                 });
                 setCitationJobNumbers(prev => {
                   const newSet = new Set(prev);
@@ -160,12 +156,10 @@ export const ReferenceCardActions: React.FC<ReferenceCardActionsProps> =
                 `[ReferenceCardActions API_CATCH_ERROR] Error starting extraction for ${referenceNumber}:`,
                 err
               );
-              toast({
+              toast.error({
                 title: 'API Error',
                 description: `Error during citation extraction for ${referenceNumber}: ${err.message || 'Unknown error'}.`,
-                status: 'error',
                 duration: 5000,
-                isClosable: true,
               });
               setCitationJobNumbers(prev => {
                 const newSet = new Set(prev);
@@ -218,74 +212,77 @@ export const ReferenceCardActions: React.FC<ReferenceCardActionsProps> =
       // Render based on current state
       if (isExtractingThisReference) {
         return (
-          <Tooltip
-            label="Requesting citation extraction..."
-            placement="top"
-            hasArrow
-            gutter={8}
-            closeOnMouseDown
-            closeOnPointerDown
-          >
-            <Box p={1}>
-              <Spinner size="xs" color="blue.500" />
-            </Box>
-          </Tooltip>
-        );
-      }
-
-      // Show loading state while fetching citation jobs
-      if (isLoadingJobs) {
-        return (
-          <Box p={1}>
-            <Spinner size="xs" color="gray.400" opacity={0.6} />
-          </Box>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="p-1">
+                  <LoadingMinimal size="sm" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Requesting citation extraction...</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       }
 
       if (hasJob) {
         return (
-          <Tooltip
-            label="View citations"
-            placement="top"
-            hasArrow
-            gutter={8}
-            closeOnMouseDown
-            closeOnPointerDown
-          >
-            <IconButton
-              {...commonProps}
-              icon={<Icon as={FiEye} color={iconColor} />}
-              aria-label="View citations for this search"
-              onClick={handleViewCitations}
-              _hover={{
-                color: iconHoverColor,
-                bg: 'bg.hover',
-              }}
-            />
-          </Tooltip>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    'h-7 px-3 flex items-center gap-1.5',
+                    'border-green-200 text-green-600 hover:bg-green-50 hover:border-green-300',
+                    'dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20 dark:hover:border-green-700',
+                    'font-medium transition-colors'
+                  )}
+                  onClick={handleViewCitations}
+                >
+                  <FiFileText className="h-3.5 w-3.5" />
+                  <span className="text-xs">View Results</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>View citation analysis results</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       }
 
       return (
-        <Tooltip
-          label="Extract citation data"
-          placement="top"
-          hasArrow
-          gutter={8}
-          closeOnMouseDown
-          closeOnPointerDown
-        >
-          <IconButton
-            {...commonProps}
-            aria-label="Extract citation data"
-            icon={<Icon as={FiList} color={iconColor} />}
-            onClick={handleExtractCitation}
-            _hover={{
-              color: iconHoverColor,
-              bg: 'bg.hover',
-            }}
-          />
-        </Tooltip>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  'h-7 px-3 flex items-center gap-1.5',
+                  'border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300',
+                  'dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20 dark:hover:border-blue-700',
+                  'font-medium transition-all duration-200 ease-in-out',
+                  'hover:scale-[1.02]'
+                )}
+                onClick={handleExtractCitation}
+                style={{
+                  animation: 'pulse-glow 3s ease-in-out infinite',
+                }}
+              >
+                <FiZap className="h-3.5 w-3.5" />
+                <span className="text-xs">Analyze</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Analyze this reference for relevant citations</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       );
     }
   );

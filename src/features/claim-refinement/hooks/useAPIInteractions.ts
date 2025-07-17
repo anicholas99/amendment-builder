@@ -1,18 +1,19 @@
-import { useState, useCallback } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { useToast } from '@chakra-ui/react';
+import { useState } from 'react';
+import { logger } from '@/utils/clientLogger';
+import { useToast } from '@/hooks/useToastWrapper';
 import { useGenerateSuggestionsMutation } from '@/hooks/api/useAI';
 import { InventionData } from '@/types/invention';
 import { Suggestion } from '@/types/claimTypes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { apiFetch } from '@/lib/api/apiClient';
-import { API_ROUTES } from '@/constants/apiRoutes';
-import { environment } from '@/config/environment';
-import { APIResponseError } from '@/services/api/apiTypes';
+import { isDevelopment, isProduction } from '@/config/environment.client';
 
 interface RequestParams {
-  searchResults?: unknown[];
-  parsedElements?: unknown[];
+  searchResults?: Array<{
+    referenceNumber: string;
+    title?: string;
+    relevanceScore?: number;
+  }>;
+  parsedElements?: string[];
   claimText?: string;
   searchId?: string | null;
 }
@@ -34,15 +35,6 @@ export const useAPIInteractions = () => {
   const toast = useToast();
 
   const generateSuggestionsMutation = useGenerateSuggestionsMutation();
-
-  const handleAPIError = useCallback((error: unknown, context: string) => {
-    // Log the error (in development mode, show more details)
-    if (environment.isDevelopment) {
-      logger.error(`API Error in ${context}`, { error });
-    } else {
-      // ... existing code ...
-    }
-  }, []);
 
   /**
    * Analyze a patent disclosure
@@ -130,13 +122,13 @@ export const useAPIInteractions = () => {
         requestParams.searchResults &&
         Array.isArray(requestParams.searchResults)
       ) {
-        logger.log(
+        logger.info(
           `Using directly provided search results and parameters with ${requestParams.searchResults.length} results`
         );
 
         const data = await generateSuggestionsMutation.mutateAsync({
-          parsedElements: requestParams.parsedElements || [],
-          searchResults: requestParams.searchResults,
+          parsedElements: (requestParams.parsedElements || []) as string[],
+          searchResults: requestParams.searchResults || [],
           claimText:
             requestParams.claimText || getClaim1Text(analyzedInvention),
           inventionData: analyzedInvention,
@@ -146,7 +138,18 @@ export const useAPIInteractions = () => {
         const suggestions = data.suggestions || [];
 
         setIsLoading(false);
-        return suggestions as Suggestion[];
+
+        // Map the suggestions to the expected Suggestion type
+        return suggestions.map((suggestion, index) => ({
+          id: `sug_${Date.now()}_${index}`,
+          type: (suggestion.type as Suggestion['type']) || 'other',
+          text: suggestion.content,
+          description: suggestion.content,
+          claimNumber: claimNumber,
+          priority: suggestion.priority || 'medium',
+          applied: false,
+          dismissed: false,
+        }));
       }
 
       logger.warn(
@@ -163,7 +166,7 @@ export const useAPIInteractions = () => {
       setError(errorMessage);
       setIsLoading(false);
 
-      if (!environment.isProduction) {
+      if (!isProduction) {
         logger.warn('Falling back to mock suggestions');
         return [
           {

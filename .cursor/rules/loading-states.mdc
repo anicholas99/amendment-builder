@@ -1,0 +1,140 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: Enforces consistent loading state implementation across the application
+globs: src/**/*.tsx, src/**/*.ts
+alwaysApply: true
+---
+
+# Loading State Consistency
+
+- **Core Requirement: Use Standardized Loading Components**
+  - All loading UI must use the `LoadingState` component from `@/components/common/LoadingState`
+  - Direct use of raw spinners, skeleton components, or plain text loading messages is discouraged
+  - This ensures consistent UX and maintainable code
+
+- **Loading State Management**
+  - Use `useLoadingState` hook for complex loading operations
+  - For React Query, use the built-in `isLoading`, `isFetching`, `isPending` states
+  - Avoid custom `useState` for loading unless absolutely necessary
+
+- **Loading UI Variants**
+  - **Spinner**: For quick operations (< 3 seconds), modals, buttons
+  - **Skeleton**: For initial page loads, tables, lists - maintains layout
+  - **Progress**: For file uploads, long operations with measurable progress
+  - **Minimal**: For inline indicators in small spaces
+
+## Implementation Examples
+
+```typescript
+// ✅ DO: Use LoadingState component
+import { LoadingState } from '@/components/common/LoadingState';
+
+// Table loading with skeleton
+if (isLoading) {
+  return (
+    <LoadingState 
+      variant="skeleton" 
+      skeletonType="table"
+      skeletonRows={5}
+    />
+  );
+}
+
+// Operation with context
+<LoadingState 
+  isLoading={isLoading} 
+  message="Saving changes..."
+  error={error}
+  onRetry={handleRetry}
+/>
+
+// Progress indicator
+<LoadingState
+  isLoading={isUploading}
+  variant="progress"
+  progress={uploadProgress}
+  message={`Uploading ${fileName}...`}
+/>
+```
+
+```typescript
+// ❌ DON'T: Use raw loading UI
+// WRONG: Plain text
+{isLoading && <Text>Loading...</Text>}
+
+// WRONG: Raw spinner
+{isLoading && <Spinner />}
+
+// WRONG: Custom loading state
+const [loading, setLoading] = useState(false);
+```
+
+- **Loading State Hook Usage**
+  ```typescript
+  import { useLoadingState } from '@/hooks/useLoadingState';
+  
+  const loadingState = useLoadingState();
+  
+  const handleSave = async () => {
+    loadingState.startLoading({
+      operation: 'save',
+      message: 'Saving project...',
+      timeout: 30000
+    });
+    
+    try {
+      await saveData();
+      loadingState.stopLoading();
+    } catch (error) {
+      loadingState.stopLoading(error);
+    }
+  };
+  
+  return (
+    <LoadingState
+      isLoading={loadingState.isLoading}
+      message={loadingState.message}
+      error={loadingState.error}
+    />
+  );
+  ```
+
+- **View-Level Loading**
+  - Full page views should use skeleton loaders
+  - Maintain layout structure during loading
+  - Show both main content and sidebar skeletons
+
+- **Component-Level Loading**
+  - Use appropriate size and minHeight
+  - Include error handling with retry
+  - Provide contextual messages
+
+- **Table/List Loading**
+  - Always use skeleton variant
+  - Match the expected number of rows
+  - Maintain column structure
+
+- **Error Handling**
+  - Always include error prop when available
+  - Provide onRetry callback for retryable operations
+  - Show user-friendly error messages
+
+- **Performance Considerations**
+  - Don't show loading for operations < 200ms
+  - Use React Query's background refetch states appropriately
+  - Memoize loading components in performance-critical areas
+
+- **Accessibility**
+  - LoadingState component includes ARIA labels automatically
+  - Screen readers announce loading states
+  - Focus is managed appropriately
+
+**References**
+- Implementation guide: [LOADING_STATES_GUIDE.md](mdc:docs/LOADING_STATES_GUIDE.md)
+- LoadingState component: [LoadingState.tsx](mdc:src/components/common/LoadingState.tsx)
+- useLoadingState hook: [useLoadingState.ts](mdc:src/hooks/useLoadingState.ts)
+

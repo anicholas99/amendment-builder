@@ -1,23 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
 import {
-  useColorModeValue,
-  Button,
-  Text,
-  FormControl,
-  FormLabel,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
-  ModalFooter,
-  Textarea,
-} from '@chakra-ui/react';
-import {
-  modalStyles,
-  modalButtonStyles,
-} from '@/components/common/ModalStyles';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 interface DependentClaimEditModalProps {
   isOpen: boolean;
@@ -36,8 +27,6 @@ const DependentClaimEditModal: React.FC<DependentClaimEditModalProps> = ({
   onSave,
 }) => {
   const [editedText, setEditedText] = useState(initialText);
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const mutedTextColor = useColorModeValue('gray.600', 'gray.400');
 
   // Reset edited text when modal opens with new initialText
   useEffect(() => {
@@ -50,50 +39,45 @@ const DependentClaimEditModal: React.FC<DependentClaimEditModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg">
-      <ModalOverlay {...modalStyles.overlay} />
-      <ModalContent>
-        <ModalHeader {...modalStyles.header} borderColor={borderColor}>
-          Edit Dependent Claim
-        </ModalHeader>
-        <ModalCloseButton />
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Edit Dependent Claim</DialogTitle>
+        </DialogHeader>
 
-        <ModalBody {...modalStyles.body}>
-          <Text mb={4} fontSize="sm" color={mutedTextColor}>
+        <div className="py-4">
+          <p className="mb-4 text-sm text-muted-foreground">
             Edit the dependent claim text below before adding it to your claim
             set:
-          </Text>
+          </p>
 
-          <FormControl isRequired>
-            <FormLabel>Claim Text</FormLabel>
+          <div className="space-y-2">
+            <Label htmlFor="claim-text">Claim Text</Label>
             <Textarea
+              id="claim-text"
               value={editedText}
               onChange={e => setEditedText(e.target.value)}
               placeholder="Enter claim text..."
               rows={8}
-              fontFamily="mono"
-              resize="vertical"
-              fontSize="14px"
-              lineHeight="1.5"
+              className="font-mono text-sm leading-relaxed resize-y"
             />
-          </FormControl>
-        </ModalBody>
+          </div>
+        </div>
 
-        <ModalFooter {...modalStyles.footer} borderColor={borderColor}>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
           <Button
-            {...modalButtonStyles.primary}
-            mr={3}
             onClick={handleSave}
-            isDisabled={!editedText.trim()}
+            disabled={!editedText.trim()}
+            className="ml-3"
           >
             Save & Insert
           </Button>
-          <Button {...modalButtonStyles.secondary} onClick={onClose}>
-            Cancel
-          </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

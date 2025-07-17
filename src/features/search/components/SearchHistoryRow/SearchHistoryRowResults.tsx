@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Box, VStack, Text, Icon, useToast } from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
 import { FiChevronUp, FiChevronDown } from 'react-icons/fi';
-import { logger } from '@/lib/monitoring/logger';
-import { useAddProjectExclusion } from '@/hooks/api/usePriorArt';
+import { logger } from '@/utils/clientLogger';
+import { useAddPatentExclusion } from '@/hooks/api/usePatentExclusions';
+import { useToast } from '@/hooks/useToastWrapper';
 import {
   SearchHistoryRowResultsProps,
   PAGINATION_CONSTANTS,
@@ -16,6 +17,7 @@ import {
 } from '../../utils/searchHistoryRowUtils';
 import { ReferenceCardActions } from './ReferenceCardActions';
 import ReferenceCard from '../ReferenceCard';
+import { PriorArtReference } from '@/types/claimTypes';
 
 /**
  * SearchHistoryRowResults - Handles the expanded results list with pagination
@@ -35,13 +37,12 @@ export const SearchHistoryRowResults: React.FC<SearchHistoryRowResultsProps> =
       savedArtNumbers = new Set<string>(),
       excludedPatentNumbers = new Set<string>(),
       isReferenceSaved,
-      referencesWithJobs = new Set(),
+      referencesWithJobs: _referencesWithJobs = new Set(),
       citationJobNumbers,
       setCitationJobNumbers,
-      isLoadingJobs = false,
     }) => {
       const toast = useToast();
-      const { mutateAsync: addExclusion } = useAddProjectExclusion();
+      const { mutateAsync: addExclusion } = useAddPatentExclusion();
 
       // State for pagination
       const [visibleResultsCount, setVisibleResultsCount] = useState<number>(
@@ -98,22 +99,23 @@ export const SearchHistoryRowResults: React.FC<SearchHistoryRowResultsProps> =
 
       // Reference exclusion handler
       const handleExcludeReference = useCallback(
-        async (referenceToExclude: { referenceNumber: string; title?: string }) => {
+        async (referenceToExclude: PriorArtReference) => {
           if (!projectId) return;
 
           try {
             await processReferenceExclusion(
               referenceToExclude,
               projectId,
-              addExclusion,
+              async params => {
+                await addExclusion(params);
+                // Return void to match expected type
+              },
               setLocalExcludedPatentNumbers, // Pass the actual state setter
               toast
             );
 
-            // Refresh the data after successful exclusion
-            if (refreshSavedArtData) {
-              await refreshSavedArtData(projectId);
-            }
+            // Note: No need to refresh data here - optimistic updates and React Query
+            // cache invalidation from useAddPatentExclusion hook handle UI updates
           } catch (error) {
             // Error handling is done in the utility function
             logger.error(
@@ -122,18 +124,20 @@ export const SearchHistoryRowResults: React.FC<SearchHistoryRowResultsProps> =
             );
           }
         },
-        [projectId, addExclusion, toast, refreshSavedArtData]
+        [projectId, addExclusion, toast]
       );
 
       // Prior art save handler
       const handleSavePriorArtClick = useCallback(
-        async (priorArtRef: { referenceNumber: string; title?: string; abstract?: string }) => {
+        async (priorArtRef: PriorArtReference) => {
           if (!onSavePriorArt) return;
 
           try {
             const normalized = priorArtRef.number
               ? priorArtRef.number.replace(/-/g, '').toUpperCase()
-              : '';
+              : priorArtRef.patentNumber
+                ? priorArtRef.patentNumber.replace(/-/g, '').toUpperCase()
+                : '';
 
             // Optimistically mark as saved immediately
             setOptimisticSavedNumbers(
@@ -171,7 +175,6 @@ export const SearchHistoryRowResults: React.FC<SearchHistoryRowResultsProps> =
               setCitationJobNumbers={setCitationJobNumbers}
               extractingReferenceNumber={extractingReferenceNumber}
               setExtractingReferenceNumber={setExtractingReferenceNumber}
-              isLoadingJobs={isLoadingJobs}
             />
           );
         },
@@ -182,7 +185,6 @@ export const SearchHistoryRowResults: React.FC<SearchHistoryRowResultsProps> =
           citationJobNumbers,
           setCitationJobNumbers,
           extractingReferenceNumber,
-          isLoadingJobs,
         ]
       );
 
@@ -213,14 +215,9 @@ export const SearchHistoryRowResults: React.FC<SearchHistoryRowResultsProps> =
       );
 
       return (
-        <Box mt={0} px={3} pb={3}>
-          <VStack
-            spacing={3}
-            align="stretch"
-            maxH="350px"
-            overflowY="auto"
-            pr={2}
-          >
+        <div className="mt-0 px-4 pb-3">
+          {/* Flexible results container */}
+          <div className="flex flex-col space-y-3 pr-2">
             {results
               .slice(0, visibleResultsCount)
               .map((result, resultIndex: number) => (
@@ -237,61 +234,50 @@ export const SearchHistoryRowResults: React.FC<SearchHistoryRowResultsProps> =
                       : false
                   }
                   getCitationIcon={getCitationIconForRow}
-                  onSave={() => handleSavePriorArtClick(result)}
+                  onSave={handleSavePriorArtClick}
                   onExclude={handleExcludeReference}
                   resultIndex={resultIndex}
                 />
               ))}
+          </div>
 
+          {/* Pagination controls - outside scrollable area */}
+          <div className="mt-3">
             {/* Show More Results */}
             {results.length > visibleResultsCount && (
-              <Text
-                mt={3}
-                fontSize="sm"
-                textAlign="center"
-                color="text.secondary"
-                _hover={{
-                  color: 'text.primary',
-                  textDecoration: 'underline',
-                  cursor: 'pointer',
-                }}
+              <p
+                className={cn(
+                  'text-sm text-center text-muted-foreground',
+                  'hover:text-foreground hover:underline cursor-pointer',
+                  'flex items-center justify-center py-2'
+                )}
                 onClick={handleShowMoreResults}
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
               >
                 {generatePaginationText(
                   results.length - visibleResultsCount,
                   PAGINATION_CONSTANTS.INCREMENT_COUNT
                 )}
-                <Icon as={FiChevronDown} ml={1} boxSize={3} />
-              </Text>
+                <FiChevronDown className="ml-1 h-3 w-3" />
+              </p>
             )}
 
             {/* Show Less Results */}
             {visibleResultsCount >
               PAGINATION_CONSTANTS.INITIAL_VISIBLE_COUNT && (
-              <Text
-                mt={3}
-                fontSize="sm"
-                textAlign="center"
-                color="text.secondary"
-                _hover={{
-                  color: 'text.primary',
-                  textDecoration: 'underline',
-                  cursor: 'pointer',
-                }}
+              <p
+                className={cn(
+                  'text-sm text-center text-muted-foreground',
+                  'hover:text-foreground hover:underline cursor-pointer',
+                  'flex items-center justify-center py-2'
+                )}
                 onClick={handleShowLessResults}
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
               >
                 Show less
-                <Icon as={FiChevronUp} ml={1} boxSize={3} />
-              </Text>
+                <FiChevronUp className="ml-1 h-3 w-3" />
+              </p>
             )}
-          </VStack>
-        </Box>
+          </div>
+        </div>
       );
     }
   );

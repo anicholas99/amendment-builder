@@ -1,6 +1,6 @@
 import { ConsolidatedCitationResult } from '@/types/citationTypes';
-import { safeJsonParse } from '@/utils/json-utils';
-import { logger } from '@/lib/monitoring/logger';
+import { safeJsonParse } from '@/utils/jsonUtils';
+import { logger } from '@/utils/clientLogger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { PriorArtReference } from '@/types/claimTypes';
 import { CITATION_THRESHOLDS } from '@/config/citationExtractionConfig';

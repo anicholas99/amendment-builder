@@ -1,6 +1,4 @@
 import React, { memo } from 'react';
-import { HStack, Box, Text } from '@chakra-ui/react';
-import { thinkingDots } from '../styles/animations';
 
 interface ThinkingAnimationProps {
   color?: string;
@@ -8,34 +6,28 @@ interface ThinkingAnimationProps {
 }
 
 export const ThinkingAnimation: React.FC<ThinkingAnimationProps> = memo(
-  ({ color = 'blue.400', message = 'Thinking' }) => (
-    <HStack spacing={1} align="center">
-      <Text fontSize="sm" color="gray.600" mr={2}>
-        {message}
-      </Text>
-      <Box
-        w="4px"
-        h="4px"
-        borderRadius="full"
-        bg={color}
-        animation={`${thinkingDots} 1.4s ease-in-out infinite`}
-      />
-      <Box
-        w="4px"
-        h="4px"
-        borderRadius="full"
-        bg={color}
-        animation={`${thinkingDots} 1.4s ease-in-out infinite 0.2s`}
-      />
-      <Box
-        w="4px"
-        h="4px"
-        borderRadius="full"
-        bg={color}
-        animation={`${thinkingDots} 1.4s ease-in-out infinite 0.4s`}
-      />
-    </HStack>
-  )
+  ({ color = 'blue.400', message = 'Thinking' }) => {
+    // Map theme-style colors to Tailwind classes
+    const colorClass = color === 'blue.400' ? 'bg-blue-500' : '';
+
+    return (
+      <div className="flex items-center gap-1">
+        <span className="text-sm text-gray-600 mr-2">{message}</span>
+        <div
+          className={`w-1 h-1 rounded-full animate-thinking-dots ${colorClass}`}
+          style={color !== 'blue.400' ? { backgroundColor: color } : undefined}
+        />
+        <div
+          className={`w-1 h-1 rounded-full animate-thinking-dots-delay-1 ${colorClass}`}
+          style={color !== 'blue.400' ? { backgroundColor: color } : undefined}
+        />
+        <div
+          className={`w-1 h-1 rounded-full animate-thinking-dots-delay-2 ${colorClass}`}
+          style={color !== 'blue.400' ? { backgroundColor: color } : undefined}
+        />
+      </div>
+    );
+  }
 );
 
 ThinkingAnimation.displayName = 'ThinkingAnimation';

@@ -1,24 +1,21 @@
 import React from 'react';
-import {
-  Box,
-  Button,
-  HStack,
-  Icon,
-  useColorModeValue,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  IconButton,
-  Text,
-  Badge,
-} from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
 import {
   FiFileText,
   FiRefreshCw,
   FiClock,
   FiChevronDown,
 } from 'react-icons/fi';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface ActionButtonsProps {
   selectedReference: string | null;
@@ -68,7 +65,18 @@ export function ActionButtons({
   citationHistory = [],
   onViewHistoricalRun,
 }: ActionButtonsProps) {
-  const notificationBorderColor = useColorModeValue('white', 'bg.primary');
+  const { isDarkMode } = useThemeContext();
+  const [showRerunConfirm, setShowRerunConfirm] = React.useState(false);
+
+  // Auto-hide confirmation after 5 seconds
+  React.useEffect(() => {
+    if (showRerunConfirm) {
+      const timer = setTimeout(() => {
+        setShowRerunConfirm(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [showRerunConfirm]);
 
   if (!selectedReference) {
     return null;
@@ -79,112 +87,189 @@ export function ActionButtons({
     onToggleExaminerAnalysis && onToggleExaminerAnalysis(!showExaminerAnalysis);
   };
 
+  const handleRerunClick = () => {
+    if (showRerunConfirm) {
+      // User confirmed, execute the rerun
+      onRerunExtraction && onRerunExtraction();
+      setShowRerunConfirm(false);
+    } else {
+      // Show confirmation
+      setShowRerunConfirm(true);
+    }
+  };
+
   return (
-    <HStack spacing={1}>
-      {/* Rerun Extraction Button */}
-      {onRerunExtraction && (
-        <Button
-          leftIcon={<Icon as={FiRefreshCw} />}
-          size="sm"
-          colorScheme="blue"
-          variant="outline"
-          onClick={onRerunExtraction}
-          isLoading={isRerunningExtraction}
-          mr={1}
-          title="Rerun citation extraction for this reference"
-        >
-          Rerun
-        </Button>
-      )}
+    <div className="flex items-center gap-0.5">
+      {/* Combined Rerun & History Dropdown */}
+      {(onRerunExtraction ||
+        (citationHistory.length > 0 && onViewHistoricalRun)) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-7 h-7 p-0"
+              title="Extraction options"
+            >
+              <FiRefreshCw
+                className={cn(
+                  'w-3.5 h-3.5',
+                  isRerunningExtraction && 'animate-spin'
+                )}
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="z-[1500] min-w-[200px]">
+            {/* Rerun Option */}
+            {onRerunExtraction && (
+              <div
+                onClick={() => {
+                  if (!isRerunningExtraction) {
+                    handleRerunClick();
+                  }
+                }}
+                className={cn(
+                  'flex items-center gap-3 py-2.5 px-3 hover:bg-accent rounded-sm',
+                  isRerunningExtraction
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'cursor-pointer',
+                  showRerunConfirm && 'text-destructive'
+                )}
+              >
+                <FiRefreshCw
+                  className={cn(
+                    'w-4 h-4',
+                    isRerunningExtraction && 'animate-spin'
+                  )}
+                />
+                <div className="flex flex-col">
+                  <span className="font-medium">
+                    {showRerunConfirm ? 'Confirm Rerun?' : 'Rerun Extraction'}
+                  </span>
+                  {showRerunConfirm && (
+                    <span className="text-xs text-muted-foreground">
+                      Click to confirm extraction rerun
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
-      {/* Citation History Dropdown */}
-      {citationHistory.length > 0 && onViewHistoricalRun && (
-        <Menu>
-          <MenuButton
-            as={IconButton}
-            icon={<Icon as={FiClock} />}
-            size="sm"
-            variant="outline"
-            colorScheme="gray"
-            title="View citation extraction history"
-            mr={1}
-          />
-          <MenuList zIndex={1500}>
-            <MenuItem isDisabled>
-              <Text fontSize="xs" fontWeight="bold" color="gray.600">
-                EXTRACTION HISTORY
-              </Text>
-            </MenuItem>
-            {citationHistory.map((run, index) => {
-              const runDate = new Date(run.createdAt);
-              const isLatest = index === 0;
+            {/* Separator if both options exist */}
+            {onRerunExtraction &&
+              citationHistory.length > 0 &&
+              onViewHistoricalRun && <DropdownMenuSeparator className="my-2" />}
 
-              return (
-                <MenuItem
-                  key={run.id}
-                  onClick={() => onViewHistoricalRun(run.id)}
-                  fontSize="sm"
-                >
-                  <Box flex="1">
-                    <HStack spacing={2}>
-                      <Text>Run #{citationHistory.length - index}</Text>
-                      {run.isCurrent && (
-                        <Badge colorScheme="green" size="sm">
-                          Current
-                        </Badge>
-                      )}
-                      {isLatest && !run.isCurrent && (
-                        <Badge colorScheme="blue" size="sm">
-                          Latest
-                        </Badge>
-                      )}
-                    </HStack>
-                    <Text fontSize="xs" color="gray.500">
-                      {runDate.toLocaleDateString()}{' '}
-                      {runDate.toLocaleTimeString()}
-                    </Text>
-                  </Box>
-                </MenuItem>
-              );
-            })}
-          </MenuList>
-        </Menu>
+            {/* History Section */}
+            {citationHistory.length > 0 && onViewHistoricalRun && (
+              <>
+                <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  EXTRACTION HISTORY
+                </div>
+                {citationHistory.map((run, index) => {
+                  const runDate = new Date(run.createdAt);
+                  const isLatest = index === 0;
+
+                  return (
+                    <DropdownMenuItem
+                      key={run.id}
+                      onClick={() => onViewHistoricalRun(run.id)}
+                      className="flex flex-col items-start gap-1.5 py-2.5 px-3 cursor-pointer hover:bg-accent"
+                    >
+                      <div className="flex items-center gap-3 w-full">
+                        <FiClock className="w-3 h-3 text-muted-foreground" />
+                        <span className="font-medium">
+                          Run #{citationHistory.length - index}
+                        </span>
+                        {run.isCurrent && (
+                          <Badge
+                            variant="secondary"
+                            className="text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                          >
+                            Current
+                          </Badge>
+                        )}
+                        {isLatest && !run.isCurrent && (
+                          <Badge
+                            variant="secondary"
+                            className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                          >
+                            Latest
+                          </Badge>
+                        )}
+                      </div>
+                      <span
+                        className={cn(
+                          'text-xs ml-6 text-muted-foreground',
+                          isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                        )}
+                      >
+                        {runDate.toLocaleDateString()}{' '}
+                        {runDate.toLocaleTimeString()}
+                      </span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
 
       {/* Examiner Analysis Toggle Button */}
       {isExaminerAnalysisAvailable && (
-        <Box position="relative">
+        <div className="relative">
           <Button
-            leftIcon={<Icon as={FiFileText} />}
             size="sm"
-            colorScheme="green"
-            variant={showExaminerAnalysis ? 'solid' : 'outline'}
+            variant={showExaminerAnalysis ? 'default' : 'outline'}
             onClick={handleExaminerAnalysisClick}
-            isLoading={isRunningExaminerAnalysis}
-            mr={1}
-            position="relative"
+            disabled={isRunningExaminerAnalysis}
+            className={cn(
+              'h-7 px-2 hidden sm:flex items-center gap-1',
+              showExaminerAnalysis
+                ? 'bg-green-600 hover:bg-green-700 text-white'
+                : 'border-green-600 text-green-600 hover:bg-green-50 dark:border-green-400 dark:text-green-400 dark:hover:bg-green-900/20'
+            )}
           >
-            {showExaminerAnalysis ? 'Hide Examiner View' : 'Examiner View'}
+            <FiFileText className="w-3 h-3" />
+            <span className="text-xs">
+              {showExaminerAnalysis ? 'Hide' : 'Examiner'}
+            </span>
+          </Button>
+
+          {/* Mobile version - icon only */}
+          <Button
+            size="sm"
+            variant={showExaminerAnalysis ? 'default' : 'outline'}
+            onClick={handleExaminerAnalysisClick}
+            disabled={isRunningExaminerAnalysis}
+            className={cn(
+              'w-7 h-7 p-0 sm:hidden',
+              showExaminerAnalysis
+                ? 'bg-green-600 hover:bg-green-700 text-white'
+                : 'border-green-600 text-green-600 hover:bg-green-50 dark:border-green-400 dark:text-green-400 dark:hover:bg-green-900/20'
+            )}
+            title={
+              showExaminerAnalysis ? 'Hide Examiner View' : 'Examiner View'
+            }
+          >
+            <FiFileText className="w-3.5 h-3.5" />
           </Button>
 
           {/* Notification dot for important findings */}
           {!showExaminerAnalysis &&
             !isRunningExaminerAnalysis &&
             hasExaminerAnalysisData && (
-              <Box
-                position="absolute"
-                top="-2px"
-                right="-2px"
-                width="10px"
-                height="10px"
-                borderRadius="full"
-                bg={hasHighImportanceFindings ? 'red.500' : 'green.400'}
-                borderWidth="2px"
-                borderColor={notificationBorderColor}
+              <div
+                className={cn(
+                  'absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border',
+                  hasHighImportanceFindings ? 'bg-red-500' : 'bg-green-400',
+                  isDarkMode ? 'border-gray-900' : 'border-white'
+                )}
               />
             )}
-        </Box>
+        </div>
       )}
-    </HStack>
+    </div>
   );
 }

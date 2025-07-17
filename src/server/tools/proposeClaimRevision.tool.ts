@@ -1,5 +1,5 @@
 import { ClaimRepository } from '@/repositories/claimRepository';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { OpenaiServerService } from '@/server/services/openai.server-service';
 import { diffWords } from 'diff';
@@ -19,9 +19,9 @@ export interface ClaimRevision {
 
 /**
  * Propose a claim revision based on user instruction
- * 
+ *
  * SECURITY: Always validates tenant ownership before accessing data
- * 
+ *
  * This tool uses AI to generate an improved version of a claim based on
  * the user's instruction (shorten, clarify, fix grammar, etc.), then
  * returns a structured diff for the UI to render with Apply/Reject buttons.
@@ -86,21 +86,31 @@ Provide the revised claim text:`;
     // Generate diff for UI visualization
     const diff = diffWords(originalText, proposedText);
     const changes = diff.map(part => ({
-      type: part.added ? 'added' as const : part.removed ? 'removed' as const : 'unchanged' as const,
+      type: part.added
+        ? ('added' as const)
+        : part.removed
+          ? ('removed' as const)
+          : ('unchanged' as const),
       value: part.value,
     }));
 
     // Calculate confidence based on the amount of change
     const totalWords = originalText.split(/\s+/).length;
-    const changedWords = diff.filter(part => part.added || part.removed)
+    const changedWords = diff
+      .filter(part => part.added || part.removed)
       .reduce((sum, part) => sum + part.value.split(/\s+/).length, 0);
     const changeRatio = changedWords / totalWords;
-    
+
     // Higher confidence for smaller, targeted changes
-    const confidence = instruction.includes('grammar') ? 0.95 : 
-                      changeRatio < 0.2 ? 0.9 :
-                      changeRatio < 0.4 ? 0.8 :
-                      changeRatio < 0.6 ? 0.7 : 0.6;
+    const confidence = instruction.includes('grammar')
+      ? 0.95
+      : changeRatio < 0.2
+        ? 0.9
+        : changeRatio < 0.4
+          ? 0.8
+          : changeRatio < 0.6
+            ? 0.7
+            : 0.6;
 
     // Generate reasoning
     const reasoning = generateReasoning(instruction, changeRatio, diff);
@@ -133,7 +143,7 @@ function generateReasoning(
   diff: any[]
 ): string {
   const changeCount = diff.filter(part => part.added || part.removed).length;
-  
+
   if (instruction.toLowerCase().includes('shorten')) {
     return `Removed ${Math.round(changeRatio * 100)}% of redundant language while preserving all technical limitations.`;
   } else if (instruction.toLowerCase().includes('clarify')) {
@@ -143,4 +153,4 @@ function generateReasoning(
   } else {
     return `Applied requested changes affecting ${Math.round(changeRatio * 100)}% of the claim text.`;
   }
-} 
+}

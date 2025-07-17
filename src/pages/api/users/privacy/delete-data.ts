@@ -2,10 +2,10 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { CustomApiRequest } from '@/types/api';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
-import { auditPrivacyEvent } from '@/lib/monitoring/audit-logger';
-import { logger } from '@/lib/monitoring/logger';
+import { auditPrivacyEvent } from '@/server/monitoring/audit-logger';
+import { logger } from '@/server/logger';
 import { deleteUserData } from '@/repositories/userRepository';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 const deleteSchema = z.object({
   confirmation: z.literal('DELETE MY DATA'),
@@ -15,17 +15,12 @@ const deleteSchema = z.object({
  * GDPR Article 17: Right to Erasure ("Right to be Forgotten")
  * Permanently delete all user data upon request
  */
-async function handler(req: CustomApiRequest, res: NextApiResponse) {
+async function handler(
+  req: CustomApiRequest<{ confirmation: string }>,
+  res: NextApiResponse
+) {
   if (req.method !== 'DELETE') {
     return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const validation = deleteSchema.safeParse(req.body);
-  if (!validation.success) {
-    return res.status(400).json({
-      error: 'Invalid deletion confirmation',
-      details: validation.error.flatten(),
-    });
   }
 
   // User is guaranteed by middleware
@@ -61,4 +56,13 @@ async function handler(req: CustomApiRequest, res: NextApiResponse) {
 }
 
 // Use the user-private preset for GDPR compliance
-export default SecurePresets.tenantProtected(TenantResolvers.fromUser, handler);
+export default SecurePresets.tenantProtected(
+  TenantResolvers.fromUser,
+  handler,
+  {
+    validate: {
+      body: deleteSchema,
+      bodyMethods: ['DELETE'],
+    },
+  }
+);

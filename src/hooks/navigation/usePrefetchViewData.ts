@@ -4,16 +4,17 @@
  */
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { inventionQueryKeys } from '@/hooks/api/useInvention';
 import { claimQueryKeys } from '@/hooks/api/useClaims';
 import { versionQueryKeys } from '@/lib/queryKeys/versionQueryKeys';
-import { inventionClientService } from '@/client/services/invention.client-service';
+import { useInventionService } from '@/contexts/ClientServicesContext';
 import { ProjectApiService } from '@/client/services/project.client-service';
 import { STALE_TIME, GC_TIME } from '@/constants/time';
 
 export const usePrefetchViewData = () => {
   const queryClient = useQueryClient();
+  const inventionService = useInventionService();
 
   /**
    * Helper to prefetch or refetch based on staleness
@@ -66,7 +67,7 @@ export const usePrefetchViewData = () => {
       // Prefetch invention data
       await prefetchOrRefetch(
         inventionQueryKeys.byProject(projectId),
-        () => inventionClientService.getInvention(projectId),
+        () => inventionService.getInvention(projectId),
         {
           staleTime: STALE_TIME.LONG,
           gcTime: GC_TIME.LONG,
@@ -75,7 +76,7 @@ export const usePrefetchViewData = () => {
 
       logger.debug('[Prefetch] Technology Details data prefetched');
     },
-    [prefetchOrRefetch]
+    [prefetchOrRefetch, inventionService]
   );
 
   /**
@@ -103,7 +104,7 @@ export const usePrefetchViewData = () => {
         // Invention data (if not already cached)
         prefetchOrRefetch(
           inventionQueryKeys.byProject(projectId),
-          () => inventionClientService.getInvention(projectId),
+          () => inventionService.getInvention(projectId),
           {
             staleTime: STALE_TIME.LONG,
             gcTime: GC_TIME.LONG,
@@ -113,7 +114,7 @@ export const usePrefetchViewData = () => {
 
       logger.debug('[Prefetch] Claim Refinement data prefetched');
     },
-    [prefetchOrRefetch]
+    [prefetchOrRefetch, inventionService]
   );
 
   /**
@@ -141,7 +142,7 @@ export const usePrefetchViewData = () => {
         // Invention data (if not already cached)
         prefetchOrRefetch(
           inventionQueryKeys.byProject(projectId),
-          () => inventionClientService.getInvention(projectId),
+          () => inventionService.getInvention(projectId),
           {
             staleTime: STALE_TIME.LONG,
             gcTime: GC_TIME.LONG,
@@ -151,7 +152,7 @@ export const usePrefetchViewData = () => {
 
       logger.debug('[Prefetch] Patent Application data prefetched');
     },
-    [prefetchOrRefetch]
+    [prefetchOrRefetch, inventionService]
   );
 
   /**

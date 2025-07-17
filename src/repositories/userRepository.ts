@@ -8,7 +8,7 @@ import {
 } from '@prisma/client';
 // Import the function to get the client instance safely
 import { prisma } from '../lib/prisma';
-import { logger } from '@/config/environment';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 
 // Define the select clause for returning safe user data (excluding passwordHash etc.)

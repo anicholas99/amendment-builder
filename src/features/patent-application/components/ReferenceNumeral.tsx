@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { Box, Text } from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 // Reference numeral is a simple text label with a reference number
 const ReferenceNumeral: React.FC<NodeProps> = ({ data, selected }) => {
+  const { isDarkMode } = useThemeContext();
   const [isEditing, setIsEditing] = useState(false);
   const [label, setLabel] = useState(data.label || 'Element');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -42,13 +44,12 @@ const ReferenceNumeral: React.FC<NodeProps> = ({ data, selected }) => {
   }, [isEditing]);
 
   return (
-    <Box
-      position="relative"
-      padding={2}
-      borderWidth={selected ? '2px' : '1px'}
-      borderRadius="md"
-      borderColor={selected ? 'blue.500' : 'gray.200'}
-      backgroundColor="white"
+    <div
+      className={cn(
+        'relative p-2 rounded-md border',
+        selected ? 'border-2 border-blue-500' : 'border-gray-200',
+        isDarkMode ? 'bg-gray-800' : 'bg-white'
+      )}
       onDoubleClick={handleDoubleClick}
     >
       {isEditing ? (
@@ -64,18 +65,23 @@ const ReferenceNumeral: React.FC<NodeProps> = ({ data, selected }) => {
           className="input-clean"
         />
       ) : (
-        <Text fontSize="sm">
+        <span className="text-sm">
           {displayLabel}
           {refNumber && (
-            <Text as="span" color="gray.500" ml={1}>
+            <span
+              className={cn(
+                'ml-1',
+                isDarkMode ? 'text-gray-500' : 'text-gray-400'
+              )}
+            >
               ({refNumber})
-            </Text>
+            </span>
           )}
-        </Text>
+        </span>
       )}
       <Handle type="source" position={Position.Right} />
       <Handle type="target" position={Position.Left} />
-    </Box>
+    </div>
   );
 };
 

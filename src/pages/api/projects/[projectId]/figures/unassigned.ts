@@ -1,11 +1,12 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
-import { listUnassignedProjectFigures } from '@/repositories/figureRepository';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { listUnassignedProjectFigures } from '@/repositories/figure';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
 import { ApplicationError } from '@/lib/error';
+import { apiResponse } from '@/utils/api/responses';
 
 const apiLogger = createApiLogger('projects/figures/unassigned');
 
@@ -52,10 +53,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         count: responseData.length,
       });
 
-      return res.status(200).json({ figures: responseData });
+      return apiResponse.ok(res, { figures: responseData });
     }
 
-    return res.status(405).json({ error: 'Method not allowed' });
+    return apiResponse.methodNotAllowed(res, ['GET']);
   } catch (error) {
     apiLogger.error('Failed to fetch unassigned figures', {
       projectId,

@@ -1,9 +1,9 @@
 import { NextApiResponse } from 'next';
 import { projectsApi } from '@/lib/api/clients/projects';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { CustomApiRequest } from '@/types/api';
 import { AuthenticatedRequest } from '@/types/middleware';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 const apiLogger = createApiLogger('export-data');
 
@@ -30,7 +30,10 @@ async function handler(
   // Return the projects data
   const response = { projects };
   apiLogger.logResponse(200, { count: projects?.length || 0 });
-  res.status(200).json(response);
+  return res.status(200).json({
+    success: true,
+    data: response,
+  });
 }
 
 // Use the new admin-specific secure preset

@@ -1,7 +1,6 @@
 import type { File } from 'formidable';
 import path from 'path';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
 
 /**
  * Options for the file guard helper.
@@ -160,17 +159,11 @@ export async function fileGuard(
     detectedMime = result?.mime;
 
     if (!detectedMime) {
-      logger.warn('Could not detect MIME type from file content', {
-        filename: sanitizedFilename,
-        fallbackMime: file.mimetype,
-      });
+      // Warning logging removed for client compatibility
     }
   } catch (err) {
     fileTypeError = err as Error;
-    logger.error('Error detecting file type', {
-      error: fileTypeError,
-      filename: sanitizedFilename,
-    });
+    // Error logging removed for client compatibility
   }
 
   // 5. MIME type validation
@@ -180,10 +173,7 @@ export async function fileGuard(
     // Special handling for text files which might not have magic numbers
     if (fileExtension === '.txt' && acceptedTypes.includes('text/plain')) {
       // Text files often don't have magic numbers, accept based on extension
-      logger.info('Accepting text file based on extension', {
-        filename: sanitizedFilename,
-        detectedMime: mimeToCheck,
-      });
+      // Info logging removed for client compatibility
     } else {
       throw new ApplicationError(
         ErrorCode.VALIDATION_INVALID_FORMAT,
@@ -207,22 +197,10 @@ export async function fileGuard(
 
   const expectedMimes = extensionMimeMap[fileExtension];
   if (expectedMimes && detectedMime && !expectedMimes.includes(detectedMime)) {
-    logger.warn('MIME type mismatch detected', {
-      filename: sanitizedFilename,
-      extension: fileExtension,
-      detectedMime,
-      expectedMimes,
-    });
+    // Warning logging removed for client compatibility
     // Don't throw error, just log warning - some legitimate files have mismatches
   }
-
-  logger.info('File validation successful', {
-    originalFilename,
-    sanitizedFilename,
-    size: file.size,
-    detectedMime: detectedMime || 'unknown',
-    extension: fileExtension,
-  });
+  // Info logging removed for client compatibility
 
   return {
     sanitizedFilename,

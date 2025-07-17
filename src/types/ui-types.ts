@@ -3,7 +3,7 @@
  */
 
 import type { CitationMatch, CitationJob } from '@prisma/client';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 /**
  * Enhanced citation job type with optimistic update flags

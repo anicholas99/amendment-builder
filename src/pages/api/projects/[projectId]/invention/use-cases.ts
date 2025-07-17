@@ -1,35 +1,44 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { inventionDataService } from '@/server/services/invention-data.server-service';
-import { logger } from '@/lib/monitoring/logger';
-import { AuthenticatedRequest } from '@/types/middleware';
+import { RequestWithServices } from '@/types/middleware';
+import { logger } from '@/server/logger';
 import { z } from 'zod';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Validation schema for updating use cases
 const updateUseCasesSchema = z.object({
   useCases: z.array(z.string()).min(1, 'At least one use case is required.'),
 });
 
-async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { inventionService } = (req as RequestWithServices).services;
   const { projectId } = req.query;
 
   if (!projectId || typeof projectId !== 'string') {
-    return res.status(400).json({ error: 'Invalid project ID' });
+    return apiResponse.badRequest(res, 'Invalid project ID');
   }
 
-  const { useCases } = req.body;
-
   try {
-    await inventionDataService.updateUseCases(projectId, useCases);
-    return res.status(200).json({ message: 'Use cases updated successfully.' });
+    switch (req.method) {
+      case 'GET':
+        const inventionData =
+          await inventionService.getInventionData(projectId);
+        return apiResponse.ok(res, { useCases: inventionData?.useCases || [] });
+
+      case 'PUT':
+        await inventionService.updateUseCases(projectId, req.body.useCases);
+        return apiResponse.ok(res, { success: true });
+
+      default:
+        return apiResponse.methodNotAllowed(res, ['GET', 'PUT']);
+    }
   } catch (error) {
-    logger.error('[API] Error updating invention use cases', {
+    logger.error('Failed to handle use cases request', {
       projectId,
+      method: req.method,
       error,
     });
-    return res
-      .status(500)
-      .json({ error: 'Failed to update invention use cases' });
+    return apiResponse.serverError(res, error);
   }
 }
 

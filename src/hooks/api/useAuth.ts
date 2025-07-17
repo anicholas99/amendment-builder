@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/router';
-import { useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import { authQueryKeys, tenantQueryKeys } from '@/lib/queryKeys';
 import type { AppSession } from '@/lib/auth/getSession';
 import { AuthApiService } from '@/client/services/auth.client-service';

@@ -14,7 +14,7 @@ import {
   ExaminerOverallAssessment,
 } from '../types/deepAnalysis';
 import { DeepAnalysisResult } from '@/types/domain/citation';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 export function parseDeepAnalysis(
   deepAnalysisJson: string | null | undefined
@@ -25,43 +25,123 @@ export function parseDeepAnalysis(
   }
 
   try {
+    // If already an object, handle it
     if (typeof deepAnalysisJson === 'object') {
+      logger.debug(
+        '[parseDeepAnalysis] deepAnalysisJson is already an object',
+        {
+          type: typeof deepAnalysisJson,
+          keys: Object.keys(deepAnalysisJson || {}),
+        }
+      );
       return deepAnalysisJson as any;
     }
 
     const cleanedJson = deepAnalysisJson.trim().replace(/^\uFEFF/, '');
     const parsed = JSON.parse(cleanedJson);
 
+    // Log the parsed structure
+    logger.debug('[parseDeepAnalysis] Parsed JSON structure', {
+      type: typeof parsed,
+      isArray: Array.isArray(parsed),
+      keys: parsed && typeof parsed === 'object' ? Object.keys(parsed) : [],
+      sample: JSON.stringify(parsed).substring(0, 200),
+    });
+
     if (typeof parsed !== 'object' || parsed === null) {
+      logger.warn('[parseDeepAnalysis] Parsed result is not an object', {
+        parsed,
+      });
       return null;
     }
 
+    // Check for DeepAnalysisResult format
     if (
       parsed.overallRelevance !== undefined &&
       parsed.elementAnalysis &&
       Array.isArray(parsed.elementAnalysis)
     ) {
+      logger.debug('[parseDeepAnalysis] Detected DeepAnalysisResult format');
       return parsed as DeepAnalysisResult;
     }
 
+    // Check for StructuredDeepAnalysis format
     if (parsed.elementAnalysis && parsed.overallAssessment) {
+      logger.debug(
+        '[parseDeepAnalysis] Detected StructuredDeepAnalysis format',
+        {
+          hasValidationPerformed: 'validationPerformed' in parsed,
+          validationPerformed: parsed.validationPerformed,
+          hasValidationResults: 'validationResults' in parsed,
+          validationResults: parsed.validationResults,
+          validationResultsType: typeof parsed.validationResults,
+          validationResultsKeys: parsed.validationResults && typeof parsed.validationResults === 'object' 
+            ? Object.keys(parsed.validationResults) 
+            : [],
+          hasValidationSummary: 'validationSummary' in parsed,
+          validationSummary: parsed.validationSummary,
+          keys: Object.keys(parsed),
+        }
+      );
       return parsed as StructuredDeepAnalysis;
     }
 
+    // Check if it might be a wrapped structure (e.g., { highRelevanceElements: { ... } })
+    const topLevelKeys = Object.keys(parsed);
+    if (topLevelKeys.length === 1) {
+      const wrappedKey = topLevelKeys[0];
+      const wrappedData = parsed[wrappedKey];
+
+      logger.debug(
+        '[parseDeepAnalysis] Found single top-level key, checking wrapped structure',
+        {
+          wrappedKey,
+          wrappedDataType: typeof wrappedData,
+          wrappedDataKeys:
+            wrappedData && typeof wrappedData === 'object'
+              ? Object.keys(wrappedData)
+              : [],
+        }
+      );
+
+      // If the wrapped data looks like claim elements, treat it as ParsedDeepAnalysis
+      if (wrappedData && typeof wrappedData === 'object') {
+        const isClaimElements = Object.values(wrappedData).every(
+          value => typeof value === 'string'
+        );
+        if (isClaimElements) {
+          logger.debug(
+            '[parseDeepAnalysis] Treating wrapped data as ParsedDeepAnalysis'
+          );
+          return wrappedData as ParsedDeepAnalysis;
+        }
+      }
+    }
+
+    // Check for legacy format
     const isLegacyFormat = Object.entries(parsed).every(
       ([key, value]) => typeof key === 'string' && typeof value === 'string'
     );
 
     if (isLegacyFormat) {
+      logger.debug(
+        '[parseDeepAnalysis] Detected legacy ParsedDeepAnalysis format'
+      );
       return parsed as ParsedDeepAnalysis;
     }
 
-    return null;
+    logger.warn(
+      '[parseDeepAnalysis] Could not determine format, returning as-is'
+    );
+    return parsed;
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error('[parseDeepAnalysis] Error parsing deepAnalysisJson:', {
-      error: err,
-      sample: deepAnalysisJson.substring(0, 500) + '...',
+      error: err.message,
+      sample:
+        typeof deepAnalysisJson === 'string'
+          ? deepAnalysisJson.substring(0, 500) + '...'
+          : 'Not a string',
     });
     return null;
   }

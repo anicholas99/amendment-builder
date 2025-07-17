@@ -10,17 +10,17 @@
 
 import { useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useRouter } from 'next/router';
-import { environment } from '@/config/environment';
+import { isDevelopment } from '@/config/environment.client';
 
 // Import mock auth only for development
-const mockAuthService = environment.isDevelopment
+const mockAuthService = isDevelopment
   ? require('../lib/development/mockAuth').default
   : null;
 
 // Import mock tenants only for development
-const MOCK_TENANTS = environment.isDevelopment
+const MOCK_TENANTS = isDevelopment
   ? require('../lib/development/mockAuth').MOCK_TENANTS
   : [];
 
@@ -103,7 +103,7 @@ export function useTenant() {
 
   if (!tenantSlug) {
     // In development, this is common during initial page loads
-    if (environment.isDevelopment) {
+    if (isDevelopment) {
       logger.debug('[useTenant] No tenant slug found in URL');
     }
     return {
@@ -124,7 +124,7 @@ export function useTenant() {
     };
   }
 
-  if (environment.isDevelopment) {
+  if (isDevelopment) {
     logger.debug('[useTenant] Current tenant:', { tenantSlug });
   }
 

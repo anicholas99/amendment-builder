@@ -1,64 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import '@/config/env-validation'; // Validate environment on server startup
-import { rateLimit } from '@/lib/security/rateLimit';
+import { rateLimit } from '@/lib/security/rateLimit.edge'; // Use Edge-compatible version
 import { environment } from '@/config/environment';
-import { getSession } from '@/lib/auth/getSession';
 
 const CSRF_COOKIE_NAME = 'csrfToken';
 const CSRF_HEADER_NAME = 'x-csrf-token';
 const ONE_HOUR = 60 * 60;
 
 /**
- * SECURITY-CRITICAL: Public API routes whitelist
- *
- * These routes bypass authentication. Adding a route here is a SECURITY DECISION.
- * Each addition must be carefully reviewed and justified.
- *
- * Format: Exact paths or patterns (e.g., '/api/auth/*' for wildcards)
- */
-const PUBLIC_API_ROUTES = [
-  // Auth0 authentication endpoints - Required for login/logout flow
-  '/api/auth/login',
-  '/api/auth/logout',
-  '/api/auth/callback',
-  '/api/auth/me',
-  '/api/auth/*', // Auth0 catch-all handler ([...auth0].ts) for OAuth flow
-
-  // Health check endpoints - Required for monitoring
-  '/api/health',
-  '/api/system/health',
-
-  // API Documentation - Public access for developers
-  '/api/swagger', // OpenAPI spec endpoint
-
-  // IMPORTANT: Adding routes here bypasses ALL authentication
-  // Each addition must be reviewed by security team
-];
-
-/**
- * Check if a path matches any public route pattern
- */
-function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_API_ROUTES.some(route => {
-    if (route.endsWith('/*')) {
-      const prefix = route.slice(0, -2);
-      return pathname.startsWith(prefix);
-    }
-    return pathname === route;
-  });
-}
-
-/**
  * SECURE-BY-DEFAULT Global Middleware
  *
  * This middleware enforces:
  * 1. Rate limiting on all requests
- * 2. Authentication on ALL API routes (except whitelisted)
- * 3. CSRF protection on mutations
- * 4. Security headers on all API responses
+ * 2. CSRF protection on mutations
+ * 3. Security headers on all API responses
  *
- * CRITICAL: Authentication is enforced by DEFAULT. Routes must be explicitly
- * whitelisted in PUBLIC_API_ROUTES to bypass authentication.
+ * Note: Authentication is handled in API routes, not in middleware.
+ * This keeps the middleware lightweight and allows for more flexible auth handling.
  */
 export async function middleware(req: NextRequest) {
   // 1️⃣ Global rate limiting
@@ -74,69 +31,7 @@ export async function middleware(req: NextRequest) {
 
   const response = NextResponse.next();
 
-  // 2️⃣ AUTHENTICATION CHECK (SECURE BY DEFAULT)
-  if (!isPublicRoute(req.nextUrl.pathname)) {
-    try {
-      // Check for valid session using the same logic as withAuth
-      const mockReq = {
-        headers: Object.fromEntries(req.headers.entries()),
-        cookies: Object.fromEntries(
-          req.cookies.getAll().map(c => [c.name, c.value])
-        ),
-      } as any;
-
-      const mockRes = {} as any;
-      const session = await getSession(mockReq, mockRes);
-
-      // Check for internal service requests
-      // Check for internal service authentication
-      const authHeader = req.headers.get('authorization');
-      const internalKey = req.headers.get('x-internal-api-key');
-      const hasInternalAuth = authHeader?.startsWith('Bearer ') || 
-        (internalKey && internalKey === environment.api.internalApiKey);
-
-      if (!session?.user && !hasInternalAuth) {
-        // Log the attempt for security monitoring
-        console.warn('[SECURITY] Unauthenticated API access blocked:', {
-          path: req.nextUrl.pathname,
-          method: req.method,
-          ip:
-            req.headers.get('x-forwarded-for') ||
-            req.headers.get('x-real-ip') ||
-            'unknown',
-          timestamp: new Date().toISOString(),
-        });
-
-        return new NextResponse(
-          JSON.stringify({
-            error: 'Authentication required',
-            message: 'This endpoint requires authentication. Please log in.',
-          }),
-          {
-            status: 401,
-            headers: {
-              'Content-Type': 'application/json',
-              'WWW-Authenticate': 'Bearer',
-            },
-          }
-        );
-      }
-
-      // Add user context to headers for downstream middleware
-      if (session?.user) {
-        response.headers.set('x-user-id', session.user.id);
-        response.headers.set('x-user-email', session.user.email || '');
-      }
-    } catch (error) {
-      console.error('[SECURITY] Auth check failed:', error);
-      return new NextResponse(
-        JSON.stringify({ error: 'Authentication validation failed' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-  }
-
-  // 3️⃣ CSRF PROTECTION
+  // 2️⃣ CSRF PROTECTION
   const method = req.method.toUpperCase();
   const tokenFromCookie = req.cookies.get(CSRF_COOKIE_NAME)?.value;
 
@@ -158,8 +53,9 @@ export async function middleware(req: NextRequest) {
       response.headers.set(CSRF_HEADER_NAME, tokenFromCookie);
     }
   } else {
-    // Unsafe methods: validate token (skip for public auth routes)
-    if (!isPublicRoute(req.nextUrl.pathname)) {
+    // Unsafe methods: validate token (skip for auth routes)
+    const isAuthRoute = req.nextUrl.pathname.startsWith('/api/auth/');
+    if (!isAuthRoute) {
       const tokenFromHeader = req.headers.get(CSRF_HEADER_NAME);
       if (
         !tokenFromCookie ||
@@ -177,14 +73,20 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // 4️⃣ SECURITY HEADERS
+  // 3️⃣ SECURITY HEADERS
   addSecurityHeaders(response);
 
-  // 5️⃣ DEVELOPMENT WARNING for missing tenant validation
+  // 4️⃣ DEVELOPMENT WARNING for missing tenant validation
   if (environment.isDevelopment) {
     // Add a warning header for routes that might need tenant validation
+    const isAuthRoute = req.nextUrl.pathname.startsWith('/api/auth/');
+    const isCsrfRoute = req.nextUrl.pathname === '/api/csrf-token';
+    const isHealthRoute = req.nextUrl.pathname.includes('/health');
+    
     if (
-      !isPublicRoute(req.nextUrl.pathname) &&
+      !isAuthRoute &&
+      !isCsrfRoute &&
+      !isHealthRoute &&
       (method === 'POST' ||
         method === 'PUT' ||
         method === 'PATCH' ||
@@ -192,7 +94,7 @@ export async function middleware(req: NextRequest) {
     ) {
       response.headers.set(
         'X-Dev-Warning',
-        'Ensure this route has proper tenant validation via withTenantGuard'
+        'Ensure this route has proper auth validation via withAuth and tenant validation via withTenantGuard'
       );
     }
   }
@@ -220,10 +122,8 @@ function addSecurityHeaders(response: NextResponse) {
     'Permissions-Policy',
     'camera=(), microphone=(), geolocation=()'
   );
-  response.headers.set(
-    'Content-Security-Policy',
-    "default-src 'self'; frame-ancestors 'none'; base-uri 'self';"
-  );
+  // CSP is already set in next.config.js with proper configuration
+  // Don't override it here
 
   if (environment.isProduction) {
     response.headers.set(

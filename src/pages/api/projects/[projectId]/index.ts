@@ -1,16 +1,17 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { logger } from '@/lib/monitoring/logger';
-import { projectService } from '@/server/services/project.server-service';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { transformProject } from '@/types/project';
 import { z } from 'zod';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { CustomApiRequest } from '@/types/api';
-import { AuthenticatedRequest } from '@/types/middleware';
+import { AuthenticatedRequest, RequestWithServices } from '@/types/middleware';
 import { projectIdQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
 import { SavedPriorArt } from '@/features/search/types';
 import { getProjectTenantId } from '@/repositories/project';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { auditDataAccess } from '@/server/monitoring/audit-logger';
+import { getClientIp } from '@/utils/network';
 
 // Define request body type for project updates
 interface UpdateProjectBody {
@@ -41,17 +42,23 @@ const updateProjectSchema = z.object({
 
 const apiLogger = createApiLogger('projects/[projectId]');
 
-async function handler(
-  req: CustomApiRequest<UpdateProjectBody>,
+const handler = async (
+  req: NextApiRequest,
   res: NextApiResponse
-): Promise<void> {
-  apiLogger.logRequest(req); // Log request with logger
-
+): Promise<void> => {
   const { method } = req;
-  // Query parameters are validated by middleware
-  const { projectId } = (req as any).validatedQuery as z.infer<
-    typeof projectIdQuerySchema
-  >;
+  const projectId = String(req.query.projectId);
+
+  // User is guaranteed by middleware
+  const { id: userId, tenantId } = (req as AuthenticatedRequest).user!;
+
+  // Get the request-scoped service
+  const { projectService } = (req as RequestWithServices).services;
+
+  // TypeScript safety check - middleware guarantees this
+  if (!tenantId) {
+    throw new Error('Tenant ID is required but was not provided by middleware');
+  }
 
   // Validate HTTP method
   if (!['GET', 'PUT', 'DELETE'].includes(method || '')) {
@@ -61,9 +68,6 @@ async function handler(
       `Method ${method} Not Allowed`
     );
   }
-
-  // User and tenant context guaranteed by middleware
-  const { id: userId, tenantId } = (req as AuthenticatedRequest).user!;
 
   if (!projectId) {
     throw new ApplicationError(
@@ -87,6 +91,12 @@ async function handler(
           'Project not found'
         );
       }
+
+      // Audit the data access
+      await auditDataAccess(userId, tenantId, 'project', projectId, 'read', {
+        ip: getClientIp(req),
+        userAgent: req.headers['user-agent'],
+      });
 
       // Map fields for savedPriorArtItems
       const mappedPriorArt: SavedPriorArt[] = project.savedPriorArtItems.map(
@@ -140,6 +150,13 @@ async function handler(
         tenantId!
       );
 
+      // Audit the update operation
+      await auditDataAccess(userId, tenantId, 'project', projectId, 'update', {
+        ip: getClientIp(req),
+        userAgent: req.headers['user-agent'],
+        fieldsUpdated: Object.keys(req.body),
+      });
+
       // No need to re-fetch, the service now returns the full object.
       // Transform for the response
       const transformedProject = transformProject(updatedProject);
@@ -150,6 +167,13 @@ async function handler(
     if (method === 'DELETE') {
       // Use service layer to delete the project
       await projectService.deleteProject(projectId, userId, tenantId!);
+
+      // Audit the deletion
+      await auditDataAccess(userId, tenantId, 'project', projectId, 'delete', {
+        ip: getClientIp(req),
+        userAgent: req.headers['user-agent'],
+      });
+
       res.status(204).end();
       return;
     }
@@ -164,7 +188,7 @@ async function handler(
     });
     throw error;
   }
-}
+};
 
 // SECURITY: This endpoint is tenant-protected using project-based resolution
 // Users can only access/modify projects within their own tenant

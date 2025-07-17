@@ -1,4 +1,4 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 // Define a type for tracking API costs
 export interface CostTracker {
   inputTokens: number;
@@ -24,6 +24,18 @@ const MODEL_PRICING: {
   'gpt-4o': {
     input: 2.5,
     output: 10.0,
+  },
+  'gpt-4.1': {
+    input: 2.0, // $2.00 per 1M tokens (July 2025)
+    output: 8.0, // $8.00 per 1M tokens
+  },
+  'gpt-4.1-mini': {
+    input: 0.4, // $0.40 per 1M tokens
+    output: 1.6, // $1.60 per 1M tokens
+  },
+  'gpt-4.1-nano': {
+    input: 0.1, // $0.10 per 1M tokens
+    output: 0.4, // $0.40 per 1M tokens
   },
   'gpt-3.5-turbo': {
     input: 0.15,
@@ -83,7 +95,7 @@ export function trackApiCallCost(
   });
 
   // Log individual call cost
-  logger.log(
+  logger.info(
     `[COST] ${operation} using ${model}: ${inputTokens} input tokens ($${inputCost.toFixed(4)}), ${outputTokens} output tokens ($${outputCost.toFixed(4)}), total $${callCost.toFixed(4)}`
   );
 }

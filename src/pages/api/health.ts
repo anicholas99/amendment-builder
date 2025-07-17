@@ -1,12 +1,10 @@
 import { NextApiResponse } from 'next';
-import {
-  getHealthCheckService,
-  HealthStatus,
-} from '@/lib/monitoring/health-check';
-import { logger } from '@/lib/monitoring/logger';
+import { HealthStatus } from '@/types/health';
+import { logger } from '@/server/logger';
 import { z } from 'zod';
-import { AuthenticatedRequest } from '@/types/middleware';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { AuthenticatedRequest, RequestWithServices } from '@/types/middleware';
+import { SecurePresets } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Query schema for health endpoint
 const healthQuerySchema = z.object({
@@ -74,19 +72,25 @@ async function handler(
   req: AuthenticatedRequest,
   res: NextApiResponse
 ): Promise<void> {
-  const healthService = getHealthCheckService();
-  const health = await healthService.checkHealth();
+  // Get health check service from request-scoped services
+  const { healthCheckService } = (req as RequestWithServices).services;
+  const health = await healthCheckService.checkHealth();
 
   const { detailed } = healthQuerySchema.parse(req.query);
 
   // Simple health response for load balancers
   if (!detailed) {
-    const statusCode = health.status === HealthStatus.HEALTHY ? 200 : 503;
-    res.status(statusCode).json({
-      status: health.status,
-      timestamp: health.timestamp,
-    });
-    return;
+    if (health.status === HealthStatus.HEALTHY) {
+      return apiResponse.ok(res, {
+        status: health.status,
+        timestamp: health.timestamp,
+      });
+    } else {
+      return res.status(503).json({
+        status: health.status,
+        timestamp: health.timestamp,
+      }); // Keep 503 - no helper exists
+    }
   }
 
   // Detailed health response
@@ -103,11 +107,19 @@ async function handler(
       status: health.status,
       failedChecks: Object.entries(health.checks)
         .filter(([_, check]) => check.status !== HealthStatus.HEALTHY)
-        .map(([name, check]) => ({ name, ...check })),
+        .map(([name, check]) => ({
+          name,
+          status: check.status,
+          message: check.message,
+        })),
     });
   }
 
-  res.status(statusCode).json(health);
+  if (statusCode === 200) {
+    return apiResponse.ok(res, health);
+  } else {
+    return res.status(503).json(health); // Keep 503 - no helper exists
+  }
 }
 
 // Use SecurePresets for a public endpoint

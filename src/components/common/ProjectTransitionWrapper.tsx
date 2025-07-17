@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Fade } from '@chakra-ui/react';
 import { useProjectData } from '@/contexts/ProjectDataContext';
 import { useRouter } from 'next/router';
 
@@ -44,15 +43,15 @@ export const ProjectTransitionWrapper: React.FC<
   }, [router.query.projectId, previousProjectId]);
 
   return (
-    <Box
-      position="relative"
-      width="100%"
-      height="100%"
-      opacity={isTransitioning ? 0.5 : 1}
-      transition="opacity 0.2s ease-in-out"
+    <div
+      className="relative w-full h-full"
+      style={{
+        opacity: isTransitioning ? 0.5 : 1,
+        transition: 'opacity 0.2s ease-in-out',
+      }}
     >
       {children}
-    </Box>
+    </div>
   );
 };
 

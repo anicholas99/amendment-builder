@@ -1,10 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { AuthenticatedRequest } from '@/types/middleware';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { figureRepository } from '@/repositories/figureRepository';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { figureRepository } from '@/repositories/figure';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { z } from 'zod';
+import { apiResponse } from '@/utils/api/responses';
 
 const apiLogger = createApiLogger('figure-elements');
 
@@ -48,7 +49,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     case 'PATCH':
       return handlePatch(req, res, figureId);
     default:
-      return res.status(405).json({ error: 'Method not allowed' });
+      return apiResponse.methodNotAllowed(res, [
+        'GET',
+        'POST',
+        'DELETE',
+        'PATCH',
+      ]);
   }
 }
 
@@ -67,7 +73,7 @@ async function handleGet(
       elementCount: elements.length,
     });
 
-    return res.status(200).json({ elements });
+    return apiResponse.ok(res, { elements });
   } catch (error) {
     apiLogger.error('Failed to fetch elements for figure', { error, figureId });
     throw error;
@@ -100,7 +106,7 @@ async function handlePost(
       elementKey: body.elementKey,
     });
 
-    return res.status(201).json({ success: true, result });
+    return apiResponse.created(res, { success: true, result });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
@@ -140,7 +146,7 @@ async function handleDelete(
       elementKey,
     });
 
-    return res.status(200).json({ success: true });
+    return apiResponse.ok(res, { success: true });
   } catch (error) {
     apiLogger.error('Failed to remove element from figure', {
       error,
@@ -174,7 +180,7 @@ async function handlePatch(
       elementKey: body.elementKey,
     });
 
-    return res.status(200).json({ success: true, result });
+    return apiResponse.ok(res, { success: true, result });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({

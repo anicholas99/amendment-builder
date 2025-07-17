@@ -2,19 +2,20 @@ import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES, buildApiUrl } from '@/constants/apiRoutes';
 import { validateApiResponse } from '@/lib/validation/apiValidation';
 import { z } from 'zod';
+import { CitationMatchSchema, DeepAnalysisSchema } from '@/types/api/citation';
 
 // Response schema for top citation matches
 const TopCitationMatchesResponseSchema = z.object({
   groupedResults: z.array(
     z.object({
       elementText: z.string(),
-      matches: z.array(z.any()),
+      matches: z.array(CitationMatchSchema),
     })
   ),
   totalMatches: z.number(),
   deepAnalysisSummary: z
     .object({
-      overallAssessment: z.any(),
+      overallAssessment: DeepAnalysisSchema,
       holisticAnalysis: z.string(),
     })
     .nullable()

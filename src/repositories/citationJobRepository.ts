@@ -342,6 +342,126 @@ export async function findDeepAnalysisByIds(jobIds: string[]) {
 }
 
 /**
+ * Get deep analysis data for a project with tenant validation
+ * This fetches all completed citation jobs with deep analysis for a project
+ * SECURITY: Always validates tenant access through project relationship
+ */
+export async function getProjectDeepAnalyses(
+  projectId: string,
+  tenantId: string,
+  limit: number = 20
+) {
+  if (!prisma) {
+    throw new ApplicationError(
+      ErrorCode.DB_CONNECTION_ERROR,
+      'Database client is not initialized.'
+    );
+  }
+
+  // First validate tenant access
+  const project = await prisma.project.findFirst({
+    where: {
+      id: projectId,
+      tenantId: tenantId,
+      deletedAt: null,
+    },
+    select: { id: true },
+  });
+
+  if (!project) {
+    throw new ApplicationError(
+      ErrorCode.PROJECT_NOT_FOUND,
+      'Project not found or access denied'
+    );
+  }
+
+  // Fetch deep analyses through search history
+  const deepAnalyses = await prisma.citationJob.findMany({
+    where: {
+      searchHistory: {
+        projectId: projectId,
+      },
+      status: 'COMPLETED',
+      deepAnalysisJson: { not: null },
+    },
+    select: {
+      id: true,
+      referenceNumber: true,
+      deepAnalysisJson: true,
+      examinerAnalysisJson: true,
+      createdAt: true,
+      completedAt: true,
+      searchHistory: {
+        select: {
+          id: true,
+          query: true,
+        },
+      },
+    },
+    orderBy: {
+      completedAt: 'desc',
+    },
+    take: limit,
+  });
+
+  return deepAnalyses;
+}
+
+/**
+ * Get specific deep analysis by reference number
+ */
+export async function getDeepAnalysisByReference(
+  projectId: string,
+  tenantId: string,
+  referenceNumber: string
+) {
+  if (!prisma) {
+    throw new ApplicationError(
+      ErrorCode.DB_CONNECTION_ERROR,
+      'Database client is not initialized.'
+    );
+  }
+
+  // Validate tenant access
+  const project = await prisma.project.findFirst({
+    where: {
+      id: projectId,
+      tenantId: tenantId,
+      deletedAt: null,
+    },
+    select: { id: true },
+  });
+
+  if (!project) {
+    throw new ApplicationError(
+      ErrorCode.PROJECT_NOT_FOUND,
+      'Project not found or access denied'
+    );
+  }
+
+  const deepAnalysis = await prisma.citationJob.findFirst({
+    where: {
+      searchHistory: {
+        projectId: projectId,
+      },
+      referenceNumber: referenceNumber,
+      status: 'COMPLETED',
+      deepAnalysisJson: { not: null },
+    },
+    select: {
+      id: true,
+      referenceNumber: true,
+      deepAnalysisJson: true,
+      examinerAnalysisJson: true,
+      createdAt: true,
+      completedAt: true,
+    },
+  });
+
+  return deepAnalysis;
+}
+
+/**
  * Find citation jobs with verified access
  */
 export async function findWithVerifiedAccess(

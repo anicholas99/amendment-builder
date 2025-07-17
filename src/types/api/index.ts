@@ -161,6 +161,8 @@ export interface Project {
   name: string;
   description?: string;
   status: 'active' | 'archived' | 'draft';
+  hasPatentContent: boolean;
+  hasProcessedInvention: boolean;
   createdAt: string;
   updatedAt: string;
   lastActivityAt?: string;

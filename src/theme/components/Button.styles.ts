@@ -54,16 +54,16 @@ const Button = {
       },
     },
     secondary: {
-      bg: 'white',
-      color: 'ipd.textDark',
+      bg: 'bg.primary',
+      color: 'text.primary',
       border: '1px solid',
-      borderColor: 'ipd.border',
+      borderColor: 'border.primary',
       _hover: {
-        bg: 'ipd.hover',
+        bg: 'bg.hover',
         borderColor: 'ipd.blue',
       },
       _active: {
-        bg: 'gray.100',
+        bg: 'bg.selected',
       },
     },
     danger: {
@@ -85,12 +85,12 @@ const Button = {
     },
     ghost: {
       bg: 'transparent',
-      color: 'ipd.textDark',
+      color: 'text.primary',
       _hover: {
-        bg: 'ipd.hover',
+        bg: 'bg.hover',
       },
       _active: {
-        bg: 'gray.100',
+        bg: 'bg.selected',
       },
     },
     'ghost-danger': {
@@ -103,6 +103,14 @@ const Button = {
       _active: {
         bg: 'red.100',
       },
+      _dark: {
+        _hover: {
+          bg: 'rgba(254, 178, 178, 0.12)',
+        },
+        _active: {
+          bg: 'rgba(254, 178, 178, 0.24)',
+        },
+      },
     },
     'ghost-primary': {
       bg: 'transparent',
@@ -113,6 +121,14 @@ const Button = {
       },
       _active: {
         bg: 'blue.100',
+      },
+      _dark: {
+        _hover: {
+          bg: 'rgba(90, 103, 216, 0.12)',
+        },
+        _active: {
+          bg: 'rgba(90, 103, 216, 0.24)',
+        },
       },
     },
     action: {

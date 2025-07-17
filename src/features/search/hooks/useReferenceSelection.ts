@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { ReferenceJobStatus } from '../../search/components/CitationTabHeader';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 interface UseReferenceSelectionParams {
   projectId: string;

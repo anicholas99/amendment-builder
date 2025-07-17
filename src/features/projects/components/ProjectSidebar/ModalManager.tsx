@@ -4,7 +4,6 @@
  */
 import React from 'react';
 import NewProjectModal from '../NewProjectModal';
-import ManageProjectsModal from '../ManageProjectsModal';
 import { ProjectSwitchModal } from '../project-list/ProjectSwitchModal';
 import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { ModalManagerProps } from '../../types/projectSidebar';
@@ -19,7 +18,6 @@ const ModalManager: React.FC<ModalManagerProps> = ({
   onConfirmSwitch,
   onCancelSwitch,
   onCloseNewProject,
-  onCloseManageProjects,
   children,
 }) => {
   return (
@@ -39,14 +37,6 @@ const ModalManager: React.FC<ModalManagerProps> = ({
         isOpen={modalStates.isNewProjectOpen}
         onClose={onCloseNewProject}
         handleCreateProject={onCreateProject}
-      />
-
-      {/* Manage Projects Modal */}
-      <ManageProjectsModal
-        isOpen={modalStates.isManageProjectsOpen}
-        onClose={onCloseManageProjects}
-        projects={projects}
-        handleDeleteProject={onDeleteProject}
       />
 
       {/* Project Switch Confirmation Modal */}

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 /**
  * Hook to manage optimistic state for citation processing

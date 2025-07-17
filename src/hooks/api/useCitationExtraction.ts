@@ -2,10 +2,9 @@
  * Centralized hook for Citation Job API mutations.
  */
 import { useMutation, UseMutationOptions } from '@tanstack/react-query';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/utils/toast';
 import { CitationClientService } from '@/client/services/citation.client-service';
 import { ApplicationError } from '@/lib/error';
-import { showSuccessToast, showErrorToast } from '@/utils/toast';
 
 // Define types based on the new createCitationJob service method
 type CreateCitationJobRequest = {
@@ -47,14 +46,13 @@ export function useCreateCitationJob(
       ),
     onSuccess: data => {
       if (data.success) {
-        showSuccessToast(toast, 'Citation job created successfully.');
+        toast.success('Citation job created successfully.');
       } else {
-        showErrorToast(toast, data.message || 'Failed to create citation job.');
+        toast.error(data.message || 'Failed to create citation job.');
       }
     },
     onError: error => {
-      showErrorToast(
-        toast,
+      toast.error(
         error.message || 'An error occurred while creating the citation job.'
       );
     },
@@ -112,20 +110,15 @@ export function useQueueCitationExtraction(
     },
     onSuccess: (data, variables) => {
       if (data.success) {
-        showSuccessToast(
-          toast,
+        toast.success(
           `Citation extraction queued successfully. Job ID: ${data.jobId}`
         );
       } else {
-        showErrorToast(
-          toast,
-          data.message || 'Failed to queue citation extraction'
-        );
+        toast.error(data.message || 'Failed to queue citation extraction');
       }
     },
     onError: error => {
-      showErrorToast(
-        toast,
+      toast.error(
         error.message || 'An error occurred while queuing citation extraction'
       );
     },

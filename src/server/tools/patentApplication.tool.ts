@@ -1,14 +1,26 @@
-import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import type { PatentApplicationAnalysis } from '@/types/tools';
+import { findProjectByIdAndTenant } from '@/repositories/project/core.repository';
+import { findDraftDocumentsByProject } from '@/repositories/project/draft.repository';
+import { rebuildHtmlContent } from '@/features/patent-application/utils/patent-sections';
+
+// Define the actual return type for this function
+interface PatentApplicationToolResult {
+  hasApplication: boolean;
+  contentLength?: number;
+  sections?: string[];
+  analysis: string;
+  suggestions: string[];
+  fullContent?: string;
+  plainTextPreview?: string;
+}
 
 /**
  * Analyzes the generated patent application for a project
  * Returns the patent content and analysis of its structure
- * 
- * NOTE: This tool fetches from DraftDocument (working copy) rather than 
- * ApplicationVersion (saved snapshots) to ensure the chat agent always 
+ *
+ * NOTE: This tool fetches from DraftDocument (working copy) rather than
+ * ApplicationVersion (saved snapshots) to ensure the chat agent always
  * sees the latest edits in real-time.
  *
  * SECURITY: Always validates tenant ownership before accessing data
@@ -16,14 +28,7 @@ import type { PatentApplicationAnalysis } from '@/types/tools';
 export async function analyzePatentApplication(
   projectId: string,
   tenantId: string
-): Promise<PatentApplicationAnalysis> {
-  if (!prisma) {
-    throw new ApplicationError(
-      ErrorCode.DB_CONNECTION_ERROR,
-      'Database client not initialized'
-    );
-  }
-
+): Promise<PatentApplicationToolResult> {
   logger.debug('[PatentApplicationTool] Starting analysis', {
     projectId,
     tenantId,
@@ -31,17 +36,7 @@ export async function analyzePatentApplication(
 
   try {
     // First, verify tenant ownership
-    const project = await prisma.project.findFirst({
-      where: {
-        id: projectId,
-        tenantId: tenantId,
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-        name: true,
-      },
-    });
+    const project = await findProjectByIdAndTenant(projectId, tenantId);
 
     if (!project) {
       throw new ApplicationError(
@@ -50,22 +45,11 @@ export async function analyzePatentApplication(
       );
     }
 
-    // Fetch the latest draft document with FULL_CONTENT
-    // @ts-ignore - Prisma types need to be regenerated after schema changes
-    const draftDocument = await prisma!.draftDocument.findUnique({
-      where: {
-        projectId_type: {
-          projectId: projectId,
-          type: 'FULL_CONTENT',
-        },
-      },
-      select: {
-        content: true,
-      },
-    });
+    // Fetch all draft documents for the project
+    const draftDocuments = await findDraftDocumentsByProject(projectId);
 
-    if (!draftDocument || !draftDocument.content) {
-      logger.info('[PatentApplicationTool] No patent application found', {
+    if (!draftDocuments || draftDocuments.length === 0) {
+      logger.info('[PatentApplicationTool] No draft documents found', {
         projectId,
       });
       return {
@@ -79,7 +63,73 @@ export async function analyzePatentApplication(
       };
     }
 
-    const content = draftDocument.content;
+    // Rebuild content from sections (following the new architecture)
+    const sectionDocs: Record<string, string> = {};
+    draftDocuments.forEach((doc: any) => {
+      if (doc.type && doc.content != null && doc.type !== 'FULL_CONTENT') {
+        sectionDocs[doc.type] = doc.content;
+      }
+    });
+
+    // Check if we have any sections
+    if (Object.keys(sectionDocs).length === 0) {
+      logger.info(
+        '[PatentApplicationTool] No patent sections found in draft documents',
+        {
+          projectId,
+          draftDocumentTypes: draftDocuments.map(d => d.type),
+        }
+      );
+      return {
+        hasApplication: false,
+        analysis: 'No patent application content found in draft documents.',
+        suggestions: [
+          'Generate a patent application from the Patent Application view',
+          'Make sure you have completed the invention details and claims first',
+        ],
+      };
+    }
+
+    // Rebuild the full content from sections
+    let content = '';
+    try {
+      content = rebuildHtmlContent(sectionDocs) || '';
+    } catch (error) {
+      logger.error(
+        '[PatentApplicationTool] Error rebuilding content from sections',
+        {
+          error,
+          projectId,
+          sectionTypes: Object.keys(sectionDocs),
+        }
+      );
+      throw new ApplicationError(
+        ErrorCode.INTERNAL_ERROR,
+        'Failed to rebuild patent content from sections'
+      );
+    }
+
+    if (!content) {
+      logger.info('[PatentApplicationTool] Rebuilt content is empty', {
+        projectId,
+        sectionCount: Object.keys(sectionDocs).length,
+      });
+      return {
+        hasApplication: false,
+        analysis:
+          'Patent application sections exist but could not be assembled.',
+        suggestions: [
+          'Try regenerating the patent application',
+          'Contact support if the issue persists',
+        ],
+      };
+    }
+
+    logger.info('[PatentApplicationTool] Successfully rebuilt patent content', {
+      projectId,
+      contentLength: content.length,
+      sectionCount: Object.keys(sectionDocs).length,
+    });
 
     // Better section detection - first H1 is usually the title
     const firstH1Match = content.match(/<h1[^>]*>([^<]+)<\/h1>/i);

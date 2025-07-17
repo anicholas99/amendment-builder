@@ -1,21 +1,11 @@
 import React from 'react';
-import {
-  Box,
-  VStack,
-  Divider,
-  useColorModeValue,
-  useDisclosure,
-} from '@chakra-ui/react';
 import { SimpleMainPanel } from '@/components/common/SimpleMainPanel';
-import TechMainPanelHeader from './components/TechMainPanelHeader';
-import TechSectionsRenderer from './components/TechSectionsRenderer';
-import AddDetailsModal from './components/AddDetailsModal';
-import ChangeSummaryModal from './components/ChangeSummaryModal';
+import TechMainPanelHeaderShadcn from './components/TechMainPanelHeaderShadcn';
+import TechSectionsRendererShadcn from './components/TechSectionsRendererShadcn';
 import { useZoomControls } from './hooks/useZoomControls';
 import { useFieldUpdate } from '../../hooks/useFieldUpdate';
 import { TechMainPanelProps } from './types';
-import { InventionData } from '@/types';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 /**
  * Main panel for displaying and editing technology details
@@ -65,25 +55,25 @@ const TechMainPanel: React.FC<TechMainPanelProps> = ({
     return null;
   }
 
-  // Header content
+  // Header content - Using shadcn/ui version for testing
   const headerContent = (
-    <TechMainPanelHeader
+    <TechMainPanelHeaderShadcn
       analyzedInvention={analyzedInvention}
       zoomLevel={zoomLevel}
       onZoomIn={handleZoomIn}
       onZoomOut={handleZoomOut}
       onResetZoom={handleResetZoom}
-      onAddDetails={() => {}} // Placeholder
     />
   );
 
   return (
     <>
       <SimpleMainPanel header={headerContent} contentPadding={true}>
-        <TechSectionsRenderer
+        <TechSectionsRendererShadcn
           analyzedInvention={analyzedInvention}
           getFontSize={getFontSize}
           onUpdate={handleFieldSave} // Pass the unified update function
+          zoomLevel={zoomLevel} // Pass zoom level for CSS transform scaling
         />
       </SimpleMainPanel>
     </>

@@ -1,31 +1,38 @@
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/router';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/utils/toast';
 import { useProjectData } from '@/contexts/ProjectDataContext';
 import { useProjectAutosave } from '@/contexts/ProjectAutosaveContext';
-import { logger } from '@/lib/monitoring/logger';
-import { showSuccessToast, showErrorToast } from '@/utils/toast';
+import { logger } from '@/utils/clientLogger';
 import { ProjectData } from '@/types/project';
-import { useQueryClient } from '@tanstack/react-query';
 
 interface UseProjectNavigationProps {
   projects: ProjectData[];
 }
 
+interface TransitionState {
+  isAnimating: boolean;
+  targetProjectName?: string;
+  targetView?: string;
+}
+
 export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
   const router = useRouter();
   const toast = useToast();
-  const queryClient = useQueryClient();
   const { tenant } = router.query;
   const { activeProjectId, setActiveProject } = useProjectData();
   const { forceSave: forceSaveCurrentProject } = useProjectAutosave();
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [transitionState, setTransitionState] = useState<TransitionState>({
+    isAnimating: false,
+  });
 
   const navigateToProject = useCallback(
     async (projectId: string, documentType: string) => {
       if (!tenant) {
         logger.error('No tenant specified for navigation');
-        showErrorToast(toast, 'Navigation Error', 'No organization selected');
+        toast.error('Navigation Error', {
+          description: 'No organization selected',
+        });
         return;
       }
 
@@ -36,11 +43,9 @@ export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
         await router.push(newPath, undefined, { shallow: false });
       } catch (navError) {
         logger.error('Navigation error:', navError);
-        showErrorToast(
-          toast,
-          'Navigation failed',
-          'Failed to navigate to project page. Please try again.'
-        );
+        toast.error('Navigation Error', {
+          description: 'Failed to navigate to project',
+        });
         throw navError;
       }
     },
@@ -51,7 +56,14 @@ export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
     async (projectId: string, isNewProject: boolean = false) => {
       if (!projectId) return;
 
-      setIsAnimating(true);
+      const targetProject = projects.find(p => p.id === projectId);
+      const documentType = 'technology'; // Always go to tech details by default
+
+      setTransitionState({
+        isAnimating: true,
+        targetProjectName: targetProject?.name,
+        targetView: 'Technology Details',
+      });
 
       try {
         // Save current project data if needed
@@ -63,9 +75,6 @@ export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
         setActiveProject(projectId);
 
         // Always navigate to technology details when switching projects
-        const targetProject = projects.find(p => p.id === projectId);
-        const documentType = 'technology'; // Always go to tech details by default
-
         await navigateToProject(projectId, documentType);
 
         if (targetProject) {
@@ -76,21 +85,17 @@ export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
                 ? 'Claims'
                 : 'Patent Application';
 
-          showSuccessToast(
-            toast,
-            'Project opened',
-            `Opened ${viewName.toLowerCase()} for "${targetProject.name}"`
-          );
+          toast.success('Project opened', {
+            description: `Opened ${viewName.toLowerCase()} for "${targetProject.name}"`,
+          });
         }
       } catch (error) {
         logger.error('Error opening project:', error);
-        showErrorToast(
-          toast,
-          'Project open failed',
-          'Failed to open project. Please try again.'
-        );
+        toast.error('Project open failed', {
+          description: 'Failed to open project. Please try again.',
+        });
       } finally {
-        setIsAnimating(false);
+        setTransitionState({ isAnimating: false });
       }
     },
     [
@@ -107,7 +112,19 @@ export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
     async (projectId: string, documentType: string) => {
       if (!projectId) return;
 
-      setIsAnimating(true);
+      const targetProject = projects.find(p => p.id === projectId);
+      const documentName =
+        documentType === 'technology'
+          ? 'Technology Details'
+          : documentType === 'claim-refinement'
+            ? 'Claims'
+            : 'Patent';
+
+      setTransitionState({
+        isAnimating: true,
+        targetProjectName: targetProject?.name,
+        targetView: documentName,
+      });
 
       try {
         // Save current project data if needed
@@ -120,30 +137,18 @@ export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
 
         await navigateToProject(projectId, documentType);
 
-        const targetProject = projects.find(p => p.id === projectId);
-        const documentName =
-          documentType === 'technology'
-            ? 'Technology Details'
-            : documentType === 'claim-refinement'
-              ? 'Claims'
-              : 'Patent';
-
         if (targetProject) {
-          showSuccessToast(
-            toast,
-            `${documentName} opened`,
-            `Opened ${documentName.toLowerCase()} for "${targetProject.name}"`
-          );
+          toast.success(`${documentName} opened`, {
+            description: `Opened ${documentName.toLowerCase()} for "${targetProject.name}"`,
+          });
         }
       } catch (error) {
         logger.error('Error opening project:', error);
-        showErrorToast(
-          toast,
-          'Project open failed',
-          'Failed to open project. Please try again.'
-        );
+        toast.error('Project open failed', {
+          description: 'Failed to open project. Please try again.',
+        });
       } finally {
-        setIsAnimating(false);
+        setTransitionState({ isAnimating: false });
       }
     },
     [
@@ -162,23 +167,18 @@ export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
         logger.warn(
           'New project created, but project ID not returned for navigation.'
         );
-        showErrorToast(
-          toast,
-          'Creation incomplete',
-          'Project may have been created but response was incomplete. Please refresh.'
-        );
+        toast.error('Creation incomplete', {
+          description:
+            'Project may have been created but response was incomplete. Please refresh.',
+        });
         return;
       }
 
-      // Pre-populate the React Query cache for technology details to avoid loading state
-      queryClient.setQueryData(['invention', newProject.id], null);
-      
-      // Also ensure the project detail is cached
-      queryClient.setQueryData(['projects', newProject.id], newProject);
-      
-      // Pre-populate versions to avoid 404s
-      queryClient.setQueryData(['versions', newProject.id, 'latest'], null);
-      queryClient.setQueryData(['versions', newProject.id, 'list'], []);
+      setTransitionState({
+        isAnimating: true,
+        targetProjectName: newProject.name,
+        targetView: 'Technology Details',
+      });
 
       // Set new active project
       setActiveProject(newProject.id);
@@ -196,19 +196,22 @@ export function useProjectNavigation({ projects }: UseProjectNavigationProps) {
         await router.push(newPath, undefined, { shallow: false });
       } catch (navError) {
         logger.error('Navigation error:', navError);
-        showErrorToast(
-          toast,
-          'Navigation failed',
-          'Project was created but failed to navigate. Please refresh the page.'
-        );
+        toast.error('Navigation failed', {
+          description:
+            'Project was created but failed to navigate. Please refresh the page.',
+        });
+      } finally {
+        setTransitionState({ isAnimating: false });
       }
     },
-    [setActiveProject, router, tenant, toast, queryClient]
+    [setActiveProject, router, tenant, toast]
   );
 
   return {
-    isAnimating,
-    setIsAnimating,
+    isAnimating: transitionState.isAnimating,
+    transitionState,
+    setIsAnimating: (value: boolean) =>
+      setTransitionState({ isAnimating: value }),
     handleSelectProject,
     handleDocumentSelect,
     handleCreateProjectNavigation,

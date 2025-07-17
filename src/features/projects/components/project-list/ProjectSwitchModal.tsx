@@ -1,15 +1,13 @@
 import React from 'react';
+import { cn } from '@/lib/utils';
 import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  Button,
-  Text,
-  Box,
-} from '@chakra-ui/react';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { useThemeContext } from '../../../../contexts/ThemeContext';
 import { ProjectData } from '@/contexts';
 import { ProjectSidebarProject } from '../../types/projectSidebar';
@@ -32,69 +30,60 @@ export const ProjectSwitchModal: React.FC<ProjectSwitchModalProps> = ({
   const { isDarkMode } = useThemeContext();
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      isCentered
-      size="md"
-      motionPreset="scale"
-      closeOnOverlayClick={!isLoading}
-      closeOnEsc={!isLoading}
-      blockScrollOnMount={true}
+    <Dialog
+      open={isOpen}
+      onOpenChange={open => !open && !isLoading && onClose()}
     >
-      <ModalOverlay bg="blackAlpha.600" />
-      <ModalContent
-        bg={isDarkMode ? 'gray.800' : 'white'}
-        color={isDarkMode ? 'white' : 'gray.800'}
-        borderRadius="md"
-        boxShadow="lg"
-        pt={6}
-        pb={4}
-      >
-        <Box px={6}>
-          <Text fontSize="xl" fontWeight="semibold" mb={4}>
+      <DialogContent className="sm:max-w-md">
+        <div className="space-y-4">
+          <DialogTitle className="text-xl font-semibold">
             Open Project
-          </Text>
-          <Text fontSize="md" mb={4}>
-            Are you sure you want to open{' '}
-            <Text
-              as="span"
-              fontWeight="semibold"
-              color={isDarkMode ? 'blue.200' : 'blue.600'}
-            >
-              {targetProject?.name}
-            </Text>
-            ?
-          </Text>
-          {isLoading && (
-            <Text
-              fontSize="sm"
-              color={isDarkMode ? 'gray.400' : 'gray.600'}
-              mt={2}
-            >
-              Loading project data...
-            </Text>
-          )}
-        </Box>
-        <ModalFooter pt={6}>
+          </DialogTitle>
+          <DialogDescription asChild>
+            <div className="space-y-4">
+              <p className="text-base">
+                Are you sure you want to open{' '}
+                <span
+                  className={cn(
+                    'font-semibold',
+                    isDarkMode ? 'text-blue-200' : 'text-blue-600'
+                  )}
+                >
+                  {targetProject?.name}
+                </span>
+                ?
+              </p>
+              {isLoading && (
+                <p
+                  className={cn(
+                    'text-sm',
+                    isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                  )}
+                >
+                  Loading project data...
+                </p>
+              )}
+            </div>
+          </DialogDescription>
+        </div>
+        <DialogFooter className="pt-6">
           <Button
-            variant="secondary"
-            mr={3}
+            variant="outline"
             onClick={onClose}
-            isDisabled={isLoading}
+            disabled={isLoading}
+            className="mr-3"
           >
             Cancel
           </Button>
           <Button
-            variant="primary"
             onClick={onConfirm}
-            isLoading={isLoading}
-            loadingText="Opening..."
+            disabled={isLoading}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
-            Open
+            {isLoading ? 'Opening...' : 'Open'}
           </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

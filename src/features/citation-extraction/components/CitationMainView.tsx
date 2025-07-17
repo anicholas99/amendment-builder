@@ -1,13 +1,16 @@
-import React, { useMemo } from 'react';
-import { Box, VStack, Text } from '@chakra-ui/react';
-import ClaimRefinementCitationTable from './ClaimRefinementCitationTable';
-import EnhancedCitationResultsTable from './EnhancedCitationResultsTable';
+import React, { useMemo, useState } from 'react';
+import CitationTable from './CitationTable';
 import { CitationAnalysisPanel } from '@/features/search/components/CitationAnalysisPanel';
-import { CitationTabHeader } from './CitationTabHeader';
-import { GroupedCitation, CitationMatch } from '@/features/search/hooks/useCitationMatches';
+import { CitationTabHeader, SortOption } from './CitationTabHeader';
+import {
+  GroupedCitation,
+  CitationMatch,
+} from '@/features/search/hooks/useCitationMatches';
 import { ProcessedSearchHistoryEntry } from '@/types/domain/searchHistory';
 import { CitationJob } from '@/features/search/hooks/useCitationJobs';
-import environment from '@/config/environment';
+import { clientFeatures } from '@/config/environment.client';
+import { calculateReferenceRelevanceScores, ReferenceRelevanceScore } from '../utils/relevanceScore';
+import { ProcessedCitationMatch } from '@/types/domain/citation';
 
 interface CitationMainViewProps {
   // Search and reference selection
@@ -19,7 +22,11 @@ interface CitationMainViewProps {
 
   // Data
   referenceStatuses: Array<{ referenceNumber: string; status?: string }>;
-  selectedReferenceMetadata: { title?: string; abstract?: string; publicationNumber?: string } | null;
+  selectedReferenceMetadata: {
+    title?: string;
+    abstract?: string;
+    publicationNumber?: string;
+  } | null;
   citationMatchesData: { groupedResults: GroupedCitation[] } | undefined;
   viewingJobId: string | null;
   citationJobs: CitationJob[];
@@ -37,7 +44,7 @@ interface CitationMainViewProps {
   isReferenceExcluded: boolean;
   onRerunCitationExtraction: () => void;
   isRerunningExtraction: boolean;
-  onSaveCitationMatch?: (match: any) => Promise<void>;
+  onSaveCitationMatch?: (match: any) => void;
   savedCitationIds?: Set<string>;
 
   // Deep analysis
@@ -47,17 +54,18 @@ interface CitationMainViewProps {
   isRunningDeepAnalysis: boolean;
   onToggleDeepAnalysis: (show: boolean) => void;
   onRunDeepAnalysis: () => void;
-  effectiveDeepAnalysis: { highRelevanceElements?: Array<{ element: string; reasoning: string }> } | null;
+  effectiveDeepAnalysis: any;
   shouldShowDeepAnalysisPanel: boolean;
   isLoadingJobDetails: boolean;
-  jobDetailsError: Error | null;
-  hasExistingDeepAnalysis: boolean;
-
-  // Citation history
-  citationHistory: Array<{ id: string; createdAt: string; status: string }>;
-  onViewHistoricalRun: (jobId: string) => void;
-
-  // Claim amendments
+  jobDetailsError?: Error | null;
+  hasExistingDeepAnalysis?: boolean;
+  citationHistory?: Array<{
+    id: string;
+    createdAt: Date;
+    status: string;
+    isCurrent: boolean;
+  }>;
+  onViewHistoricalRun?: (jobId: string) => void;
   onApplyAmendmentToClaim1?: (original: string, revised: string) => void;
 }
 
@@ -99,10 +107,35 @@ export const CitationMainView: React.FC<CitationMainViewProps> = ({
   onViewHistoricalRun,
   onApplyAmendmentToClaim1,
 }) => {
-  const isDeepAnalysisAvailable =
-    environment.features.enableDeepAnalysis || false;
-  const useEnhancedCitationTable =
-    environment.features.enableEnhancedCitationTable || false;
+  // State for sorting
+  const [sortOption, setSortOption] = useState<SortOption>('default');
+
+  // Calculate relevance scores for all references
+  const referenceRelevanceScores = useMemo((): Map<string, ReferenceRelevanceScore> => {
+    if (!citationMatchesData?.groupedResults) {
+      return new Map();
+    }
+    // Cast CitationMatch to ProcessedCitationMatch for score calculation
+    const typedGroupedResults = citationMatchesData.groupedResults.map(group => ({
+      elementText: group.elementText,
+      matches: group.matches as unknown as ProcessedCitationMatch[]
+    }));
+    return calculateReferenceRelevanceScores(typedGroupedResults);
+  }, [citationMatchesData]);
+
+  // Enhanced reference metadata that includes relevance score
+  const enhancedReferenceMetadata = useMemo(() => {
+    if (!selectedReference || !selectedReferenceMetadata) return null;
+    
+    const relevanceScore = referenceRelevanceScores.get(selectedReference);
+    
+    return {
+      ...selectedReferenceMetadata,
+      relevanceScore: relevanceScore?.averageScore ?? 0,
+      matchCount: relevanceScore?.matchCount ?? 0,
+      hasLowConfidenceMatches: relevanceScore?.hasLowConfidenceMatches ?? false,
+    };
+  }, [selectedReferenceMetadata, selectedReference, referenceRelevanceScores]);
 
   // Filter matches for selected reference and optionally by job ID
   const filteredMatches = useMemo((): GroupedCitation[] => {
@@ -151,13 +184,119 @@ export const CitationMainView: React.FC<CitationMainViewProps> = ({
     // Sort by elementOrder of the first match to guarantee correct order
     const sorted = [...filteredMatches].sort((a, b) => {
       const aOrder =
-        (a.matches[0] as CitationMatch & { elementOrder?: number })?.elementOrder ?? Number.MAX_SAFE_INTEGER;
+        (a.matches[0] as CitationMatch & { elementOrder?: number })
+          ?.elementOrder ?? Number.MAX_SAFE_INTEGER;
       const bOrder =
-        (b.matches[0] as CitationMatch & { elementOrder?: number })?.elementOrder ?? Number.MAX_SAFE_INTEGER;
+        (b.matches[0] as CitationMatch & { elementOrder?: number })
+          ?.elementOrder ?? Number.MAX_SAFE_INTEGER;
       return aOrder - bOrder;
     });
     return sorted;
   }, [filteredMatches]);
+
+  // Get reference metadata for sorting
+  const getReferenceMetadata = (referenceNumber: string) => {
+    if (!citationMatchesData?.groupedResults) return null;
+    
+    for (const group of citationMatchesData.groupedResults) {
+      const match = group.matches.find(
+        (m): m is ProcessedCitationMatch =>
+          (m as ProcessedCitationMatch).referenceNumber === referenceNumber
+      );
+      if (match) {
+        return {
+          publicationDate: match.referencePublicationDate,
+          applicant: match.referenceApplicant,
+          title: match.referenceTitle,
+        };
+      }
+    }
+    return null;
+  };
+
+  // Transform reference statuses with conditional sorting
+  const transformedReferenceStatuses = useMemo(() => {
+    const transformed = referenceStatuses.map(ref => ({
+      ...ref,
+      status: ref.status || 'pending', // Ensure status is always defined
+      isOptimistic: (ref as any).isOptimistic || false,
+      wasOptimistic: (ref as any).wasOptimistic || false,
+      showAsOptimistic: (ref as any).showAsOptimistic || false,
+    }));
+
+    // Apply sorting based on user preference
+    switch (sortOption) {
+      case 'relevance':
+        return transformed.sort((a, b) => {
+          const scoreA = referenceRelevanceScores.get(a.referenceNumber)?.averageScore ?? 0;
+          const scoreB = referenceRelevanceScores.get(b.referenceNumber)?.averageScore ?? 0;
+          
+          // If scores are the same, maintain original order by using reference number as tiebreaker
+          if (scoreA === scoreB) {
+            return a.referenceNumber.localeCompare(b.referenceNumber);
+          }
+          
+          // Sort by score descending (highest first)
+          return scoreB - scoreA;
+        });
+
+      case 'date-desc':
+        return transformed.sort((a, b) => {
+          const metaA = getReferenceMetadata(a.referenceNumber);
+          const metaB = getReferenceMetadata(b.referenceNumber);
+          
+          const dateA = metaA?.publicationDate;
+          const dateB = metaB?.publicationDate;
+          
+          // Handle missing dates - put them at the end
+          if (!dateA && !dateB) return a.referenceNumber.localeCompare(b.referenceNumber);
+          if (!dateA) return 1;
+          if (!dateB) return -1;
+          
+          // Sort by date descending (newest first)
+          return dateB.localeCompare(dateA);
+        });
+
+      case 'date-asc':
+        return transformed.sort((a, b) => {
+          const metaA = getReferenceMetadata(a.referenceNumber);
+          const metaB = getReferenceMetadata(b.referenceNumber);
+          
+          const dateA = metaA?.publicationDate;
+          const dateB = metaB?.publicationDate;
+          
+          // Handle missing dates - put them at the end
+          if (!dateA && !dateB) return a.referenceNumber.localeCompare(b.referenceNumber);
+          if (!dateA) return 1;
+          if (!dateB) return -1;
+          
+          // Sort by date ascending (oldest first)
+          return dateA.localeCompare(dateB);
+        });
+
+      default:
+        // Return in original order if not sorting
+        return transformed;
+    }
+  }, [referenceStatuses, referenceRelevanceScores, sortOption, citationMatchesData]);
+
+  // Check if deep analysis is available
+  const isDeepAnalysisAvailable = clientFeatures.enableDeepAnalysis;
+
+  // Transform citation history for component compatibility
+  const transformedCitationHistory = useMemo(() => {
+    if (!citationHistory) return undefined;
+    
+    return citationHistory.map(item => ({
+      ...item,
+      createdAt: item.createdAt instanceof Date ? item.createdAt : new Date(item.createdAt),
+    }));
+  }, [citationHistory]);
+
+  // Handler for sort change
+  const handleSortChange = (newSortOption: SortOption) => {
+    setSortOption(newSortOption);
+  };
 
   return (
     <>
@@ -165,7 +304,7 @@ export const CitationMainView: React.FC<CitationMainViewProps> = ({
         currentSearchId={activeSearchId}
         onSearchChange={onSearchChange}
         searchHistory={searchHistory}
-        referenceStatuses={referenceStatuses}
+        referenceStatuses={transformedReferenceStatuses}
         selectedReference={selectedReference}
         onSelectReference={onSelectReference}
         isLoading={isLoadingJobs || isLoadingCitationMatches}
@@ -174,7 +313,9 @@ export const CitationMainView: React.FC<CitationMainViewProps> = ({
         isReferenceSaved={isReferenceSaved}
         onExcludeReference={onExcludeReference}
         isReferenceExcluded={isReferenceExcluded}
-        referenceMetadata={selectedReferenceMetadata}
+        referenceMetadata={enhancedReferenceMetadata}
+        sortOption={sortOption}
+        onSortChange={handleSortChange}
         isDeepAnalysisAvailable={isDeepAnalysisAvailable}
         showDeepAnalysis={showDeepAnalysis}
         hasDeepAnalysisData={hasExistingDeepAnalysis || hasDeepAnalysisData}
@@ -184,48 +325,13 @@ export const CitationMainView: React.FC<CitationMainViewProps> = ({
         onRunDeepAnalysis={onRunDeepAnalysis}
         onRerunCitationExtraction={onRerunCitationExtraction}
         isRerunningExtraction={isRerunningExtraction}
-        citationHistory={citationHistory}
+        citationHistory={transformedCitationHistory}
         onViewHistoricalRun={onViewHistoricalRun}
       />
-      <Box flex="1" overflow="auto" position="relative">
-        {activeSearchId ? (
-          useEnhancedCitationTable && isDeepAnalysisAvailable ? (
-            <EnhancedCitationResultsTable
-              searchHistoryId={activeSearchId}
-              selectedReference={selectedReference || undefined}
-            />
-          ) : (
-            <ClaimRefinementCitationTable
-              isLoading={isLoadingCitationMatches}
-              error={citationMatchesError}
-              groupedResults={visibleMatches}
-              onSaveCitationMatch={onSaveCitationMatch}
-              savedCitationIds={savedCitationIds}
-            />
-          )
-        ) : (
-          <VStack py={8} spacing={3}>
-            <Text color="gray.500" fontSize="lg">
-              No search selected
-            </Text>
-            <Text fontSize="sm" color="gray.400">
-              Run a search from the Search tab to see citations here
-            </Text>
-          </VStack>
-        )}
-
-        {/* Deep Analysis Panel */}
-        {shouldShowDeepAnalysisPanel && selectedReference && (
-          <Box
-            position="absolute"
-            top={0}
-            bottom={0}
-            left={0}
-            right={0}
-            bg="white"
-            zIndex={10}
-            overflow="hidden"
-          >
+      
+      {activeSearchId ? (
+        shouldShowDeepAnalysisPanel && selectedReference ? (
+          <div className="flex-1 overflow-hidden">
             <CitationAnalysisPanel
               type="deep"
               selectedReference={selectedReference}
@@ -236,10 +342,28 @@ export const CitationMainView: React.FC<CitationMainViewProps> = ({
               onRunAnalysis={onRunDeepAnalysis}
               onApplyAmendmentToClaim1={onApplyAmendmentToClaim1}
               error={jobDetailsError}
+              referenceStatuses={referenceStatuses}
             />
-          </Box>
-        )}
-      </Box>
+          </div>
+        ) : (
+          <CitationTable
+            isLoading={isLoadingCitationMatches}
+            error={citationMatchesError}
+            groupedResults={visibleMatches}
+            onSaveCitationMatch={onSaveCitationMatch}
+            savedCitationIds={savedCitationIds}
+            selectedReference={selectedReference}
+            referenceStatuses={referenceStatuses}
+          />
+        )
+      ) : (
+        <div className="py-8 flex flex-col items-center space-y-3">
+          <p className="text-muted-foreground text-lg">No search selected</p>
+          <p className="text-sm text-muted-foreground">
+            Run a search from the Search tab to see citations here
+          </p>
+        </div>
+      )}
     </>
   );
 };

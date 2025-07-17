@@ -4,397 +4,81 @@
 
 ## 📋 Overview
 
-The Patent Drafter AI API follows REST principles with a tenant-aware architecture. All API endpoints are protected by authentication and authorization middleware.
+The Patent Drafter AI API follows REST principles with a tenant-aware architecture. All API endpoints are protected by authentication and authorization middleware using the SecurePresets pattern.
 
 ### Base URL Structure
 ```
-https://your-domain.com/api/[tenant]/[resource]
+https://your-domain.com/api/[endpoint]
 ```
 
 ### Authentication
-All API requests require authentication via Auth0 JWT tokens. Include the token in the Authorization header:
+All API requests require authentication via Auth0 JWT tokens (with planned migration to IPD Identity). Include the token in the Authorization header and tenant context:
+
 ```
 Authorization: Bearer <jwt-token>
+x-tenant-slug: <tenant-slug>
 ```
 
 ---
 
-## 🔒 Security Presets
+## 🔒 Security Architecture
 
-Every API endpoint uses one of these security presets:
+Every API endpoint uses SecurePresets with defense-in-depth security:
 
-| Preset | Authentication | CSRF | Rate Limit | Tenant Isolation |
-|--------|---------------|------|------------|------------------|
-| `tenantProtected` | ✅ | ✅ | ✅ | ✅ |
-| `userPrivate` | ✅ | ✅ | ✅ | ❌ |
-| `adminTenant` | ✅ (Admin) | ✅ | ✅ | ✅ |
-| `adminGlobal` | ✅ (Admin) | ✅ | ✅ | ❌ |
-| `public` | ❌ | ❌ | ✅ | ❌ |
-| `browserAccessible` | Conditional | ❌ | ✅ | ✅ |
+| Preset | Authentication | CSRF | Rate Limit | Tenant Isolation | Validation |
+|--------|---------------|------|------------|------------------|------------|
+| `tenantProtected` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `userPrivate` | ✅ | ✅ | ✅ | ❌ | ✅ |
+| `adminTenant` | ✅ (Admin) | ✅ | ✅ | ✅ | ✅ |
+| `public` | ❌ | ❌ | ✅ | ❌ | ✅ |
+
+### Middleware Stack (Applied in Order)
+1. **Error Handling** - Catches all errors, prevents info leakage
+2. **Security Headers** - X-Frame-Options, CSP, HSTS
+3. **Rate Limiting** - Prevents abuse and DDoS
+4. **Authentication** - Verifies user identity
+5. **Session Security** - Validates session state
+6. **CSRF Protection** - Prevents cross-site attacks
+7. **Tenant Guard** - Ensures data isolation
+8. **Input Validation** - Validates and sanitizes input
 
 ---
 
-## 📊 Project Management
+## 🔐 Authentication Endpoints
 
-### Projects
+### Session Management
 
-#### GET `/api/[tenant]/projects`
-List all projects for the tenant.
+#### GET `/api/auth/session`
+Get current user session information.
 
 **Response:**
 ```json
 {
-  "projects": [
+  "user": {
+    "id": "string",
+    "email": "string",
+    "name": "string",
+    "role": "string"
+  },
+  "currentTenant": {
+    "id": "string",
+    "slug": "string",
+    "name": "string"
+  },
+  "tenants": [
     {
       "id": "string",
-      "name": "string",
-      "description": "string",
-      "createdAt": "string",
-      "updatedAt": "string",
-      "inventionCount": "number"
+      "slug": "string", 
+      "name": "string"
     }
-  ]
+  ],
+  "permissions": ["string"],
+  "expiresAt": "2024-01-01T00:00:00Z"
 }
 ```
-
-#### POST `/api/[tenant]/projects`
-Create a new project.
-
-**Request:**
-```json
-{
-  "name": "string",
-  "description": "string"
-}
-```
-
-#### GET `/api/[tenant]/projects/[id]`
-Get project details with inventions.
-
-#### PUT `/api/[tenant]/projects/[id]`
-Update project information.
-
-#### DELETE `/api/[tenant]/projects/[id]`
-Soft delete a project.
-
----
-
-## 🔬 Invention Management
-
-### Inventions
-
-#### GET `/api/[tenant]/projects/[projectId]/inventions`
-List inventions in a project.
-
-#### POST `/api/[tenant]/projects/[projectId]/inventions`
-Create a new invention.
-
-**Request:**
-```json
-{
-  "title": "string",
-  "summary": "string",
-  "backgroundText": "string",
-  "detailedDescription": "string",
-  "claims": ["string"],
-  "figureDescriptions": ["string"]
-}
-```
-
-#### GET `/api/[tenant]/inventions/[id]`
-Get invention details.
-
-#### PUT `/api/[tenant]/inventions/[id]`
-Update invention information.
-
----
-
-## ⚖️ Claims Management
-
-### Claims
-
-#### GET `/api/[tenant]/projects/[projectId]/claims`
-List claims for a project.
-
-#### POST `/api/[tenant]/projects/[projectId]/claims`
-Create new claims.
-
-**Request:**
-```json
-{
-  "claims": [
-    {
-      "number": "number",
-      "text": "string",
-      "type": "independent" | "dependent",
-      "dependsOn": "number"
-    }
-  ]
-}
-```
-
-#### GET `/api/[tenant]/claims/[id]/history`
-Get claim version history.
-
-#### PUT `/api/[tenant]/claims/[id]`
-Update a claim.
-
-#### POST `/api/[tenant]/claims/[id]/generate-variants`
-Generate claim variants using AI.
-
----
-
-## 🔍 Citation & Prior Art
-
-### Citation Extraction
-
-#### POST `/api/[tenant]/citation-extraction/queue`
-Start citation extraction job (async).
-
-**Request:**
-```json
-{
-  "searchHistoryId": "string",
-  "useDeepAnalysis": "boolean",
-  "priority": "high" | "normal" | "low"
-}
-```
-
-**Response:**
-```json
-{
-  "jobId": "string",
-  "status": "queued"
-}
-```
-
-#### GET `/api/[tenant]/citation-extraction/[jobId]/status`
-Check citation extraction status.
-
-**Response:**
-```json
-{
-  "status": "processing" | "completed" | "failed",
-  "progress": "number",
-  "citationCount": "number",
-  "error": "string"
-}
-```
-
-#### GET `/api/[tenant]/citation-matches`
-List citation matches with filtering.
-
-**Query Parameters:**
-- `projectId`: Filter by project
-- `searchHistoryId`: Filter by search
-- `limit`: Number of results (default: 50)
-- `offset`: Pagination offset
-
-### Prior Art Analysis
-
-#### GET `/api/[tenant]/prior-art/saved`
-List saved prior art references.
-
-#### POST `/api/[tenant]/prior-art/save`
-Save a prior art reference.
-
-**Request:**
-```json
-{
-  "publicationNumber": "string",
-  "title": "string",
-  "abstract": "string",
-  "relevanceScore": "number",
-  "notes": "string"
-}
-```
-
----
-
-## 🔍 Search & Analysis
-
-### Search History
-
-#### POST `/api/[tenant]/search-history/async-search`
-Start asynchronous patent search.
-
-**Request:**
-```json
-{
-  "projectId": "string",
-  "queries": ["string"],
-  "filters": {
-    "jurisdiction": "US" | "EP" | "WO",
-    "dateFrom": "string",
-    "dateTo": "string",
-    "documentTypes": ["string"]
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "searchId": "string",
-  "status": "processing"
-}
-```
-
-#### GET `/api/[tenant]/search-history/[id]/status`
-Check search status and get results.
-
-#### GET `/api/[tenant]/search-history`
-List search history for project.
-
----
-
-## 📄 Patent Generation
-
-### Patent Documents
-
-#### POST `/api/[tenant]/patents/generate`
-Generate patent application document.
-
-**Request:**
-```json
-{
-  "inventionId": "string",
-  "template": "utility" | "provisional",
-  "includeDrawings": "boolean",
-  "customInstructions": "string"
-}
-```
-
-#### GET `/api/[tenant]/patents/[id]`
-Get patent document content.
-
-#### PUT `/api/[tenant]/patents/[id]`
-Update patent document.
-
-#### POST `/api/[tenant]/patents/[id]/export`
-Export patent to DOCX format.
-
----
-
-## 🖼️ Figure Management
-
-### Figures
-
-#### POST `/api/[tenant]/projects/[projectId]/figures`
-Upload figure files.
-
-**Request:** `multipart/form-data`
-- `files`: Figure files (images, PDFs)
-- `descriptions`: JSON array of descriptions
-
-**Response:**
-```json
-{
-  "figures": [
-    {
-      "id": "string",
-      "filename": "string",
-      "mimeType": "string",
-      "size": "number",
-      "description": "string",
-      "url": "string"
-    }
-  ]
-}
-```
-
-#### GET `/api/[tenant]/figures/[id]`
-Get figure metadata.
-
-#### GET `/api/[tenant]/figures/[id]/download`
-Download figure file (secure access).
-
-#### PUT `/api/[tenant]/figures/[id]`
-Update figure description.
-
-#### DELETE `/api/[tenant]/figures/[id]`
-Delete figure.
-
----
-
-## 💬 Chat Interface
-
-### Chat
-
-#### POST `/api/[tenant]/chat/message`
-Send message to AI assistant.
-
-**Request:**
-```json
-{
-  "message": "string",
-  "context": {
-    "projectId": "string",
-    "inventionId": "string"
-  }
-}
-```
-
-**Response:** Server-Sent Events stream
-```
-data: {"type": "thinking", "message": "Analyzing your question..."}
-data: {"type": "content", "message": "Based on your invention..."}
-data: {"type": "complete"}
-```
-
-#### GET `/api/[tenant]/chat/history`
-Get chat conversation history.
-
----
-
-## 👥 User & Tenant Management
-
-### Users
-
-#### GET `/api/[tenant]/users/profile`
-Get current user profile.
-
-#### PUT `/api/[tenant]/users/profile`
-Update user profile.
-
-### Tenant Management (Admin Only)
-
-#### GET `/api/admin/tenants`
-List all tenants.
-
-#### POST `/api/admin/tenants`
-Create new tenant.
-
-#### GET `/api/admin/tenants/[id]/users`
-List tenant users.
-
----
-
-## 🔧 System & Utility
-
-### Health Check
-
-#### GET `/api/health`
-System health check.
-
-**Response:**
-```json
-{
-  "status": "healthy" | "degraded" | "unhealthy",
-  "timestamp": "string",
-  "services": {
-    "database": "healthy",
-    "storage": "healthy",
-    "redis": "healthy",
-    "ai": "healthy"
-  }
-}
-```
-
-### CSRF Token
 
 #### GET `/api/csrf-token`
-Get CSRF token for forms.
+Get CSRF token for state-changing operations.
 
 **Response:**
 ```json
@@ -405,23 +89,781 @@ Get CSRF token for forms.
 
 ---
 
+## 📊 Project Management
+
+### Projects
+
+#### GET `/api/projects`
+List all projects for the authenticated user within the tenant.
+
+**Query Parameters:**
+- `page`: Page number (default: 1)
+- `limit`: Items per page (default: 20, max: 100)
+- `search`: Search query to filter by name
+- `filterBy`: Filter by status (all, recent, complete, in-progress, draft)
+- `sortBy`: Sort field (name, created, modified, recent)
+- `sortOrder`: Sort order (asc, desc)
+
+**Response:**
+```json
+{
+  "projects": [
+    {
+      "id": "string",
+      "name": "string",
+      "status": "string",
+      "hasPatentContent": "boolean",
+      "hasProcessedInvention": "boolean",
+      "createdAt": "string",
+      "updatedAt": "string",
+      "invention": {
+        "title": "string",
+        "summary": "string"
+      },
+      "_count": {
+        "figures": "number",
+        "collaborators": "number",
+        "searchHistory": "number"
+      }
+    }
+  ],
+  "pagination": {
+    "page": "number",
+    "limit": "number",
+    "total": "number",
+    "totalPages": "number",
+    "hasNextPage": "boolean",
+    "hasPrevPage": "boolean"
+  }
+}
+```
+
+#### POST `/api/projects`
+Create a new project.
+
+**Request:**
+```json
+{
+  "name": "string",
+  "status": "draft" | "active" | "archived",
+  "textInput": "string"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "string",
+  "name": "string",
+  "status": "string",
+  "createdAt": "string",
+  "updatedAt": "string"
+}
+```
+
+#### GET `/api/projects/[projectId]`
+Get project details.
+
+#### PUT `/api/projects/[projectId]`
+Update project information.
+
+#### DELETE `/api/projects/[projectId]`
+Soft delete a project.
+
+### Project Collaboration
+
+#### GET `/api/projects/[projectId]/collaborators`
+List project collaborators.
+
+**Response:**
+```json
+{
+  "collaborators": [
+    {
+      "id": "string",
+      "userId": "string",
+      "role": "viewer" | "editor" | "admin",
+      "invitedBy": "string",
+      "createdAt": "string",
+      "user": {
+        "name": "string",
+        "email": "string"
+      }
+    }
+  ]
+}
+```
+
+#### POST `/api/projects/[projectId]/collaborators`
+Add project collaborator.
+
+**Request:**
+```json
+{
+  "userId": "string",
+  "role": "viewer" | "editor" | "admin"
+}
+```
+
+#### DELETE `/api/projects/[projectId]/collaborators/[userId]`
+Remove project collaborator.
+
+### Project Documents
+
+#### GET `/api/projects/[projectId]/documents`
+List project documents.
+
+**Response:**
+```json
+{
+  "documents": [
+    {
+      "id": "string",
+      "fileName": "string",
+      "originalName": "string",
+      "fileType": "string",
+      "createdAt": "string",
+      "uploadedBy": "string"
+    }
+  ]
+}
+```
+
+#### POST `/api/projects/[projectId]/documents`
+Upload project document.
+
+**Request:** `multipart/form-data`
+- `files`: Document files (PDF, DOCX, TXT)
+- `fileType`: Document type (parent-patent, office-action, invention-disclosure, etc.)
+
+---
+
+## 🔬 Invention Management
+
+### Inventions
+
+#### GET `/api/projects/[projectId]/invention`
+Get invention details for a project.
+
+**Response:**
+```json
+{
+  "invention": {
+    "id": "string",
+    "title": "string",
+    "summary": "string",
+    "abstract": "string",
+    "technicalField": "string",
+    "noveltyStatement": "string",
+    "patentCategory": "string",
+    "features": ["string"],
+    "advantages": ["string"],
+    "useCases": ["string"],
+    "processSteps": ["string"],
+    "definitions": {"key": "value"},
+    "claims": [
+      {
+        "id": "string",
+        "number": "number",
+        "text": "string"
+      }
+    ]
+  }
+}
+```
+
+#### PUT `/api/projects/[projectId]/invention`
+Update invention information.
+
+**Request:**
+```json
+{
+  "title": "string",
+  "summary": "string",
+  "abstract": "string",
+  "technicalField": "string",
+  "features": ["string"],
+  "advantages": ["string"],
+  "useCases": ["string"],
+  "processSteps": ["string"],
+  "definitions": {"key": "value"}
+}
+```
+
+### Claims Management
+
+#### GET `/api/projects/[projectId]/claims`
+List claims for a project.
+
+#### POST `/api/projects/[projectId]/claims`
+Create or update claims.
+
+**Request:**
+```json
+{
+  "claims": [
+    {
+      "number": "number",
+      "text": "string"
+    }
+  ]
+}
+```
+
+#### POST `/api/projects/[projectId]/claims/parse/v2`
+Parse claim text into elements.
+
+**Request:**
+```json
+{
+  "claimText": "string"
+}
+```
+
+**Response:**
+```json
+{
+  "elements": ["string"],
+  "version": "2.0.0"
+}
+```
+
+#### POST `/api/projects/[projectId]/claims/queries/v2`
+Generate search queries from claim elements.
+
+**Request:**
+```json
+{
+  "elements": ["string"],
+  "inventionData": {}
+}
+```
+
+**Response:**
+```json
+{
+  "searchQueries": ["string"],
+  "timestamp": "string",
+  "projectId": "string"
+}
+```
+
+---
+
+## 🔍 Search & Citation Management
+
+### Search History
+
+#### POST `/api/search-history`
+Create a new search.
+
+**Request:**
+```json
+{
+  "projectId": "string",
+  "query": "string",
+  "parsedElements": ["string"]
+}
+```
+
+**Response:**
+```json
+{
+  "searchHistory": {
+    "id": "string",
+    "query": "string",
+    "timestamp": "string",
+    "projectId": "string"
+  }
+}
+```
+
+#### GET `/api/search-history`
+List search history.
+
+**Query Parameters:**
+- `projectId`: Filter by project
+- `limit`: Number of results (default: 50)
+- `offset`: Pagination offset
+
+#### DELETE `/api/search-history`
+Delete search history entries.
+
+**Query Parameters:**
+- `searchHistoryId`: ID of search to delete
+
+### Citation Jobs
+
+#### GET `/api/citation-jobs`
+List citation jobs.
+
+**Query Parameters:**
+- `searchHistoryId`: Filter by search history
+
+**Response:**
+```json
+[
+  {
+    "id": "string",
+    "searchHistoryId": "string",
+    "referenceNumber": "string",
+    "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED",
+    "deepAnalysisJson": "object",
+    "examinerAnalysisJson": "object",
+    "createdAt": "string",
+    "completedAt": "string"
+  }
+]
+```
+
+#### POST `/api/citation-jobs`
+Create a new citation job.
+
+**Request:**
+```json
+{
+  "userId": "string",
+  "searchHistoryId": "string",
+  "filterReferenceNumber": "string",
+  "searchInputs": ["string"],
+  "threshold": "number"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "jobId": "string"
+}
+```
+
+### Citation Matches
+
+#### GET `/api/citation-matches/top-results`
+Get top citation matches from deep analysis.
+
+**Query Parameters:**
+- `searchHistoryId`: Required search history ID
+- `referenceNumber`: Optional reference filter
+
+**Response:**
+```json
+{
+  "matches": [
+    {
+      "id": "string",
+      "referenceNumber": "string",
+      "citation": "string",
+      "score": "number",
+      "parsedElementText": "string",
+      "reasoningSummary": "string",
+      "analysisSource": "string",
+      "isTopResult": "boolean"
+    }
+  ]
+}
+```
+
+#### GET `/api/citation-matches/by-search`
+Get citation matches by search (legacy endpoint).
+
+**Query Parameters:**
+- `searchHistoryId`: Required search history ID
+- `includeMetadataForAllReferences`: Include metadata (default: false)
+
+---
+
+## 📄 Prior Art Management
+
+### Saved Prior Art
+
+#### GET `/api/projects/[projectId]/prior-art`
+List saved prior art for a project.
+
+**Response:**
+```json
+{
+  "priorArt": [
+    {
+      "id": "string",
+      "patentNumber": "string",
+      "title": "string",
+      "abstract": "string",
+      "claim1": "string",
+      "summary": "string",
+      "url": "string",
+      "notes": "string",
+      "savedAt": "string",
+      "fileType": "string",
+      "storageUrl": "string"
+    }
+  ],
+  "count": "number"
+}
+```
+
+#### POST `/api/projects/[projectId]/prior-art`
+Save prior art reference.
+
+**Request:**
+```json
+{
+  "patentNumber": "string",
+  "title": "string",
+  "abstract": "string",
+  "url": "string",
+  "notes": "string",
+  "claim1": "string",
+  "summary": "string"
+}
+```
+
+### Project Exclusions
+
+#### GET `/api/projects/[projectId]/exclusions`
+List excluded patents for a project.
+
+#### POST `/api/projects/[projectId]/exclusions`
+Add patent exclusions.
+
+**Request:**
+```json
+{
+  "patentNumbers": ["string"],
+  "metadata": {}
+}
+```
+
+#### DELETE `/api/projects/[projectId]/exclusions`
+Remove patent exclusion.
+
+**Request:**
+```json
+{
+  "patentNumber": "string"
+}
+```
+
+---
+
+## 🖼️ Figure Management
+
+### Figures
+
+#### GET `/api/projects/[projectId]/figures`
+List project figures.
+
+**Query Parameters:**
+- `includeElements`: Include figure elements (default: false)
+
+**Response:**
+```json
+{
+  "figures": [
+    {
+      "id": "string",
+      "figureKey": "string",
+      "title": "string",
+      "description": "string",
+      "fileName": "string",
+      "mimeType": "string",
+      "status": "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED",
+      "displayOrder": "number",
+      "elements": [
+        {
+          "elementKey": "string",
+          "elementName": "string",
+          "calloutDescription": "string"
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### POST `/api/projects/[projectId]/figures`
+Upload figure files.
+
+**Request:** `multipart/form-data`
+- `files`: Figure files (images, PDFs)
+- `descriptions`: JSON array of descriptions
+
+#### GET `/api/projects/[projectId]/figures/[figureId]`
+Get figure details.
+
+#### PUT `/api/projects/[projectId]/figures/[figureId]`
+Update figure metadata.
+
+#### DELETE `/api/projects/[projectId]/figures/[figureId]`
+Delete figure.
+
+### Figure Elements
+
+#### GET `/api/projects/[projectId]/figures/[figureId]/elements`
+List figure elements.
+
+#### POST `/api/projects/[projectId]/figures/[figureId]/elements`
+Add element to figure.
+
+**Request:**
+```json
+{
+  "elementKey": "string",
+  "elementName": "string",
+  "calloutDescription": "string"
+}
+```
+
+#### PATCH `/api/projects/[projectId]/figures/[figureId]/elements`
+Update element callout.
+
+#### DELETE `/api/projects/[projectId]/figures/[figureId]/elements`
+Remove element from figure.
+
+### Project Elements
+
+#### GET `/api/projects/[projectId]/elements`
+Get all elements for a project.
+
+**Response:**
+```json
+{
+  "elements": [
+    {
+      "elementKey": "string",
+      "elementName": "string",
+      "id": "string"
+    }
+  ]
+}
+```
+
+#### PATCH `/api/projects/[projectId]/elements/[elementKey]`
+Update element name.
+
+**Request:**
+```json
+{
+  "name": "string"
+}
+```
+
+---
+
+## 💬 Chat Interface
+
+### Chat Messages
+
+#### GET `/api/projects/[projectId]/chat`
+Get chat conversation history.
+
+**Response:**
+```json
+{
+  "messages": [
+    {
+      "id": "string",
+      "role": "user" | "assistant" | "system",
+      "content": "string",
+      "metadata": {},
+      "timestamp": "string"
+    }
+  ]
+}
+```
+
+#### DELETE `/api/projects/[projectId]/chat`
+Clear chat history for a project.
+
+**Response:**
+```json
+{
+  "success": true
+}
+```
+
+### Tool Invocations
+
+#### POST `/api/projects/[projectId]/tool-invocations/execute`
+Execute a tool invocation.
+
+**Request:**
+```json
+{
+  "toolName": "string",
+  "parameters": {}
+}
+```
+
+**Response:**
+```json
+{
+  "id": "string",
+  "toolName": "string",
+  "status": "pending" | "running" | "completed" | "failed",
+  "result": {},
+  "startTime": "number",
+  "endTime": "number"
+}
+```
+
+---
+
+## 📋 Patent Application Generation
+
+### Application Versions
+
+#### GET `/api/projects/[projectId]/versions`
+List application versions.
+
+**Query Parameters:**
+- `latest`: Get only the latest version (default: false)
+
+**Response:**
+```json
+[
+  {
+    "id": "string",
+    "name": "string",
+    "createdAt": "string",
+    "documents": [
+      {
+        "id": "string",
+        "type": "string",
+        "content": "string"
+      }
+    ]
+  }
+]
+```
+
+#### POST `/api/projects/[projectId]/versions`
+Create new application version.
+
+**Request:**
+```json
+{
+  "name": "string",
+  "sections": [
+    {
+      "type": "string",
+      "title": "string",
+      "content": "string"
+    }
+  ]
+}
+```
+
+### Application Sections
+
+#### POST `/api/projects/[projectId]/generate-application-sections`
+Generate patent application sections.
+
+**Request:**
+```json
+{
+  "sections": ["TITLE", "ABSTRACT", "BACKGROUND", "SUMMARY", "CLAIMS"],
+  "customInstructions": "string"
+}
+```
+
+**Response:**
+```json
+{
+  "sections": {
+    "TITLE": "string",
+    "ABSTRACT": "string",
+    "BACKGROUND": "string",
+    "SUMMARY": "string",
+    "CLAIMS": "string"
+  }
+}
+```
+
+---
+
+## 🔧 System & Utility
+
+### Health Check
+
+#### GET `/api/health`
+System health check.
+
+**Query Parameters:**
+- `detailed`: Include detailed health information (default: false)
+
+**Response:**
+```json
+{
+  "status": "healthy" | "degraded" | "unhealthy",
+  "timestamp": "string",
+  "version": "string",
+  "uptime": "number",
+  "checks": {
+    "database": {
+      "status": "healthy",
+      "message": "string",
+      "duration": "number"
+    },
+    "storage": {
+      "status": "healthy",
+      "message": "string",
+      "duration": "number"
+    },
+    "redis": {
+      "status": "healthy",
+      "message": "string",
+      "duration": "number"
+    },
+    "ai": {
+      "status": "healthy",
+      "message": "string",
+      "duration": "number"
+    }
+  }
+}
+```
+
+### API Documentation
+
+#### GET `/api/swagger`
+Get OpenAPI/Swagger specification.
+
+**Response:**
+```json
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Patent Drafter AI API",
+    "version": "1.0.0"
+  },
+  "paths": {},
+  "components": {}
+}
+```
+
+---
+
 ## 📊 Rate Limiting
 
 Different endpoints have different rate limits:
 
-| Endpoint Type | Limit | Window |
-|---------------|-------|---------|
-| Authentication | 10 requests | 1 hour |
-| Standard API | 100 requests | 15 minutes |
-| AI Operations | 20 requests | 15 minutes |
-| File Upload | 10 requests | 15 minutes |
-| Citation Extraction | 5 requests | 15 minutes |
+| Endpoint Type | Limit | Window | Key |
+|---------------|-------|---------|-----|
+| Authentication | 5 requests | 5 minutes | IP + User |
+| Standard API | 100 requests | 1 minute | User + Tenant |
+| AI Operations | 20 requests | 5 minutes | User + Tenant |
+| File Upload | 10 requests | 5 minutes | User + Tenant |
+| Search Operations | 50 requests | 1 hour | User + Tenant |
+| Read Operations | 500 requests | 15 minutes | User + Tenant |
 
 Rate limit headers are included in responses:
 ```
 X-RateLimit-Limit: 100
 X-RateLimit-Remaining: 99
 X-RateLimit-Reset: 1635724800
+Retry-After: 60
 ```
 
 ---
@@ -431,15 +873,15 @@ X-RateLimit-Reset: 1635724800
 ### Standard Error Response
 ```json
 {
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Request validation failed",
-    "details": {
-      "field": "email",
-      "issue": "Invalid email format"
-    },
-    "requestId": "req_12345"
-  }
+  "error": true,
+  "message": "Human-readable error message",
+  "code": "ERROR_CODE",
+  "details": {
+    "field": "fieldName",
+    "issue": "Specific validation error"
+  },
+  "requestId": "req_12345",
+  "timestamp": "2024-01-01T00:00:00Z"
 }
 ```
 
@@ -447,13 +889,16 @@ X-RateLimit-Reset: 1635724800
 
 | Code | HTTP Status | Description |
 |------|-------------|-------------|
-| `UNAUTHORIZED` | 401 | Invalid or missing authentication |
-| `FORBIDDEN` | 403 | Insufficient permissions |
-| `VALIDATION_ERROR` | 400 | Request validation failed |
-| `NOT_FOUND` | 404 | Resource not found |
-| `RATE_LIMITED` | 429 | Too many requests |
+| `AUTH_UNAUTHORIZED` | 401 | Invalid or missing authentication |
+| `AUTH_FORBIDDEN` | 403 | Insufficient permissions |
+| `VALIDATION_FAILED` | 400 | Request validation failed |
+| `VALIDATION_REQUIRED_FIELD` | 400 | Required field missing |
+| `DB_RECORD_NOT_FOUND` | 404 | Resource not found |
+| `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
 | `INTERNAL_ERROR` | 500 | Server error |
-| `SERVICE_UNAVAILABLE` | 503 | External service unavailable |
+| `AI_SERVICE_ERROR` | 500 | AI service unavailable |
+| `STORAGE_UPLOAD_FAILED` | 500 | File upload failed |
+| `SECURITY_MALWARE_DETECTED` | 400 | Malicious file detected |
 
 ---
 
@@ -463,7 +908,7 @@ X-RateLimit-Reset: 1635724800
 
 #### Pagination
 ```
-?limit=20&offset=0
+?page=1&limit=20
 ```
 
 #### Filtering
@@ -481,36 +926,51 @@ X-RateLimit-Reset: 1635724800
 ?fields=id,name,createdAt
 ```
 
+#### Search
+```
+?search=patent%20application&filterBy=recent
+```
+
 ---
 
 ## 📝 Request/Response Examples
 
-### Create Invention with Claims
+### Create Project with Invention
 ```bash
-curl -X POST "https://api.example.com/api/acme-corp/projects/proj_123/inventions" \
+curl -X POST "https://api.example.com/api/projects" \
   -H "Authorization: Bearer <token>" \
+  -H "x-tenant-slug: acme-corp" \
   -H "Content-Type: application/json" \
   -H "X-CSRF-Token: <csrf-token>" \
   -d '{
-    "title": "Smart Weight Sensor System",
-    "summary": "A weight sensor that detects load changes",
-    "claims": [
-      "A weight sensor comprising: a load cell; a microprocessor; and a wireless transmitter.",
-      "The weight sensor of claim 1, wherein the load cell is a strain gauge."
-    ]
+    "name": "Smart Weight Sensor System",
+    "textInput": "A weight sensor that detects load changes using AI algorithms..."
   }'
 ```
 
-### Start Citation Extraction
+### Upload Project Figure
 ```bash
-curl -X POST "https://api.example.com/api/acme-corp/citation-extraction/queue" \
+curl -X POST "https://api.example.com/api/projects/proj_123/figures" \
   -H "Authorization: Bearer <token>" \
+  -H "x-tenant-slug: acme-corp" \
+  -H "X-CSRF-Token: <csrf-token>" \
+  -F "files=@figure1.png" \
+  -F "descriptions=[{\"description\":\"System overview diagram\"}]"
+```
+
+### Generate Search Queries
+```bash
+curl -X POST "https://api.example.com/api/projects/proj_123/claims/queries/v2" \
+  -H "Authorization: Bearer <token>" \
+  -H "x-tenant-slug: acme-corp" \
   -H "Content-Type: application/json" \
   -H "X-CSRF-Token: <csrf-token>" \
   -d '{
-    "searchHistoryId": "search_456",
-    "useDeepAnalysis": true,
-    "priority": "high"
+    "elements": [
+      "a weight sensor",
+      "a microprocessor",
+      "a wireless transmitter"
+    ]
   }'
 ```
 
@@ -520,7 +980,7 @@ curl -X POST "https://api.example.com/api/acme-corp/citation-extraction/queue" \
 
 ### Development Testing
 ```bash
-# Set base URL
+# Set base URL and tenant
 export API_BASE="http://localhost:3000/api"
 export TENANT="test-tenant"
 
@@ -528,12 +988,13 @@ export TENANT="test-tenant"
 csrf_token=$(curl -s "$API_BASE/csrf-token" | jq -r '.csrfToken')
 
 # Test health endpoint
-curl "$API_BASE/health"
+curl "$API_BASE/health?detailed=true"
 
 # Test authenticated endpoint
 curl -H "Authorization: Bearer $JWT_TOKEN" \
+     -H "x-tenant-slug: $TENANT" \
      -H "X-CSRF-Token: $csrf_token" \
-     "$API_BASE/$TENANT/projects"
+     "$API_BASE/projects"
 ```
 
 ### Rate Limit Testing
@@ -541,7 +1002,9 @@ curl -H "Authorization: Bearer $JWT_TOKEN" \
 # Test rate limiting
 for i in {1..30}; do
   curl -w "%{http_code}\n" -o /dev/null -s \
-    "$API_BASE/test-endpoint"
+    -H "Authorization: Bearer $JWT_TOKEN" \
+    -H "x-tenant-slug: $TENANT" \
+    "$API_BASE/projects"
 done
 ```
 
@@ -551,8 +1014,9 @@ done
 
 - [Authentication Guide](02-architecture/02-authentication.md)
 - [Security Architecture](SECURITY_ARCHITECTURE.md)
-- [Error Handling Patterns](../src/utils/error-handling/README.md)
+- [Data Fetching Standards](../src/lib/api/DATA_FETCHING_STANDARDS.md)
 - [Async Services Guide](../src/client/services/ASYNC_QUICK_REFERENCE.md)
+- [Repository Pattern Guide](../src/repositories/README.md)
 
 ---
 

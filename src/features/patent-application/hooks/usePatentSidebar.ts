@@ -4,26 +4,23 @@
  */
 import { useCallback, useMemo, useRef, useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import { useProjectData } from '@/contexts/ProjectDataContext';
-import {
-  useInventionQuery,
-  useUpdateInventionMutation,
-} from '@/hooks/api/useInvention';
+import { useInventionQuery } from '@/hooks/api/useInvention';
 import { useFigures } from '@/hooks/api/useFigures';
 import { useFigureElements } from '@/hooks/api/useFigureElements';
 import { FigureApiService } from '@/services/api/figureApiService';
 import { Figures } from '../../technology-details/components/figures/carousel-components/types';
+import type { FiguresWithIds } from '@/hooks/api/useFigures';
 import {
   convertInventionFiguresToCarouselFormat,
-  convertCarouselFiguresToInventionFormat,
   extractElementsFromInvention,
   createStableProjectReference,
   logPatentSidebarOperation,
   logFigureOperation,
 } from '../utils/patentSidebarUtils';
 import { useProject } from '@/hooks/api/useProjects';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { InventionData } from '@/types';
 
 /**
@@ -48,7 +45,6 @@ export const usePatentSidebar = ({
   setCurrentFigure,
 }: UsePatentSidebarProps) => {
   const toast = useToast();
-  const updateInventionMutation = useUpdateInventionMutation();
 
   // Convert figures data for FigureCarousel
   const convertedFigures = useMemo(
@@ -64,7 +60,7 @@ export const usePatentSidebar = ({
 
   // Handle figure updates from FigureCarousel
   const handleFigureUpdate = useCallback(
-    (newFigures: Figures) => {
+    (newFigures: FiguresWithIds) => {
       if (!inventionData || !projectId) {
         logPatentSidebarOperation(
           'Figure update failed - no invention data or projectId',
@@ -72,45 +68,33 @@ export const usePatentSidebar = ({
         );
         return Promise.resolve();
       }
-      const updatedFigures =
-        convertCarouselFiguresToInventionFormat(newFigures);
 
-      return new Promise<void>((resolve, reject) => {
-        updateInventionMutation.mutate(
-          { projectId, updates: { figures: updatedFigures } },
-          {
-            onSuccess: () => {
-              logPatentSidebarOperation('Figure update successful', {});
-              toast({
-                title: 'Figures saved',
-                status: 'success',
-                duration: 2000,
-                position: 'bottom-right',
-              });
-              resolve();
-            },
-            onError: error => {
-              toast({
-                title: 'Save failed',
-                description: 'Failed to save figure changes.',
-                status: 'error',
-                position: 'bottom-right',
-              });
-              reject(error);
-            },
-          }
-        );
-      });
+      // IMPORTANT: Figures are no longer updated through the invention endpoint
+      // This function is deprecated and should not be used
+      // All figure updates should go through dedicated figure APIs:
+      // - FigureApiService.updateFigureMetadata() for descriptions
+      // - FigureApiService.updateElementCallout() for element descriptions
+      // - FigureApiService.uploadFigure() for images
+      logger.warn(
+        '[usePatentSidebar] handleFigureUpdate called but figures should not be updated through invention endpoint',
+        {
+          projectId,
+          figureKeys: Object.keys(newFigures),
+        }
+      );
+
+      // Return resolved promise to maintain compatibility
+      return Promise.resolve();
     },
-    [inventionData, projectId, updateInventionMutation, toast]
+    [inventionData, projectId]
   );
 
   // Handle element updates from ReferenceNumeralsEditor
   const handleElementUpdate = useCallback(
-    (newElements: Record<string, string>) => {
+    async (newElements: Record<string, string>) => {
       if (!inventionData || !projectId || !currentFigure) {
         logPatentSidebarOperation(
-          'Element update failed - no invention data, projectId, or currentFigure',
+          'Element update failed - missing required data',
           {
             hasInvention: !!inventionData,
             hasProjectId: !!projectId,
@@ -120,75 +104,30 @@ export const usePatentSidebar = ({
         return;
       }
 
-      // Log the new elements being saved
-      logger.info('[usePatentSidebar] Saving reference numerals', {
-        currentFigure,
-        newElements,
-        elementCount: Object.keys(newElements).length,
-      });
-
-      // Create updated figures object with elements for the current figure
-      const currentFigures = inventionData.figures || {};
-      const currentFigureData = currentFigures[currentFigure] || {};
-
-      // Preserve existing figure data while updating elements
-      const updatedFigures = {
-        ...currentFigures,
-        [currentFigure]: {
-          ...currentFigureData,
-          elements: newElements,
-          // If callouts exist, update them to match the new elements
-          ...(currentFigureData.callouts
-            ? {
-                callouts: Object.entries(newElements)
-                  .map(([element, description]) => ({
-                    element,
-                    description,
-                  }))
-                  .filter(callout => callout.description), // Only include callouts with descriptions
-              }
-            : {}),
-        },
-      };
-
-      // Log the complete figures object being sent
-      logger.info('[usePatentSidebar] Updated figures object', {
-        currentFigure,
-        updatedFigures,
-        figureKeys: Object.keys(updatedFigures),
-      });
-
-      updateInventionMutation.mutate(
-        { projectId, updates: { figures: updatedFigures } },
+      // Elements are now managed through normalized database tables
+      // This function needs to be refactored to use FigureApiService element methods
+      logger.warn(
+        '[usePatentSidebar] handleElementUpdate needs refactoring to use proper element APIs',
         {
-          onSuccess: () => {
-            logPatentSidebarOperation('Element update successful', {
-              figureKey: currentFigure,
-              elementCount: Object.keys(newElements).length,
-            });
-            toast({
-              title: 'Reference numerals saved',
-              status: 'success',
-              duration: 2000,
-              position: 'bottom-right',
-            });
-          },
-          onError: error => {
-            logPatentSidebarOperation('Element update failed', {
-              error,
-              figureKey: currentFigure,
-            });
-            toast({
-              title: 'Save failed',
-              description: 'Failed to save reference numerals.',
-              status: 'error',
-              position: 'bottom-right',
-            });
-          },
+          currentFigure,
+          elementCount: Object.keys(newElements).length,
         }
       );
+
+      // TODO: Implementation needed:
+      // 1. Get figure ID for currentFigure
+      // 2. For each element, call FigureApiService.updateElementCallout()
+      // 3. Handle any elements that need to be added/removed
+
+      toast({
+        title: 'Reference numerals update pending',
+        description: 'Element updates need to be migrated to new API',
+        status: 'warning',
+        duration: 3000,
+        position: 'bottom-right',
+      });
     },
-    [inventionData, projectId, currentFigure, updateInventionMutation, toast]
+    [inventionData, projectId, currentFigure, toast]
   );
 
   // Handle figure selection change
@@ -205,7 +144,7 @@ export const usePatentSidebar = ({
     inventionData,
     convertedFigures,
     elements,
-    isUpdating: updateInventionMutation.isPending,
+    isUpdating: false,
 
     // Handlers
     handleFigureUpdate,
@@ -230,7 +169,7 @@ export const usePatentFigures = (props: UsePatentSidebarProps) => {
   );
 
   return {
-    figures: combinedFigures,
+    figures: combinedFigures as Figures, // Cast back to Figures for compatibility
     onUpdate: handleFigureUpdate,
     onFigureChange: handleFigureChange,
     isUpdating,

@@ -5,7 +5,7 @@ import { claimQueryKeys } from '@/hooks/api/useClaims';
 import { queryKeys } from '@/config/reactQueryConfig';
 import { ProjectWorkspace } from '@/types/projectWorkspace';
 import { useEffect } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 // Query key factory for workspace queries
 export const projectWorkspaceQueryKeys = {

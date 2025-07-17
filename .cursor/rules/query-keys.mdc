@@ -3,3 +3,175 @@ description:
 globs:
 alwaysApply: false
 ---
+# React Query Key Patterns
+
+- **CRITICAL: All query keys MUST be prefixed with tenant slug**
+  - This ensures complete data isolation between tenants
+  - Use `getCurrentTenant()` from `src/lib/queryKeys/tenant.ts`
+  - Never create query keys without tenant prefix
+
+- **Standard Query Key Structure**
+  - Format: `[tenantSlug, domain, operation, ...params]`
+  - Example: `['development', 'projects', 'list', { status: 'active' }]`
+  - This creates tenant-specific cache namespaces
+
+- **Query Key Factory Pattern**
+  ```typescript
+  import { getCurrentTenant } from './tenant';
+  
+  export const domainKeys = {
+    // Base key - returns function for lazy evaluation
+    all: () => [getCurrentTenant(), 'domain'] as const,
+    
+    // List operations
+    lists: () => [...domainKeys.all(), 'list'] as const,
+    list: (params?: QueryParams) => [...domainKeys.lists(), params] as const,
+    
+    // Detail operations
+    details: () => [...domainKeys.all(), 'detail'] as const,
+    detail: (id: string) => [...domainKeys.details(), id] as const,
+    
+    // Nested resources
+    nested: (id: string) => [...domainKeys.detail(id), 'nested'] as const,
+    nestedList: (id: string, params?: QueryParams) => 
+      [...domainKeys.nested(id), 'list', params] as const,
+  };
+  ```
+
+- **Important Implementation Notes**
+  - All key properties must be functions (not static arrays)
+  - This ensures tenant is evaluated at query time, not module load time
+  - Use spread operator to build hierarchical keys
+  - Always use `as const` for type safety
+
+- **Common Patterns**
+  - **Lists**: `[tenant, domain, 'list', params?]`
+  - **Details**: `[tenant, domain, 'detail', id]`
+  - **Mutations**: Use same keys as queries for automatic invalidation
+  - **Nested**: Build on parent keys for hierarchy
+
+- **Cache Invalidation**
+  ```typescript
+  // Invalidate all domain queries for current tenant
+  queryClient.invalidateQueries({ queryKey: domainKeys.all() });
+  
+  // Invalidate specific item
+  queryClient.invalidateQueries({ queryKey: domainKeys.detail(id) });
+  
+  // Invalidate lists only
+  queryClient.invalidateQueries({ queryKey: domainKeys.lists() });
+  ```
+
+- **Testing Query Keys**
+  ```typescript
+  // Keys should be consistent and predictable
+  expect(projectKeys.detail('123')).toEqual(['development', 'projects', 'detail', '123']);
+  expect(projectKeys.list({ status: 'active' })).toEqual([
+    'development', 'projects', 'list', { status: 'active' }
+  ]);
+  ```
+
+- **Anti-patterns to Avoid**
+  ```typescript
+  // ❌ DON'T: Static keys without tenant
+  export const badKeys = {
+    all: ['projects'] as const, // No tenant isolation!
+  };
+  
+  // ❌ DON'T: Hardcoded tenant
+  export const badKeys = {
+    all: () => ['development', 'projects'] as const, // Hardcoded!
+  };
+  
+  // ❌ DON'T: Missing lazy evaluation
+  export const badKeys = {
+    all: [getCurrentTenant(), 'projects'] as const, // Evaluated once at module load!
+  };
+  ```
+
+- **References**
+  - All query key factories: `src/lib/queryKeys/*.ts`
+  - Tenant helper: `src/lib/queryKeys/tenant.ts`
+  - Debug utility: `src/utils/debugTenantKeys.ts`
+
+# Query Key Patterns for Multi-Tenant Architecture
+
+## Core Principle: Tenant-Scoped Query Keys
+
+All query keys that fetch tenant-specific data **MUST** include the tenant slug as the first element. This ensures complete cache isolation between tenants.
+
+## Implementation Pattern
+
+```typescript
+// ✅ DO: Include tenant slug in query keys
+export const projectKeys = {
+  all: ['projects'] as const,
+  lists: () => [getCurrentTenant(), ...projectKeys.all, 'list'] as const,
+  list: (filters?: any) => [...projectKeys.lists(), { filters }] as const,
+  details: () => [getCurrentTenant(), ...projectKeys.all, 'detail'] as const,
+  detail: (id: string) => [...projectKeys.details(), id] as const,
+};
+
+// ❌ DON'T: Use global query keys for tenant-specific data
+export const badProjectKeys = {
+  list: () => ['projects', 'list'] as const, // Missing tenant isolation!
+};
+```
+
+## Tenant Switch Handling
+
+When switching tenants, follow this exact sequence:
+
+1. **Reset tenant cache** - Updates `getCurrentTenant()` return value
+2. **Clear API cache** - Prevents stale GET responses
+3. **Navigate to new URL** - Triggers context updates
+4. **Invalidate all queries** - Forces refetch with new tenant
+
+```typescript
+// Standard tenant switch pattern
+const handleTenantSwitch = async (tenantSlug: string) => {
+  // 1. Reset caches BEFORE navigation
+  resetTenantCache();
+  clearApiCache();
+  
+  // 2. Navigate to trigger context updates
+  await router.push(`/${tenantSlug}/projects`);
+  
+  // 3. Invalidate queries AFTER navigation
+  await queryClient.invalidateQueries();
+};
+```
+
+## Key Requirements
+
+- **Never use `queryClient.clear()`** - Too aggressive, use `invalidateQueries()`
+- **Always reset tenant cache before navigation** - Ensures query keys update
+- **Include tenant in first position** - Enables efficient cache cleanup
+- **Use `getCurrentTenant()` helper** - Centralizes tenant resolution
+
+## Security Considerations
+
+- Query keys with tenant prefixes prevent cross-tenant data leakage in cache
+- Combined with API-level tenant validation for defense in depth
+- Cache invalidation ensures no stale data persists after tenant switch
+
+## Related Patterns
+
+- See `[tenant-context.mdc](mdc:.cursor/rules/tenant-context.mdc)` for API header injection
+- See `[tenant-security.mdc](mdc:.cursor/rules/tenant-security.mdc)` for backend validation
+- Query key factories in `src/lib/queryKeys/` follow this pattern
+
+## Example: Creating New Query Keys
+
+```typescript
+// src/lib/queryKeys/myFeatureKeys.ts
+import { getCurrentTenant } from './tenant';
+
+export const myFeatureKeys = {
+  all: ['myFeature'] as const,
+  list: () => [getCurrentTenant(), ...myFeatureKeys.all, 'list'] as const,
+  detail: (id: string) => [getCurrentTenant(), ...myFeatureKeys.all, 'detail', id] as const,
+};
+```
+
+This ensures your feature automatically gets tenant isolation without additional work.

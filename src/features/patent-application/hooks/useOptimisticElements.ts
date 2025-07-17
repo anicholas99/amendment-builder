@@ -1,210 +1,156 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useToast } from '@chakra-ui/react';
-import {
-  useAddFigureElement,
-  useRemoveFigureElement,
-  useUpdateFigureElementCallout,
-} from '@/hooks/api/useFigureElements';
-import { useUpdateElementName } from '@/hooks/api/useFiguresNormalized';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useToast } from '@/hooks/useToastWrapper';
+import { 
+  useOptimisticAddElement, 
+  useOptimisticUpdateElement, 
+  useOptimisticRemoveElement 
+} from '@/hooks/api/useOptimisticFigureElements';
 
-interface UseOptimisticElementsProps {
+interface UseOptimisticElementsOptions {
   projectId: string | null | undefined;
-  currentFigureId: string | null;
-  dbElements: Record<string, unknown> | undefined;
+  currentFigureId: string | null | undefined;
+  currentFigureKey: string;
+  dbElements: Record<string, unknown>;
+}
+
+interface UseOptimisticElementsReturn {
+  elements: Record<string, string>;
+  addElement: (number: string, description: string) => Promise<void>;
+  removeElement: (number: string) => Promise<void>;
+  updateElement: (number: string, description: string) => Promise<void>;
+  isMutating: boolean;
 }
 
 /**
- * Hook for managing optimistic updates of figure elements
- * Handles local state updates immediately while syncing with the database
+ * Hook that uses the proper React Query optimistic update system
+ * This replaces the local state management with React Query cache updates
  */
 export function useOptimisticElements({
   projectId,
   currentFigureId,
+  currentFigureKey,
   dbElements,
-}: UseOptimisticElementsProps) {
+}: UseOptimisticElementsOptions): UseOptimisticElementsReturn {
   const toast = useToast();
-
-  // Local state for optimistic updates
-  const [localElements, setLocalElements] = useState<Record<string, string>>(
-    {}
-  );
-  const [hasLocalChanges, setHasLocalChanges] = useState(false);
-
-  // Database mutation hooks
-  const addElementMutation = useAddFigureElement(projectId, currentFigureId);
-  const removeElementMutation = useRemoveFigureElement(
-    projectId,
-    currentFigureId
-  );
-  const updateCalloutMutation = useUpdateFigureElementCallout(
-    projectId,
-    currentFigureId
-  );
-  const updateElementNameMutation = useUpdateElementName();
-
-  // Sync database elements to local state when they change
-  useEffect(() => {
-    if (!hasLocalChanges && dbElements) {
-      const typedElements: Record<string, string> = {};
-
-      if (typeof dbElements === 'object' && !Array.isArray(dbElements)) {
-        Object.entries(dbElements).forEach(([key, value]) => {
-          typedElements[key] = String(value || '');
-        });
-      }
-
-      const currentElementsStr = JSON.stringify(localElements);
-      const newElementsStr = JSON.stringify(typedElements);
-
-      if (currentElementsStr !== newElementsStr) {
-        setLocalElements(typedElements);
-      }
+  
+  // Convert dbElements to the format the component expects
+  const elements = useMemo(() => {
+    const converted: Record<string, string> = {};
+    if (dbElements) {
+      Object.entries(dbElements).forEach(([key, value]) => {
+        converted[key] = String(value || '');
+      });
     }
-  }, [dbElements, hasLocalChanges]);
+    return converted;
+  }, [dbElements]);
 
-  // Reset local changes flag when figure changes
-  useEffect(() => {
-    setHasLocalChanges(false);
-  }, [currentFigureId]);
-
-  const addElement = useCallback(
-    async (elementNum: string, elementDesc: string) => {
-      if (!currentFigureId) return;
-
-      // Optimistic update
-      const updatedElements = {
-        ...localElements,
-        [elementNum]: elementDesc,
-      };
-      setLocalElements(updatedElements);
-      setHasLocalChanges(true);
-
-      try {
-        await addElementMutation.mutateAsync({
-          elementKey: elementNum,
-          elementName: elementDesc,
-          calloutDescription: elementDesc,
-        });
-
-        toast({
-          title: 'Element added',
-          status: 'success',
-          duration: 2000,
-          position: 'bottom-right',
-        });
-      } catch (error) {
-        // Revert optimistic update
-        setLocalElements(localElements);
-
-        toast({
-          title: 'Failed to add element',
-          status: 'error',
-          duration: 3000,
-          position: 'bottom-right',
-        });
-
-        throw error;
-      }
-    },
-    [currentFigureId, localElements, addElementMutation, toast]
+  // Use the existing optimistic hooks that work with React Query
+  const addElementMutation = useOptimisticAddElement(
+    projectId, 
+    currentFigureId, 
+    currentFigureKey
+  );
+  
+  const updateElementMutation = useOptimisticUpdateElement(
+    projectId, 
+    currentFigureKey
+  );
+  
+  const removeElementMutation = useOptimisticRemoveElement(
+    projectId, 
+    currentFigureId, 
+    currentFigureKey
   );
 
-  const removeElement = useCallback(
-    async (elementNum: string) => {
-      if (!currentFigureId) return;
+  const addElement = useCallback(async (number: string, description: string) => {
+    if (!projectId || !currentFigureId) {
+      toast({
+        title: 'Cannot add element',
+        description: 'Missing project or figure information',
+        status: 'error',
+        duration: 3000,
+      });
+      return;
+    }
 
-      const originalElements = { ...localElements };
-      // Optimistic update
-      const updatedElements = { ...localElements };
-      delete updatedElements[elementNum];
-      setLocalElements(updatedElements);
-      setHasLocalChanges(true);
+    try {
+      await addElementMutation.mutateAsync({
+        projectId,
+        figureId: currentFigureId,
+        figureKey: currentFigureKey,
+        elementKey: number,
+        elementName: description,
+      });
+      
+      toast({
+        title: 'Reference numeral added',
+        description: `Reference numeral ${number} added to ${currentFigureKey}`,
+        status: 'success',
+        duration: 2000,
+        position: 'bottom-right',
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to add reference numeral',
+        description: 'Please try again',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  }, [addElementMutation, projectId, currentFigureId, currentFigureKey, toast]);
 
-      try {
-        await removeElementMutation.mutateAsync(elementNum);
+  const updateElement = useCallback(async (number: string, description: string) => {
+    try {
+      await updateElementMutation.mutateAsync({
+        elementKey: number,
+        name: description,
+      });
+      
+      toast({
+        title: 'Reference numeral updated',
+        description: `Reference numeral ${number} updated`,
+        status: 'success',
+        duration: 2000,
+        position: 'bottom-right',
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to update reference numeral',
+        description: 'Please try again',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  }, [updateElementMutation, toast]);
 
-        toast({
-          title: 'Element removed',
-          status: 'success',
-          duration: 2000,
-          position: 'bottom-right',
-        });
-      } catch (error) {
-        // Revert optimistic update
-        setLocalElements(originalElements);
+  const removeElement = useCallback(async (number: string) => {
+    try {
+      await removeElementMutation.mutateAsync(number);
+      
+      toast({
+        title: 'Reference numeral deleted',
+        description: `Reference numeral ${number} deleted`,
+        status: 'success',
+        duration: 2000,
+        position: 'bottom-right',
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to delete reference numeral',
+        description: 'Please try again',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  }, [removeElementMutation, toast]);
 
-        toast({
-          title: 'Failed to remove element',
-          status: 'error',
-          duration: 3000,
-          position: 'bottom-right',
-        });
-
-        throw error;
-      }
-    },
-    [currentFigureId, localElements, removeElementMutation, toast]
-  );
-
-  const updateElement = useCallback(
-    async (elementNum: string, newDesc: string) => {
-      if (!currentFigureId || !projectId) return;
-
-      const originalElements = { ...localElements };
-      // Optimistic update
-      const updatedElements = {
-        ...localElements,
-        [elementNum]: newDesc,
-      };
-      setLocalElements(updatedElements);
-      setHasLocalChanges(true);
-
-      try {
-        await updateElementNameMutation.mutateAsync({
-          projectId,
-          elementKey: elementNum,
-          name: newDesc,
-        });
-      } catch (error) {
-        // Revert optimistic update
-        setLocalElements(originalElements);
-
-        toast({
-          title: 'Failed to update element',
-          status: 'error',
-          duration: 3000,
-          position: 'bottom-right',
-        });
-
-        throw error;
-      }
-    },
-    [
-      currentFigureId,
-      projectId,
-      localElements,
-      updateElementNameMutation,
-      toast,
-    ]
-  );
-
-  const isMutating =
-    addElementMutation.isPending ||
-    removeElementMutation.isPending ||
-    updateCalloutMutation.isPending ||
-    updateElementNameMutation.isPending;
-
-  // Determine what elements to display
-  const displayElements =
-    !hasLocalChanges && Object.keys(localElements).length === 0 && dbElements
-      ? (dbElements as Record<string, string>)
-      : localElements;
+  const isMutating = addElementMutation.isPending || updateElementMutation.isPending || removeElementMutation.isPending;
 
   return {
-    elements: displayElements,
+    elements,
     addElement,
     removeElement,
     updateElement,
     isMutating,
   };
-}
+} 

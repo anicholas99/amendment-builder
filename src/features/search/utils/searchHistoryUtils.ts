@@ -13,7 +13,7 @@
  * All data should already be in ProcessedSearchHistoryEntry format.
  */
 import { PriorArtReference } from '../../../types/claimTypes';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import {
   SearchHistoryEntry,
   ProcessedSearchHistoryEntry,
@@ -56,6 +56,19 @@ export const getRelevancyColor = (score: number): string => {
   if (score >= 0.8) return 'green';
   if (score >= 0.6) return 'yellow';
   return 'red';
+};
+
+/**
+ * Get consistent relevance badge classes for all components
+ */
+export const getRelevanceBadgeClasses = (score: number): string => {
+  if (score >= 0.8)
+    return 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300';
+  if (score >= 0.6)
+    return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300';
+  if (score >= 0.4)
+    return 'bg-orange-100 text-orange-800 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-300';
+  return 'bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300';
 };
 
 /**

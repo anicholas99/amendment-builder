@@ -1,14 +1,16 @@
 import React, { RefObject } from 'react';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
-  AlertDialogBody,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogContent,
-  AlertDialogOverlay,
-  useColorModeValue,
-  Button,
-} from '@chakra-ui/react';
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface DeleteFigureAlertProps {
   isOpen: boolean;
@@ -28,46 +30,32 @@ const DeleteFigureAlert: React.FC<DeleteFigureAlertProps> = ({
   figureNum,
   cancelRef,
 }) => {
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const { isDarkMode } = useThemeContext();
 
   return (
-    <AlertDialog
-      isOpen={isOpen}
-      leastDestructiveRef={cancelRef}
-      onClose={onClose}
-      isCentered
-    >
-      <AlertDialogOverlay bg="blackAlpha.600">
-        <AlertDialogContent boxShadow="xl" borderRadius="md">
-          <AlertDialogHeader
-            fontSize="lg"
-            fontWeight="600"
-            pb={3}
-            borderBottomWidth="1px"
-            borderColor={borderColor}
-          >
+    <AlertDialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <AlertDialogContent className="sm:max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-lg font-semibold">
             Delete Figure
-          </AlertDialogHeader>
-
-          <AlertDialogBody pt={4} pb={5}>
+          </AlertDialogTitle>
+          <AlertDialogDescription>
             Are you sure you want to delete {figureNum}? This action cannot be
             undone.
-          </AlertDialogBody>
-
-          <AlertDialogFooter
-            borderTopWidth="1px"
-            borderColor={borderColor}
-            pt={3}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel ref={cancelRef} onClick={onClose}>
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onDelete}
+            className="bg-red-600 hover:bg-red-700 text-white focus:ring-red-600"
           >
-            <Button onClick={onClose} size="sm">
-              Cancel
-            </Button>
-            <Button colorScheme="red" onClick={onDelete} ml={3} size="sm">
-              Delete
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialogOverlay>
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
     </AlertDialog>
   );
 };

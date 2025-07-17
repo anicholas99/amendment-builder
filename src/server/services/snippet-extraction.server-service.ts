@@ -1,7 +1,7 @@
 /**
  * Server-side service for performing complex AI-driven snippet extraction.
  */
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { OpenaiServerService } from './openai.server-service';
 
 /**

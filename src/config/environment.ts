@@ -7,7 +7,7 @@
  * - Providing safe defaults for server-only variables when on client
  * - Using process.env directly to avoid complex bundling issues
  */
-import { type Environment as LogEnvironment } from '@/lib/monitoring/logger-config';
+// LogEnvironment import removed - using local Environment type instead
 
 // Helper functions
 const parseBoolean = (
@@ -119,26 +119,35 @@ export const environment = {
     maxRequestsPerWindow: isServer
       ? parseNumber(process.env.MAX_REQUESTS_PER_WINDOW, 100)
       : 100,
-    apiKey: isServer ? process.env.API_KEY || '' : '',
-    internalApiKey: isServer ? process.env.INTERNAL_API_KEY || '' : '',
   },
 
   // Authentication settings for Auth0
   auth: {
     provider: 'auth0' as const,
-    domain: isServer ? process.env.AUTH0_ISSUER_BASE_URL : '',
-    clientId: isServer ? process.env.AUTH0_CLIENT_ID : '',
-    clientSecret: isServer ? process.env.AUTH0_CLIENT_SECRET : '',
-    audience: isServer ? process.env.AUTH0_AUDIENCE : '',
+    domain: isServer
+      ? process.env.AUTH0_ISSUER_BASE_URL ||
+        (isTest ? 'https://test.auth0.com' : '')
+      : '',
+    clientId: isServer
+      ? process.env.AUTH0_CLIENT_ID || (isTest ? 'test-client-id' : '')
+      : '',
+    clientSecret: isServer
+      ? process.env.AUTH0_CLIENT_SECRET || (isTest ? 'test-client-secret' : '')
+      : '',
+    audience: isServer
+      ? process.env.AUTH0_AUDIENCE || (isTest ? 'https://api.test.com' : '')
+      : '',
     scope: 'openid profile email',
     redirectUri: isServer
-      ? `${process.env.AUTH0_BASE_URL}/api/auth/callback`
+      ? `${process.env.AUTH0_BASE_URL || (isTest ? 'http://localhost:3000' : '')}/api/auth/callback`
       : '',
-    logoutUri: isServer ? process.env.AUTH0_BASE_URL : '',
+    logoutUri: isServer
+      ? process.env.AUTH0_BASE_URL || (isTest ? 'http://localhost:3000' : '')
+      : '',
     sessionSecret: isServer
       ? process.env.AUTH0_SECRET ||
         process.env.NEXTAUTH_SECRET ||
-        'change-this-in-production'
+        (isTest ? 'test-session-secret' : 'change-this-in-production')
       : '',
   },
 
@@ -181,14 +190,17 @@ export const environment = {
     enableExaminerAnalysis: isServer
       ? parseBoolean(process.env.ENABLE_EXAMINER_ANALYSIS, false)
       : false,
-    enableEnhancedCitationTable:
-      parseBoolean(
-        process.env.NEXT_PUBLIC_ENABLE_ENHANCED_CITATION_TABLE,
-        false
-      ) ||
-      (isServer
-        ? parseBoolean(process.env.ENABLE_ENHANCED_CITATION_TABLE, false)
-        : false),
+    enableClaimRefinement: parseBoolean(
+      process.env.NEXT_PUBLIC_ENABLE_CLAIM_REFINEMENT,
+      true
+    ),
+    enableAiAudit: parseBoolean(process.env.ENABLE_AI_AUDIT, true),
+    enableRefreshButton: parseBoolean(
+      process.env.NEXT_PUBLIC_ENABLE_REFRESH_BUTTON,
+      false
+    ),
+    enableTwoPhaseValidation: parseBoolean(process.env.ENABLE_TWO_PHASE_VALIDATION, false),
+    enableMultiReferenceValidation: parseBoolean(process.env.ENABLE_MULTI_REFERENCE_VALIDATION, false),
   },
 
   // UI settings
@@ -204,7 +216,7 @@ export const environment = {
     enableConsole: true,
     enableRemote: APP_ENV !== 'development',
     remoteEndpoint: isServer ? process.env.LOG_ENDPOINT || '' : '',
-    logEnv: APP_ENV as LogEnvironment,
+    logEnv: APP_ENV as Environment,
   },
 
   // Deployment info
@@ -233,6 +245,12 @@ export const environment = {
     deepAnalysisMaxCitationsPerElement: isServer
       ? parseNumber(process.env.DEEP_ANALYSIS_MAX_CITATIONS_PER_ELEMENT, 3)
       : 3,
+    deepAnalysisMaxAmendmentsForValidation: isServer
+      ? parseNumber(process.env.DEEP_ANALYSIS_MAX_AMENDMENTS_FOR_VALIDATION, 3)
+      : 3,
+    deepAnalysisMaxTokens: isServer
+      ? parseNumber(process.env.DEEP_ANALYSIS_MAX_TOKENS, 16000)
+      : 16000,
   },
 
   // Azure settings
@@ -316,46 +334,16 @@ export const environment = {
           .filter(Boolean)
       : [],
     virusTotalApiKey: isServer ? process.env.VIRUSTOTAL_API_KEY || '' : '',
+    sessionTimeoutMinutes: isServer
+      ? parseNumber(process.env.SESSION_TIMEOUT_MINUTES, 30) // 30 minutes default
+      : 30,
+    sessionAbsoluteTimeoutHours: isServer
+      ? parseNumber(process.env.SESSION_ABSOLUTE_TIMEOUT_HOURS, 8) // 8 hours default
+      : 8,
   },
 };
 
-/**
- * Logger utility - use this instead of console.log
- * This centralizes logging and can be configured to send logs to a remote endpoint in production
- */
-const consoleDebug = console.debug;
-const consoleInfo = console.info;
-const consoleWarn = console.warn;
-const consoleError = console.error;
-
-const logLevel = isServer ? process.env.LOG_LEVEL || 'info' : 'info';
-const enableLogging = isServer
-  ? parseBoolean(process.env.ENABLE_LOGGING, false)
-  : false;
-
-export const logger = {
-  debug: (message: string, ...args: unknown[]) => {
-    if (logLevel === 'debug') {
-      consoleDebug(`[DEBUG] ${message}`, ...args);
-    }
-  },
-  info: (message: string, ...args: unknown[]) => {
-    if (['debug', 'info'].includes(logLevel) || enableLogging) {
-      consoleInfo(`[INFO] ${message}`, ...args);
-    }
-  },
-  warn: (message: string, ...args: unknown[]) => {
-    if (['debug', 'info', 'warn'].includes(logLevel)) {
-      consoleWarn(`[WARN] ${message}`, ...args);
-    }
-  },
-  error: (message: string, ...args: unknown[]) => {
-    consoleError(`[ERROR] ${message}`, ...args);
-  },
-  section: (message: string, ...args: unknown[]) => {
-    consoleInfo(`[SECTION] ${message}`, ...args);
-  },
-};
+// Logger has been removed from this file - use @/server/logger for server-side or @/utils/clientLogger for client-side
 
 // Export commonly used configurations
 export const API_CONFIG = environment.api;

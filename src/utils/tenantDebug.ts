@@ -4,9 +4,9 @@
  * Helper functions to debug and fix tenant context issues
  */
 
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { resetTenantCache, getTenantSlugFromPath } from './tenant';
-import { environment } from '@/config/environment';
+import { isDevelopment } from '@/config/environment.client';
 
 export interface TenantDebugInfo {
   currentUrl: string;
@@ -29,8 +29,8 @@ export function getTenantDebugInfo(): TenantDebugInfo {
     typeof window !== 'undefined' ? window.location.pathname : '';
   const extractedTenant = getTenantSlugFromPath() || 'null';
 
-  // Access the cached tenant directly (we'll need to export this from tenant.ts)
-  const cachedTenant = (window as any).__tenantCache?.cachedTenantSlug;
+  // Access the cached tenant using proper types
+  const cachedTenant = window.__tenantCache?.cachedTenantSlug;
 
   return {
     currentUrl,
@@ -87,11 +87,12 @@ export async function fixTenantContext(
 export function logTenantState(): void {
   const debugInfo = getTenantDebugInfo();
 
-  console.group('🏢 Tenant Debug Information');
-  console.log('Current URL:', debugInfo.currentUrl);
-  console.log('Pathname:', debugInfo.pathname);
-  console.log('Extracted Tenant:', debugInfo.extractedTenant);
-  console.log('Cached Tenant:', debugInfo.cachedTenant);
+  logger.info('🏢 Tenant Debug Information', {
+    currentUrl: debugInfo.currentUrl,
+    pathname: debugInfo.pathname,
+    extractedTenant: debugInfo.extractedTenant,
+    cachedTenant: debugInfo.cachedTenant,
+  });
 
   // Check localStorage for any tenant preferences
   const tenantPrefs = Object.keys(localStorage)
@@ -105,28 +106,33 @@ export function logTenantState(): void {
     );
 
   if (Object.keys(tenantPrefs).length > 0) {
-    console.log('Tenant preferences in localStorage:', tenantPrefs);
+    logger.info('Tenant preferences in localStorage:', tenantPrefs);
   }
 
   // Check React Query cache for tenant data
   if (
     typeof window !== 'undefined' &&
-    (window as any).__REACT_QUERY_DEVTOOLS_GLOBAL_STORE__
+    window.__REACT_QUERY_DEVTOOLS_GLOBAL_STORE__
   ) {
-    const queryClient = (window as any).__REACT_QUERY_DEVTOOLS_GLOBAL_STORE__;
-    console.log(
-      'React Query tenant queries:',
-      Array.from(queryClient?.getQueryCache?.()?.getAll() || [])
-        .filter((query: { queryKey?: unknown[] }) => query.queryKey?.[0] && typeof query.queryKey[0] === 'string' && query.queryKey[0].includes('tenant'))
-        .map((query: Record<string, unknown>) => ({
-          key: query.queryKey,
-          state: query.state.status,
-          data: query.state.data,
-        }))
-    );
-  }
+    const queryCache =
+      window.__REACT_QUERY_DEVTOOLS_GLOBAL_STORE__.getQueryCache?.();
+    const queries = queryCache?.getAll?.() || [];
 
-  console.groupEnd();
+    logger.info('React Query tenant queries:', {
+      queries: queries
+        .filter(
+          query =>
+            query.queryKey?.[0] &&
+            typeof query.queryKey[0] === 'string' &&
+            query.queryKey[0].includes('tenant')
+        )
+        .map(query => ({
+          key: query.queryKey,
+          state: query.state?.status,
+          data: query.state?.data,
+        })),
+    });
+  }
 }
 
 /**
@@ -139,18 +145,26 @@ export function clearAllTenantCaches(): void {
   resetTenantCache();
 
   // 2. Clear any tenant-related localStorage
+  // eslint-disable-next-line no-restricted-globals
   Object.keys(localStorage)
     .filter(key => key.includes('tenant'))
     .forEach(key => {
       logger.info(`[Tenant Debug] Removing localStorage key: ${key}`);
+      // eslint-disable-next-line no-restricted-globals
       localStorage.removeItem(key);
     });
 
   // 3. Clear React Query cache for tenant queries
-  if (typeof window !== 'undefined' && (window as any).__queryClient) {
-    const queryClient = (window as any).__queryClient;
-    queryClient.removeQueries({ queryKey: ['tenants'] });
-    queryClient.removeQueries({ queryKey: ['user-tenants'] });
+  if (typeof window !== 'undefined' && window.__queryClient) {
+    const queryClient = window.__queryClient;
+    if (
+      queryClient &&
+      typeof queryClient === 'object' &&
+      'removeQueries' in queryClient
+    ) {
+      (queryClient as any).removeQueries({ queryKey: ['tenants'] });
+      (queryClient as any).removeQueries({ queryKey: ['user-tenants'] });
+    }
   }
 
   logger.info('[Tenant Debug] All tenant caches cleared. Reloading...');
@@ -166,22 +180,27 @@ export function clearProjectCaches(): void {
   if (typeof window !== 'undefined') {
     // Clear React Query cache for project queries
     const queryClient =
-      (window as any).__REACT_QUERY_DEVTOOLS_GLOBAL_STORE__
+      window.__REACT_QUERY_DEVTOOLS_GLOBAL_STORE__
         ?.getQueryCache?.()
         ?.getQueryClient?.() ||
-      (window as any).__queryClient ||
-      (window as any).queryClient;
+      window.__queryClient ||
+      window.queryClient;
 
-    if (queryClient) {
+    if (
+      queryClient &&
+      typeof queryClient === 'object' &&
+      'removeQueries' in queryClient
+    ) {
+      const client = queryClient as any;
       // Clear all project-related queries
-      queryClient.removeQueries({ queryKey: ['projects'] });
-      queryClient.removeQueries({ queryKey: ['project'] });
-      queryClient.removeQueries({ queryKey: ['invention'] });
-      queryClient.removeQueries({ queryKey: ['documents'] });
-      queryClient.removeQueries({ queryKey: ['claims'] });
+      client.removeQueries({ queryKey: ['projects'] });
+      client.removeQueries({ queryKey: ['project'] });
+      client.removeQueries({ queryKey: ['invention'] });
+      client.removeQueries({ queryKey: ['documents'] });
+      client.removeQueries({ queryKey: ['claims'] });
 
       // Invalidate to trigger refetch
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      client.invalidateQueries({ queryKey: ['projects'] });
 
       logger.info('[Tenant Debug] Project caches cleared and invalidated');
     } else {
@@ -189,25 +208,28 @@ export function clearProjectCaches(): void {
     }
 
     // Also clear any API client cache
-    if ((window as any).__apiDebug?.clearCache) {
-      (window as any).__apiDebug.clearCache();
+    if (window.__apiDebug?.clearCache) {
+      window.__apiDebug.clearCache();
       logger.info('[Tenant Debug] API cache cleared');
     }
   }
 }
 
-export function logTenantOperation(operation: string, data: Record<string, unknown> = {}) {
+export function logTenantOperation(
+  operation: string,
+  data: Record<string, unknown> = {}
+) {
   // Only log in development to avoid performance issues
-  if (!environment.isDevelopment) {
+  if (!isDevelopment) {
     return;
   }
 
-  // ... existing code ...
+  logger.debug(`[Tenant Operation] ${operation}`, data);
 }
 
 // Expose debug functions to window in development
-if (typeof window !== 'undefined' && environment.isDevelopment) {
-  (window as any).__tenantDebug = {
+if (typeof window !== 'undefined' && isDevelopment) {
+  window.__tenantDebug = {
     getTenantDebugInfo,
     fixTenantContext,
     logTenantState,
@@ -216,7 +238,7 @@ if (typeof window !== 'undefined' && environment.isDevelopment) {
   };
 
   // Also expose the cache directly for inspection
-  (window as any).__tenantCache = {
+  window.__tenantCache = {
     get cachedTenantSlug() {
       // This will need to be exported from tenant.ts
       return null; // Placeholder

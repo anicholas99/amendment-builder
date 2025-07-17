@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { ApiLogger, createApiLogger } from '@/lib/monitoring/apiLogger';
+import { ApiLogger, createApiLogger } from '@/server/monitoring/apiLogger';
 import { CustomApiRequest } from '@/types/api';
 import { environment } from '@/config/environment';
 

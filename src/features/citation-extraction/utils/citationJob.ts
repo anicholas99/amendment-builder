@@ -20,8 +20,8 @@ import {
   CitationJobStatus,
   ProcessedCitationMatch,
 } from '@/types/domain/citation';
-import { safeJsonParse } from '@/utils/json-utils';
-import { logger } from '@/lib/monitoring/logger';
+import { safeJsonParse } from '@/utils/jsonUtils';
+import { logger } from '@/utils/clientLogger';
 import { processCitationMatch } from './citation';
 import { validateApiResponse } from '@/lib/validation/apiValidation';
 import { parseDeepAnalysis as parseDeepAnalysisFromSchema } from '@/lib/validation/schemas/db/citationAnalysis.schema';

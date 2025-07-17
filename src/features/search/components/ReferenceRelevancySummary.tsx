@@ -1,6 +1,6 @@
 import React from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { Text } from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
+import { cn } from '@/lib/utils';
 
 export interface CitationMatchSummary {
   id: string;
@@ -106,12 +106,12 @@ const getRelevancyLabel = (score: number): string => {
  * Determine score color based on value with more granular tiers
  */
 const getScoreColor = (score: number): string => {
-  if (score >= 0.85) return 'green';
-  if (score >= 0.7) return 'teal';
-  if (score >= 0.55) return 'blue';
-  if (score >= 0.4) return 'yellow';
-  if (score >= 0.25) return 'orange';
-  return 'red';
+  if (score >= 0.85) return 'text-green-600 dark:text-green-400';
+  if (score >= 0.7) return 'text-teal-600 dark:text-teal-400';
+  if (score >= 0.55) return 'text-blue-600 dark:text-blue-400';
+  if (score >= 0.4) return 'text-yellow-600 dark:text-yellow-400';
+  if (score >= 0.25) return 'text-orange-600 dark:text-orange-400';
+  return 'text-red-600 dark:text-red-400';
 };
 
 /**
@@ -162,15 +162,16 @@ export const ReferenceRelevancySummary: React.FC<
     : 0;
 
   // Determine the score color, using gray for 0
-  const scoreColor = scorePercentage > 0 ? getScoreColor(overallScore) : 'gray';
+  const scoreColor =
+    scorePercentage > 0 ? getScoreColor(overallScore) : 'text-muted-foreground';
 
   // Removed final score logging for performance
 
   // Always render the score component
   return (
-    <Text fontSize="xs" fontWeight="medium" color={`${scoreColor}.600`} mr={2}>
+    <span className={cn('text-xs font-medium mr-2', scoreColor)}>
       Relevancy: {scorePercentage}%
-    </Text>
+    </span>
   );
 };
 

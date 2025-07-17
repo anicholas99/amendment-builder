@@ -28,8 +28,10 @@ This directory contains comprehensive documentation for the Patent Drafter AI ap
 - **[02-architecture/01-system-overview.md](02-architecture/01-system-overview.md)** - High-level architecture
 - **[02-architecture/02-authentication.md](02-architecture/02-authentication.md)** - Auth0 integration
 - **[02-architecture/03-data-and-persistence.md](02-architecture/03-data-and-persistence.md)** - Database design
-- **[02-architecture/04-api-design.md](02-architecture/04-api-design.md)** - API patterns
+- **[02-architecture/04-api-design.md](02-architecture/04-api-design.md)** - API patterns & SecurePresets
 - **[02-architecture/05-async-processing.md](02-architecture/05-async-processing.md)** - Background jobs
+- **[02-architecture/06-patent-versioning.md](02-architecture/06-patent-versioning.md)** - Document versioning
+- **[02-architecture/07-caching-architecture.md](02-architecture/07-caching-architecture.md)** - Caching strategy
 
 ### 💻 Development
 - **[03-development-practices/01-coding-style.md](03-development-practices/01-coding-style.md)** - Code standards
@@ -44,11 +46,12 @@ This directory contains comprehensive documentation for the Patent Drafter AI ap
 ### 📋 Specialized Guides
 - **[LOGGING_GUIDE.md](LOGGING_GUIDE.md)** - Logging standards
 - **[TEST_GUIDE.md](TEST_GUIDE.md)** - Testing procedures
-- **[redis-rate-limiting.md](redis-rate-limiting.md)** - Rate limiting setup
+- **[STYLE_GUIDE.md](STYLE_GUIDE.md)** - UI/UX patterns with shadcn/ui and Tailwind CSS
 
 ### 🔒 Security & Reports
-- **[security/](security/)** - Security assessments, audit reports, and security guides
-- **[reports/](reports/)** - Technical analysis reports and performance assessments
+- **[security/](security/)** - Security documentation and implementation guides
+- **[security/SECURITY_ARCHITECTURE.md](security/SECURITY_ARCHITECTURE.md)** - Comprehensive security design
+- **[security/SECURITY_IMPLEMENTATION_SUMMARY.md](security/SECURITY_IMPLEMENTATION_SUMMARY.md)** - Current security status
 
 ---
 
@@ -64,8 +67,8 @@ This directory contains comprehensive documentation for the Patent Drafter AI ap
 
 **Advanced Topics:**
 - [Async Services](../src/client/services/ASYNC_QUICK_REFERENCE.md) - Background processing
-- [Security Architecture](SECURITY_ARCHITECTURE.md) - Security patterns
-- [Error Handling](../src/utils/error-handling/README.md) - Error patterns
+- [Security Architecture](security/SECURITY_ARCHITECTURE.md) - Security patterns
+- [Caching Architecture](02-architecture/07-caching-architecture.md) - Performance optimization
 
 ### 🔧 **DevOps/Operations**
 **Essential Reading:**
@@ -75,8 +78,8 @@ This directory contains comprehensive documentation for the Patent Drafter AI ap
 4. [Monitoring Guide](04-deployment-and-ops/03-monitoring-and-health.md) - Observability
 
 **Security & Maintenance:**
-- [Security Architecture](SECURITY_ARCHITECTURE.md) - Security implementation
-- [Redis Rate Limiting](redis-rate-limiting.md) - Rate limiting setup
+- [Security Architecture](security/SECURITY_ARCHITECTURE.md) - Security implementation
+- [SOC2 Controls](security/SOC2_SECURITY_CONTROLS.md) - Compliance controls
 
 ### 👨‍💼 **Product/Business**
 **Overview Documents:**
@@ -86,10 +89,11 @@ This directory contains comprehensive documentation for the Patent Drafter AI ap
 
 ### 🔒 **Security Team**
 **Security Documentation:**
-1. [Security Architecture](SECURITY_ARCHITECTURE.md) - Comprehensive security guide
-2. [Security Reports](security/) - Audit reports and security assessments
-3. [Environment Variables](ENVIRONMENT_VARIABLES.md) - Secrets management
-4. [Authentication Guide](02-architecture/02-authentication.md) - Auth implementation
+1. [Security Architecture](security/SECURITY_ARCHITECTURE.md) - Comprehensive security guide
+2. [Security Implementation](security/SECURITY_IMPLEMENTATION_SUMMARY.md) - Current status
+3. [SecurePresets Pattern](security/SECUREPRESETS_PATTERN.md) - API security framework
+4. [SOC2 Controls](security/SOC2_SECURITY_CONTROLS.md) - Compliance implementation
+5. [Authentication Guide](02-architecture/02-authentication.md) - Auth implementation
 
 ---
 
@@ -196,18 +200,20 @@ When making changes to the codebase:
 ## 📊 **Documentation Stats**
 
 ### Coverage
-- ✅ **Architecture**: Comprehensive
-- ✅ **API Reference**: Complete
-- ✅ **Database Schema**: Detailed
-- ✅ **Security**: Thorough
-- ✅ **Deployment**: Production-ready
-- ✅ **Development**: Getting started to advanced
+- ✅ **Architecture**: Comprehensive with 7 detailed documents
+- ✅ **API Reference**: Complete with SecurePresets patterns
+- ✅ **Database Schema**: Detailed with multi-tenant design
+- ✅ **Security**: Enterprise-grade documentation
+- ✅ **Deployment**: Production-ready Azure deployment
+- ✅ **Development**: Getting started to advanced patterns
+- ✅ **UI/UX**: Complete shadcn/ui and Tailwind CSS guide
 
 ### Quality Metrics
-- **Last Updated**: Current with codebase
-- **Accuracy**: Verified against implementation
-- **Completeness**: All major topics covered
-- **Usability**: Role-based organization
+- **Last Updated**: January 8, 2025
+- **Accuracy**: Verified against current implementation
+- **Completeness**: All major topics covered including new features
+- **Usability**: Role-based organization for easy navigation
+- **Tech Stack**: Updated for shadcn/ui, Tailwind CSS, and current architecture
 
 ---
 
@@ -217,7 +223,7 @@ When making changes to the codebase:
 1. Read the [Handover Guide](HANDOVER_GUIDE.md) thoroughly
 2. Set up your environment using [Getting Started](01-getting-started.md)
 3. Review the [System Overview](02-architecture/01-system-overview.md)
-4. Explore the codebase with [Directory Guide](../DIRECTORY_GUIDE.md)
+4. Explore the codebase with the source directory structure
 
 ### For Experienced Developers
 1. Check the [API Reference](API_REFERENCE.md) for endpoint details
@@ -227,7 +233,7 @@ When making changes to the codebase:
 
 ### For Operations Teams
 1. Study [Azure Deployment](04-deployment-and-ops/01-azure-deployment.md) guide
-2. Configure using [Environment Variables](ENVIRONMENT_VARIABLES.md) reference
+2. Configure using environment variables from `.env.example`
 3. Set up [Monitoring](04-deployment-and-ops/03-monitoring-and-health.md) and alerting
 4. Review [Security Architecture](SECURITY_ARCHITECTURE.md) for compliance
 

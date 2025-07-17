@@ -1,18 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  ModalCloseButton,
-  Button,
-  FormControl,
-  FormLabel,
-  Input,
-  useToast,
-} from '@chakra-ui/react';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/useToastWrapper';
 import { useProjectActions } from '../../hooks/useProjectActions';
 import { useNextTick } from '@/hooks/useNextTick';
 
@@ -73,41 +71,47 @@ export const RenameProjectModal: React.FC<RenameProjectModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} initialFocusRef={initialRef}>
-      <ModalOverlay bg="blackAlpha.600" />
-      <ModalContent>
+    <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
-          <ModalHeader>Rename Project</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <FormControl>
-              <FormLabel>Project name</FormLabel>
+          <DialogHeader>
+            <DialogTitle>Rename Project</DialogTitle>
+            <DialogDescription>
+              Enter a new name for your project.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-2">
+              <Label htmlFor="project-name">Project name</Label>
               <Input
+                id="project-name"
                 ref={initialRef}
                 value={newName}
                 onChange={e => setNewName(e.target.value)}
                 placeholder="Enter a new name"
                 onKeyDown={e => e.key === 'Escape' && onClose()}
               />
-            </FormControl>
-          </ModalBody>
-
-          <ModalFooter>
+            </div>
+          </div>
+          <DialogFooter>
             <Button
-              colorScheme="blue"
-              mr={3}
               type="submit"
-              isLoading={isSubmitting || isRenaming}
-              disabled={!newName.trim() || newName.trim() === currentName}
+              disabled={
+                isSubmitting ||
+                isRenaming ||
+                !newName.trim() ||
+                newName.trim() === currentName
+              }
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              Save
+              {isSubmitting || isRenaming ? 'Saving...' : 'Save'}
             </Button>
             <Button onClick={onClose} variant="outline">
               Cancel
             </Button>
-          </ModalFooter>
+          </DialogFooter>
         </form>
-      </ModalContent>
-    </Modal>
+      </DialogContent>
+    </Dialog>
   );
 };

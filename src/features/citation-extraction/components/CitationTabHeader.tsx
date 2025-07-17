@@ -1,22 +1,27 @@
 import React from 'react';
-import {
-  Box,
-  Flex,
-  Text,
-  HStack,
-  Badge,
-  Button,
-  Select,
-  IconButton,
-  Spinner,
-  VStack,
-  Icon,
-  Tooltip,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import { FiX, FiBookmark, FiCpu } from 'react-icons/fi';
+import { X, Cpu, ArrowUpDown, SortDesc, ChevronDown, Calendar, CalendarDays } from 'lucide-react';
+import { Bookmark } from 'lucide-react';
 import { BsBookmarkFill } from 'react-icons/bs';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { LoadingState, LoadingMinimal } from '@/components/common/LoadingState';
 import { ActionButtons } from '@/features/search/components/citation-header/ActionButtons';
+import { logger } from '@/utils/clientLogger';
+import { SearchSelectionDropdown } from '@/features/search/components/SearchSelectionDropdown';
+import { formatRelevanceScore } from '../utils/relevanceScore';
 
 interface Search {
   id: string;
@@ -30,6 +35,8 @@ interface ReferenceStatus {
   wasOptimistic?: boolean;
   showAsOptimistic?: boolean;
 }
+
+export type SortOption = 'default' | 'relevance' | 'date-desc' | 'date-asc';
 
 interface CitationTabHeaderProps {
   currentSearchId: string | null;
@@ -48,7 +55,13 @@ interface CitationTabHeaderProps {
     title?: string | null;
     applicant?: string | null;
     publicationDate?: string | null;
+    relevanceScore?: number;
+    matchCount?: number;
+    hasLowConfidenceMatches?: boolean;
   } | null;
+  // Sorting props
+  sortOption?: SortOption;
+  onSortChange?: (sortOption: SortOption) => void;
   // Deep analysis props
   isDeepAnalysisAvailable?: boolean;
   showDeepAnalysis?: boolean;
@@ -85,6 +98,8 @@ export const CitationTabHeader: React.FC<CitationTabHeaderProps> = React.memo(
     isReferenceSaved = false,
     isReferenceExcluded = false,
     referenceMetadata,
+    sortOption = 'default',
+    onSortChange,
     isDeepAnalysisAvailable,
     showDeepAnalysis,
     hasDeepAnalysisData,
@@ -101,285 +116,227 @@ export const CitationTabHeader: React.FC<CitationTabHeaderProps> = React.memo(
       return ref.replace(/-/g, '');
     };
 
-    const unsavedBookmarkColor = useColorModeValue(
-      'gray.600',
-      'text.secondary'
-    );
+    const handleSaveClick = React.useCallback(() => {
+      onSaveReference();
+    }, [onSaveReference]);
+
+    const getSortIcon = () => {
+      switch (sortOption) {
+        case 'relevance':
+          return <SortDesc className="w-3 h-3 mr-1" />;
+        case 'date-desc':
+          return <CalendarDays className="w-3 h-3 mr-1" />;
+        case 'date-asc':
+          return <Calendar className="w-3 h-3 mr-1" />;
+        default:
+          return <ArrowUpDown className="w-3 h-3 mr-1" />;
+      }
+    };
 
     return (
-      <Box p={3} borderBottomWidth="1px" borderColor="border.light">
-        <Flex justify="space-between" align="center" mb={3}>
-          <HStack spacing={4}>
-            <Text fontSize="lg" fontWeight="semibold" color="text.primary">
-              Citation Analysis
-            </Text>
-            {searchHistory.length > 0 && (
-              <Select
-                size="sm"
-                variant="outline"
-                value={currentSearchId || ''}
-                onChange={e => onSearchChange(e.target.value)}
-                width="150px"
-              >
-                {!currentSearchId && <option value="">Select a search</option>}
-                {searchHistory.map((s, i) => (
-                  <option key={s.id} value={s.id}>
-                    Search #{searchHistory.length - i}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </HStack>
-          <HStack>
-            <Button
-              size="sm"
-              colorScheme="blue"
-              onClick={onCombinedAnalysis}
-              isDisabled={!selectedReference || referenceStatuses.length === 0}
-            >
-              Combined Examiner Analysis
-            </Button>
+      <TooltipProvider>
+        <div className="p-3 border-b border-border">
+          {/* First row: Title, search dropdown, and action buttons */}
+          <div
+            className={`flex justify-between items-center ${currentSearchId && referenceStatuses.length > 0 ? 'mb-2' : ''}`}
+          >
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-semibold text-foreground">
+                Citation Analysis
+              </h2>
 
-            <ActionButtons
-              selectedReference={selectedReference}
-              isReferenceSaved={isReferenceSaved}
-              isReferenceExcluded={isReferenceExcluded}
-              isLoading={isLoading}
-              onSaveReference={onSaveReference}
-              onExcludeReference={onExcludeReference}
-              onRerunExtraction={onRerunCitationExtraction}
-              isRerunningExtraction={isRerunningExtraction}
-              citationHistory={citationHistory}
-              onViewHistoricalRun={onViewHistoricalRun}
-            />
-          </HStack>
-        </Flex>
+              {/* Search dropdown */}
+              {searchHistory.length > 0 && (
+                <>
+                  <div className="w-px h-5 bg-border" />
+                  <SearchSelectionDropdown
+                    selectedSearchId={currentSearchId}
+                    searchHistory={searchHistory}
+                    onChange={e => onSearchChange(e.target.value)}
+                    inline
+                    placeholder="Please select"
+                  />
+                </>
+              )}
+            </div>
 
-        {currentSearchId && (
-          <Box>
-            <Text fontSize="xs" color="text.tertiary" mb={2}>
-              REFERENCES
-            </Text>
-            {isLoading && referenceStatuses.length === 0 ? (
-              <Spinner size="sm" />
-            ) : (
-              <HStack spacing={2} overflowX="auto" pt={1} pb={2}>
-                {referenceStatuses.map(ref => {
-                  const isSelected = selectedReference === ref.referenceNumber;
-                  const shouldShowSpinner =
-                    ref.showAsOptimistic || ref.isOptimistic;
-
-                  return (
-                    <Badge
-                      key={ref.referenceNumber}
-                      px={3}
-                      py={1}
-                      borderRadius="full"
-                      cursor="pointer"
-                      bg={isSelected ? 'blue.500' : 'bg.card'}
-                      color={isSelected ? 'white' : 'text.primary'}
-                      borderWidth="1px"
-                      borderColor={isSelected ? 'blue.500' : 'border.primary'}
-                      onClick={() => onSelectReference(ref.referenceNumber)}
-                      position="relative"
-                      opacity={shouldShowSpinner ? 0.7 : 1}
-                      transition="background-color 0.15s ease-out, border-color 0.15s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out, opacity 0.15s ease-out"
-                      _hover={{
-                        bg: isSelected ? 'blue.600' : 'bg.hover',
-                        borderColor: isSelected ? 'blue.600' : 'border.primary',
-                        transform: 'translateY(-1px)',
-                        boxShadow: 'sm',
-                      }}
-                      _active={{
-                        transform: 'translateY(0px)',
-                        boxShadow: 'xs',
-                      }}
+            {/* Action buttons */}
+            <div className="flex items-center gap-1">
+              {/* Sort dropdown */}
+              {referenceStatuses.length > 1 && onSortChange && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
                     >
-                      {formatReferenceNumber(ref.referenceNumber)}
-                      {shouldShowSpinner && (
-                        <Box as="span" ml={1} display="inline-block">
-                          <Spinner
-                            size="xs"
-                            color={isSelected ? 'white' : 'blue.500'}
-                            thickness="2px"
-                          />
-                        </Box>
-                      )}
-                    </Badge>
-                  );
-                })}
-              </HStack>
-            )}
-            {selectedReference && (
-              <Box mt={2} pl={1}>
-                {isLoading && !referenceMetadata ? (
-                  <Spinner size="xs" />
-                ) : referenceMetadata ? (
-                  <VStack align="start" spacing={0}>
-                    <Flex align="center" justify="space-between" width="100%">
-                      <Text
-                        fontSize="sm"
-                        fontWeight="medium"
-                        noOfLines={1}
-                        color="text.primary"
-                        flex="1"
+                      {getSortIcon()}
+                      Sort
+                      <ChevronDown className="w-3 h-3 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem
+                      onClick={() => onSortChange('default')}
+                      className={sortOption === 'default' ? 'bg-accent' : ''}
+                    >
+                      <ArrowUpDown className="w-3 h-3 mr-2" />
+                      Default Order
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onSortChange('relevance')}
+                      className={sortOption === 'relevance' ? 'bg-accent' : ''}
+                    >
+                      <SortDesc className="w-3 h-3 mr-2" />
+                      By Relevance
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => onSortChange('date-desc')}
+                      className={sortOption === 'date-desc' ? 'bg-accent' : ''}
+                    >
+                      <CalendarDays className="w-3 h-3 mr-2" />
+                      Newest First
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onSortChange('date-asc')}
+                      className={sortOption === 'date-asc' ? 'bg-accent' : ''}
+                    >
+                      <Calendar className="w-3 h-3 mr-2" />
+                      Oldest First
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
+              <Button
+                size="sm"
+                onClick={onCombinedAnalysis}
+                disabled={false}
+                className="text-xs px-2 py-1 h-7 hidden sm:flex"
+              >
+                Combined Analysis
+              </Button>
+
+              {/* Mobile version - icon only */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    onClick={onCombinedAnalysis}
+                    disabled={false}
+                    className="w-7 h-7 p-0 sm:hidden"
+                  >
+                    <Cpu className="w-3.5 h-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Combined Analysis</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <ActionButtons
+                selectedReference={selectedReference}
+                isReferenceSaved={isReferenceSaved}
+                isReferenceExcluded={isReferenceExcluded}
+                isLoading={isLoading}
+                onSaveReference={handleSaveClick}
+                onExcludeReference={onExcludeReference}
+                onRerunExtraction={onRerunCitationExtraction}
+                isRerunningExtraction={isRerunningExtraction}
+                citationHistory={citationHistory}
+                onViewHistoricalRun={onViewHistoricalRun}
+              />
+            </div>
+          </div>
+
+          {/* Second row: Reference badges */}
+          {referenceStatuses.length > 0 && (
+            <div className="mb-2">
+              {isLoading && referenceStatuses.length === 0 ? (
+                <LoadingState variant="spinner" size="sm" minHeight="32px" />
+              ) : (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-2 pt-0.5">
+                  {referenceStatuses.map(ref => {
+                    const isSelected =
+                      selectedReference === ref.referenceNumber;
+                    const shouldShowSpinner =
+                      ref.showAsOptimistic || ref.isOptimistic;
+
+                    return (
+                      <div
+                        key={ref.referenceNumber}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            onSelectReference(ref.referenceNumber);
+                          }
+                        }}
+                        className={`
+                          px-3 py-1 text-xs rounded-full cursor-pointer relative flex-shrink-0
+                          transition-colors duration-150 ease-out border flex items-center gap-1.5
+                          ${
+                            isSelected
+                              ? 'bg-blue-600 text-white border-blue-700'
+                              : 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600'
+                          }
+                          ${shouldShowSpinner ? 'opacity-50' : ''}
+                          hover:border-blue-500 hover:dark:border-blue-400
+                        `}
+                        onClick={() => onSelectReference(ref.referenceNumber)}
                       >
-                        {referenceMetadata.title || 'No Title Available'}
-                      </Text>
-                      {selectedReference && (
-                        <HStack
-                          spacing={1}
-                          ml={2}
-                          flexShrink={0}
-                          align="center"
-                        >
-                          {/* AI Analysis Button */}
-                          {isDeepAnalysisAvailable && (
-                            <Box
-                              position="relative"
-                              display="flex"
-                              alignItems="center"
-                            >
-                              <Tooltip
-                                label={
-                                  showDeepAnalysis
-                                    ? 'Hide AI Analysis'
-                                    : 'Show AI Analysis'
-                                }
-                                placement="bottom"
-                                hasArrow
-                              >
-                                <IconButton
-                                  size="xs"
-                                  variant={
-                                    showDeepAnalysis ? 'solid' : 'outline'
-                                  }
-                                  aria-label={
-                                    showDeepAnalysis
-                                      ? 'Hide AI Analysis'
-                                      : 'Show AI Analysis'
-                                  }
-                                  icon={<Icon as={FiCpu} />}
-                                  colorScheme="purple"
-                                  color={
-                                    showDeepAnalysis ? 'white' : 'purple.500'
-                                  }
-                                  onClick={() =>
-                                    onToggleDeepAnalysis &&
-                                    onToggleDeepAnalysis(!showDeepAnalysis)
-                                  }
-                                  isLoading={isRunningDeepAnalysis}
-                                  isDisabled={!selectedReference || isLoading}
-                                  _hover={{
-                                    color: showDeepAnalysis
-                                      ? 'white'
-                                      : 'purple.600',
-                                    bg: showDeepAnalysis
-                                      ? 'purple.600'
-                                      : 'purple.50',
-                                  }}
-                                />
-                              </Tooltip>
+                        {formatReferenceNumber(ref.referenceNumber)}
+                        {shouldShowSpinner && (
+                          <span className="ml-1 inline-block">
+                            <LoadingMinimal size="sm" />
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
-                              {/* Notification dot for new analysis */}
-                              {!showDeepAnalysis &&
-                                !isRunningDeepAnalysis &&
-                                hasDeepAnalysisData && (
-                                  <Box
-                                    position="absolute"
-                                    top="-2px"
-                                    right="-2px"
-                                    width="8px"
-                                    height="8px"
-                                    borderRadius="full"
-                                    bg={
-                                      hasHighRelevanceAnalysis
-                                        ? 'red.500'
-                                        : 'purple.400'
-                                    }
-                                    borderWidth="1px"
-                                    borderColor="white"
-                                  />
-                                )}
-                            </Box>
-                          )}
-                          {/* Save/Unsave Icon Button */}
-                          <Tooltip
-                            label={
-                              isReferenceSaved
-                                ? 'Reference saved to prior art'
-                                : 'Save reference to prior art'
-                            }
-                            placement="bottom"
-                            hasArrow
+          {/* Third row: Selected reference metadata */}
+          {selectedReference && referenceMetadata && (
+            <div className="pt-1">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate text-foreground">
+                    {referenceMetadata.title || 'No Title Available'}
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {/* Relevance Score Badge */}
+                    {typeof referenceMetadata.relevanceScore === 'number' && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            variant="secondary"
+                            className={`text-xs px-2 py-0.5 border ${formatRelevanceScore(referenceMetadata.relevanceScore).styleClass}`}
                           >
-                            <IconButton
-                              icon={
-                                <Icon
-                                  as={
-                                    isReferenceSaved
-                                      ? BsBookmarkFill
-                                      : FiBookmark
-                                  }
-                                />
-                              }
-                              aria-label={
-                                isReferenceSaved
-                                  ? 'Unsave reference'
-                                  : 'Save reference'
-                              }
-                              size="xs"
-                              colorScheme={isReferenceSaved ? 'blue' : 'gray'}
-                              variant={isReferenceSaved ? 'ghost' : 'outline'}
-                              color={
-                                isReferenceSaved
-                                  ? 'blue.500'
-                                  : unsavedBookmarkColor
-                              }
-                              onClick={onSaveReference}
-                              isDisabled={!selectedReference || isLoading}
-                              _hover={{
-                                color: isReferenceSaved
-                                  ? 'blue.600'
-                                  : 'text.primary',
-                                bg: isReferenceSaved ? 'blue.50' : 'bg.hover',
-                              }}
-                            />
-                          </Tooltip>
-
-                          {/* Exclude Icon Button */}
-                          <Tooltip
-                            label="Exclude this reference from future searches"
-                            placement="bottom"
-                            hasArrow
-                          >
-                            <IconButton
-                              size="xs"
-                              variant="ghost"
-                              aria-label="Exclude this reference"
-                              icon={<Icon as={FiX} />}
-                              colorScheme="red"
-                              color="red.500"
-                              onClick={onExcludeReference}
-                              isDisabled={
-                                !onExcludeReference || isReferenceExcluded
-                              }
-                              _hover={{
-                                color: 'red.600',
-                                bg: 'red.50',
-                              }}
-                            />
-                          </Tooltip>
-                        </HStack>
-                      )}
-                    </Flex>
-                    <HStack spacing={2} fontSize="xs" color="text.tertiary">
-                      <Text>
-                        {referenceMetadata.applicant || 'Unknown Applicant'}
-                      </Text>
-                      {referenceMetadata.publicationDate && <Text>|</Text>}
+                            {formatRelevanceScore(referenceMetadata.relevanceScore).percentage}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>
+                            Overall relevance score based on {referenceMetadata.matchCount || 0} citation matches
+                            {referenceMetadata.hasLowConfidenceMatches && ' (some low-confidence matches excluded)'}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                    
+                    {/* Author/Applicant and Date */}
+                    <p className="text-muted-foreground text-xs flex-1 min-w-0">
+                      {referenceMetadata.applicant || 'Unknown Applicant'}
                       {referenceMetadata.publicationDate && (
-                        <Text>
+                        <>
+                          {' '}
+                          •{' '}
                           {(() => {
                             const dateStr = String(
                               referenceMetadata.publicationDate
@@ -387,22 +344,128 @@ export const CitationTabHeader: React.FC<CitationTabHeaderProps> = React.memo(
                             if (dateStr.length === 8) {
                               return `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
                             }
-                            return 'Invalid Date Format';
+                            return 'Invalid Date';
                           })()}
-                        </Text>
+                        </>
                       )}
-                    </HStack>
-                  </VStack>
-                ) : (
-                  <Text fontSize="sm" color="text.tertiary">
-                    Metadata not available.
-                  </Text>
-                )}
-              </Box>
-            )}
-          </Box>
-        )}
-      </Box>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Action buttons for selected reference */}
+                <div className="flex items-center gap-1 ml-3 flex-shrink-0">
+                  {/* AI Analysis Button */}
+                  {isDeepAnalysisAvailable && (
+                    <div className="relative flex items-center">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant={showDeepAnalysis ? 'default' : 'outline'}
+                            className={`
+                              h-6 w-6 p-0
+                              ${
+                                showDeepAnalysis
+                                  ? 'bg-purple-500 text-white hover:bg-purple-600'
+                                  : 'text-purple-500 border-purple-200 hover:text-purple-600 hover:bg-purple-50'
+                              }
+                            `}
+                            onClick={() =>
+                              onToggleDeepAnalysis &&
+                              onToggleDeepAnalysis(!showDeepAnalysis)
+                            }
+                            disabled={
+                              !selectedReference ||
+                              isLoading ||
+                              isRunningDeepAnalysis
+                            }
+                          >
+                            {isRunningDeepAnalysis ? (
+                              <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Cpu className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>
+                            {showDeepAnalysis
+                              ? 'Hide AI Analysis'
+                              : 'Show AI Analysis'}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+
+                      {/* Notification dot for new analysis */}
+                      {!showDeepAnalysis &&
+                        !isRunningDeepAnalysis &&
+                        hasDeepAnalysisData && (
+                          <div
+                            className={`
+                              absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full border border-white
+                              ${hasHighRelevanceAnalysis ? 'bg-red-500' : 'bg-purple-400'}
+                            `}
+                          />
+                        )}
+                    </div>
+                  )}
+
+                  {/* Save/Unsave Icon Button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant={isReferenceSaved ? 'ghost' : 'outline'}
+                        className={`
+                          h-6 w-6 p-0
+                          ${
+                            isReferenceSaved
+                              ? 'text-blue-500 hover:text-blue-600 hover:bg-blue-50'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                          }
+                        `}
+                        onClick={handleSaveClick}
+                        disabled={!selectedReference || isLoading}
+                      >
+                        {isReferenceSaved ? (
+                          <BsBookmarkFill className="h-3 w-3" />
+                        ) : (
+                          <Bookmark className="h-3 w-3" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>
+                        {isReferenceSaved
+                          ? 'Reference saved to prior art'
+                          : 'Save reference to prior art'}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  {/* Exclude Icon Button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                        onClick={onExcludeReference}
+                        disabled={!onExcludeReference || isReferenceExcluded}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Exclude this reference from future searches</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </TooltipProvider>
     );
   }
 );

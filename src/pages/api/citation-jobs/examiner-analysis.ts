@@ -1,11 +1,12 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { findWithExaminerAnalysis } from '@/repositories/citationJobRepository';
-import { safeJsonParse } from '@/utils/json-utils';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { safeJsonParse } from '@/utils/jsonUtils';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { z } from 'zod';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
 import { ApplicationError } from '@/lib/error';
+import { apiResponse } from '@/utils/api/responses';
 
 // Validation schema for query parameters
 const querySchema = z.object({
@@ -16,7 +17,7 @@ const querySchema = z.object({
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return apiResponse.methodNotAllowed(res, ['GET']);
   }
 
   const { referenceNumber, searchHistoryId, claimSetVersionId } = (req as any)
@@ -35,10 +36,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         searchHistoryId,
         claimSetVersionId,
       });
-      return res.status(404).json({
-        error: 'Citation job not found',
-        examinerAnalysis: null,
-      });
+      return apiResponse.notFound(res, 'Citation job not found');
     }
 
     // Parse and return the examiner analysis
@@ -48,7 +46,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       examinerAnalysis = safeJsonParse(jobWithExaminer.examinerAnalysisJson);
     }
 
-    return res.status(200).json({
+    return apiResponse.ok(res, {
       jobId: job.id,
       status: job.status,
       examinerAnalysis,

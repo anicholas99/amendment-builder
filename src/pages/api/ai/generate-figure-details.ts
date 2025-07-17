@@ -1,5 +1,5 @@
 import { NextApiResponse } from 'next';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { processWithOpenAI } from '@/server/ai/aiService';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
@@ -9,9 +9,9 @@ import {
   FIGURE_SUGGESTION_PROMPT_V1,
 } from '@/server/prompts/prompts/templates/figureGeneration';
 import { CustomApiRequest } from '@/types/api';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 /**
  * Expected request body structure
@@ -112,7 +112,7 @@ const callAIServiceForSuggestions = async (
   );
   const systemMessage = FIGURE_GENERATION_SYSTEM_MESSAGE_V1.template;
 
-  logger.log(`Attempting to generate figure suggestions via AI service.`);
+  logger.info(`Attempting to generate figure suggestions via AI service.`);
 
   const aiResponse = await processWithOpenAI(prompt, systemMessage, {
     response_format: { type: 'json_object' },
@@ -145,7 +145,7 @@ const callAIServiceForSuggestions = async (
       );
     }
 
-    logger.log(
+    logger.info(
       `Successfully generated and parsed figure suggestions. Cost: $${aiResponse.usage.estimated_cost.toFixed(5)}`
     );
 
@@ -164,7 +164,7 @@ const callAIServiceForSuggestions = async (
  */
 async function handler(
   req: CustomApiRequest<GenerateFigureSuggestionsRequestBody>,
-  res: NextApiResponse<GenerateFigureSuggestionsResponse | ErrorResponse>
+  res: NextApiResponse
 ): Promise<void> {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -184,7 +184,10 @@ async function handler(
   );
 
   // 2. Return the suggested updates (could be an empty object)
-  return res.status(200).json(result);
+  return res.status(200).json({
+    success: true,
+    data: result,
+  });
 }
 
 // Use the new secure preset

@@ -1,7 +1,7 @@
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { ProcessedCitationMatch } from '@/types/domain/citation';
 
 export interface CitationMatchResponse {
@@ -33,7 +33,12 @@ export class CitationMatchApiService {
         );
       }
 
-      return await response.json();
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: matches }
+      const unwrappedResult = result.data || result;
+
+      return unwrappedResult;
     } catch (error) {
       logger.error(
         '[CitationMatchApiService] Error fetching grouped citation matches',

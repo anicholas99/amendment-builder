@@ -14,9 +14,9 @@ import {
   UseMutationOptions,
   QueryClient,
 } from '@tanstack/react-query';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import { apiFetch } from './apiClient';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { STALE_TIME } from '@/constants/time';
 
@@ -228,7 +228,29 @@ async function fetchWithApiFetch<T>(
 
   const contentType = response.headers.get('content-type');
   if (contentType?.includes('application/json')) {
-    return await response.json();
+    const jsonResponse = await response.json();
+
+    // Auto-unwrap API responses that use the { data: ... } format
+    // This handles the standardized apiResponse.ok() wrapper format
+    if (
+      jsonResponse &&
+      typeof jsonResponse === 'object' &&
+      'data' in jsonResponse &&
+      // Make sure it's actually a wrapped response (has data but not other expected API fields)
+      !('error' in jsonResponse && 'success' in jsonResponse)
+    ) {
+      logger.debug('[fetchWithApiFetch] Auto-unwrapped API response', {
+        url: url.length > 100 ? url.substring(0, 100) + '...' : url,
+        hasData: !!jsonResponse.data,
+        originalKeys: Object.keys(jsonResponse),
+        dataType: Array.isArray(jsonResponse.data)
+          ? 'array'
+          : typeof jsonResponse.data,
+      });
+      return jsonResponse.data as T;
+    }
+
+    return jsonResponse as T;
   }
 
   // For non-JSON responses, return the text as-is

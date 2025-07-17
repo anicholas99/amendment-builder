@@ -1,12 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 import { mockDeep, DeepMockProxy } from 'jest-mock-extended';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 
 // Import the repository you're testing
 // import { repositoryFunction } from '../path/to/repository';
 
 // Mock dependencies
-jest.mock('@/lib/monitoring/logger');
+jest.mock('@/server/logger');
 
 describe('[RepositoryName] Repository', () => {
   let mockPrisma: DeepMockProxy<PrismaClient>;

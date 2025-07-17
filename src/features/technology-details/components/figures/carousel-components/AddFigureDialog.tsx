@@ -1,32 +1,15 @@
 import React, { useState } from 'react';
+import { toast } from '@/hooks/use-toast';
 import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalFooter,
-  ModalBody,
-  ModalCloseButton,
-  Input,
-  FormControl,
-  FormLabel,
-  useToast,
-  Tabs,
-  TabList,
-  TabPanels,
-  Tab,
-  TabPanel,
-  SimpleGrid,
-  Box,
-  Button,
-  Text,
-  Stack,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import {
-  modalStyles,
-  modalButtonStyles,
-} from '@/components/common/ModalStyles';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
 interface FigureOption {
   label: string;
@@ -52,25 +35,8 @@ const AddFigureDialog: React.FC<AddFigureDialogProps> = ({
   options,
   onAddFigure,
 }) => {
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState('quick-select');
   const [customFigureNumber, setCustomFigureNumber] = useState('');
-  const toast = useToast();
-
-  // Theme colors
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const variantsBg = useColorModeValue('gray.50', 'gray.800');
-  const scrollbarBg = useColorModeValue(
-    'rgba(0, 0, 0, 0.05)',
-    'rgba(255, 255, 255, 0.05)'
-  );
-  const scrollbarThumbBg = useColorModeValue(
-    'rgba(0, 0, 0, 0.2)',
-    'rgba(255, 255, 255, 0.2)'
-  );
-  const mutedTextColor = useColorModeValue('gray.500', 'gray.400');
-  const labelColor = useColorModeValue('gray.700', 'gray.300');
-  const blueHoverBg = useColorModeValue('blue.50', 'blue.900');
-  const purpleHoverBg = useColorModeValue('purple.50', 'purple.900');
 
   // Group options by main figures and variants
   const mainFigures = options.filter(opt => !opt.isVariant);
@@ -97,9 +63,8 @@ const AddFigureDialog: React.FC<AddFigureDialogProps> = ({
       toast({
         title: 'Empty figure number',
         description: 'Please enter a figure number',
-        status: 'error',
+        variant: 'destructive',
         duration: 3000,
-        isClosable: true,
       });
       return;
     }
@@ -110,9 +75,8 @@ const AddFigureDialog: React.FC<AddFigureDialogProps> = ({
       toast({
         title: 'Invalid format',
         description: 'Figure number must be in format "1", "1A", etc.',
-        status: 'error',
+        variant: 'destructive',
         duration: 3000,
-        isClosable: true,
       });
       return;
     }
@@ -122,163 +86,149 @@ const AddFigureDialog: React.FC<AddFigureDialogProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="xl">
-      <ModalOverlay {...modalStyles.overlay} />
-      <ModalContent
-        borderRadius="lg"
-        minWidth={{ base: '90%', md: '600px' }}
-        maxWidth="800px"
-      >
-        <ModalHeader {...modalStyles.header} borderColor={borderColor}>
-          Add New Figure
-        </ModalHeader>
-        <ModalCloseButton />
-        <ModalBody {...modalStyles.body}>
-          <Tabs
-            index={activeTab}
-            onChange={setActiveTab}
-            variant="soft-rounded"
-            colorScheme="blue"
-          >
-            <TabList mb={4}>
-              <Tab fontWeight="normal">Quick Select</Tab>
-              <Tab fontWeight="normal">Custom Number</Tab>
-            </TabList>
-            <TabPanels>
-              <TabPanel p={0}>
-                <Text fontWeight="semibold" mb={3} color="blue.600">
-                  Next Figure
-                </Text>
-                <SimpleGrid columns={3} spacing={3}>
-                  {mainFigures.map(option => (
-                    <Button
-                      key={option.value}
-                      variant="outline"
-                      colorScheme="blue"
-                      onClick={() => handleOptionClick(option)}
-                      height="60px"
-                      width="100%"
-                      _hover={{ bg: blueHoverBg }}
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
-                </SimpleGrid>
+    <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <DialogContent className="min-w-[90%] md:min-w-[600px] max-w-[800px] rounded-lg">
+        <DialogHeader className="border-b border-border">
+          <DialogTitle>Add New Figure</DialogTitle>
+        </DialogHeader>
 
-                {Object.keys(variantGroups).length > 0 && (
-                  <Box
-                    width="100%"
-                    bg={variantsBg}
-                    p={3}
-                    borderRadius="md"
-                    mt={4}
-                  >
-                    <Text fontWeight="semibold" mb={3} color="purple.600">
-                      Variant Options
-                    </Text>
-                    <Box
-                      maxHeight="240px"
-                      overflowY="auto"
-                      pr={2}
-                      className="custom-scrollbar"
-                    >
-                      {Object.entries(variantGroups).map(
-                        ([baseNumber, variants]) => (
-                          <Box
-                            key={baseNumber}
-                            mb={4}
-                            pb={3}
-                            borderBottom={
-                              parseInt(baseNumber) <
-                              Math.max(
-                                ...Object.keys(variantGroups).map(Number)
-                              )
-                                ? '1px'
-                                : '0'
-                            }
-                            borderColor={borderColor}
-                          >
-                            <Text
-                              fontSize="sm"
-                              mb={2}
-                              fontWeight="medium"
-                              color={labelColor}
-                            >
-                              FIG. {baseNumber} Variants
-                            </Text>
-                            <SimpleGrid columns={5} spacing={2}>
-                              {variants.map(variant => (
-                                <Button
-                                  key={variant.value}
-                                  size="sm"
-                                  variant="outline"
-                                  colorScheme="purple"
-                                  onClick={() => handleOptionClick(variant)}
-                                  py={1}
-                                  height="auto"
-                                  _hover={{ bg: purpleHoverBg }}
-                                >
-                                  {variant.label.replace(/FIG\.\s*/i, '')}
-                                </Button>
-                              ))}
-                            </SimpleGrid>
-                          </Box>
-                        )
-                      )}
-                    </Box>
-                  </Box>
+        <div className="py-4">
+          {/* Custom Tabs Implementation */}
+          <div className="w-full">
+            <div className="flex w-full rounded-lg bg-accent p-1">
+              <button
+                className={cn(
+                  'flex-1 rounded-md px-3 py-2 text-sm font-medium transition-all',
+                  activeTab === 'quick-select'
+                    ? 'bg-white dark:bg-gray-700 text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
                 )}
-              </TabPanel>
+                onClick={() => setActiveTab('quick-select')}
+              >
+                Quick Select
+              </button>
+              <button
+                className={cn(
+                  'flex-1 rounded-md px-3 py-2 text-sm font-medium transition-all',
+                  activeTab === 'custom-number'
+                    ? 'bg-white dark:bg-gray-700 text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setActiveTab('custom-number')}
+              >
+                Custom Number
+              </button>
+            </div>
 
-              <TabPanel p={0}>
-                <FormControl>
-                  <FormLabel fontWeight="semibold">
-                    Custom Figure Number
-                  </FormLabel>
-                  <Stack direction="row" spacing={2}>
-                    <Text
-                      fontWeight="semibold"
-                      fontSize="lg"
-                      color={labelColor}
-                    >
-                      FIG.
-                    </Text>
-                    <Input
-                      value={customFigureNumber}
-                      onChange={e => setCustomFigureNumber(e.target.value)}
-                      placeholder="1"
-                      size="md"
-                      width="120px"
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          handleCustomSubmit();
-                        }
-                      }}
-                    />
-                    <Button
-                      {...modalButtonStyles.primary}
-                      onClick={handleCustomSubmit}
-                    >
-                      Add
-                    </Button>
-                  </Stack>
-                  <Text fontSize="sm" color={mutedTextColor} mt={2}>
-                    Enter a figure number like "1", "2A", or "3B". The prefix
-                    "FIG." will be added automatically.
-                  </Text>
-                </FormControl>
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
-        </ModalBody>
+            {/* Tab Content */}
+            <div className="mt-4">
+              {activeTab === 'quick-select' && (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-semibold mb-3 text-blue-600 dark:text-blue-400">
+                      Next Figure
+                    </h3>
+                    <div className="grid grid-cols-3 gap-3">
+                      {mainFigures.map(option => (
+                        <Button
+                          key={option.value}
+                          variant="outline"
+                          onClick={() => handleOptionClick(option)}
+                          className="h-15 w-full border-blue-600 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
 
-        <ModalFooter {...modalStyles.footer} borderColor={borderColor}>
-          <Button onClick={onClose} {...modalButtonStyles.secondary}>
+                  {Object.keys(variantGroups).length > 0 && (
+                    <div className="w-full bg-muted p-4 rounded-md">
+                      <h3 className="font-semibold mb-3 text-purple-600 dark:text-purple-400">
+                        Variant Options
+                      </h3>
+                      <div className="max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                        {Object.entries(variantGroups).map(
+                          ([baseNumber, variants], index, array) => (
+                            <div
+                              key={baseNumber}
+                              className={cn(
+                                'mb-4 pb-3',
+                                index < array.length - 1 &&
+                                  'border-b border-border'
+                              )}
+                            >
+                              <div className="text-sm mb-2 font-medium text-gray-700 dark:text-gray-300">
+                                FIG. {baseNumber} Variants
+                              </div>
+                              <div className="grid grid-cols-5 gap-2">
+                                {variants.map(variant => (
+                                  <Button
+                                    key={variant.value}
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleOptionClick(variant)}
+                                    className="py-1 h-auto border-purple-600 text-purple-600 hover:bg-purple-50 dark:border-purple-400 dark:text-purple-400 dark:hover:bg-purple-900/20"
+                                  >
+                                    {variant.label.replace(/FIG\.\s*/i, '')}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'custom-number' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="font-semibold text-sm text-foreground">
+                      Custom Figure Number
+                    </label>
+                    <div className="flex items-center space-x-2 mt-2">
+                      <span className="font-semibold text-lg text-gray-700 dark:text-gray-300">
+                        FIG.
+                      </span>
+                      <Input
+                        value={customFigureNumber}
+                        onChange={e => setCustomFigureNumber(e.target.value)}
+                        placeholder="1"
+                        className="w-30"
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            handleCustomSubmit();
+                          }
+                        }}
+                      />
+                      <Button
+                        onClick={handleCustomSubmit}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        Add
+                      </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Enter a figure number like "1", "2A", or "3B". The prefix
+                      "FIG." will be added automatically.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="border-t border-border">
+          <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

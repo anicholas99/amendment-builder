@@ -13,7 +13,7 @@ const Input = {
         },
         _focus: {
           borderColor: 'ipd.blue',
-          boxShadow: '0 0 0 1px var(--chakra-colors-ipd-blue)',
+          boxShadow: '0 0 0 1px var(--colors-ipd-blue)',
         },
       },
     },

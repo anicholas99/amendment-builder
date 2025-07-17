@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
-import { useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import { emitPriorArtEvent } from '@/features/search/utils/priorArtEvents';
 import {
   useAddSavedPriorArt,
@@ -97,7 +97,7 @@ export function usePriorArtHandlers({
         return;
       }
 
-      logger.log('handleRemovePriorArt called', {
+      logger.info('handleRemovePriorArt called', {
         indexToRemove,
         artItem,
         patentNumber: artItem.patentNumber,
@@ -137,7 +137,7 @@ export function usePriorArtHandlers({
   );
 
   const refreshInventionData = useCallback(async () => {
-    logger.log(
+    logger.info(
       '[ClaimRefinementView] refreshInventionData called - data managed by useProjectSidebarData'
     );
     // Data refresh is now handled by the sidebar's useProjectSidebarData hook

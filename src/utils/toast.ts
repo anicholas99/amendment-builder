@@ -1,73 +1,101 @@
-import { UseToastOptions, useToast as useChakraToast } from '@chakra-ui/react';
+import { toast } from 'sonner';
 
-export type ToastType = 'success' | 'error' | 'warning' | 'info';
-
-interface ShowToastOptions extends Omit<UseToastOptions, 'status'> {
-  type?: ToastType;
-  title: string;
+export interface UseToastOptions {
+  title?: string;
   description?: string;
+  status?: 'success' | 'error' | 'warning' | 'info';
+  duration?: number;
+  isClosable?: boolean;
+  position?:
+    | 'top'
+    | 'top-left'
+    | 'top-right'
+    | 'bottom'
+    | 'bottom-left'
+    | 'bottom-right';
 }
 
-const DEFAULT_DURATIONS = {
-  success: 3000,
-  error: 5000,
-  warning: 4000,
-  info: 3000,
-};
+export interface ToastInstance {
+  (options: UseToastOptions): string | number;
+  success: (
+    message: string,
+    options?: Omit<UseToastOptions, 'status'>
+  ) => string | number;
+  error: (
+    message: string,
+    options?: Omit<UseToastOptions, 'status'>
+  ) => string | number;
+  warning: (
+    message: string,
+    options?: Omit<UseToastOptions, 'status'>
+  ) => string | number;
+  info: (
+    message: string,
+    options?: Omit<UseToastOptions, 'status'>
+  ) => string | number;
+}
 
-export const useToast = () => {
-  const toast = useChakraToast();
+/**
+ * Custom toast hook that provides a theme-compatible API
+ */
+export const useToast = (): ToastInstance => {
+  const showToast = (options: UseToastOptions) => {
+    const { title, description, status = 'info', duration } = options;
 
-  const showToast = ({
-    type = 'info',
-    title,
-    description,
-    duration = DEFAULT_DURATIONS[type],
-    ...rest
-  }: ShowToastOptions) => {
-    toast({
-      title,
-      description,
-      status: type,
-      duration,
-      isClosable: true,
-      position: 'bottom-right',
-      ...rest,
-    });
+    // Create the message - use title if available, otherwise description
+    const message = title || description || '';
+    const secondaryMessage = title && description ? description : undefined;
+
+    const config = {
+      duration: duration || 4000,
+      description: secondaryMessage,
+    };
+
+    switch (status) {
+      case 'success':
+        return toast.success(message, config);
+      case 'error':
+        return toast.error(message, config);
+      case 'warning':
+        return toast.warning(message, config);
+      case 'info':
+      default:
+        return toast(message, config);
+    }
   };
 
-  return showToast;
+  // Create the main function with convenience methods
+  const toastFn = showToast as ToastInstance;
+
+  toastFn.success = (
+    message: string,
+    options: Omit<UseToastOptions, 'status'> = {}
+  ) => {
+    return showToast({ ...options, title: message, status: 'success' });
+  };
+
+  toastFn.error = (
+    message: string,
+    options: Omit<UseToastOptions, 'status'> = {}
+  ) => {
+    return showToast({ ...options, title: message, status: 'error' });
+  };
+
+  toastFn.warning = (
+    message: string,
+    options: Omit<UseToastOptions, 'status'> = {}
+  ) => {
+    return showToast({ ...options, title: message, status: 'warning' });
+  };
+
+  toastFn.info = (
+    message: string,
+    options: Omit<UseToastOptions, 'status'> = {}
+  ) => {
+    return showToast({ ...options, title: message, status: 'info' });
+  };
+
+  return toastFn;
 };
 
-// Helper functions for common toast types
-export const showSuccessToast = (
-  toast: ReturnType<typeof useToast>,
-  title: string,
-  description?: string
-) => {
-  toast({ type: 'success', title, description });
-};
-
-export const showErrorToast = (
-  toast: ReturnType<typeof useToast>,
-  title: string,
-  description?: string
-) => {
-  toast({ type: 'error', title, description });
-};
-
-export const showWarningToast = (
-  toast: ReturnType<typeof useToast>,
-  title: string,
-  description?: string
-) => {
-  toast({ type: 'warning', title, description });
-};
-
-export const showInfoToast = (
-  toast: ReturnType<typeof useToast>,
-  title: string,
-  description?: string
-) => {
-  toast({ type: 'info', title, description });
-};
+export default useToast;

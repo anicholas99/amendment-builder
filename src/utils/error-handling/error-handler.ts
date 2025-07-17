@@ -7,7 +7,7 @@
  */
 
 import { NextApiRequest, NextApiResponse } from 'next';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { randomBytes } from 'crypto';
 import { env } from '@/config/env';
 

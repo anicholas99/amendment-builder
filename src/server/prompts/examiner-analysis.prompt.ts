@@ -1,5 +1,5 @@
-import { logger } from '@/lib/monitoring/logger';
-import { safeJsonParse } from '@/utils/json-utils';
+import { logger } from '@/server/logger';
+import { safeJsonParse } from '@/utils/jsonUtils';
 
 // These types would be defined here or imported from a shared types file
 // For now, defining them here to make the prompt self-contained.

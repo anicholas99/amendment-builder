@@ -10,6 +10,7 @@ import { useCallback, useRef, useEffect } from 'react';
  * @param delay - The delay in milliseconds
  * @returns The debounced function
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useDebouncedCallback<T extends (...args: any[]) => any>(
   callback: T,
   delay: number
@@ -28,6 +29,7 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
         clearTimeout(timeoutRef.current);
       }
 
+      // eslint-disable-next-line no-restricted-globals, no-restricted-syntax
       timeoutRef.current = setTimeout(() => {
         callbackRef.current(...args);
         timeoutRef.current = null;

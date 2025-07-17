@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-imports */
 import React from 'react';
-import { Text, Icon } from '@chakra-ui/react';
 import { FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { cn } from '@/lib/utils';
 
 interface SearchHistoryPaginationControlsProps {
   totalResults: number;
@@ -25,48 +25,34 @@ export const SearchHistoryPaginationControls: React.FC<
   return (
     <>
       {totalResults > visibleResultsCount && (
-        <Text
-          mt={3}
-          fontSize="sm"
-          textAlign="center"
-          color="text.secondary"
-          _hover={{
-            color: 'text.primary',
-            textDecoration: 'underline',
-            cursor: 'pointer',
-          }}
+        <div
+          className={cn(
+            'mt-3 text-sm text-center text-muted-foreground cursor-pointer',
+            'hover:text-foreground hover:underline',
+            'flex items-center justify-center'
+          )}
           onClick={onShowMore}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
         >
           {(() => {
             const remainingResults = totalResults - visibleResultsCount;
             const showNextCount = Math.min(incrementCount, remainingResults);
             return `Show ${remainingResults <= incrementCount ? 'all' : showNextCount} ${remainingResults === 1 ? 'remaining result' : `more results (${remainingResults} remaining)`}`;
           })()}
-          <Icon as={FiChevronDown} ml={1} boxSize={3} />
-        </Text>
+          <FiChevronDown className="ml-1 w-3 h-3" />
+        </div>
       )}
       {visibleResultsCount > initialVisibleCount && (
-        <Text
-          mt={3}
-          fontSize="sm"
-          textAlign="center"
-          color="text.secondary"
-          _hover={{
-            color: 'text.primary',
-            textDecoration: 'underline',
-            cursor: 'pointer',
-          }}
+        <div
+          className={cn(
+            'mt-3 text-sm text-center text-muted-foreground cursor-pointer',
+            'hover:text-foreground hover:underline',
+            'flex items-center justify-center'
+          )}
           onClick={onShowLess}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
         >
           Show less
-          <Icon as={FiChevronUp} ml={1} boxSize={3} />
-        </Text>
+          <FiChevronUp className="ml-1 w-3 h-3" />
+        </div>
       )}
     </>
   );

@@ -1,6 +1,6 @@
 import { Prisma, Document } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { logger } from '../lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 
 /**
@@ -229,42 +229,85 @@ export async function batchUpdateDocuments(
       `Repository: Processing ${updates.length} document updates for user: ${userId}`
     );
 
-    const results = [];
+    // Extract valid document IDs
+    const validUpdates = updates.filter(
+      update => update.documentId && typeof update.content === 'string'
+    );
 
-    for (const update of updates) {
-      const { documentId, content } = update;
+    if (validUpdates.length === 0) {
+      logger.warn(`Repository: No valid updates provided`, { userId });
+      return [];
+    }
 
-      if (!documentId || typeof content !== 'string') {
-        logger.warn(`Repository: Invalid update object`, { userId, update });
-        continue;
-      }
+    const documentIds = validUpdates.map(u => u.documentId);
 
-      // Check authorization first
-      const document = await findDocumentWithAuth(documentId, userId);
-      if (!document) {
-        logger.warn(`Repository: Document not found or access denied`, {
+    // Fetch all documents in a single query with authorization info
+    const documents = await prisma.document.findMany({
+      where: {
+        id: { in: documentIds },
+      },
+      select: {
+        id: true,
+        applicationVersion: {
+          select: {
+            project: {
+              select: {
+                userId: true,
+                tenantId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Create a map for quick lookup
+    const documentMap = new Map(documents.map(doc => [doc.id, doc]));
+
+    // Filter authorized updates
+    const authorizedUpdates = validUpdates.filter(update => {
+      const doc = documentMap.get(update.documentId);
+      if (!doc) {
+        logger.warn(`Repository: Document not found`, {
           userId,
-          documentId,
+          documentId: update.documentId,
         });
-        continue;
+        return false;
       }
+      if (doc.applicationVersion.project.userId !== userId) {
+        logger.warn(`Repository: User not authorized for document`, {
+          userId,
+          documentId: update.documentId,
+        });
+        return false;
+      }
+      return true;
+    });
 
-      // Update the document
-      const updatedDocument = await prisma.document.update({
-        where: { id: documentId },
+    if (authorizedUpdates.length === 0) {
+      logger.info(`Repository: No authorized documents to update`);
+      return [];
+    }
+
+    // Perform batch update in a transaction
+    const updatePromises = authorizedUpdates.map(update =>
+      prisma!.document.update({
+        where: { id: update.documentId },
         data: {
-          content: content,
+          content: update.content,
           updatedAt: new Date(),
         },
-      });
+        select: { id: true },
+      })
+    );
 
-      results.push({
-        id: updatedDocument.id,
-        success: true,
-      });
+    const updatedDocuments = await prisma!.$transaction(updatePromises);
 
-      logger.debug(`Repository: Document updated successfully: ${documentId}`);
-    }
+    // Build results array
+    const results = updatedDocuments.map(doc => ({
+      id: doc.id,
+      success: true,
+    }));
 
     logger.info(
       `Repository: Batch update completed: ${results.length}/${updates.length} successful`

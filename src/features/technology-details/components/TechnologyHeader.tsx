@@ -1,14 +1,17 @@
 import React from 'react';
-import { Button, Icon, Tooltip } from '@chakra-ui/react';
+import { Button } from '@/components/ui/button';
 import {
-  FiUpload,
-  FiDownload,
-  FiCheckCircle,
-  FiChevronRight,
-} from 'react-icons/fi';
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
+import { Upload, Download, CheckCircle } from 'lucide-react';
+import { FiChevronRight } from 'react-icons/fi';
 import { useRouter } from 'next/router';
 import ViewHeader from '../../../components/common/ViewHeader';
 import { NavigationButton } from '@/components/common/NavigationButton';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface TechnologyHeaderProps {
   onImport?: () => void;
@@ -24,6 +27,7 @@ const TechnologyHeader: React.FC<TechnologyHeaderProps> = ({
   onExport,
   onCheckConsistency,
 }) => {
+  const { isDarkMode } = useThemeContext();
   const router = useRouter();
   const { projectId, tenant } = router.query;
 
@@ -33,37 +37,45 @@ const TechnologyHeader: React.FC<TechnologyHeaderProps> = ({
     <ViewHeader
       title="Technology Details"
       actions={
-        <>
+        <TooltipProvider>
           {onImport && (
             <Button
-              leftIcon={<Icon as={FiUpload} />}
-              variant="solid"
-              size="md"
+              variant="default"
+              size="default"
               onClick={onImport}
+              className="flex items-center gap-2"
             >
+              <Upload className="h-4 w-4" />
               Import
             </Button>
           )}
           {onExport && (
             <Button
-              leftIcon={<Icon as={FiDownload} />}
               variant="outline"
-              size="md"
+              size="default"
               onClick={onExport}
+              className="flex items-center gap-2"
             >
+              <Download className="h-4 w-4" />
               Export
             </Button>
           )}
           {onCheckConsistency && (
-            <Tooltip label="Check consistency across all sections">
-              <Button
-                leftIcon={<Icon as={FiCheckCircle} />}
-                variant="solid"
-                size="md"
-                onClick={onCheckConsistency}
-              >
-                Check Consistency
-              </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="default"
+                  size="default"
+                  onClick={onCheckConsistency}
+                  className="flex items-center gap-2"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  Check Consistency
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Check consistency across all sections</p>
+              </TooltipContent>
             </Tooltip>
           )}
           {projectId && tenant && (
@@ -71,18 +83,18 @@ const TechnologyHeader: React.FC<TechnologyHeaderProps> = ({
               href={`/${tenant}/projects/${projectId}/claim-refinement`}
               viewType="claims"
               projectId={projectId as string}
-              rightIcon={<Icon as={FiChevronRight} boxSize={3.5} />}
               variant="ghost"
               size="xs"
               style={{
-                color: 'var(--chakra-colors-gray-400)',
+                color: isDarkMode ? '#9CA3AF' : '#6B7280',
                 fontSize: '12px',
               }}
             >
               Claim Refinement
+              <FiChevronRight className="h-3.5 w-3.5" />
             </NavigationButton>
           )}
-        </>
+        </TooltipProvider>
       }
     />
   );

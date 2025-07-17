@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import { SearchHistoryApiService } from '@/client/services/search-history.client-service';
 import { ProcessedSearchHistoryEntry } from '@/types/domain/searchHistory';
 

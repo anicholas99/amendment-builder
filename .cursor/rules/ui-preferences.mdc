@@ -1,0 +1,83 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+---
+description: UI preferences persistence system for maintaining user settings across sessions
+alwaysApply: true
+---
+
+# UI Preferences System
+
+- **Core Principle: All UI preferences must be persisted to the backend**
+  - UI preferences are stored in the `user_preferences` table as key-value pairs
+  - Never use localStorage for user preferences (security and cross-device sync)
+  - All preferences are user-specific, not tenant-specific
+
+- **API Structure**
+  - Generic endpoint: `/api/user/preferences/ui` handles all UI preferences
+  - Service layer: `UIPreferencesService` in `src/services/api/uiPreferencesService.ts`
+  - React hooks: `useUIPreferences` and specific convenience hooks in `src/hooks/api/useUIPreferences.ts`
+
+- **Preference Keys**
+  - All preference keys are defined in `UI_PREFERENCE_KEYS` constant
+  - Use namespaced keys: `ui.featureName.settingName` (e.g., `ui.claimViewMode`)
+  - Current preferences:
+    - `ui.claimViewMode`: Claim view mode ('box' | 'compact')
+    - `ui.sidebarShowAllProjects`: Show/hide all projects in sidebar
+    - `ui.mainPanelWidth`: Resizable panel width
+    - `ui.editorZoomLevel`: Editor zoom percentage
+    - `ui.editorFontFamily`: Editor font family
+    - `ui.editorFontSize`: Editor font size
+    - `ui.techZoomLevel`: Technology details zoom level
+
+- **Implementation Pattern**
+  ```typescript
+  // ✅ DO: Use the preference hooks
+  import { useClaimViewMode } from '@/hooks/api/useUIPreferences';
+  
+  const MyComponent = () => {
+    const [viewMode, setViewMode] = useClaimViewMode();
+    
+    return (
+      <Button onClick={() => setViewMode('compact')}>
+        Switch to {viewMode === 'box' ? 'compact' : 'box'} view
+      </Button>
+    );
+  };
+  ```
+
+  ```typescript
+  // ❌ DON'T: Use localStorage directly
+  const viewMode = localStorage.getItem('claimViewMode'); // WRONG
+  ```
+
+- **Adding New Preferences**
+  1. Add the key to `UI_PREFERENCE_KEYS` in `/api/user/preferences/ui.ts`
+  2. Create a convenience hook in `useUIPreferences.ts` if needed
+  3. Update components to use the hook instead of local state
+  4. Add migration logic if replacing localStorage usage
+
+- **Features**
+  - Automatic caching with React Query (5-minute stale time)
+  - Optimistic updates for instant UI response
+  - Graceful degradation on errors (returns defaults)
+  - One-time migration from localStorage on mount
+  - Cross-device synchronization
+
+- **Security**
+  - Uses `SecurePresets.userPrivate` - requires authentication
+  - Validates all preference keys against whitelist
+  - No tenant context required (user-specific data)
+
+- **Performance**
+  - Batched updates supported via `setPreferences({ key1: val1, key2: val2 })`
+  - Optimistic updates prevent UI lag
+  - React Query caching reduces API calls
+
+- **Related Files**
+  - API endpoint: [ui.ts](mdc:src/pages/api/user/preferences/ui.ts)
+  - Service layer: [uiPreferencesService.ts](mdc:src/services/api/uiPreferencesService.ts)
+  - React hooks: [useUIPreferences.ts](mdc:src/hooks/api/useUIPreferences.ts)
+  - Repository: [userPreferenceRepository.ts](mdc:src/repositories/userPreferenceRepository.ts)

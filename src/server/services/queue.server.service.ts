@@ -1,5 +1,5 @@
 import { QueueClient, QueueServiceClient } from '@azure/storage-queue';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { Buffer } from 'buffer';
 import { environment } from '@/config/environment';
@@ -12,7 +12,7 @@ const CITATION_EXTRACTION_QUEUE_NAME = 'citation-extraction-jobs';
  * Service for interacting with Azure Storage Queues.
  * Handles client initialization and message sending for background processing.
  */
-class QueueServerService {
+export class QueueServerService {
   private queueServiceClient: QueueServiceClient | null = null;
 
   /**
@@ -122,5 +122,3 @@ class QueueServerService {
     }
   }
 }
-
-export const queueService = new QueueServerService();

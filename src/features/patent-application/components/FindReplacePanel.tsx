@@ -1,26 +1,141 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import {
-  Box,
-  Button,
-  Input,
-  HStack,
-  VStack,
-  Text,
-  Checkbox,
-  IconButton,
-  useToast,
-  Collapse,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import { CloseIcon, ChevronUpIcon, ChevronDownIcon } from '@chakra-ui/icons';
+import React, { useReducer, useCallback, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useToast } from '@/hooks/useToastWrapper';
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
+import { useColorModeValue } from '@/hooks/useColorModeValue';
+import { X, ChevronUp, ChevronDown } from 'lucide-react';
 import { Editor } from '@tiptap/react';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Plugin, PluginKey } from 'prosemirror-state';
+import { logger } from '@/utils/clientLogger';
+import { cn } from '@/lib/utils';
 
 interface FindReplacePanelProps {
   isOpen: boolean;
   onClose: () => void;
   editor: Editor | null;
+  initialSearchTerm?: string;
+}
+
+// State shape - grouped by logical concerns
+interface FindReplacePanelState {
+  // Search inputs
+  inputs: {
+    findText: string;
+    replaceText: string;
+  };
+
+  // Search options
+  options: {
+    caseSensitive: boolean;
+    wholeWord: boolean;
+  };
+
+  // Match tracking
+  matches: {
+    count: number;
+    current: number;
+  };
+
+  // UI state
+  ui: {
+    showReplace: boolean;
+    forceScroll: boolean;
+  };
+}
+
+// Action types
+type FindReplacePanelAction =
+  // Input actions
+  | { type: 'SET_FIND_TEXT'; payload: string }
+  | { type: 'SET_REPLACE_TEXT'; payload: string }
+  // Option actions
+  | { type: 'TOGGLE_CASE_SENSITIVE' }
+  | { type: 'TOGGLE_WHOLE_WORD' }
+  | { type: 'SET_WHOLE_WORD'; payload: boolean }
+  // Match actions
+  | { type: 'SET_MATCH_COUNT'; payload: number }
+  | { type: 'SET_CURRENT_MATCH'; payload: number }
+  | { type: 'UPDATE_MATCHES'; payload: { count: number; current: number } }
+  // UI actions
+  | { type: 'TOGGLE_SHOW_REPLACE' }
+  | { type: 'SET_FORCE_SCROLL'; payload: boolean }
+  // Complex actions
+  | { type: 'INIT_SEARCH'; payload: { findText: string; wholeWord: boolean } };
+
+// Reducer function
+function findReplacePanelReducer(
+  state: FindReplacePanelState,
+  action: FindReplacePanelAction
+): FindReplacePanelState {
+  switch (action.type) {
+    // Input actions
+    case 'SET_FIND_TEXT':
+      return {
+        ...state,
+        inputs: { ...state.inputs, findText: action.payload },
+      };
+    case 'SET_REPLACE_TEXT':
+      return {
+        ...state,
+        inputs: { ...state.inputs, replaceText: action.payload },
+      };
+
+    // Option actions
+    case 'TOGGLE_CASE_SENSITIVE':
+      return {
+        ...state,
+        options: {
+          ...state.options,
+          caseSensitive: !state.options.caseSensitive,
+        },
+      };
+    case 'TOGGLE_WHOLE_WORD':
+      return {
+        ...state,
+        options: { ...state.options, wholeWord: !state.options.wholeWord },
+      };
+    case 'SET_WHOLE_WORD':
+      return {
+        ...state,
+        options: { ...state.options, wholeWord: action.payload },
+      };
+
+    // Match actions
+    case 'SET_MATCH_COUNT':
+      return { ...state, matches: { ...state.matches, count: action.payload } };
+    case 'SET_CURRENT_MATCH':
+      return {
+        ...state,
+        matches: { ...state.matches, current: action.payload },
+      };
+    case 'UPDATE_MATCHES':
+      return { ...state, matches: action.payload };
+
+    // UI actions
+    case 'TOGGLE_SHOW_REPLACE':
+      return {
+        ...state,
+        ui: { ...state.ui, showReplace: !state.ui.showReplace },
+      };
+    case 'SET_FORCE_SCROLL':
+      return { ...state, ui: { ...state.ui, forceScroll: action.payload } };
+
+    // Complex actions
+    case 'INIT_SEARCH':
+      return {
+        ...state,
+        inputs: { ...state.inputs, findText: action.payload.findText },
+        options: { ...state.options, wholeWord: action.payload.wholeWord },
+        matches: { ...state.matches, current: 0 },
+        ui: { ...state.ui, forceScroll: true },
+      };
+
+    default:
+      return state;
+  }
 }
 
 // Plugin key for search decorations
@@ -30,19 +145,54 @@ export const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
   isOpen,
   onClose,
   editor,
+  initialSearchTerm,
 }) => {
-  const [findText, setFindText] = useState('');
-  const [replaceText, setReplaceText] = useState('');
-  const [caseSensitive, setCaseSensitive] = useState(false);
-  const [wholeWord, setWholeWord] = useState(false);
-  const [matchCount, setMatchCount] = useState(0);
-  const [currentMatch, setCurrentMatch] = useState(0);
-  const [showReplace, setShowReplace] = useState(false);
+  // Initial state
+  const initialState: FindReplacePanelState = {
+    inputs: {
+      findText: initialSearchTerm || '',
+      replaceText: '',
+    },
+    options: {
+      caseSensitive: false,
+      wholeWord: false,
+    },
+    matches: {
+      count: 0,
+      current: 0,
+    },
+    ui: {
+      showReplace: false,
+      forceScroll: false,
+    },
+  };
+
+  const [state, dispatch] = useReducer(findReplacePanelReducer, initialState);
   const toast = useToast();
 
+  // Update search term when initialSearchTerm changes (triggered programmatically)
+  useEffect(() => {
+    if (
+      isOpen &&
+      initialSearchTerm &&
+      initialSearchTerm !== state.inputs.findText
+    ) {
+      dispatch({
+        type: 'INIT_SEARCH',
+        payload: {
+          findText: initialSearchTerm,
+          wholeWord: true, // Ensure "Word" option is enabled for reference numeral searches
+        },
+      });
+    }
+  }, [isOpen, initialSearchTerm]); // Don't include state.inputs.findText as dependency
+
   // UI colors
-  const bgColor = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const bgColor = useColorModeValue('white', 'hsl(var(--card))');
+  const borderColor = useColorModeValue(
+    'hsl(var(--border))',
+    'hsl(var(--border))'
+  );
   const shadowColor = useColorModeValue('lg', 'dark-lg');
 
   // Clear search highlights
@@ -60,23 +210,22 @@ export const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
 
   // Highlight all matches and return positions
   const highlightMatches = useCallback(() => {
-    if (!editor || !findText) {
+    if (!editor || !state.inputs.findText) {
       clearHighlights();
-      setMatchCount(0);
-      setCurrentMatch(0);
+      dispatch({ type: 'UPDATE_MATCHES', payload: { count: 0, current: 0 } });
       return [];
     }
 
-    const { state } = editor;
-    const { doc } = state;
+    const { state: editorState } = editor;
+    const { doc } = editorState;
     const decorations: Decoration[] = [];
     const matches: { from: number; to: number }[] = [];
 
     const searchRegex = new RegExp(
-      wholeWord
-        ? `\\b${findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`
-        : findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
-      caseSensitive ? 'g' : 'gi'
+      state.options.wholeWord
+        ? `\\b${state.inputs.findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`
+        : state.inputs.findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+      state.options.caseSensitive ? 'g' : 'gi'
     );
 
     doc.descendants((node, pos) => {
@@ -123,9 +272,15 @@ export const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
       editor.registerPlugin(searchPlugin);
     }
 
-    setMatchCount(matches.length);
+    dispatch({ type: 'SET_MATCH_COUNT', payload: matches.length });
     return matches;
-  }, [editor, findText, caseSensitive, wholeWord, clearHighlights]);
+  }, [
+    editor,
+    state.inputs.findText,
+    state.options.caseSensitive,
+    state.options.wholeWord,
+    clearHighlights,
+  ]);
 
   // Navigate to specific match
   const goToMatch = useCallback(
@@ -133,29 +288,28 @@ export const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
       if (!editor || matches.length === 0 || index >= matches.length) return;
 
       const match = matches[index];
-      editor.commands.setTextSelection({ from: match.from, to: match.to });
+
+      // Clear any existing text selection to prevent blue highlights
+      if (window.getSelection) {
+        window.getSelection()?.removeAllRanges();
+      }
+
+      // Ensure editor doesn't have any text selection
+      editor.commands.setTextSelection(match.from);
+      editor.commands.blur();
 
       const { doc } = editor.state;
       const decorations: Decoration[] = [];
 
-      matches.forEach((m, i) => {
-        if (i === index) {
-          decorations.push(
-            Decoration.inline(m.from, m.to, {
-              class: 'search-result-current',
-              style:
-                'background-color: #ff9800; padding: 0 2px; border-radius: 2px; color: white;',
-            })
-          );
-        } else {
-          decorations.push(
-            Decoration.inline(m.from, m.to, {
-              class: 'search-result',
-              style:
-                'background-color: #ffeb3b; padding: 0 2px; border-radius: 2px;',
-            })
-          );
-        }
+      // Highlight all matches in yellow
+      matches.forEach(m => {
+        decorations.push(
+          Decoration.inline(m.from, m.to, {
+            class: 'search-result patent-search-highlight',
+            style:
+              'background-color: #ffeb3b !important; padding: 0 2px; border-radius: 2px; -webkit-user-select: none; user-select: none;',
+          })
+        );
       });
 
       clearHighlights();
@@ -180,61 +334,136 @@ export const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
 
       editor.registerPlugin(searchPlugin);
 
-      // Only scroll into view if the selection is not already visible
-      const { view } = editor;
-      const coords = view.coordsAtPos(match.from);
-      const editorElement = view.dom as HTMLElement;
-      const scrollContainer = editorElement.closest('.custom-scrollbar') || 
-                             editorElement.parentElement;
-      
-      if (scrollContainer) {
-        const containerRect = scrollContainer.getBoundingClientRect();
-        const isVisible = coords.top >= containerRect.top && 
-                         coords.bottom <= containerRect.bottom;
-        
-        // Only scroll if not visible
-        if (!isVisible) {
-          editor.commands.scrollIntoView();
-        }
-      } else {
-        // Fallback if no scroll container found
-        editor.commands.scrollIntoView();
-      }
+      // Ensure scrolling happens after selection and rendering
+      // We need multiple steps with delays to ensure everything is ready
 
-      setCurrentMatch(index);
+      // Step 1: Set the selection
+      dispatch({ type: 'SET_CURRENT_MATCH', payload: index });
+
+      // Step 2: After ensuring selection is set, manually adjust scroll within the editor container without focusing, to avoid browser auto-scroll.
+      setTimeout(() => {
+        try {
+          // We intentionally avoid editor.commands.focus() and editor.commands.scrollIntoView() to prevent the page layout from shifting.
+
+          // Direct DOM manipulation fallback
+          const { view } = editor;
+          const domAtPos = view.domAtPos(match.from);
+
+          if (domAtPos && domAtPos.node) {
+            const node = domAtPos.node;
+            const element =
+              node.nodeType === Node.TEXT_NODE
+                ? node.parentElement
+                : (node as HTMLElement);
+
+            if (element) {
+              logger.debug('[FindReplace] Found element to scroll to:', {
+                tagName: element.tagName,
+                className: element.className,
+                text: element.textContent?.substring(0, 50),
+              });
+
+              // Get the editor's scrollable container
+              const editorContainer = document.querySelector(
+                '.patent-editor-tiptap'
+              );
+              if (!editorContainer) {
+                logger.error(
+                  '[FindReplace] Could not find .patent-editor-tiptap container'
+                );
+                return;
+              }
+
+              // Get positions
+              const containerRect = editorContainer.getBoundingClientRect();
+              const elementRect = element.getBoundingClientRect();
+
+              // Check if element is already visible
+              const isVisible =
+                elementRect.top >= containerRect.top &&
+                elementRect.bottom <= containerRect.bottom;
+
+              if (!isVisible || state.ui.forceScroll) {
+                // Calculate scroll position to center the element
+                const scrollTop =
+                  editorContainer.scrollTop +
+                  (elementRect.top - containerRect.top) -
+                  containerRect.height / 2 +
+                  elementRect.height / 2;
+
+                logger.debug('[FindReplace] Scrolling to position:', {
+                  currentScroll: editorContainer.scrollTop,
+                  targetScroll: scrollTop,
+                  elementTop: elementRect.top,
+                  containerTop: containerRect.top,
+                });
+
+                editorContainer.scrollTo({
+                  top: Math.max(0, scrollTop),
+                  behavior: 'smooth',
+                });
+              }
+            }
+          }
+
+          // Reset force scroll flag
+          if (state.ui.forceScroll) {
+            dispatch({ type: 'SET_FORCE_SCROLL', payload: false });
+          }
+        } catch (e) {
+          logger.error('[FindReplace] Scroll error:', e);
+        }
+      }, 50); // Small delay after selection
     },
-    [editor, clearHighlights]
+    [editor, clearHighlights, state.ui.forceScroll]
   );
 
   // Update highlights when search parameters change
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && state.inputs.findText) {
       const matches = highlightMatches();
-      if (matches.length > 0 && currentMatch < matches.length) {
-        goToMatch(matches, currentMatch);
-      }
-    } else {
+      // Don't navigate here - let the forceScroll effect handle initial navigation
+    } else if (!isOpen) {
       clearHighlights();
     }
   }, [
-    findText,
-    caseSensitive,
-    wholeWord,
+    state.inputs.findText,
+    state.options.caseSensitive,
+    state.options.wholeWord,
     isOpen,
     highlightMatches,
-    currentMatch,
-    goToMatch,
     clearHighlights,
+  ]);
+
+  // Handle initial scroll when search is triggered programmatically
+  useEffect(() => {
+    if (state.ui.forceScroll && isOpen && state.inputs.findText) {
+      // Small delay to ensure highlights are rendered
+      const timer = setTimeout(() => {
+        const matches = highlightMatches();
+        if (matches.length > 0) {
+          goToMatch(matches, 0);
+        }
+      }, 200); // Longer delay to ensure everything is ready
+
+      return () => clearTimeout(timer);
+    }
+  }, [
+    state.ui.forceScroll,
+    isOpen,
+    state.inputs.findText,
+    highlightMatches,
+    goToMatch,
   ]);
 
   // Clear when panel closes
   useEffect(() => {
     if (!isOpen) {
       clearHighlights();
-      setFindText('');
-      setReplaceText('');
-      setCurrentMatch(0);
-      setShowReplace(false);
+      dispatch({ type: 'SET_FIND_TEXT', payload: '' });
+      dispatch({ type: 'SET_REPLACE_TEXT', payload: '' });
+      dispatch({ type: 'SET_CURRENT_MATCH', payload: 0 });
+      dispatch({ type: 'TOGGLE_SHOW_REPLACE' });
     }
   }, [isOpen, clearHighlights]);
 
@@ -242,23 +471,25 @@ export const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
     const matches = highlightMatches();
     if (matches.length === 0) return;
 
-    const nextIndex = (currentMatch + 1) % matches.length;
-    setCurrentMatch(nextIndex);
+    const nextIndex = (state.matches.current + 1) % matches.length;
+    dispatch({ type: 'SET_CURRENT_MATCH', payload: nextIndex });
     goToMatch(matches, nextIndex);
-  }, [highlightMatches, currentMatch, goToMatch]);
+  }, [highlightMatches, state.matches.current, goToMatch]);
 
   const findPrevious = useCallback(() => {
     const matches = highlightMatches();
     if (matches.length === 0) return;
 
     const prevIndex =
-      currentMatch === 0 ? matches.length - 1 : currentMatch - 1;
-    setCurrentMatch(prevIndex);
+      state.matches.current === 0
+        ? matches.length - 1
+        : state.matches.current - 1;
+    dispatch({ type: 'SET_CURRENT_MATCH', payload: prevIndex });
     goToMatch(matches, prevIndex);
-  }, [highlightMatches, currentMatch, goToMatch]);
+  }, [highlightMatches, state.matches.current, goToMatch]);
 
   const replaceCurrent = useCallback(() => {
-    if (!editor || !findText || matchCount === 0) return;
+    if (!editor || !state.inputs.findText || state.matches.count === 0) return;
 
     const selection = editor.state.selection;
     const selectedText = editor.state.doc.textBetween(
@@ -267,47 +498,48 @@ export const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
     );
 
     if (
-      selectedText === findText ||
-      (!caseSensitive && selectedText.toLowerCase() === findText.toLowerCase())
+      selectedText === state.inputs.findText ||
+      (!state.options.caseSensitive &&
+        selectedText.toLowerCase() === state.inputs.findText.toLowerCase())
     ) {
-      editor.chain().focus().insertContent(replaceText).run();
+      editor.chain().focus().insertContent(state.inputs.replaceText).run();
 
       setTimeout(() => {
         const matches = highlightMatches();
         if (matches.length > 0) {
-          const nextIndex = Math.min(currentMatch, matches.length - 1);
-          setCurrentMatch(nextIndex);
+          const nextIndex = Math.min(state.matches.current, matches.length - 1);
+          dispatch({ type: 'SET_CURRENT_MATCH', payload: nextIndex });
           goToMatch(matches, nextIndex);
         }
       }, 100);
     }
   }, [
     editor,
-    findText,
-    replaceText,
-    caseSensitive,
-    matchCount,
-    currentMatch,
+    state.inputs.findText,
+    state.inputs.replaceText,
+    state.options.caseSensitive,
+    state.matches.count,
+    state.matches.current,
     highlightMatches,
     goToMatch,
   ]);
 
   const replaceAll = useCallback(() => {
-    if (!editor || !findText || matchCount === 0) return;
+    if (!editor || !state.inputs.findText || state.matches.count === 0) return;
 
-    const { state } = editor;
-    const { doc } = state;
+    const { state: editorState } = editor;
+    const { doc } = editorState;
     let offset = 0;
     let replacedCount = 0;
 
     const searchRegex = new RegExp(
-      wholeWord
-        ? `\\b${findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`
-        : findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
-      caseSensitive ? 'g' : 'gi'
+      state.options.wholeWord
+        ? `\\b${state.inputs.findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`
+        : state.inputs.findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+      state.options.caseSensitive ? 'g' : 'gi'
     );
 
-    const tr = state.tr;
+    const tr = editorState.tr;
 
     doc.descendants((node, pos) => {
       if (node.isText && node.text) {
@@ -327,9 +559,9 @@ export const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
           tr.replaceWith(
             m.from + offset,
             m.to + offset,
-            editor.schema.text(replaceText)
+            editor.schema.text(state.inputs.replaceText)
           );
-          offset += replaceText.length - m.length;
+          offset += state.inputs.replaceText.length - m.length;
           replacedCount++;
         }
       }
@@ -345,15 +577,14 @@ export const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
     });
 
     clearHighlights();
-    setCurrentMatch(0);
-    setMatchCount(0);
+    dispatch({ type: 'UPDATE_MATCHES', payload: { count: 0, current: 0 } });
   }, [
     editor,
-    findText,
-    replaceText,
-    caseSensitive,
-    wholeWord,
-    matchCount,
+    state.inputs.findText,
+    state.inputs.replaceText,
+    state.options.caseSensitive,
+    state.options.wholeWord,
+    state.matches.count,
     clearHighlights,
     toast,
   ]);
@@ -381,123 +612,134 @@ export const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
   if (!isOpen) return null;
 
   return (
-    <Box
-      position="absolute"
-      top={4}
-      right={4}
-      zIndex={1000}
-      bg={bgColor}
-      borderRadius="md"
-      border="1px solid"
-      borderColor={borderColor}
-      boxShadow={shadowColor}
-      p={3}
-      minWidth="350px"
-      maxWidth="400px"
+    <div
+      className="absolute top-4 right-4 z-1000"
+      style={{
+        backgroundColor: bgColor,
+        borderRadius: 'md',
+        border: `1px solid ${borderColor}`,
+        boxShadow: shadowColor,
+        padding: '1rem',
+        minWidth: '350px',
+        maxWidth: '400px',
+      }}
     >
-      <VStack spacing={3} align="stretch">
-        {/* Header with close button */}
-        <HStack justify="space-between">
-          <HStack spacing={3}>
-            <Text fontWeight="semibold" fontSize="sm">
-              Find & Replace
-            </Text>
-            <IconButton
-              aria-label="Toggle replace"
-              icon={showReplace ? <ChevronUpIcon /> : <ChevronDownIcon />}
-              size="xs"
-              variant="ghost"
-              onClick={() => setShowReplace(!showReplace)}
-            />
-          </HStack>
-          <IconButton
-            aria-label="Close"
-            icon={<CloseIcon />}
-            size="xs"
-            variant="ghost"
-            onClick={onClose}
-          />
-        </HStack>
-
-        {/* Find input and buttons */}
-        <HStack spacing={2}>
-          <Input
-            size="sm"
-            value={findText}
-            onChange={e => setFindText(e.target.value)}
-            placeholder="Find..."
-            autoFocus
-          />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <span className="text-sm font-semibold">Find & Replace</span>
           <Button
-            size="sm"
-            onClick={findPrevious}
-            isDisabled={matchCount === 0}
+            aria-label="Toggle replace"
+            variant="ghost"
+            size="icon"
+            onClick={() => dispatch({ type: 'TOGGLE_SHOW_REPLACE' })}
           >
-            ↑
+            {state.ui.showReplace ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
           </Button>
-          <Button size="sm" onClick={findNext} isDisabled={matchCount === 0}>
-            ↓
-          </Button>
-        </HStack>
+        </div>
+        <Button
+          aria-label="Close"
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
 
-        {/* Replace section */}
-        <Collapse in={showReplace} animateOpacity>
-          <VStack spacing={2} align="stretch">
+      <div className="mt-4 flex items-center space-x-2">
+        <Input
+          value={state.inputs.findText}
+          onChange={e =>
+            dispatch({ type: 'SET_FIND_TEXT', payload: e.target.value })
+          }
+          placeholder="Find..."
+          autoFocus
+          className="h-9 text-sm"
+        />
+        <Button
+          size="sm"
+          onClick={findPrevious}
+          disabled={state.matches.count === 0}
+        >
+          ↑
+        </Button>
+        <Button
+          size="sm"
+          onClick={findNext}
+          disabled={state.matches.count === 0}
+        >
+          ↓
+        </Button>
+      </div>
+
+      <Collapsible open={state.ui.showReplace}>
+        <CollapsibleContent>
+          <div className="mt-4 flex items-center space-x-2">
             <Input
-              size="sm"
-              value={replaceText}
-              onChange={e => setReplaceText(e.target.value)}
+              value={state.inputs.replaceText}
+              onChange={e =>
+                dispatch({ type: 'SET_REPLACE_TEXT', payload: e.target.value })
+              }
               placeholder="Replace with..."
+              className="h-9 text-sm"
             />
-            <HStack spacing={2}>
-              <Button
-                size="sm"
-                onClick={replaceCurrent}
-                isDisabled={matchCount === 0}
-                flex={1}
-              >
-                Replace
-              </Button>
-              <Button
-                size="sm"
-                onClick={replaceAll}
-                isDisabled={matchCount === 0}
-                colorScheme="purple"
-                flex={1}
-              >
-                Replace All
-              </Button>
-            </HStack>
-          </VStack>
-        </Collapse>
+            <Button
+              size="sm"
+              onClick={replaceCurrent}
+              disabled={state.matches.count === 0}
+              className="flex-1"
+            >
+              Replace
+            </Button>
+            <Button
+              size="sm"
+              onClick={replaceAll}
+              disabled={state.matches.count === 0}
+              className="bg-purple-500 text-white flex-1"
+            >
+              Replace All
+            </Button>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
 
-        {/* Options and match count */}
-        <HStack justify="space-between" fontSize="xs">
-          <HStack spacing={3}>
+      <div className="mt-4 flex items-center justify-between text-xs">
+        <div className="flex items-center space-x-3">
+          <label className="flex items-center space-x-2 cursor-pointer">
             <Checkbox
-              size="sm"
-              isChecked={caseSensitive}
-              onChange={e => setCaseSensitive(e.target.checked)}
-            >
-              Case
-            </Checkbox>
+              checked={state.options.caseSensitive}
+              onCheckedChange={checked => {
+                if (checked !== 'indeterminate') {
+                  dispatch({ type: 'TOGGLE_CASE_SENSITIVE' });
+                }
+              }}
+            />
+            <span>Case</span>
+          </label>
+          <label className="flex items-center space-x-2 cursor-pointer">
             <Checkbox
-              size="sm"
-              isChecked={wholeWord}
-              onChange={e => setWholeWord(e.target.checked)}
-            >
-              Word
-            </Checkbox>
-          </HStack>
-          {findText && (
-            <Text color="gray.600">
-              {matchCount > 0
-                ? `${currentMatch + 1}/${matchCount}`
-                : 'No matches'}
-            </Text>
-          )}
-        </HStack>
-      </VStack>
-    </Box>
+              checked={state.options.wholeWord}
+              onCheckedChange={checked => {
+                if (checked !== 'indeterminate') {
+                  dispatch({ type: 'TOGGLE_WHOLE_WORD' });
+                }
+              }}
+            />
+            <span>Word</span>
+          </label>
+        </div>
+        {state.inputs.findText && (
+          <span className="text-text-secondary">
+            {state.matches.count > 0
+              ? `${state.matches.current + 1}/${state.matches.count}`
+              : 'No matches'}
+          </span>
+        )}
+      </div>
+    </div>
   );
 };

@@ -5,7 +5,7 @@
  * before navigating away or refreshing the page.
  */
 
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 // Flag to track if there are unsaved changes
 let hasUnsavedChanges = false;

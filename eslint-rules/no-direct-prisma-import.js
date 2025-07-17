@@ -13,7 +13,7 @@ module.exports = {
     },
     messages: {
       noPrismaImport:
-        'Direct Prisma imports are not allowed outside of src/repositories/. Use repository functions instead.',
+        'Direct Prisma imports are not allowed outside of src/repositories/. Use repository functions instead. See db-access-consistency.mdc',
     },
     schema: [],
   },
@@ -23,13 +23,16 @@ module.exports = {
         const importPath = node.source.value;
         const filename = context.getFilename();
 
-        // Check if this is a Prisma import
+        // Check if this is a Prisma import (more comprehensive patterns)
         const isPrismaImport =
           importPath.includes('@/lib/prisma') ||
           importPath.includes('../lib/prisma') ||
           importPath.includes('../../lib/prisma') ||
           importPath.includes('../../../lib/prisma') ||
-          importPath === '@prisma/client';
+          importPath.includes('lib/prisma') ||
+          importPath === '@prisma/client' ||
+          importPath.startsWith('@prisma/') ||
+          importPath.includes('prisma');
 
         if (!isPrismaImport) return;
 
@@ -49,28 +52,49 @@ module.exports = {
           return;
         }
 
+        // Allow in database seed files
+        if (
+          filename.includes('/seed/') ||
+          filename.includes('\\seed\\') ||
+          filename.includes('seeder')
+        ) {
+          return;
+        }
+
         // Allow in test files for mocking
         if (filename.includes('.test.') || filename.includes('.spec.')) {
           return;
         }
 
-        // Check for specific imports that indicate direct DB access
-        const hasDirectDbAccess = node.specifiers.some(spec => {
-          if (spec.type === 'ImportSpecifier') {
-            return (
-              spec.imported.name === 'prisma' ||
-              spec.imported.name === 'getPrismaClient'
-            );
-          }
-          return false;
-        });
-
-        if (hasDirectDbAccess || importPath.includes('@/lib/prisma')) {
-          context.report({
-            node,
-            messageId: 'noPrismaImport',
-          });
+        // Allow in migration files
+        if (
+          filename.includes('/migrations/') ||
+          filename.includes('\\migrations\\')
+        ) {
+          return;
         }
+
+        // Allow in scripts directory (for maintenance/migration scripts)
+        if (
+          filename.includes('/scripts/') ||
+          filename.includes('\\scripts\\')
+        ) {
+          return;
+        }
+
+        // Allow in lib/db directory (database utilities)
+        if (
+          filename.includes('/lib/db/') ||
+          filename.includes('\\lib\\db\\')
+        ) {
+          return;
+        }
+
+        // Report violation
+        context.report({
+          node,
+          messageId: 'noPrismaImport',
+        });
       },
     };
   },

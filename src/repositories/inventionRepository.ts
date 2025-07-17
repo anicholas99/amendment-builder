@@ -1,8 +1,8 @@
 import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { Prisma } from '@prisma/client';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { Invention } from '@prisma/client';
 import { FigureStatus } from '@/constants/database-enums';
 
@@ -330,7 +330,7 @@ export const inventionRepository = {
 
       // Extract top-level elements before deleting them
       const topLevelElements = inventionData.elements;
-      
+
       // Also remove figures and elements - these are now handled by normalized tables
       delete inventionData.figures;
       delete inventionData.elements;
@@ -384,8 +384,10 @@ export const inventionRepository = {
         logger.debug(
           `[InventionRepo] Processing ${Object.keys(topLevelElements).length} top-level elements`
         );
-        
-        for (const [elementKey, elementName] of Object.entries(topLevelElements)) {
+
+        for (const [elementKey, elementName] of Object.entries(
+          topLevelElements
+        )) {
           if (typeof elementName === 'string') {
             allElements.set(String(elementKey), elementName);
           }

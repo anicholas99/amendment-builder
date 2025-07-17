@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import {
   FigureApiService,
   FigureUpdatePayload,
 } from '@/services/api/figureApiService';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { queryKeys } from '@/config/reactQueryConfig';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { apiFetch } from '@/lib/api/apiClient';
@@ -85,6 +85,7 @@ export function useAssignFigure() {
         status: 'success',
         duration: 3000,
         isClosable: true,
+        position: 'bottom-right',
       });
     },
     onError: (error, variables) => {
@@ -100,6 +101,7 @@ export function useAssignFigure() {
         status: 'error',
         duration: 5000,
         isClosable: true,
+        position: 'bottom-right',
       });
     },
   });
@@ -165,6 +167,7 @@ export function useUnassignFigure() {
         status: 'success',
         duration: 3000,
         isClosable: true,
+        position: 'bottom-right',
       });
     },
     onError: (error, variables) => {
@@ -180,6 +183,7 @@ export function useUnassignFigure() {
         status: 'error',
         duration: 5000,
         isClosable: true,
+        position: 'bottom-right',
       });
     },
   });

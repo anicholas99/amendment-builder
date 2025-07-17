@@ -8,7 +8,7 @@ export const useZoomControls = (initialZoom = 100) => {
 
   // Handle zoom in
   const handleZoomIn = () => {
-    setZoomLevel(prevZoom => Math.min(prevZoom + 10, 120));
+    setZoomLevel(prevZoom => Math.min(prevZoom + 10, 150));
   };
 
   // Handle zoom out

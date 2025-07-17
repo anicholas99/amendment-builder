@@ -1,20 +1,13 @@
 import React from 'react';
-import {
-  VStack,
-  Box,
-  Text,
-  FormControl,
-  FormLabel,
-  Input,
-  Textarea,
-  Button,
-  Divider,
-  Flex,
-  HStack,
-  Icon,
-  Badge,
-} from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { FiPlus, FiTrash2 } from 'react-icons/fi';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface TechnologyDetail {
   id: string;
@@ -57,196 +50,211 @@ const TechnologyDetailsForm: React.FC<TechnologyDetailsFormProps> = ({
   onUpdateAdvantage,
   onDeleteAdvantage,
 }) => {
+  const { isDarkMode } = useThemeContext();
+
   return (
-    <Box w="100%" p={4}>
-      <VStack spacing={6} align="stretch">
+    <div className="w-full p-4">
+      <div className="space-y-6">
         {/* Basic Invention Information */}
-        <Box>
-          <Text fontSize="xl" fontWeight="bold" mb={4}>
-            Basic Information
-          </Text>
+        <div>
+          <h2 className="text-xl font-bold mb-4">Basic Information</h2>
 
-          <FormControl mb={4}>
-            <FormLabel>Invention Title</FormLabel>
-            <Input
-              value={inventionTitle}
-              onChange={e => onUpdateInvention('title', e.target.value)}
-              placeholder="Enter the title of your invention"
-            />
-          </FormControl>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="invention-title">Invention Title</Label>
+              <Input
+                id="invention-title"
+                value={inventionTitle}
+                onChange={e => onUpdateInvention('title', e.target.value)}
+                placeholder="Enter the title of your invention"
+              />
+            </div>
 
-          <FormControl>
-            <FormLabel>Invention Description</FormLabel>
-            <Textarea
-              value={inventionDescription}
-              onChange={e => onUpdateInvention('description', e.target.value)}
-              placeholder="Provide a brief description of your invention"
-              minH="100px"
-              resize="vertical"
-            />
-          </FormControl>
-        </Box>
+            <div className="space-y-2">
+              <Label htmlFor="invention-description">
+                Invention Description
+              </Label>
+              <Textarea
+                id="invention-description"
+                value={inventionDescription}
+                onChange={e => onUpdateInvention('description', e.target.value)}
+                placeholder="Provide a brief description of your invention"
+                className="min-h-[100px] resize-y"
+              />
+            </div>
+          </div>
+        </div>
 
-        <Divider />
+        <Separator />
 
         {/* Problem Solved */}
-        <Box>
-          <Text fontSize="xl" fontWeight="bold" mb={4}>
-            Problem Solved
-          </Text>
+        <div>
+          <h2 className="text-xl font-bold mb-4">Problem Solved</h2>
 
-          <FormControl>
-            <FormLabel>What problem does your invention solve?</FormLabel>
+          <div className="space-y-2">
+            <Label htmlFor="problem-solved">
+              What problem does your invention solve?
+            </Label>
             <Textarea
+              id="problem-solved"
               value={problemSolved}
               onChange={e => onUpdateProblemSolved(e.target.value)}
               placeholder="Describe the problem that your invention addresses"
-              minH="100px"
-              resize="vertical"
+              className="min-h-[100px] resize-y"
             />
-          </FormControl>
-        </Box>
+          </div>
+        </div>
 
-        <Divider />
+        <Separator />
 
         {/* Advantages */}
-        <Box>
-          <Flex justifyContent="space-between" alignItems="center" mb={4}>
-            <Text fontSize="xl" fontWeight="bold">
-              Advantages
-            </Text>
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">Advantages</h2>
             <Button
-              leftIcon={<Icon as={FiPlus} />}
-              colorScheme="blue"
               variant="outline"
               onClick={onAddAdvantage}
+              className="flex items-center space-x-2"
             >
-              Add Advantage
+              <FiPlus className="h-4 w-4" />
+              <span>Add Advantage</span>
             </Button>
-          </Flex>
+          </div>
 
-          <VStack spacing={3} align="stretch">
+          <div className="space-y-3">
             {advantages.map((advantage, index) => (
-              <Flex key={index} alignItems="center">
-                <Badge colorScheme="green" mr={2}>
+              <div key={index} className="flex items-center space-x-2">
+                <Badge
+                  variant="secondary"
+                  className="bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300"
+                >
                   {index + 1}
                 </Badge>
                 <Input
                   value={advantage}
                   onChange={e => onUpdateAdvantage(index, e.target.value)}
-                  flex="1"
+                  className="flex-1"
                 />
                 <Button
-                  ml={2}
                   size="sm"
-                  colorScheme="red"
                   variant="ghost"
                   onClick={() => onDeleteAdvantage(index)}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/50"
                 >
-                  <Icon as={FiTrash2} />
+                  <FiTrash2 className="h-4 w-4" />
                 </Button>
-              </Flex>
+              </div>
             ))}
 
             {advantages.length === 0 && (
-              <Box p={4} borderWidth="1px" borderRadius="md" bg="gray.50">
-                <Text color="gray.500" textAlign="center">
-                  No advantages added yet. Click "Add Advantage" to add one.
-                </Text>
-              </Box>
+              <div
+                className={cn(
+                  'p-4 border rounded-md text-center',
+                  isDarkMode
+                    ? 'border-gray-700 bg-gray-800/50 text-gray-400'
+                    : 'border-gray-200 bg-gray-50 text-gray-500'
+                )}
+              >
+                No advantages added yet. Click "Add Advantage" to add one.
+              </div>
             )}
-          </VStack>
-        </Box>
+          </div>
+        </div>
 
-        <Divider />
+        <Separator />
 
         {/* Technical Details */}
-        <Box>
-          <Flex justifyContent="space-between" alignItems="center" mb={4}>
-            <Text fontSize="xl" fontWeight="bold">
-              Technical Details
-            </Text>
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">Technical Details</h2>
             <Button
-              leftIcon={<Icon as={FiPlus} />}
-              colorScheme="blue"
               variant="outline"
               onClick={onAddDetail}
+              className="flex items-center space-x-2"
             >
-              Add Detail
+              <FiPlus className="h-4 w-4" />
+              <span>Add Detail</span>
             </Button>
-          </Flex>
+          </div>
 
-          <VStack spacing={4} align="stretch">
+          <div className="space-y-4">
             {details.map(detail => (
-              <Box
+              <div
                 key={detail.id}
-                p={4}
-                borderWidth="1px"
-                borderRadius="md"
-                boxShadow="sm"
+                className="p-4 border rounded-md shadow-sm bg-card border-border"
               >
-                <Flex justifyContent="space-between" alignItems="center" mb={2}>
-                  <FormControl>
-                    <FormLabel>Title</FormLabel>
+                <div className="flex justify-between items-start mb-2 space-x-2">
+                  <div className="flex-1 space-y-2">
+                    <Label htmlFor={`detail-title-${detail.id}`}>Title</Label>
                     <Input
+                      id={`detail-title-${detail.id}`}
                       value={detail.title}
                       onChange={e =>
                         onUpdateDetail(detail.id, 'title', e.target.value)
                       }
                       placeholder="Detail title"
                     />
-                  </FormControl>
+                  </div>
 
                   <Button
-                    ml={2}
                     size="sm"
-                    colorScheme="red"
                     variant="ghost"
                     onClick={() => onDeleteDetail(detail.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/50 mt-7"
                   >
-                    <Icon as={FiTrash2} />
+                    <FiTrash2 className="h-4 w-4" />
                   </Button>
-                </Flex>
+                </div>
 
-                <FormControl mt={3}>
-                  <FormLabel>Description</FormLabel>
+                <div className="space-y-2 mt-3">
+                  <Label htmlFor={`detail-description-${detail.id}`}>
+                    Description
+                  </Label>
                   <Textarea
+                    id={`detail-description-${detail.id}`}
                     value={detail.description}
                     onChange={e =>
                       onUpdateDetail(detail.id, 'description', e.target.value)
                     }
                     placeholder="Detailed description"
-                    minH="100px"
-                    resize="vertical"
+                    className="min-h-[100px] resize-y"
                   />
-                </FormControl>
+                </div>
 
                 {detail.category && (
-                  <FormControl mt={3}>
-                    <FormLabel>Category</FormLabel>
+                  <div className="space-y-2 mt-3">
+                    <Label htmlFor={`detail-category-${detail.id}`}>
+                      Category
+                    </Label>
                     <Input
+                      id={`detail-category-${detail.id}`}
                       value={detail.category}
                       onChange={e =>
                         onUpdateDetail(detail.id, 'category', e.target.value)
                       }
                       placeholder="Category (optional)"
                     />
-                  </FormControl>
+                  </div>
                 )}
-              </Box>
+              </div>
             ))}
 
             {details.length === 0 && (
-              <Box p={4} borderWidth="1px" borderRadius="md" bg="gray.50">
-                <Text color="gray.500" textAlign="center">
-                  No technical details added yet. Click "Add Detail" to add one.
-                </Text>
-              </Box>
+              <div
+                className={cn(
+                  'p-4 border rounded-md text-center',
+                  isDarkMode
+                    ? 'border-gray-700 bg-gray-800/50 text-gray-400'
+                    : 'border-gray-200 bg-gray-50 text-gray-500'
+                )}
+              >
+                No technical details added yet. Click "Add Detail" to add one.
+              </div>
             )}
-          </VStack>
-        </Box>
-      </VStack>
-    </Box>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

@@ -9,9 +9,8 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { DebugApiService } from '@/client/services/debug.client-service';
 import { ApplicationError } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
-import { useToast } from '@chakra-ui/react';
-import { showSuccessToast, showErrorToast } from '@/utils/toast';
+import { logger } from '@/utils/clientLogger';
+import { useToast } from '@/utils/toast';
 import { debugKeys } from '@/lib/queryKeys';
 
 /**
@@ -35,18 +34,16 @@ export function useResetCitationExtraction() {
     mutationFn: (jobId: number) =>
       DebugApiService.resetCitationExtraction(jobId),
     onSuccess: () => {
-      showSuccessToast(
-        toast,
-        'UI Reset Requested',
-        'You can now return to the main app and try again'
-      );
+      toast.success('UI Reset Requested', {
+        description: 'You can now return to the main app and try again',
+      });
     },
     onError: (error: ApplicationError) => {
       logger.error(
         '[useResetCitationExtraction] Error resetting extraction:',
         error
       );
-      showErrorToast(toast, 'Failed to reset extraction');
+      toast.error('Failed to reset extraction');
     },
   });
 }

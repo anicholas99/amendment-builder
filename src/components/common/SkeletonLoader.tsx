@@ -1,265 +1,531 @@
 import React from 'react';
 import {
-  Box,
-  Flex,
-  Stack,
   Skeleton,
   SkeletonText,
-  VStack,
-  HStack,
-  useColorModeValue,
-  Spacer,
-} from '@chakra-ui/react';
+  SkeletonAvatar,
+  SkeletonButton,
+  SkeletonCard,
+} from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 interface SkeletonLoaderProps {
-  type?: 'document' | 'project' | 'sidebar' | 'projects-dashboard';
+  type?:
+    | 'document'
+    | 'project'
+    | 'sidebar'
+    | 'projects-dashboard'
+    | 'table'
+    | 'list'
+    | 'search-history'
+    | 'project-list'
+    | 'card'
+    | 'form'
+    | 'chat'
+    | 'detailed-card';
   count?: number;
+  variant?: 'default' | 'shimmer' | 'wave' | 'pulse' | 'glow';
+  className?: string;
+  showAvatar?: boolean;
+  showActions?: boolean;
 }
 
 /**
- * A component that displays skeleton placeholders during loading states
- * to improve perceived performance and provide visual feedback
+ * Enhanced skeleton loader component with modern animations and patterns
+ * Uses shadcn/ui skeleton components with improved visual design
  */
 const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
   type = 'document',
   count = 1,
+  variant = 'shimmer',
+  className,
+  showAvatar = true,
+  showActions = true,
 }) => {
-  const bgColor = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-
-  // Render a skeleton for a document view
+  // Enhanced document skeleton with better visual hierarchy
   if (type === 'document') {
     return (
-      <Box
-        w="100%"
-        minH="400px"
-        bg={bgColor}
-        p={{ base: 4, md: 6 }}
-        borderRadius="md"
-        borderWidth="1px"
-        borderColor={borderColor}
-        boxShadow="sm"
-      >
-        <VStack spacing={{ base: 4, md: 6 }} align="stretch">
-          {/* Document Header */}
-          <HStack spacing={{ base: 3, md: 4 }}>
-            <Skeleton
-              height={{ base: '32px', md: '40px' }}
-              width={{ base: '32px', md: '40px' }}
-              borderRadius="md"
-            />
-            <Skeleton
-              height={{ base: '32px', md: '40px' }}
-              width={{ base: '50%', md: '60%' }}
-            />
-          </HStack>
+      <div className={cn('w-full space-y-6', className)}>
+        {/* Document Header */}
+        <div className="space-y-4">
+          <div className="flex items-center space-x-4">
+            <Skeleton className="h-8 w-8 rounded-lg" variant={variant} />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-6 w-3/5" variant={variant} />
+              <Skeleton className="h-4 w-2/5 opacity-60" variant={variant} />
+            </div>
+          </div>
+        </div>
 
-          {/* Document Content Sections */}
-          <Skeleton height="12px" width={{ base: '40%', md: '30%' }} />
-          <SkeletonText
-            mt="4"
-            noOfLines={{ base: 4, md: 6 }}
-            spacing="4"
-            skeletonHeight="4"
-          />
+        {/* Content sections */}
+        <div className="space-y-8">
+          {/* Section 1 */}
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-1/3" variant={variant} />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full" variant={variant} />
+              <Skeleton className="h-4 w-5/6" variant={variant} />
+              <Skeleton className="h-4 w-4/5" variant={variant} />
+            </div>
+          </div>
 
-          <>
-            <Skeleton height="12px" width={{ base: '50%', md: '40%' }} />
-            <SkeletonText
-              mt="4"
-              noOfLines={{ base: 6, md: 8 }}
-              spacing="4"
-              skeletonHeight="4"
-            />
+          {/* Section 2 */}
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-2/5" variant={variant} />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full" variant={variant} />
+              <Skeleton className="h-4 w-11/12" variant={variant} />
+              <Skeleton className="h-4 w-4/5" variant={variant} />
+              <Skeleton className="h-4 w-3/4" variant={variant} />
+            </div>
+          </div>
 
-            <Box mt={4}>
-              <Skeleton
-                height="12px"
-                width={{ base: '35%', md: '25%' }}
-                mb={4}
-              />
-              <HStack spacing={{ base: 3, md: 4 }} overflowX="auto" pb={2}>
+          {/* Section 3 */}
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-1/4" variant={variant} />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full" variant={variant} />
+              <Skeleton className="h-4 w-5/6" variant={variant} />
+            </div>
+          </div>
+
+          {/* Visual elements placeholder */}
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-1/5" variant={variant} />
+            <div className="flex space-x-3">
+              {Array.from({ length: 3 }).map((_, i) => (
                 <Skeleton
-                  height={{ base: '80px', md: '100px' }}
-                  width={{ base: '80px', md: '100px' }}
-                  borderRadius="md"
-                  flexShrink={0}
+                  key={i}
+                  className="h-20 w-20 rounded-lg flex-shrink-0"
+                  variant={variant}
                 />
-                <Skeleton
-                  height={{ base: '80px', md: '100px' }}
-                  width={{ base: '80px', md: '100px' }}
-                  borderRadius="md"
-                  flexShrink={0}
-                />
-                <Skeleton
-                  height={{ base: '80px', md: '100px' }}
-                  width={{ base: '80px', md: '100px' }}
-                  borderRadius="md"
-                  flexShrink={0}
-                />
-              </HStack>
-            </Box>
-          </>
-        </VStack>
-      </Box>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
-  // Render a skeleton for the projects dashboard
+  // Enhanced projects dashboard with modern card design
   if (type === 'projects-dashboard') {
     return (
-      <VStack spacing={6} align="stretch" w="100%">
-        {/* Dashboard Header Skeleton */}
-        <Flex justify="space-between" align="center" mb={4}>
-          <VStack align="start" spacing={2}>
-            <Skeleton height="32px" width="200px" />
-            <Skeleton height="16px" width="120px" />
-          </VStack>
-          <Skeleton height="40px" width="140px" borderRadius="md" />
-        </Flex>
-
-        {/* Search and Filter Bar Skeleton */}
-        <Box
-          p={4}
-          bg={bgColor}
-          borderRadius="lg"
-          borderWidth="1px"
-          borderColor={borderColor}
-        >
-          <Flex gap={4} align="center" wrap="wrap">
-            <Skeleton height="40px" width="300px" borderRadius="md" />
-            <Skeleton height="40px" width="120px" borderRadius="md" />
-            <Skeleton height="40px" width="120px" borderRadius="md" />
-            <Spacer />
-            <Skeleton height="16px" width="80px" />
-          </Flex>
-        </Box>
-
-        {/* Project Cards Skeleton */}
-        <VStack spacing={4} align="stretch">
-          {Array.from({ length: count }).map((_, index) => (
-            <Box
-              key={index}
-              p={5}
-              borderWidth="1px"
-              borderRadius="lg"
-              borderColor={borderColor}
-              bg={bgColor}
-              boxShadow="md"
-            >
-              <VStack spacing={4} align="stretch">
-                {/* Project Header */}
-                <Flex alignItems="center">
-                  <Skeleton height="24px" width="250px" />
-                  <Spacer />
-                  <Skeleton height="20px" width="60px" borderRadius="full" />
-                </Flex>
-
-                {/* Date Information */}
-                <HStack spacing={6}>
-                  <HStack spacing={2}>
-                    <Skeleton height="16px" width="16px" />
-                    <Skeleton height="16px" width="120px" />
-                  </HStack>
-                  <HStack spacing={2}>
-                    <Skeleton height="16px" width="16px" />
-                    <Skeleton height="16px" width="100px" />
-                  </HStack>
-                </HStack>
-
-                {/* Status Tags */}
-                <HStack spacing={2}>
-                  <Skeleton height="24px" width="120px" borderRadius="full" />
-                  <Skeleton height="24px" width="80px" borderRadius="full" />
-                  <Skeleton height="24px" width="70px" borderRadius="full" />
-                </HStack>
-
-                <Spacer />
-
-                {/* Action Buttons */}
-                <Flex justify="flex-end">
-                  <HStack spacing={3}>
-                    <Skeleton height="32px" width="80px" borderRadius="md" />
-                    <Skeleton height="32px" width="70px" borderRadius="md" />
-                    <Skeleton height="32px" width="80px" borderRadius="md" />
-                  </HStack>
-                </Flex>
-              </VStack>
-            </Box>
-          ))}
-        </VStack>
-      </VStack>
-    );
-  }
-
-  // Render a skeleton for a project selection (legacy - keeping for compatibility)
-  if (type === 'project') {
-    return (
-      <VStack spacing={4} align="stretch" w="100%">
+      <div className={cn('space-y-4 w-full', className)}>
         {Array.from({ length: count }).map((_, index) => (
-          <Box
+          <div
             key={index}
-            borderWidth="1px"
-            borderRadius="md"
-            borderColor={borderColor}
-            p={4}
-            bg={bgColor}
+            className="p-6 border rounded-lg bg-card shadow-sm hover:shadow-md transition-shadow"
           >
-            <Flex justify="space-between" align="center">
-              <HStack spacing={3}>
-                <Skeleton height="24px" width="24px" borderRadius="md" />
-                <Skeleton height="20px" width="120px" />
-              </HStack>
-              <Skeleton height="24px" width="60px" />
-            </Flex>
-          </Box>
+            <div className="space-y-4">
+              {/* Project header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  {showAvatar && (
+                    <SkeletonAvatar className="h-8 w-8" variant={variant} />
+                  )}
+                  <div className="space-y-1">
+                    <Skeleton className="h-6 w-48" variant={variant} />
+                    <Skeleton className="h-4 w-32" variant={variant} />
+                  </div>
+                </div>
+                <Skeleton className="h-6 w-20 rounded-full" variant={variant} />
+              </div>
+
+              {/* Project metadata */}
+              <div className="flex items-center space-x-6">
+                <div className="flex items-center space-x-2">
+                  <Skeleton
+                    className="h-4 w-4 rounded-full"
+                    variant={variant}
+                  />
+                  <Skeleton className="h-4 w-24" variant={variant} />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Skeleton
+                    className="h-4 w-4 rounded-full"
+                    variant={variant}
+                  />
+                  <Skeleton className="h-4 w-20" variant={variant} />
+                </div>
+              </div>
+
+              {/* Status indicators */}
+              <div className="flex items-center space-x-2">
+                <Skeleton className="h-6 w-24 rounded-md" variant={variant} />
+                <Skeleton className="h-6 w-16 rounded-md" variant={variant} />
+                <Skeleton className="h-6 w-20 rounded-md" variant={variant} />
+              </div>
+
+              {/* Actions */}
+              {showActions && (
+                <div className="flex justify-end space-x-3 pt-2">
+                  <SkeletonButton className="h-8 w-16" variant={variant} />
+                  <SkeletonButton className="h-8 w-20" variant={variant} />
+                  <SkeletonButton className="h-8 w-16" variant={variant} />
+                </div>
+              )}
+            </div>
+          </div>
         ))}
-      </VStack>
+      </div>
     );
   }
 
-  // Render a skeleton for a sidebar
+  // Enhanced sidebar with better hierarchy
   if (type === 'sidebar') {
     return (
-      <VStack spacing={4} align="stretch" w="100%" p={{ base: 2, md: 3 }}>
-        <Skeleton
-          height={{ base: '32px', md: '40px' }}
-          width="100%"
-          borderRadius="md"
-          mb={2}
-        />
-
-        <Box pt={2}>
-          <Skeleton height={{ base: '16px', md: '20px' }} width="80%" mb={3} />
-          <VStack spacing={2} align="stretch" pl={{ base: 2, md: 3 }}>
-            {Array.from({ length: 4 }).map((_, index) => (
+      <div className={cn('space-y-6 w-full', className)}>
+        {/* Tab navigation area */}
+        <div className="space-y-3">
+          <div className="flex space-x-1">
+            {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton
-                key={index}
-                height={{ base: '14px', md: '16px' }}
-                width={`${90 - index * 10}%`}
+                key={i}
+                className="h-8 w-12 rounded-md"
+                variant={variant}
               />
             ))}
-          </VStack>
-        </Box>
+          </div>
+        </div>
 
-        <Box pt={2}>
-          <Skeleton height={{ base: '16px', md: '20px' }} width="70%" mb={3} />
-          <VStack spacing={2} align="stretch" pl={{ base: 2, md: 3 }}>
-            {Array.from({ length: 3 }).map((_, index) => (
-              <Skeleton
-                key={index}
-                height={{ base: '14px', md: '16px' }}
-                width={`${85 - index * 10}%`}
-              />
+        {/* Content area */}
+        <div className="space-y-4">
+          {/* Section 1 */}
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-2/3" variant={variant} />
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-center space-x-3">
+                  <Skeleton className="h-4 w-4 rounded" variant={variant} />
+                  <Skeleton className="h-4 flex-1" variant={variant} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Section 2 */}
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-1/2" variant={variant} />
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton
+                  key={i}
+                  className="h-12 w-full rounded-lg"
+                  variant={variant}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Section 3 - More content */}
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-4 w-full" variant={variant} />
             ))}
-          </VStack>
-        </Box>
-      </VStack>
+          </div>
+        </div>
+      </div>
     );
   }
 
-  // Default fallback
-  return <SkeletonText mt="4" noOfLines={8} spacing="4" skeletonHeight="4" />;
+  // Enhanced table with modern design
+  if (type === 'table') {
+    return (
+      <div
+        className={cn('overflow-hidden rounded-lg border bg-card', className)}
+      >
+        {/* Table header */}
+        <div className="border-b bg-muted/50 px-6 py-4">
+          <div className="grid grid-cols-12 gap-4">
+            <div className="col-span-2">
+              <Skeleton className="h-4 w-20" variant={variant} />
+            </div>
+            <div className="col-span-5">
+              <Skeleton className="h-4 w-32" variant={variant} />
+            </div>
+            <div className="col-span-3">
+              <Skeleton className="h-4 w-24" variant={variant} />
+            </div>
+            <div className="col-span-2">
+              <Skeleton className="h-4 w-16" variant={variant} />
+            </div>
+          </div>
+        </div>
+
+        {/* Table rows */}
+        <div className="divide-y">
+          {Array.from({ length: count || 5 }).map((_, index) => (
+            <div key={index} className="p-6">
+              <div className="grid grid-cols-12 gap-4 items-center">
+                <div className="col-span-2">
+                  <Skeleton className="h-4 w-full" variant={variant} />
+                </div>
+                <div className="col-span-5">
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full" variant={variant} />
+                    <Skeleton className="h-3 w-3/4" variant={variant} />
+                  </div>
+                </div>
+                <div className="col-span-3">
+                  <div className="flex items-center space-x-2">
+                    <Skeleton
+                      className="h-5 w-5 rounded-full"
+                      variant={variant}
+                    />
+                    <Skeleton className="h-4 w-16" variant={variant} />
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <Skeleton
+                    className="h-8 w-8 rounded-full"
+                    variant={variant}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Enhanced search history
+  if (type === 'search-history') {
+    return (
+      <div className={cn('space-y-0 w-full', className)}>
+        {Array.from({ length: count || 3 }).map((_, index) => (
+          <div key={index} className="border-b bg-card">
+            <div className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <Skeleton
+                    className="h-5 w-5 rounded-full"
+                    variant={variant}
+                  />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-64" variant={variant} />
+                    <div className="flex items-center space-x-4">
+                      <Skeleton className="h-3 w-20" variant={variant} />
+                      <Skeleton className="h-3 w-28" variant={variant} />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Skeleton
+                    className="h-5 w-16 rounded-full"
+                    variant={variant}
+                  />
+                  <Skeleton
+                    className="h-8 w-8 rounded-full"
+                    variant={variant}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Enhanced project list
+  if (type === 'project-list') {
+    return (
+      <div className={cn('space-y-4 w-full', className)}>
+        {/* Active project section */}
+        <div>
+          <Skeleton className="h-4 w-32 mb-3 ml-4" variant={variant} />
+          <div className="bg-primary/5 rounded-lg mx-1 p-1">
+            <div className="flex items-center py-3 px-4">
+              <SkeletonAvatar className="h-6 w-6 mr-3" variant={variant} />
+              <Skeleton className="h-4 w-40" variant={variant} />
+              <div className="flex-1" />
+              <Skeleton className="h-4 w-4 rounded-full" variant={variant} />
+            </div>
+          </div>
+        </div>
+
+        {/* All projects section */}
+        <div>
+          <Skeleton className="h-4 w-24 mb-3 ml-4" variant={variant} />
+          <div className="space-y-1">
+            {Array.from({ length: count || 4 }).map((_, index) => (
+              <div
+                key={index}
+                className="flex items-center py-3 px-4 hover:bg-muted/50 rounded-md"
+              >
+                <SkeletonAvatar className="h-6 w-6 mr-3" variant={variant} />
+                <Skeleton
+                  className={cn('h-4', `w-${32 + index * 4}`)}
+                  variant={variant}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // New card pattern
+  if (type === 'card') {
+    return (
+      <div className={cn('space-y-4', className)}>
+        {Array.from({ length: count }).map((_, index) => (
+          <SkeletonCard key={index} variant={variant} />
+        ))}
+      </div>
+    );
+  }
+
+  // New detailed card pattern
+  if (type === 'detailed-card') {
+    return (
+      <div className={cn('space-y-6', className)}>
+        {Array.from({ length: count }).map((_, index) => (
+          <div key={index} className="border rounded-lg bg-card p-6 shadow-sm">
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <SkeletonAvatar className="h-12 w-12" variant={variant} />
+                  <div className="space-y-1">
+                    <Skeleton className="h-5 w-32" variant={variant} />
+                    <Skeleton className="h-4 w-24" variant={variant} />
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <Skeleton
+                    className="h-6 w-6 rounded-full"
+                    variant={variant}
+                  />
+                  <Skeleton
+                    className="h-6 w-6 rounded-full"
+                    variant={variant}
+                  />
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="space-y-3">
+                <SkeletonText lines={3} variant={variant} />
+                <div className="flex space-x-2">
+                  <Skeleton
+                    className="h-6 w-16 rounded-full"
+                    variant={variant}
+                  />
+                  <Skeleton
+                    className="h-6 w-20 rounded-full"
+                    variant={variant}
+                  />
+                  <Skeleton
+                    className="h-6 w-12 rounded-full"
+                    variant={variant}
+                  />
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between pt-3 border-t">
+                <div className="flex items-center space-x-4">
+                  <Skeleton className="h-4 w-16" variant={variant} />
+                  <Skeleton className="h-4 w-20" variant={variant} />
+                </div>
+                <div className="flex space-x-2">
+                  <SkeletonButton className="h-8 w-16" variant={variant} />
+                  <SkeletonButton className="h-8 w-20" variant={variant} />
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // New form pattern
+  if (type === 'form') {
+    return (
+      <div className={cn('space-y-6 max-w-md', className)}>
+        {Array.from({ length: count || 4 }).map((_, index) => (
+          <div key={index} className="space-y-2">
+            <Skeleton className="h-4 w-20" variant={variant} />
+            <Skeleton className="h-10 w-full rounded-md" variant={variant} />
+          </div>
+        ))}
+        <div className="flex space-x-3 pt-4">
+          <SkeletonButton className="h-10 w-24" variant={variant} />
+          <SkeletonButton className="h-10 w-20" variant={variant} />
+        </div>
+      </div>
+    );
+  }
+
+  // New chat pattern
+  if (type === 'chat') {
+    return (
+      <div className={cn('space-y-4', className)}>
+        {Array.from({ length: count || 3 }).map((_, index) => (
+          <div
+            key={index}
+            className={cn(
+              'flex',
+              index % 2 === 0 ? 'justify-start' : 'justify-end'
+            )}
+          >
+            <div
+              className={cn(
+                'flex space-x-3 max-w-xs',
+                index % 2 === 0
+                  ? 'flex-row'
+                  : 'flex-row-reverse space-x-reverse'
+              )}
+            >
+              <SkeletonAvatar className="h-8 w-8" variant={variant} />
+              <div
+                className={cn(
+                  'bg-card border rounded-lg p-3',
+                  index % 2 === 0 ? 'rounded-tl-sm' : 'rounded-tr-sm'
+                )}
+              >
+                <SkeletonText lines={2} variant={variant} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Legacy project pattern (kept for compatibility)
+  if (type === 'project') {
+    return (
+      <div className={cn('space-y-4 w-full', className)}>
+        {Array.from({ length: count }).map((_, index) => (
+          <div key={index} className="border rounded-lg p-4 bg-card">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center space-x-3">
+                <Skeleton className="h-6 w-6 rounded-md" variant={variant} />
+                <Skeleton className="h-5 w-32" variant={variant} />
+              </div>
+              <Skeleton className="h-6 w-16" variant={variant} />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Default list pattern
+  return (
+    <div className={cn('space-y-4 w-full', className)}>
+      {Array.from({ length: count }).map((_, index) => (
+        <div key={index} className="space-y-2">
+          <Skeleton className="h-4 w-full" variant={variant} />
+          <Skeleton className="h-4 w-4/5" variant={variant} />
+        </div>
+      ))}
+    </div>
+  );
 };
 
 export default SkeletonLoader;

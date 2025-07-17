@@ -1,7 +1,7 @@
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 export class DebugApiService {
   static async checkCitationJobStatus(jobId: string): Promise<any> {
@@ -17,7 +17,12 @@ export class DebugApiService {
         );
       }
 
-      return await response.json();
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: status }
+      const unwrappedResult = result.data || result;
+
+      return unwrappedResult;
     } catch (error) {
       logger.error('[DebugApiService] Error checking citation job status', {
         jobId,
@@ -44,7 +49,12 @@ export class DebugApiService {
         );
       }
 
-      return await response.json();
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: result }
+      const unwrappedResult = result.data || result;
+
+      return unwrappedResult;
     } catch (error) {
       logger.error('[DebugApiService] Error resetting citation extraction', {
         jobId,

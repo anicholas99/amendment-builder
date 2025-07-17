@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import { queryKeys } from '@/config/reactQueryConfig';
 import { TechnologyDetailsService } from '@/client/services/technology-details.client-service';
 import { InventionData } from '@/types/invention';
@@ -24,57 +24,64 @@ export function useProcessInvention() {
       TechnologyDetailsService.processInvention(data),
     onSuccess: async (data: any, { projectId }) => {
       queryClient.setQueryData(inventionKeys.detail(projectId), data.data);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.projects.detail(projectId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: inventionKeys.detail(projectId),
-      });
 
       if (data.claims) {
         queryClient.setQueryData(claimQueryKeys.list(projectId), {
           claims: data.claims,
         });
-        
+
         queryClient.invalidateQueries({
           queryKey: claimQueryKeys.list(projectId),
           refetchType: 'none',
         });
       }
-      
-      // CRITICAL: Force update the specific project detail first
+
+      // IMPORTANT: Use invalidateQueries instead of resetQueries to maintain cache stability
+      // This prevents the "active project not found" issue during processing
+
+      // Invalidate project detail query with immediate refetch
       await queryClient.invalidateQueries({
         queryKey: projectKeys.detail(projectId),
-        refetchType: 'active',
+        refetchType: 'active', // Force immediate refetch
       });
-      
-      // Then invalidate ALL project list queries with immediate refetch
-      // This ensures the sidebar gets the updated invention data
+
+      // Invalidate ALL project list queries with controlled refetch
       await queryClient.invalidateQueries({
         queryKey: projectKeys.lists(),
         exact: false, // Match all list queries regardless of filters
         refetchType: 'active', // Force immediate refetch
       });
-      
+
       // Also invalidate the base projects queries
       await queryClient.invalidateQueries({
         queryKey: projectKeys.all,
         refetchType: 'active',
       });
-      
-      // Add a small delay to ensure React Query has processed the updates
-      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Invalidate the invention queries to ensure fresh data
+      await queryClient.invalidateQueries({
+        queryKey: inventionKeys.detail(projectId),
+        refetchType: 'active',
+      });
+
+      // Wait for queries to settle before showing success message
+      await queryClient.refetchQueries({
+        queryKey: projectKeys.lists(),
+        exact: false,
+      });
 
       toast({
         title: 'Success',
         description: 'Your invention has been processed successfully!',
         status: 'success',
       });
-      
+
       // Emit a custom event to notify other components
-      window.dispatchEvent(new CustomEvent('invention-processed', {
-        detail: { projectId }
-      }));
+      window.dispatchEvent(
+        new CustomEvent('invention-processed', {
+          detail: { projectId },
+        })
+      );
     },
     onError: () => {
       toast({

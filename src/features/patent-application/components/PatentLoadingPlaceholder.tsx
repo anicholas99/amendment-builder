@@ -1,29 +1,27 @@
 import React from 'react';
-import { Box, Text, Button } from '@chakra-ui/react';
+import { Box } from '@/components/ui/box';
+import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/button';
+import { useViewHeight } from '@/hooks/useViewHeight';
 
 /**
  * A placeholder component shown when patent data is loading
  */
 const PatentLoadingPlaceholder: React.FC = () => {
+  const viewHeight = useViewHeight();
+
   return (
     <Box
-      display="flex"
-      flexDirection="column"
-      justifyContent="center"
-      alignItems="center"
-      height="calc(100vh - 150px)"
+      className="flex flex-col justify-center items-center"
+      style={{ height: viewHeight }}
     >
-      <Text fontSize="lg" mb={4}>
+      <Text size="lg" className="mb-4">
         Loading patent data...
       </Text>
-      <Button
-        variant="primary"
-        onClick={() => window.location.reload()}
-        className="mt-4"
-      >
+      <Button onClick={() => window.location.reload()} className="mt-4">
         Reload Page
       </Button>
-      <Text fontSize="sm" color="gray.500" className="mt-2">
+      <Text size="sm" className="text-muted-foreground mt-2">
         If loading takes too long, try reloading the page
       </Text>
     </Box>

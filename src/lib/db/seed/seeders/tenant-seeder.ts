@@ -28,7 +28,7 @@ export class TenantSeeder extends BaseSeeder {
         slug: 'acme',
         domain: 'acme.patentdrafter.ai',
         settings: {
-          primaryColor: '#0066CC',
+          primaryColor: 'ipd.blue',
           logoUrl: '/images/tenants/acme-logo.png',
           features: {
             advancedSearch: true,
@@ -45,7 +45,7 @@ export class TenantSeeder extends BaseSeeder {
         slug: 'techstartup',
         domain: 'techstartup.patentdrafter.ai',
         settings: {
-          primaryColor: '#00AA55',
+          primaryColor: 'green.600',
           logoUrl: '/images/tenants/techstartup-logo.png',
           features: {
             advancedSearch: true,
@@ -62,7 +62,7 @@ export class TenantSeeder extends BaseSeeder {
         slug: 'development',
         domain: 'localhost:3000',
         settings: {
-          primaryColor: '#FF6B6B',
+          primaryColor: 'red.400',
           logoUrl: null,
           features: {
             advancedSearch: true,

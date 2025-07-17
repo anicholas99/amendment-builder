@@ -1,5 +1,5 @@
 import { NextApiResponse } from 'next';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { AuthenticatedRequest } from '@/types/middleware';
 import {
   findWithDeepAnalysis as getCitationJobsWithDeepAnalysis,
@@ -7,7 +7,7 @@ import {
 } from '../../../repositories/citationJobRepository';
 import { CustomApiRequest } from '@/types/api';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { env } from '@/config/env';
 
 const apiLogger = createApiLogger('debug/check-deep-analysis');

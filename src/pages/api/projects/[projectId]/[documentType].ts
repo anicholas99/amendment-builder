@@ -1,14 +1,14 @@
 import { NextApiResponse, NextApiRequest } from 'next';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
-import { logger } from '../../../../lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { CustomApiRequest } from '@/types/api';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { documentTypeQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
 
 // Domain interface for Document (replacing Prisma import)
 interface DocumentEntity {

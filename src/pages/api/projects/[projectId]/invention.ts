@@ -1,11 +1,54 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { inventionDataService } from '@/server/services/invention-data.server-service';
-import { logger } from '@/lib/monitoring/logger';
+import { AuthenticatedRequest, RequestWithServices } from '@/types/middleware';
+import { logger } from '@/server/monitoring/enhanced-logger';
 import { getProjectTenantId } from '@/repositories/project/security.repository';
-import { AuthenticatedRequest } from '@/types/middleware';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { z } from 'zod';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+
+// Define typed schemas for complex fields
+const FigureElementSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  referenceNumeral: z.string().optional(),
+});
+
+const FigureSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  fileName: z.string().optional(),
+  elements: z.array(FigureElementSchema).optional(),
+  displayOrder: z.number().optional(),
+});
+
+const PendingFigureSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  fileName: z.string(),
+  status: z.enum(['pending', 'uploaded', 'processed']).optional(),
+});
+
+const ClaimSchema = z.object({
+  id: z.string().optional(),
+  claimNumber: z.number(),
+  text: z.string(),
+  type: z.enum(['independent', 'dependent', 'multiple-dependent']).optional(),
+  parentClaimId: z.string().optional(),
+  dependencies: z.array(z.number()).optional(),
+});
+
+const PriorArtItemSchema = z.object({
+  id: z.string().optional(),
+  patentNumber: z.string(),
+  title: z.string(),
+  abstract: z.string().optional(),
+  publicationDate: z.string().optional(),
+  relevance: z.number().optional(),
+  notes: z.string().optional(),
+});
 
 // Validation schemas
 const updateSchema = z.object({
@@ -25,12 +68,21 @@ const updateSchema = z.object({
   processSteps: z.array(z.string()).optional(),
   futureDirections: z.array(z.string()).optional(),
 
-  // Object fields
-  figures: z.record(z.any()).optional(),
-  pendingFigures: z.array(z.any()).optional(),
-  elements: z.record(z.any()).optional(),
-  claims: z.any().optional(), // Complex structure
-  priorArt: z.any().optional(), // Complex structure
+  // Object fields - now properly typed
+  // NOTE: figures are handled through normalized tables, not through invention data
+  // figures: z.record(FigureSchema).optional(),
+  pendingFigures: z.array(PendingFigureSchema).optional(),
+  elements: z
+    .record(
+      z.object({
+        name: z.string(),
+        description: z.string().optional(),
+        figureReferences: z.array(z.string()).optional(),
+      })
+    )
+    .optional(),
+  claims: z.array(ClaimSchema).optional(), // Now properly typed
+  priorArt: z.array(PriorArtItemSchema).optional(), // Now properly typed
   definitions: z.record(z.string()).optional(),
   technicalImplementation: z
     .object({
@@ -53,53 +105,38 @@ const updateSchema = z.object({
 
 const patchSchema = z.object({
   field: z.string().min(1, 'Field name is required'),
-  value: z.any(),
+  value: z.unknown(), // Use unknown instead of any, will be validated based on field
 });
 
 /**
  * API endpoint for managing invention data
  * Demonstrates the dual-write pattern for migrating away from JSON blobs
  */
-async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
-  const { projectId } = req.query;
+const handler = async (
+  req: NextApiRequest,
+  res: NextApiResponse
+): Promise<void> => {
+  const { method } = req;
+  const projectId = String(req.query.projectId);
+  const userId = (req as AuthenticatedRequest).user!.id;
+
+  // Get the request-scoped service
+  const { inventionService } = (req as RequestWithServices).services;
 
   if (!projectId || typeof projectId !== 'string') {
     return res.status(400).json({ error: 'Invalid project ID' });
   }
 
-  switch (req.method) {
+  switch (method) {
     case 'GET':
       try {
-        logger.info('[API] Getting invention data', { projectId });
-        logger.debug(
-          '[INVENTION API] Starting getInventionData call for project:',
-          { projectId }
-        );
         const inventionData =
-          await inventionDataService.getInventionData(projectId);
-
-        logger.debug('[INVENTION API] Raw inventionData received:', {
-          projectId,
-          hasData: !!inventionData,
-          inventionDataKeys: inventionData ? Object.keys(inventionData) : [],
-          hasFigures: !!inventionData?.figures,
-          figuresKeys: inventionData?.figures
-            ? Object.keys(inventionData.figures)
-            : [],
-          hasElements: !!inventionData?.elements,
-          elementsKeys: inventionData?.elements
-            ? Object.keys(inventionData.elements)
-            : [],
-        });
+          await inventionService.getInventionData(projectId);
 
         if (!inventionData) {
-          logger.debug(
-            '[INVENTION API] No invention data found, returning 404'
-          );
           return res.status(404).json({ error: 'No invention data found' });
         }
 
-        logger.debug('[INVENTION API] Returning invention data to frontend');
         return res.status(200).json(inventionData);
       } catch (error) {
         logger.error('[API] Error getting invention data', {
@@ -113,7 +150,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     case 'PATCH':
       try {
         // Validate PATCH requests differently
-        if (req.method === 'PATCH') {
+        if (method === 'PATCH') {
           const result = patchSchema.safeParse(req.body);
           if (!result.success) {
             return res.status(400).json({
@@ -123,39 +160,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           }
         }
 
-        // Log the raw request body
-        logger.debug('[API] Raw request body received', {
-          projectId,
-          method: req.method,
-          bodyKeys: Object.keys(req.body || {}),
-          body: req.body,
-        });
-
         let updateData = req.body;
         // For PATCH requests, construct the update object from field/value
-        if (req.method === 'PATCH' && req.body.field) {
+        if (method === 'PATCH' && req.body.field) {
           updateData = { [req.body.field]: req.body.value };
         }
 
-        logger.debug('[API] Processed update data', {
-          projectId,
-          method: req.method,
-          updateDataKeys: Object.keys(updateData || {}),
-          updateData,
-        });
-
-        await inventionDataService.updateMultipleFields(projectId, updateData);
+        await inventionService.updateMultipleFields(projectId, updateData);
 
         // Return the updated data
-        const updatedData =
-          await inventionDataService.getInventionData(projectId);
-
-        logger.info('[API] Update successful, returning data', {
-          projectId,
-          hasUpdatedData: !!updatedData,
-          novelty: updatedData?.novelty,
-          noveltyStatement: updatedData?.noveltyStatement,
-        });
+        const updatedData = await inventionService.getInventionData(projectId);
 
         return res.status(200).json(updatedData);
       } catch (error) {
@@ -172,7 +186,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       res.setHeader('Allow', ['GET', 'PUT', 'PATCH']);
       return res.status(405).json({ error: 'Method not allowed' });
   }
-}
+};
 
 // SECURITY: This endpoint is tenant-protected using project-based resolution
 // Users can only access/modify invention data for projects within their own tenant

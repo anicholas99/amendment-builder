@@ -5,7 +5,7 @@
  * This is part of the split from UnifiedProjectContext for better maintainability.
  *
  * Responsibilities:
- * - Project content state (structuredData, textInput)
+ * - Project content state (inventionData)
  * - Change detection
  * - Autosave logic with debouncing
  * - Manual save operations
@@ -18,32 +18,89 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
 } from 'react';
-import { useToast } from '@/ui/hooks/useToast';
-import { logger } from '@/lib/monitoring/logger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import { useUpdateProjectMutation } from '@/hooks/api/useProjects';
 import { useUpdateInventionMutation } from '@/hooks/api/useInvention';
 import { UpdateProjectData } from '@/types/project';
 import { useProjectData } from './ProjectDataContext';
 import { useDebouncedCallback } from '@/hooks/useDebounce';
 import { InventionData } from '@/types/invention';
-import { inventionClientService } from '@/client/services/invention.client-service';
+import { useInventionService } from '@/contexts/ClientServicesContext';
 import { useQueryClient } from '@tanstack/react-query';
 
 const AUTOSAVE_DELAY = 2000; // 2 seconds
 
+// Valid fields that can be saved/updated
+const SAVEABLE_FIELDS = [
+  'title',
+  'summary',
+  'abstract',
+  'novelty',
+  'noveltyStatement',
+  'patentCategory',
+  'technicalField',
+  'features',
+  'advantages',
+  'useCases',
+  'processSteps',
+  'futureDirections',
+  'pendingFigures',
+  'elements',
+  'claims',
+  'priorArt',
+  'definitions',
+  'technicalImplementation',
+  'background',
+] as const;
+
 interface ProjectAutosaveContextValue {
   inventionData: InventionData | null;
-  textInput: string;
+  textInput: string; // Kept for backward compatibility, maps to inventionData.summary
   isSaving: boolean;
   setInventionData: React.Dispatch<React.SetStateAction<InventionData | null>>;
-  setTextInput: React.Dispatch<React.SetStateAction<string>>;
+  setTextInput: React.Dispatch<React.SetStateAction<string>>; // Updates inventionData.summary
   forceSave: () => Promise<boolean>;
 }
 
 const ProjectAutosaveContext = createContext<
   ProjectAutosaveContextValue | undefined
 >(undefined);
+
+/**
+ * Clean invention data to only include saveable fields
+ * This prevents sending database fields like id, createdAt, etc.
+ */
+function cleanInventionData(
+  data: InventionData | null
+): Partial<InventionData> | null {
+  if (!data) return null;
+
+  const cleaned: Partial<InventionData> = {};
+
+  for (const field of SAVEABLE_FIELDS) {
+    if (field in data) {
+      const value = data[field as keyof InventionData];
+
+      // Special handling for claims - ensure it's an array
+      if (
+        field === 'claims' &&
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value)
+      ) {
+        // Convert object to array if needed
+        cleaned[field] = Object.values(value);
+      } else if (value !== undefined) {
+        cleaned[field] = value as any;
+      }
+    }
+  }
+
+  return cleaned;
+}
 
 export function ProjectAutosaveProvider({
   children,
@@ -57,17 +114,43 @@ export function ProjectAutosaveProvider({
   const [inventionData, setInventionData] = useState<InventionData | null>(
     null
   );
-  const [textInput, setTextInput] = useState('');
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Track the last saved data to detect real changes
+  const lastSavedDataRef = useRef<string>('');
 
   const updateProjectMutation = useUpdateProjectMutation();
   const updateInventionMutation = useUpdateInventionMutation();
 
+  const inventionService = useInventionService();
+
+  // Derive textInput from inventionData.summary for backward compatibility
+  const textInput = inventionData?.summary || '';
+
+  // Custom setter that updates inventionData.summary
+  const setTextInput = useCallback(
+    (value: string | ((prev: string) => string)) => {
+      setInventionData(prev => {
+        if (!prev) {
+          // If no invention data yet, create minimal object with summary
+          return {
+            summary: typeof value === 'function' ? value('') : value,
+          } as InventionData;
+        }
+        const newValue =
+          typeof value === 'function' ? value(prev.summary || '') : value;
+        return { ...prev, summary: newValue };
+      });
+    },
+    []
+  );
+
   useEffect(() => {
     if (!activeProjectId) {
       setInventionData(null);
-      setTextInput('');
       setIsInitialLoad(true);
+      lastSavedDataRef.current = '';
       return;
     }
 
@@ -76,24 +159,29 @@ export function ProjectAutosaveProvider({
       setIsInitialLoad(true);
       try {
         // Check React Query cache first to avoid unnecessary API calls
-        const cachedData = queryClient.getQueryData<InventionData | null>(['invention', activeProjectId]);
-        
+        const cachedData = queryClient.getQueryData<InventionData | null>([
+          'invention',
+          activeProjectId,
+        ]);
+
         // If we have cached data (including explicit null for new projects), use it
         if (cachedData !== undefined) {
           if (!cancelled) {
             setInventionData(cachedData);
-            setTextInput('');
+            // Store the initial state to detect changes
+            const cleaned = cleanInventionData(cachedData);
+            lastSavedDataRef.current = JSON.stringify(cleaned || {});
           }
         } else {
           // Only fetch if not in cache
           const loadedInventionData =
-            await inventionClientService.getInvention(activeProjectId);
+            await inventionService.getInvention(activeProjectId);
           if (!cancelled) {
             // It's normal for new projects to have no invention data (null)
             setInventionData(loadedInventionData);
-            // Assuming textInput is part of the project data, not invention data
-            // If it is, it should be loaded here as well. For now, reset it.
-            setTextInput('');
+            // Store the initial state to detect changes
+            const cleaned = cleanInventionData(loadedInventionData);
+            lastSavedDataRef.current = JSON.stringify(cleaned || {});
           }
         }
       } catch (error) {
@@ -103,7 +191,7 @@ export function ProjectAutosaveProvider({
         });
         if (!cancelled) {
           setInventionData(null);
-          setTextInput('');
+          lastSavedDataRef.current = '';
         }
       } finally {
         if (!cancelled) {
@@ -117,72 +205,67 @@ export function ProjectAutosaveProvider({
     return () => {
       cancelled = true;
     };
-  }, [activeProjectId, queryClient]);
+  }, [activeProjectId, queryClient, inventionService]);
 
   const saveProjectData = useCallback(async () => {
     if (!activeProjectId || isInitialLoad) {
       return false;
     }
 
+    // Only save invention data if it exists and has changes
+    if (!inventionData) {
+      return true; // Nothing to save is not an error
+    }
+
+    // Clean the data to only include saveable fields
+    const cleanedData = cleanInventionData(inventionData);
+    if (!cleanedData) {
+      return true; // Nothing to save
+    }
+
+    // Check if there are actual changes
+    const currentDataString = JSON.stringify(cleanedData);
+    if (currentDataString === lastSavedDataRef.current) {
+      logger.debug('[ProjectAutosave] No changes detected, skipping save');
+      return true;
+    }
+
     logger.info('[ProjectAutosave] Autosaving project data...', {
       projectId: activeProjectId,
     });
 
-    const promises = [];
-
-    // For simplicity, we save both if they exist.
-    // A more advanced implementation could check for dirty state.
-    if (textInput) {
-      promises.push(
-        updateProjectMutation.mutateAsync({
-          projectId: activeProjectId,
-          data: { textInput },
-        })
-      );
-    }
-
-    if (inventionData) {
-      promises.push(
-        updateInventionMutation.mutateAsync({
-          projectId: activeProjectId,
-          updates: inventionData,
-        })
-      );
-    }
-
-    if (promises.length === 0) return true;
+    setIsSaving(true);
 
     try {
-      await Promise.all(promises);
-      logger.info('[ProjectAutosave] Autosave successful.', {
-        projectId: activeProjectId,
-      });
+      const result = await inventionService.updateInvention(
+        activeProjectId,
+        cleanedData
+      );
+      logger.debug('[ProjectAutosaveContext] Save successful', { result });
+
+      // Update the last saved data reference
+      lastSavedDataRef.current = currentDataString;
+
       return true;
     } catch (error) {
-      logger.error('[ProjectAutosave] Autosave failed.', { error });
+      logger.error('[ProjectAutosaveContext] Save failed', { error });
       toast.error({
         title: 'Autosave Failed',
         description: 'Your latest changes could not be saved.',
       });
       return false;
+    } finally {
+      setIsSaving(false);
     }
-  }, [
-    activeProjectId,
-    textInput,
-    inventionData,
-    updateProjectMutation,
-    updateInventionMutation,
-    toast,
-    isInitialLoad,
-  ]);
+  }, [activeProjectId, inventionData, isInitialLoad, inventionService, toast]);
 
   const [debouncedSave] = useDebouncedCallback(saveProjectData, AUTOSAVE_DELAY);
 
   useEffect(() => {
-    if (!isInitialLoad) {
+    if (!isInitialLoad && inventionData) {
       debouncedSave();
     }
-  }, [textInput, inventionData, debouncedSave, isInitialLoad]);
+  }, [inventionData, debouncedSave, isInitialLoad]);
 
   const forceSave = useCallback(async (): Promise<boolean> => {
     // This function can be a direct call to saveProjectData without the debounce
@@ -194,7 +277,9 @@ export function ProjectAutosaveProvider({
       inventionData,
       textInput,
       isSaving:
-        updateProjectMutation.isPending || updateInventionMutation.isPending,
+        updateProjectMutation.isPending ||
+        updateInventionMutation.isPending ||
+        isSaving,
       setInventionData,
       setTextInput,
       forceSave,
@@ -204,6 +289,8 @@ export function ProjectAutosaveProvider({
       textInput,
       updateProjectMutation.isPending,
       updateInventionMutation.isPending,
+      isSaving,
+      setTextInput,
       forceSave,
     ]
   );

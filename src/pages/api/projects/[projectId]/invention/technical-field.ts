@@ -1,37 +1,49 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { inventionDataService } from '@/server/services/invention-data.server-service';
-import { logger } from '@/lib/monitoring/logger';
-import { AuthenticatedRequest } from '@/types/middleware';
+import { RequestWithServices } from '@/types/middleware';
+import { logger } from '@/server/logger';
 import { z } from 'zod';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Validation schema for updating the technical field
 const updateTechnicalFieldSchema = z.object({
   technicalField: z.string().min(1, 'Technical field cannot be empty.'),
 });
 
-async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { inventionService } = (req as RequestWithServices).services;
   const { projectId } = req.query;
 
   if (!projectId || typeof projectId !== 'string') {
-    return res.status(400).json({ error: 'Invalid project ID' });
+    return apiResponse.badRequest(res, 'Invalid project ID');
   }
 
-  const { technicalField } = req.body;
-
   try {
-    await inventionDataService.updateTechnicalField(projectId, technicalField);
-    return res
-      .status(200)
-      .json({ message: 'Technical field updated successfully.' });
+    switch (req.method) {
+      case 'GET':
+        const inventionData =
+          await inventionService.getInventionData(projectId);
+        return apiResponse.ok(res, {
+          technicalField: inventionData?.technicalField || '',
+        });
+
+      case 'PUT':
+        await inventionService.updateTechnicalField(
+          projectId,
+          req.body.technicalField
+        );
+        return apiResponse.ok(res, { success: true });
+
+      default:
+        return apiResponse.methodNotAllowed(res, ['GET', 'PUT']);
+    }
   } catch (error) {
-    logger.error('[API] Error updating invention technical field', {
+    logger.error('Failed to handle technical field request', {
       projectId,
+      method: req.method,
       error,
     });
-    return res
-      .status(500)
-      .json({ error: 'Failed to update invention technical field' });
+    return apiResponse.serverError(res, error);
   }
 }
 

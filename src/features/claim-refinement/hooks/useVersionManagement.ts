@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ClaimVersion } from '../../../types/claimTypes';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import { InventionData } from '../../../types';
 
 /**

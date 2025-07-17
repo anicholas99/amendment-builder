@@ -2,7 +2,7 @@ import { useApiQuery } from '@/lib/api/queryClient';
 import { ProcessedSearchHistoryEntry } from '@/types/domain/searchHistory';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { searchHistoryKeys } from '@/lib/queryKeys/projectKeys';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { STALE_TIME } from '@/constants/time';
 
 /**

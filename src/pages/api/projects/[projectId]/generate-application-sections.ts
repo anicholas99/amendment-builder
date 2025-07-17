@@ -1,10 +1,8 @@
 import { NextApiResponse } from 'next';
-import { CustomApiRequest } from '@/types/api';
 import { z } from 'zod';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { findProjectById } from '@/repositories/project/core.repository';
-import { createApplicationVersionWithDocuments } from '@/repositories/project/versions.repository';
 import { processWithOpenAI, TokenUsage } from '@/server/ai/aiService';
 import {
   SYSTEM_MESSAGE_V1,
@@ -16,35 +14,17 @@ import {
   ABSTRACT_SECTION_PROMPT_V1,
 } from '@/server/prompts/prompts/templates/applicationSections';
 import { renderPromptTemplate } from '@/server/prompts/prompts/utils';
-import { AuthenticatedRequest } from '@/types/middleware';
-import { inventionDataService } from '@/server/services/invention-data.server-service';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { AuthenticatedRequest, RequestWithServices } from '@/types/middleware';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { ClaimRepository } from '@/repositories/claimRepository';
-import { flexibleJsonParse } from '@/utils/json-utils';
+import { flexibleJsonParse } from '@/utils/jsonUtils';
 import { PatentServerService } from '@/server/services/patent.server-service';
 import { addProjectPriorArt } from '@/repositories/project/priorArt.repository';
-import { figureRepository } from '@/repositories/figureRepository';
-
-// Helper to parse JSON or return already-parsed objects
-function parseJson(input: any, defaultValue: any = null) {
-  if (input === null || input === undefined) return defaultValue;
-  if (typeof input === 'string') {
-    try {
-      return JSON.parse(input);
-    } catch (e) {
-      logger.warn('Failed to JSON.parse field; returning defaultValue', {
-        error: (e as Error).message,
-      });
-      return defaultValue;
-    }
-  }
-  return input;
-}
-
-interface GenerateApplicationSectionsBody {
-  versionName?: string | null;
-  selectedRefs?: string[];
-}
+import { figureRepository } from '@/repositories/figure';
+import { secureUpdateProject } from '@/repositories/project/security.repository';
+import { InventionData } from '@/types/invention';
+import { SavedPriorArt } from '@/types/domain/priorArt';
+import type { SavedPriorArt as PrismaSavedPriorArt } from '@prisma/client';
 
 const bodySchema = z.object({
   versionName: z.string().optional().nullable(),
@@ -81,16 +61,19 @@ async function getFiguresText(projectId: string): Promise<string> {
   return figuresText;
 }
 
+// NOTE: This function was moved to inventionService and is no longer used here
+// Keeping for reference only
+/*
 async function getFullInventionDataString(
-  invention: any,
+  invention: InventionData,
   projectId: string
 ): Promise<string> {
-  const features = parseJson(invention.featuresJson, []);
-  const advantages = parseJson(invention.advantagesJson, []);
-  const useCases = parseJson(invention.useCasesJson, []);
-  const processSteps = parseJson(invention.processStepsJson, []);
+  const features = parseJson<string[]>(invention.featuresJson, []);
+  const advantages = parseJson<string[]>(invention.advantagesJson, []);
+  const useCases = parseJson<string[]>(invention.useCasesJson, []);
+  const processSteps = parseJson<string[]>(invention.processStepsJson, []);
   const claims = invention.claims ?? {};
-  const technicalImpl = parseJson(invention.technicalImplementationJson, {});
+  const technicalImpl = parseJson<Record<string, unknown>>(invention.technicalImplementationJson, {});
 
   // Fetch figures from normalized tables
   let figuresText = 'No figures provided';
@@ -144,40 +127,77 @@ async function getFullInventionDataString(
     }
     Figures: ${figuresText}
     Technical Implementation - Preferred Embodiment: ${technicalImpl.preferred_embodiment || invention.systemArchitecture || 'No preferred embodiment provided'}
-    Technical Implementation - Alternative Embodiments: ${(technicalImpl.alternative_embodiments || []).join('; ') || 'No alternative embodiments provided'}
+    Technical Implementation - Alternative Embodiments: ${Array.isArray(technicalImpl.alternative_embodiments) ? technicalImpl.alternative_embodiments.join('; ') : 'No alternative embodiments provided'}
     Process Steps: ${processSteps.join(' → ') || invention.dataFlow || 'No process steps provided'}
   `;
 }
+*/
 
 const prompts = {
-  field: async (invention: any, projectId: string) => {
+  field: async (
+    invention: InventionData,
+    projectId: string,
+    inventionService: {
+      getFullInventionDataString: (
+        invention: InventionData,
+        figures: string
+      ) => string;
+    }
+  ) => {
     const figuresText = await getFiguresText(projectId);
     return renderPromptTemplate(FIELD_SECTION_PROMPT_V1, {
-      fullInventionData: inventionDataService.getFullInventionDataString(
+      fullInventionData: inventionService.getFullInventionDataString(
         invention,
         figuresText
       ),
     });
   },
-  background: async (invention: any, projectId: string) => {
+  background: async (
+    invention: InventionData,
+    projectId: string,
+    inventionService: {
+      getFullInventionDataString: (
+        invention: InventionData,
+        figures: string
+      ) => string;
+    }
+  ) => {
     const figuresText = await getFiguresText(projectId);
     return renderPromptTemplate(BACKGROUND_SECTION_PROMPT_V1, {
-      fullInventionData: inventionDataService.getFullInventionDataString(
+      fullInventionData: inventionService.getFullInventionDataString(
         invention,
         figuresText
       ),
     });
   },
-  summary: async (invention: any, projectId: string) => {
+  summary: async (
+    invention: InventionData,
+    projectId: string,
+    inventionService: {
+      getFullInventionDataString: (
+        invention: InventionData,
+        figures: string
+      ) => string;
+    }
+  ) => {
     const figuresText = await getFiguresText(projectId);
     return renderPromptTemplate(SUMMARY_SECTION_PROMPT_V1, {
-      fullInventionData: inventionDataService.getFullInventionDataString(
+      fullInventionData: inventionService.getFullInventionDataString(
         invention,
         figuresText
       ),
     });
   },
-  drawings: async (invention: any, projectId: string) => {
+  drawings: async (
+    invention: InventionData,
+    projectId: string,
+    _inventionService: {
+      getFullInventionDataString: (
+        invention: InventionData,
+        figures: string
+      ) => string;
+    }
+  ) => {
     let hasFigures = false;
     let figuresList = '';
 
@@ -207,7 +227,16 @@ const prompts = {
       figuresList,
     });
   },
-  detailed_description: async (invention: any, projectId: string) => {
+  detailed_description: async (
+    invention: InventionData,
+    projectId: string,
+    inventionService: {
+      getFullInventionDataString: (
+        invention: InventionData,
+        figures: string
+      ) => string;
+    }
+  ) => {
     let hasFigures = false;
 
     try {
@@ -225,16 +254,25 @@ const prompts = {
 
     return renderPromptTemplate(DETAILED_DESCRIPTION_PROMPT_V1, {
       hasFigures,
-      fullInventionData: inventionDataService.getFullInventionDataString(
+      fullInventionData: inventionService.getFullInventionDataString(
         invention,
         figuresText
       ),
     });
   },
-  abstract: async (invention: any, projectId: string) => {
+  abstract: async (
+    invention: InventionData,
+    projectId: string,
+    inventionService: {
+      getFullInventionDataString: (
+        invention: InventionData,
+        figures: string
+      ) => string;
+    }
+  ) => {
     const figuresText = await getFiguresText(projectId);
     return renderPromptTemplate(ABSTRACT_SECTION_PROMPT_V1, {
-      fullInventionData: inventionDataService.getFullInventionDataString(
+      fullInventionData: inventionService.getFullInventionDataString(
         invention,
         figuresText
       ),
@@ -269,18 +307,16 @@ async function generateTextWithService(
   }
 }
 
-async function handler(
-  req: CustomApiRequest<GenerateApplicationSectionsBody>,
-  res: NextApiResponse
-) {
-  const { projectId } = req.query as { projectId: string };
-  const { id: userId, tenantId } = (req as AuthenticatedRequest).user!;
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+  const { inventionService } = (req as RequestWithServices).services;
+  const { projectId } = req.query;
+  // User is guaranteed by SecurePresets middleware
+  const { id: userId, tenantId } = req.user!;
   const { versionName, selectedRefs } = req.body;
   const finalVersionName = versionName === undefined ? null : versionName;
 
-  const invention = await inventionDataService.getInventionData(
-    String(projectId)
-  );
+  // Get invention data with figures and elements
+  const invention = await inventionService.getInventionData(String(projectId));
   if (!invention) {
     throw new ApplicationError(
       ErrorCode.DB_RECORD_NOT_FOUND,
@@ -310,101 +346,103 @@ async function handler(
 
   let priorArtContext = '';
   if (Array.isArray(selectedRefs) && selectedRefs.length > 0) {
-    const project = await findProjectById(String(projectId), tenantId!);
-    const savedPriorArtItems = project?.savedPriorArtItems as unknown as Array<{
-      id?: string;
-      patentNumber?: string;
-      number?: string;
-      title?: string;
-      abstract?: string;
-      summary?: string;
-      claim1?: string;
-      authors?: string;
-      year?: string;
-      publicationDate?: string;
-      notes?: string;
-    }>;
-    const matchingRefs =
-      savedPriorArtItems?.filter(r => selectedRefs.includes(r.id || '')) || [];
+    if (!tenantId) {
+      throw new ApplicationError(
+        ErrorCode.AUTH_UNAUTHORIZED,
+        'Tenant ID not found'
+      );
+    }
+    const project = await findProjectById(String(projectId), tenantId);
 
-    // Enrich references that are missing claim1 or summary
-    if (matchingRefs.length > 0) {
-      logger.info(
-        `Enriching ${matchingRefs.length} selected prior art references`
+    // Type guard for savedPriorArtItems
+    if (!project || !Array.isArray(project.savedPriorArtItems)) {
+      priorArtContext = '';
+    } else {
+      const savedPriorArtItems =
+        project.savedPriorArtItems as PrismaSavedPriorArt[];
+      const matchingRefs = savedPriorArtItems.filter(r =>
+        selectedRefs.includes(r.id)
       );
 
-      // Process references in parallel for efficiency
-      const enrichmentPromises = matchingRefs.map(async ref => {
-        const patentNumber = ref.patentNumber || ref.number;
+      // Enrich references that are missing claim1 or summary
+      if (matchingRefs.length > 0) {
+        logger.info(
+          `Enriching ${matchingRefs.length} selected prior art references`
+        );
 
-        // Check if we need to fetch claim1 or summary
-        if (patentNumber && (!ref.claim1 || !ref.summary)) {
-          logger.info(`Fetching missing data for ${patentNumber}`, {
-            hasClaim1: !!ref.claim1,
-            hasSummary: !!ref.summary,
-          });
+        // Process references in parallel for efficiency
+        const enrichmentPromises = matchingRefs.map(async ref => {
+          const patentNumber = ref.patentNumber;
 
-          try {
-            const { claim1, summary } =
-              await PatentServerService.fetchClaim1AndSummary(patentNumber);
-
-            // Update the reference object with fetched data
-            if (claim1 && !ref.claim1) {
-              ref.claim1 = claim1;
-            }
-            if (summary && !ref.summary) {
-              ref.summary = summary;
-            }
-
-            // Update the database to cache this data for future use
-            if (claim1 || summary) {
-              await addProjectPriorArt(String(projectId), {
-                patentNumber,
-                title: ref.title,
-                abstract: ref.abstract,
-                url: undefined,
-                notes: ref.notes,
-                authors: ref.authors,
-                publicationDate: ref.publicationDate || ref.year,
-                claim1: ref.claim1,
-                summary: ref.summary,
-              });
-
-              logger.info(
-                `Updated database with enriched data for ${patentNumber}`
-              );
-            }
-          } catch (error) {
-            logger.error(`Failed to enrich prior art ${patentNumber}:`, {
-              error: error instanceof Error ? error : new Error(String(error)),
+          // Check if we need to fetch claim1 or summary
+          if (patentNumber && (!ref.claim1 || !ref.summary)) {
+            logger.info(`Fetching missing data for ${patentNumber}`, {
+              hasClaim1: !!ref.claim1,
+              hasSummary: !!ref.summary,
             });
-            // Continue with original data if enrichment fails
+
+            try {
+              const { claim1, summary } =
+                await PatentServerService.fetchClaim1AndSummary(patentNumber);
+
+              // Update the reference object with fetched data
+              if (claim1 && !ref.claim1) {
+                ref.claim1 = claim1;
+              }
+              if (summary && !ref.summary) {
+                ref.summary = summary;
+              }
+
+              // Update the database to cache this data for future use
+              if (claim1 || summary) {
+                await addProjectPriorArt(String(projectId), {
+                  patentNumber,
+                  title: ref.title || undefined,
+                  abstract: ref.abstract || undefined,
+                  url: undefined,
+                  notes: ref.notes || undefined,
+                  authors: ref.authors || undefined,
+                  publicationDate: ref.publicationDate || undefined,
+                  claim1: ref.claim1 || undefined,
+                  summary: ref.summary || undefined,
+                });
+
+                logger.info(
+                  `Updated database with enriched data for ${patentNumber}`
+                );
+              }
+            } catch (error) {
+              logger.error(`Failed to enrich prior art ${patentNumber}:`, {
+                error:
+                  error instanceof Error ? error : new Error(String(error)),
+              });
+              // Continue with original data if enrichment fails
+            }
           }
-        }
 
-        return ref;
-      });
+          return ref;
+        });
 
-      // Wait for all enrichments to complete
-      await Promise.all(enrichmentPromises);
+        // Wait for all enrichments to complete
+        await Promise.all(enrichmentPromises);
 
-      // Build the prior art context with enriched data
-      priorArtContext = matchingRefs
-        .map(ref => {
-          const lines: string[] = [];
-          lines.push(
-            `Ref ${ref.patentNumber || ref.number || ref.id} – ${ref.title || 'Untitled'}`
-          );
-          if (ref.abstract) lines.push(`Abstract: ${ref.abstract}`);
-          if (ref.summary) lines.push(`Summary: ${ref.summary}`);
-          if (ref.claim1) lines.push(`Main Claim: ${ref.claim1}`);
-          if (ref.authors) lines.push(`Authors: ${ref.authors}`);
-          if (ref.year || ref.publicationDate)
-            lines.push(`Year: ${ref.year || ref.publicationDate}`);
-          if (ref.notes) lines.push(`Notes: ${ref.notes}`);
-          return lines.join('\n');
-        })
-        .join('\n\n');
+        // Build the prior art context with enriched data
+        priorArtContext = matchingRefs
+          .map(ref => {
+            const lines: string[] = [];
+            lines.push(
+              `Ref ${ref.patentNumber || ref.id} – ${ref.title || 'Untitled'}`
+            );
+            if (ref.abstract) lines.push(`Abstract: ${ref.abstract}`);
+            if (ref.summary) lines.push(`Summary: ${ref.summary}`);
+            if (ref.claim1) lines.push(`Main Claim: ${ref.claim1}`);
+            if (ref.authors) lines.push(`Authors: ${ref.authors}`);
+            if (ref.publicationDate) lines.push(`Year: ${ref.publicationDate}`);
+            if (ref.notes) lines.push(`Notes: ${ref.notes}`);
+            return lines.join('\n');
+          })
+          .join('\n\n');
+      }
     }
   }
 
@@ -429,7 +467,11 @@ async function handler(
   // Generate sections sequentially to maintain order
   for (const sectionInfo of sectionsToGenerate) {
     logger.info(`Starting generation for section: ${sectionInfo.key}`);
-    let prompt = await sectionInfo.promptFn(invention, String(projectId));
+    let prompt = await sectionInfo.promptFn(
+      invention,
+      String(projectId),
+      inventionService
+    );
 
     // Only add prior art context if it's not the drawings section
     // This prevents the drawings section from being contaminated with extra info
@@ -453,7 +495,7 @@ async function handler(
 
   // Add claims
   const claims = flexibleJsonParse(invention.claims, {});
-  generatedSections['CLAIM_SET'] =
+  generatedSections['CLAIMS'] =
     typeof claims === 'object' && !Array.isArray(claims)
       ? Object.entries(claims)
           .sort(([numA], [numB]) => parseInt(numA, 10) - parseInt(numB, 10))
@@ -463,31 +505,83 @@ async function handler(
         ? claims.map((text, i) => `${i + 1}. ${text}`).join('\n\n')
         : '';
 
+  // Log generated sections for debugging
+  logger.info(`Patent generation sections complete for project: ${projectId}`, {
+    projectId,
+    sectionsGenerated: Object.keys(generatedSections),
+    sectionCount: Object.keys(generatedSections).length,
+    sectionsPreview: Object.entries(generatedSections)
+      .slice(0, 3)
+      .map(([type, content]) => ({
+        type,
+        contentLength: content?.length || 0,
+        hasContent: !!(content && content.trim().length > 0),
+        contentPreview: content?.substring(0, 100) + '...',
+      })),
+    allSectionsHaveContent: Object.values(generatedSections).every(
+      content => content && content.trim().length > 0
+    ),
+  });
+
   // Initialize draft documents with generated sections
   const { initializeDraftDocumentsWithSections } = await import(
     '@/repositories/project'
   );
-  
+
+  logger.info(`About to initialize draft documents for project: ${projectId}`, {
+    projectId,
+    sectionKeys: Object.keys(generatedSections),
+    sectionsToSave: Object.entries(generatedSections).map(
+      ([type, content]) => ({
+        type,
+        contentLength: content?.length || 0,
+        hasContent: !!(content && content.trim().length > 0),
+      })
+    ),
+  });
+
   const draftCount = await initializeDraftDocumentsWithSections(
     String(projectId),
     generatedSections
   );
-  
-  logger.info(`Initialized ${draftCount} draft documents for project: ${projectId}`);
-  
+
+  logger.info(
+    `Draft document initialization complete for project: ${projectId}`,
+    {
+      projectId,
+      draftCount,
+      expectedCount: Object.keys(generatedSections).length,
+      success: draftCount > 0,
+    }
+  );
+
+  // Update the project to indicate it has patent content
+  if (draftCount > 0) {
+    if (!tenantId) {
+      throw new ApplicationError(
+        ErrorCode.AUTH_UNAUTHORIZED,
+        'Tenant ID not found'
+      );
+    }
+    await secureUpdateProject(String(projectId), tenantId, userId, {
+      hasPatentContent: true,
+    });
+    logger.info(`Updated hasPatentContent flag for project: ${projectId}`);
+  }
+
   // Optionally create a version if versionName was provided
   let versionData = null;
   if (finalVersionName) {
     const { createApplicationVersionFromDraft } = await import(
       '@/repositories/project'
     );
-    
+
     const newVersion = await createApplicationVersionFromDraft(
       String(projectId),
       userId,
       finalVersionName
     );
-    
+
     versionData = {
       id: newVersion.id,
       name: newVersion.name,
@@ -503,6 +597,7 @@ async function handler(
     message: 'Patent application sections generated successfully',
     draftDocuments: draftCount,
     version: versionData,
+    sections: generatedSections,
   });
 }
 

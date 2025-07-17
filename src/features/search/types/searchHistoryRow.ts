@@ -64,7 +64,6 @@ export interface SearchHistoryRowProps {
   refreshSavedArtData?: (projectId: string) => Promise<void>;
   savedArtNumbers?: Set<string>;
   excludedPatentNumbers?: Set<string>;
-  isLoadingCitationJobs?: boolean;
 }
 
 /**
@@ -106,7 +105,6 @@ export interface SearchHistoryRowResultsProps {
   referencesWithJobs?: Set<string>;
   citationJobNumbers: Set<string>;
   setCitationJobNumbers: React.Dispatch<React.SetStateAction<Set<string>>>;
-  isLoadingJobs?: boolean;
 }
 
 /**
@@ -127,7 +125,6 @@ export interface ReferenceCardActionsProps {
   setCitationJobNumbers: React.Dispatch<React.SetStateAction<Set<string>>>;
   extractingReferenceNumber: string | null;
   setExtractingReferenceNumber: (refNumber: string | null) => void;
-  isLoadingJobs?: boolean;
 }
 
 /**

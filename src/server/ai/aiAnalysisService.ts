@@ -1,5 +1,5 @@
 import { processWithOpenAI } from './aiService';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { GPTReadyReference } from '../../types/patbaseTypes';
 import {
   FullAnalysisResponse,
@@ -11,7 +11,7 @@ import {
   PRIOR_ART_ANALYSIS_SYSTEM_PROMPT_V1,
   PRIOR_ART_ANALYSIS_USER_PROMPT_V1,
 } from '@/server/prompts/prompts/templates/priorArtAnalysis';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 
 // Define the expected structure for the parsed AI response (core part)
@@ -81,12 +81,12 @@ export async function callAIServiceForAnalysis(
     references: JSON.stringify(references, null, 2),
   });
 
-  logger.log(
+  logger.info(
     `[AI Analysis Service] Sending user prompt with ${userPrompt.length} characters.`
   );
 
   try {
-    logger.log(
+    logger.info(
       '[AI Analysis Service] Calling processWithOpenAI with structured prompt and temp=0.0'
     );
     const aiResponse = await processWithOpenAI(userPrompt, systemPrompt, {
@@ -104,7 +104,7 @@ export async function callAIServiceForAnalysis(
     }
 
     if (aiResponse.usage) {
-      logger.log(
+      logger.info(
         `[AI Analysis Service Usage] Model: ${aiResponse.usage.model || 'N/A'}, Prompt Tokens: ${aiResponse.usage.prompt_tokens}, Completion Tokens: ${aiResponse.usage.completion_tokens}, Total Tokens: ${aiResponse.usage.total_tokens}, Estimated Cost: $${aiResponse.usage.estimated_cost.toFixed(6)}, Fallback Used: ${aiResponse.usage.used_fallback || false}`
       );
     } else {
@@ -384,7 +384,7 @@ export async function callAIServiceForAnalysis(
         // Attach calculated results to the parsed object
         responseObj.referenceRiskProfiles = referenceRiskProfiles;
         responseObj.autoResolvedReferences = autoResolvedReferences;
-        logger.log(
+        logger.info(
           '[AI Analysis Service] Calculated reference risk profiles:',
           { referenceRiskProfiles }
         );
@@ -399,7 +399,7 @@ export async function callAIServiceForAnalysis(
       }
       // --- END NEW CODE: Risk Profile Calculation ---
 
-      logger.log(
+      logger.info(
         '[AI Analysis Service] Successfully parsed and validated AI response. Calculation added.'
       );
       // Cast to the full type now that calculation is done

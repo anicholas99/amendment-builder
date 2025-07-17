@@ -1,11 +1,16 @@
 import React from 'react';
 import { render as rtlRender, RenderOptions } from '@testing-library/react';
-import { ChakraProvider } from '@chakra-ui/react';
-import { theme } from '../theme';
+import { ThemeProvider } from '@/contexts/ThemeContext';
+import { Toaster } from '@/components/ui/toaster';
 
 // Add custom providers here
 function AllTheProviders({ children }: { children: React.ReactNode }) {
-  return <ChakraProvider theme={theme}>{children}</ChakraProvider>;
+  return (
+    <ThemeProvider>
+      {children}
+      <Toaster />
+    </ThemeProvider>
+  );
 }
 
 function render(

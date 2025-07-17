@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { Text } from '@chakra-ui/react';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 // Decision node is a diamond shape with text inside
 const DecisionNode: React.FC<NodeProps> = ({ data, selected }) => {
+  const { isDarkMode } = useThemeContext();
   const [isEditing, setIsEditing] = useState(false);
   const [label, setLabel] = useState(data.label || 'Decision');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -61,7 +62,7 @@ const DecisionNode: React.FC<NodeProps> = ({ data, selected }) => {
         >
           <polygon
             points="90,0 180,50 90,100 0,50"
-            fill="white"
+            fill={isDarkMode ? '#1f2937' : 'white'}
             stroke="black"
             strokeWidth="1"
           />
@@ -96,9 +97,9 @@ const DecisionNode: React.FC<NodeProps> = ({ data, selected }) => {
               style={{ width: '80%' }}
             />
           ) : (
-            <Text textAlign="center" fontWeight="normal" fontSize="14px">
+            <span className="text-center font-normal text-sm">
               {displayLabel}
-            </Text>
+            </span>
           )}
         </div>
       </div>

@@ -9,9 +9,8 @@
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { CitationClientService } from '@/client/services/citation.client-service';
 import { CitationJob } from '@/types/citation';
-import { logger } from '@/lib/monitoring/logger';
-import { useToast } from '@chakra-ui/react';
-import { showSuccessToast, showErrorToast } from '@/utils/toast';
+import { logger } from '@/utils/clientLogger';
+import { useToast } from '@/utils/toast';
 import { ApplicationError } from '@/lib/error';
 import { citationKeys } from '@/lib/queryKeys';
 import { STALE_TIME } from '@/constants/time';
@@ -116,14 +115,14 @@ export function useSyncJobStatus() {
       CitationClientService.syncJobStatus(jobId),
     onSuccess: (data, jobId) => {
       if (data.success) {
-        showSuccessToast(toast, `Job ${jobId} status synced.`);
+        toast.success(`Job ${jobId} status synced.`);
         queryClient.invalidateQueries({ queryKey: citationKeys.jobs.all() });
       } else {
-        showErrorToast(toast, `Failed to sync job ${jobId}.`);
+        toast.error(`Failed to sync job ${jobId}.`);
       }
     },
     onError: (error: ApplicationError, jobId) => {
-      showErrorToast(toast, `Error syncing job ${jobId}: ${error.message}`);
+      toast.error(`Error syncing job ${jobId}: ${error.message}`);
     },
   });
 }

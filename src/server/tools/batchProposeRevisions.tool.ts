@@ -1,7 +1,10 @@
 import { ClaimRepository } from '@/repositories/claimRepository';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { proposeClaimRevision, ClaimRevision } from './proposeClaimRevision.tool';
+import {
+  proposeClaimRevision,
+  ClaimRevision,
+} from './proposeClaimRevision.tool';
 
 export interface BatchRevisionResult {
   revisions: ClaimRevision[];
@@ -14,9 +17,9 @@ export interface BatchRevisionResult {
 
 /**
  * Propose revisions for multiple claims at once
- * 
+ *
  * SECURITY: Always validates tenant ownership before accessing data
- * 
+ *
  * This tool batch processes multiple claims through the revision engine,
  * allowing users to apply the same instruction to multiple claims efficiently.
  */
@@ -45,22 +48,25 @@ export async function batchProposeRevisions(
     }
 
     // Process claims in parallel for efficiency
-    const revisionPromises = claimIds.map(claimId => 
-      proposeClaimRevision(projectId, tenantId, claimId, instruction)
-        .catch(error => {
+    const revisionPromises = claimIds.map(claimId =>
+      proposeClaimRevision(projectId, tenantId, claimId, instruction).catch(
+        error => {
           logger.error('[BatchProposeRevisionsTool] Failed to revise claim', {
             claimId,
             error,
           });
           return null; // Return null for failed revisions
-        })
+        }
+      )
     );
 
     const results = await Promise.all(revisionPromises);
-    
+
     // Filter out failed revisions
-    const successfulRevisions = results.filter((r): r is ClaimRevision => r !== null);
-    
+    const successfulRevisions = results.filter(
+      (r): r is ClaimRevision => r !== null
+    );
+
     return {
       revisions: successfulRevisions,
       summary: {
@@ -70,10 +76,13 @@ export async function batchProposeRevisions(
       },
     };
   } catch (error) {
-    logger.error('[BatchProposeRevisionsTool] Failed to batch propose revisions', {
-      projectId,
-      error,
-    });
+    logger.error(
+      '[BatchProposeRevisionsTool] Failed to batch propose revisions',
+      {
+        projectId,
+        error,
+      }
+    );
     throw error;
   }
-} 
+}

@@ -1,13 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { processWithOpenAI, TokenUsage } from '@/lib/ai/openAIClient';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { CustomApiRequest } from '@/types/api';
 import { z } from 'zod';
-import { safeJsonParse } from '@/utils/json-utils';
-import { logger } from '@/lib/monitoring/logger';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { safeJsonParse } from '@/utils/jsonUtils';
+import { logger } from '@/server/logger';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 const apiLogger = createApiLogger('generate-dependent-claims');
 
@@ -196,7 +196,10 @@ Return ONLY valid JSON in this format:
     },
   };
   apiLogger.logResponse(200, { generatedClaimsCount: generatedCount });
-  return res.status(200).json(responsePayload);
+  return res.status(200).json({
+    success: true,
+    data: responsePayload,
+  });
 }
 
 // Use the new secure preset for tenant protection and validation

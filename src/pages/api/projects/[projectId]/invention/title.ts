@@ -1,9 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { inventionDataService } from '@/server/services/invention-data.server-service';
-import { logger } from '@/lib/monitoring/logger';
-import { AuthenticatedRequest } from '@/types/middleware';
+import { RequestWithServices } from '@/types/middleware';
+import { logger } from '@/server/logger';
 import { z } from 'zod';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Validation schema for updating the title
 const updateTitleSchema = z.object({
@@ -18,24 +18,35 @@ const querySchema = z.object({
   projectId: z.string().min(1, 'Project ID is required'),
 });
 
-async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
-  const { projectId } = req.query as z.infer<typeof querySchema>;
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { inventionService } = (req as RequestWithServices).services;
+  const { projectId } = req.query;
 
   if (!projectId || typeof projectId !== 'string') {
-    return res.status(400).json({ error: 'Invalid project ID' });
+    return apiResponse.badRequest(res, 'Invalid project ID');
   }
 
-  const { title } = req.body as z.infer<typeof updateTitleSchema>;
-
   try {
-    await inventionDataService.updateTitle(projectId, title);
-    return res.status(200).json({ message: 'Title updated successfully.' });
+    switch (req.method) {
+      case 'GET':
+        const inventionData =
+          await inventionService.getInventionData(projectId);
+        return apiResponse.ok(res, { title: inventionData?.title || '' });
+
+      case 'PUT':
+        await inventionService.updateTitle(projectId, req.body.title);
+        return apiResponse.ok(res, { success: true });
+
+      default:
+        return apiResponse.methodNotAllowed(res, ['GET', 'PUT']);
+    }
   } catch (error) {
-    logger.error('[API] Error updating invention title', {
+    logger.error('Failed to handle title request', {
       projectId,
+      method: req.method,
       error,
     });
-    return res.status(500).json({ error: 'Failed to update invention title' });
+    return apiResponse.serverError(res, error);
   }
 }
 

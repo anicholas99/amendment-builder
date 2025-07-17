@@ -1,7 +1,7 @@
 import { getSession } from '@/lib/auth/getSession';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
+import { SecurePresets } from '@/server/api/securePresets';
 
 const apiLogger = createApiLogger('auth/session');
 
@@ -25,9 +25,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(401).json({ error: 'Unauthenticated' });
     }
 
-    apiLogger.info('Session retrieved successfully', {
+    apiLogger.debug('Session retrieved successfully', {
+      routeName: 'auth/session',
+      requestId: req.headers['x-request-id'] as string,
+      timestamp: new Date().toISOString(),
       userId: session.user.id,
-      currentTenantId: session.currentTenant?.id,
       tenantsCount: session.tenants.length,
     });
 

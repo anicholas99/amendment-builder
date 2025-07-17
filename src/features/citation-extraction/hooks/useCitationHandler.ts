@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import { useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import { ProcessedSearchHistoryEntry } from '@/types/domain/searchHistory';
 import { useCreateCitationJob } from '@/hooks/api/useCitationExtraction';
 
@@ -60,7 +60,7 @@ export function useCitationHandler({
           // Update the persistent selected search ID
           persistentSelectedSearchId.current = entryId;
 
-          // Switch to citations tab
+          // Switch to citations tab (index 1 after removing Image Analysis tab)
           handleTabChange(1);
         } else {
           throw new Error(response?.message || 'Failed to start extraction');

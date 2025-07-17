@@ -8,7 +8,7 @@
  */
 
 import { apiFetch } from './apiClient';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 
 export interface AxiosRequestConfig {
   url?: string;

@@ -2,8 +2,7 @@ import { useMemo } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 
 /**
- * Framework-agnostic hook for color mode values
- * Replaces Chakra's useColorModeValue with our own theme system
+ * Provides a theme-aware color value based on the current color mode.
  */
 export const useColorModeValue = <T = string>(
   lightValue: T,

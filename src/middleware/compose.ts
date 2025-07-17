@@ -36,7 +36,7 @@ export { withCsrf } from '../lib/security/csrf';
 export { withValidation } from '../lib/security/validate';
 export { withRateLimit } from './rateLimiter';
 export { withProjectCache, withTenantCache, withUserCache } from './cache';
-export { createApiLogger } from '../lib/monitoring/apiLogger';
+export { createApiLogger } from '@/server/monitoring/apiLogger';
 export { withActivityLogging } from './activityLogger';
 export { withMethod } from './method';
 export { withQueryValidation } from './queryValidation';

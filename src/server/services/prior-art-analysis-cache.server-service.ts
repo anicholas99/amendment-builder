@@ -1,4 +1,4 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { priorArtAnalysisCacheRepository } from '@/repositories/priorArtAnalysisCacheRepository';
 import { FullAnalysisResponse } from '../../types/priorArtAnalysisTypes';
 
@@ -38,7 +38,7 @@ export async function createOrUpdateAnalysisCache(
   claim1TextHash: string,
   results: FullAnalysisResponse
 ) {
-  logger.log(
+  logger.info(
     `[Cache Service - Upsert] Caching analysis for ${searchHistoryId}, hash ${claim1TextHash.substring(
       0,
       8

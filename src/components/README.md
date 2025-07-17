@@ -122,28 +122,24 @@ Each main view has a dedicated documentation file that lists all components used
 - [ClaimRefinementComponents.md](./views/ClaimRefinementComponents.md)
 - [TechnologyDetailsComponents.md](./views/TechnologyDetailsComponents.md)
 
-## Component Visualization
+## Component Analysis
 
-You can generate visualizations of component dependencies by running:
+You can analyze component dependencies using standard tools:
 
 ```bash
-node scripts/visualize-components.js
+# Analyze circular dependencies
+npx madge --circular src/components
+
+# Generate dependency graph
+npx madge --image deps.svg src/components
 ```
 
-This will create the following files in the `docs` directory:
-
-- `component-dependencies-patentapplicationview.md` - Mermaid diagram of PatentApplicationView components
-- `component-dependencies-claimrefinementview.md` - Mermaid diagram of ClaimRefinementView components
-- `component-dependencies-technologydetailsview.md` - Mermaid diagram of TechnologyDetailsView components
-- `component-list-patentapplicationview.md` - List of PatentApplicationView components
-- `component-list-claimrefinementview.md` - List of ClaimRefinementView components
-- `component-list-technologydetailsview.md` - List of TechnologyDetailsView components
-- `component-summary.md` - Summary of all components used in the application
+For IDE-based analysis, most modern editors provide built-in dependency visualization and component relationship tools.
 
 ## Best Practices
 
 1. **Keep Components Small and Focused**: Each component should have a single responsibility.
 2. **Use Index Files**: Import components from the corresponding index file to keep imports clean.
 3. **Document New Components**: When adding new components, update the corresponding documentation files.
-4. **Run the Visualization Script**: Periodically run the visualization script to keep documentation up-to-date.
+4. **Monitor Dependencies**: Use tools like `madge` to check for circular dependencies and component relationships.
 5. **Reuse Shared Components**: Use shared components from the common directory when possible.

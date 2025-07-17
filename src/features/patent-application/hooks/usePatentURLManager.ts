@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { ApplicationVersionWithDocuments } from '@/types/versioning';
 
 interface UsePatentURLManagerProps {

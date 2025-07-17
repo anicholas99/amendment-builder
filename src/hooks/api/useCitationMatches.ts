@@ -8,7 +8,7 @@
 import { useApiQuery } from '@/lib/api/queryClient';
 import { UseQueryOptions } from '@tanstack/react-query';
 import { CitationMatchResponse } from '@/client/services/citation-match.client-service';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { STALE_TIME, GC_TIME } from '@/constants/time';
 import { ApplicationError } from '@/lib/error';
 import { API_ROUTES } from '@/constants/apiRoutes';

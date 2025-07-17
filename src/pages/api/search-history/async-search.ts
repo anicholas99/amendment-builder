@@ -4,9 +4,9 @@
  */
 import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { TenantServerService } from '@/server/services/tenant.server.service';
+import { resolveTenantIdFromProject } from '@/repositories/tenantRepository';
 import {
   createSearchHistory,
   updateSearchHistory,
@@ -19,7 +19,8 @@ import {
   ExtendedSearchResponse,
 } from '@/server/services/semantic-search.server-service';
 import { normalizeSearchResults } from '@/features/search/utils/searchHistory';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { prisma } from '@/lib/prisma';
 
 const apiLogger = createApiLogger('async-search');
 
@@ -52,6 +53,7 @@ const AsyncSearchRequestSchema = z.object({
   parsedElements: z
     .union([
       z.string(),
+      z.array(z.string()),
       z.array(
         z
           .object({
@@ -109,6 +111,7 @@ async function handler(
       searchId: searchHistory.id,
       projectId,
       queryCount: searchQueries.length,
+      citationExtractionStatus: searchHistory.citationExtractionStatus,
     });
 
     // Queue background processing (add to your queue system)
@@ -121,12 +124,13 @@ async function handler(
       parsedElements,
     });
 
-    // Return immediately with job ID
+    // Return the full search history entry for immediate cache update
     const response = {
       searchId: searchHistory.id,
       status: 'processing',
       message:
         'Search started. Use /api/search-history/[id]/status to check progress.',
+      searchHistory: searchHistory, // Include the full entry
     };
 
     apiLogger.logResponse(202, response);
@@ -155,7 +159,7 @@ async function queueAsyncSearch(params: {
   queries: string[];
   searchType: string;
   filters: SearchFilters;
-  parsedElements?: string | ParsedElement[];
+  parsedElements?: string | string[] | ParsedElement[];
 }) {
   // TODO: Implement your queue system here
   // For now, process immediately in background
@@ -180,18 +184,8 @@ async function processAsyncSearch(params: {
   queries: string[];
   searchType: string;
   filters: SearchFilters;
-  parsedElements?: string | ParsedElement[];
+  parsedElements?: string | string[] | ParsedElement[];
 }) {
-  const { executeSemanticSearch } = await import(
-    '@/server/services/semantic-search.server-service'
-  );
-  const { updateSearchHistory } = await import(
-    '@/repositories/searchRepository'
-  );
-  const { normalizeSearchResults } = await import(
-    '@/features/search/utils/searchHistory'
-  );
-
   try {
     apiLogger.info('Starting background search processing', {
       searchId: params.searchId,
@@ -226,13 +220,21 @@ async function processAsyncSearch(params: {
     });
   } catch (error) {
     // Mark as failed
-    await updateSearchHistory(params.searchId, {
-      citationExtractionStatus: 'failed',
-    });
+    try {
+      await updateSearchHistory(params.searchId, {
+        citationExtractionStatus: 'failed',
+      });
+    } catch (updateError) {
+      apiLogger.error('Failed to update search status to failed', {
+        searchId: params.searchId,
+        error: updateError,
+      });
+    }
 
     apiLogger.error('Background search failed', {
       searchId: params.searchId,
-      error,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
   }
 }
@@ -244,7 +246,7 @@ const projectBasedSearchTenantResolver = async (
   const { projectId } = req.body as { projectId?: string };
   if (!projectId) return null;
 
-  return TenantServerService.getTenantIdForProject(projectId);
+  return resolveTenantIdFromProject(projectId);
 };
 
 // Use the new secure preset

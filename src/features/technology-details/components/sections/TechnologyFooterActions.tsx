@@ -1,16 +1,6 @@
 import React from 'react';
-import {
-  Box,
-  HStack,
-  Text,
-  Badge,
-  Button,
-  Icon,
-  Spinner,
-  Container,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import { FiArrowRight } from 'react-icons/fi';
+import { ArrowRight, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface TechnologyFooterActionsProps {
   value: string;
@@ -31,71 +21,80 @@ export const TechnologyFooterActions: React.FC<
   isUploading,
   onProceed,
 }) => {
-  const mutedTextColor = useColorModeValue('gray.600', 'gray.400');
-  const iconColor = useColorModeValue('blue.500', 'blue.300');
-
-  const charCount = value.length;
-  const wordCount = value.trim() ? value.trim().split(/\s+/).length : 0;
-  const totalFiles = uploadedFilesCount + uploadedFiguresCount;
+  const hasContent =
+    value.trim().length > 0 ||
+    uploadedFilesCount > 0 ||
+    uploadedFiguresCount > 0;
+  const isLoading = isProcessing || isUploading;
 
   return (
-    <Box py={3} pb={4} px={{ base: 4, md: 6 }} minH="80px">
-      <Container maxW="7xl">
-        <HStack justify="space-between" align="center">
-          {/* Content Status */}
-          <HStack spacing={4}>
-            {value.length > 0 && (
-              <Box>
-                <Text fontSize="sm" color={mutedTextColor}>
-                  {wordCount} {wordCount === 1 ? 'word' : 'words'} • {charCount}{' '}
-                  characters
-                </Text>
-              </Box>
-            )}
-            {totalFiles > 0 && (
-              <Badge colorScheme="green" variant="subtle" fontSize="sm">
-                {totalFiles} files ready
-              </Badge>
-            )}
-            {!value.length && totalFiles === 0 && (
-              <Text fontSize="sm" color={mutedTextColor}>
-                No content yet
-              </Text>
-            )}
-          </HStack>
+    <div className="w-full bg-background">
+      <div className="px-4 md:px-6 py-3 md:py-4">
+        {/* Match the same grid structure as the content above */}
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_0.75fr] gap-4 md:gap-5">
+          {/* Left column - matches text input area */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            {/* Status Text */}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-muted-foreground">
+                {hasContent ? (
+                  <>
+                    {value.trim().length > 0 && (
+                      <span>{value.trim().length} characters</span>
+                    )}
+                    {value.trim().length > 0 &&
+                      (uploadedFilesCount > 0 || uploadedFiguresCount > 0) && (
+                        <span> • </span>
+                      )}
+                    {uploadedFilesCount > 0 && (
+                      <span>
+                        {uploadedFilesCount} file
+                        {uploadedFilesCount !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                    {uploadedFilesCount > 0 && uploadedFiguresCount > 0 && (
+                      <span> • </span>
+                    )}
+                    {uploadedFiguresCount > 0 && (
+                      <span>
+                        {uploadedFiguresCount} figure
+                        {uploadedFiguresCount !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  'Add content to begin analysis'
+                )}
+              </p>
+            </div>
 
-          {/* Process Button */}
-          {isProcessing ? (
-            <HStack spacing={3}>
-              <Spinner size="sm" color={iconColor} />
-              <Text fontSize="sm" color="text.primary">
-                Processing your invention...
-              </Text>
-            </HStack>
-          ) : (
-            <Button
-              colorScheme="blue"
-              size="lg"
-              rightIcon={<Icon as={FiArrowRight} />}
-              onClick={onProceed}
-              isLoading={isUploading}
-              isDisabled={
-                isProcessing ||
-                isUploading ||
-                (!value.length && totalFiles === 0)
-              }
-              px={8}
-              _hover={{
-                transform: 'translateY(-1px)',
-                boxShadow: 'lg',
-              }}
-              transition="all 0.2s"
-            >
-              Process Invention
-            </Button>
-          )}
-        </HStack>
-      </Container>
-    </Box>
+            {/* Action Button - Aligned with right edge of text input container */}
+            <div className="flex-shrink-0">
+              <Button
+                onClick={onProceed}
+                disabled={!hasContent || isLoading}
+                className="w-full sm:w-auto min-w-[140px]"
+                size="default"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {isProcessing ? 'Analyzing...' : 'Uploading...'}
+                  </>
+                ) : (
+                  <>
+                    Analyze Invention
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Right column - empty space to match files sidebar */}
+          <div className="hidden lg:block"></div>
+        </div>
+      </div>
+    </div>
   );
 };

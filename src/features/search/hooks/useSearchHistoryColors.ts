@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useColorModeValue } from '@chakra-ui/react';
+import { useColorModeValue } from '@/hooks/useColorModeValue';
 
 /**
  * Interface for the color theme

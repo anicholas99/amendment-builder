@@ -1,26 +1,30 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
-import {
-  Box,
-  Textarea,
-  InputGroup,
-  InputRightElement,
-  IconButton,
-  Icon,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import { FiSend } from 'react-icons/fi';
+import { Send, Paperclip } from 'lucide-react';
+
+// Import shadcn/ui components
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
   isAssistantTyping: boolean;
   assistantColor: string;
+  onFileSelect?: (file: File) => void;
+  isUploadingFile?: boolean;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = React.memo(
-  ({ onSendMessage, isAssistantTyping, assistantColor }) => {
+  ({
+    onSendMessage,
+    isAssistantTyping,
+    assistantColor,
+    onFileSelect,
+    isUploadingFile,
+  }) => {
     const [inputMessage, setInputMessage] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const inputTextBg = useColorModeValue('gray.50', 'gray.700');
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Auto-resize textarea
     const adjustTextareaHeight = useCallback(() => {
@@ -66,67 +70,101 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(
       }
     }, [inputMessage, onSendMessage]);
 
+    const handleFileClick = useCallback(() => {
+      fileInputRef.current?.click();
+    }, []);
+
+    const handleFileChange = useCallback(
+      (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && onFileSelect) {
+          onFileSelect(file);
+          // Reset input
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+        }
+      },
+      [onFileSelect]
+    );
+
     return (
-      <Box
-        p={3}
-        borderTop="1px solid"
-        borderColor="border.primary"
-        bg="bg.secondary"
-        boxShadow="0 -2px 8px rgba(0,0,0,0.03)"
-      >
-        <InputGroup size="sm">
+      <div className="p-4 border-t border-border bg-secondary/50 shadow-sm">
+        <div className="relative">
           <Textarea
+            ref={textareaRef}
             placeholder="Ask me about your patent application..."
             value={inputMessage}
             onChange={handleInputChange}
             onKeyDown={handleKeyPress}
-            pr="3rem"
-            bg={inputTextBg}
-            color="text.primary"
-            border="1px solid"
-            borderColor="border.primary"
-            borderRadius="lg"
-            _hover={{
-              borderColor: 'border.light',
+            disabled={isAssistantTyping || isUploadingFile}
+            className={cn(
+              'min-h-[36px] max-h-[120px] resize-none pr-20',
+              'bg-background border-input',
+              'hover:border-border/70',
+              'focus:border-primary focus:ring-1 focus:ring-primary',
+              'placeholder:text-muted-foreground',
+              'text-sm',
+              'transition-colors duration-150',
+              (isAssistantTyping || isUploadingFile) &&
+                'opacity-50 cursor-not-allowed'
+            )}
+            style={{
+              scrollbarWidth: 'thin',
+              msOverflowStyle: 'auto',
+              WebkitOverflowScrolling: 'touch',
             }}
-            _focus={{
-              borderColor: assistantColor,
-              boxShadow: `0 0 0 1px ${assistantColor}`,
-              bg: 'bg.primary',
-            }}
-            _placeholder={{
-              color: 'text.tertiary',
-            }}
-            fontSize="sm"
-            disabled={isAssistantTyping}
-            transition="border-color 0.15s ease-out, box-shadow 0.15s ease-out, background-color 0.15s ease-out"
-            minH="36px"
-            maxH="120px"
-            resize="none"
-            ref={textareaRef}
-            overflow="hidden"
           />
-          <InputRightElement width="3rem" height="36px">
-            <IconButton
-              h="24px"
-              w="24px"
-              size="xs"
-              colorScheme={assistantColor.split('.')[0]}
-              isLoading={isAssistantTyping}
-              isDisabled={!inputMessage.trim() || isAssistantTyping}
+          <div className="absolute right-2 bottom-2 flex items-center gap-1">
+            {onFileSelect && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={isAssistantTyping || isUploadingFile}
+                onClick={handleFileClick}
+                className={cn(
+                  'h-6 w-6 p-0 rounded-md',
+                  'hover:bg-muted',
+                  'transition-all duration-150',
+                  'disabled:opacity-50 disabled:cursor-not-allowed'
+                )}
+                title="Upload patent document"
+              >
+                <Paperclip className="w-3 h-3" />
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="default"
+              disabled={
+                !inputMessage.trim() || isAssistantTyping || isUploadingFile
+              }
               onClick={handleSendClick}
-              borderRadius="md"
-              icon={<Icon as={FiSend} boxSize="12px" />}
-              _hover={{
-                transform: 'translateY(-1px)',
-                boxShadow: 'sm',
+              className={cn(
+                'h-6 w-6 p-0 rounded-md',
+                'hover:scale-105 hover:shadow-sm',
+                'transition-all duration-150',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
+              )}
+              style={{
+                backgroundColor: assistantColor?.includes('blue')
+                  ? 'hsl(var(--primary))'
+                  : assistantColor,
               }}
-              transition="transform 0.15s ease-out, box-shadow 0.15s ease-out"
-              aria-label="Send message"
-            />
-          </InputRightElement>
-        </InputGroup>
-      </Box>
+            >
+              <Send className="w-3 h-3" />
+            </Button>
+          </div>
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.docx,.doc,.txt"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+        </div>
+      </div>
     );
   }
 );

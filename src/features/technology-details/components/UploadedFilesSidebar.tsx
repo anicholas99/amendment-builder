@@ -1,12 +1,8 @@
 import React from 'react';
-import { Box, Text, Icon, Flex, IconButton, Center } from '@chakra-ui/react';
-import {
-  VStack,
-  SimpleGrid,
-  AspectRatio,
-  useColorModeValue,
-} from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { FiFile, FiTrash2 } from 'react-icons/fi';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface UploadedFilesSidebarProps {
   uploadedFiles: string[];
@@ -21,20 +17,7 @@ interface UploadedFilesSidebarProps {
 export const UploadedFilesSidebar: React.FC<UploadedFilesSidebarProps> =
   React.memo(
     ({ uploadedFiles, clearUploadedFile, isProcessing, isUploading }) => {
-      // Move all color mode values outside of callbacks
-      const bgSecondary = useColorModeValue('bg.secondary', 'bg.secondary');
-      const borderPrimary = useColorModeValue(
-        'border.primary',
-        'border.primary'
-      );
-      const borderSecondary = useColorModeValue(
-        'border.secondary',
-        'border.secondary'
-      );
-      const bgCard = useColorModeValue('bg.card', 'bg.card');
-      const bgHover = useColorModeValue('bg.hover', 'bg.hoverDark');
-      const borderHover = useColorModeValue('blue.200', 'blue.700');
-      const bgTertiary = useColorModeValue('bg.tertiary', 'bg.tertiary');
+      const { isDarkMode } = useThemeContext();
 
       // Helper function to determine if a file is an image
       const isImageFile = (fileName: string) => {
@@ -48,152 +31,138 @@ export const UploadedFilesSidebar: React.FC<UploadedFilesSidebarProps> =
       const figureFiles = uploadedFiles.filter(isImageFile);
 
       return (
-        <Box
-          width="300px"
-          bg={bgSecondary}
-          borderLeft="1px solid"
-          borderColor={borderPrimary}
-          overflowY="auto"
-          display="flex"
-          flexDirection="column"
-          className="thin-scrollbar"
+        <div
+          className={cn(
+            'w-[300px] border-l overflow-y-auto flex flex-col thin-scrollbar',
+            isDarkMode
+              ? 'bg-gray-800 border-gray-700'
+              : 'bg-gray-50 border-gray-200'
+          )}
         >
-          <Box p={6}>
-            <Text fontSize="lg" fontWeight="semibold" color="gray.700" mb={4}>
-              Uploaded Files
-            </Text>
+          <div className="p-6">
+            <h2 className="text-lg font-semibold mb-4">Uploaded Files</h2>
 
             {uploadedFiles.length === 0 ? (
-              <Center py={8}>
-                <VStack spacing={3}>
-                  <Icon as={FiFile} boxSize={8} color="gray.400" />
-                  <Text color="gray.500" fontSize="sm" textAlign="center">
+              <div className="py-8 flex flex-col items-center justify-center">
+                <div className="flex flex-col items-center space-y-3">
+                  <FiFile
+                    className={cn(
+                      'h-8 w-8',
+                      isDarkMode ? 'text-gray-500' : 'text-gray-400'
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      'text-sm text-center',
+                      isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                    )}
+                  >
                     No files uploaded yet
-                  </Text>
-                </VStack>
-              </Center>
+                  </span>
+                </div>
+              </div>
             ) : (
-              <VStack spacing={6} align="stretch">
+              <div className="space-y-6">
                 {/* Documents Section */}
                 {documentFiles.length > 0 && (
-                  <Box>
-                    <Text
-                      fontWeight="semibold"
-                      color="gray.600"
-                      mb={3}
-                      fontSize="sm"
+                  <div>
+                    <h3
+                      className={cn(
+                        'font-semibold mb-3 text-sm',
+                        isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                      )}
                     >
                       Documents
-                    </Text>
-                    <VStack spacing={2} align="stretch">
+                    </h3>
+                    <div className="space-y-2">
                       {documentFiles.map((fileName, index) => (
-                        <Flex
+                        <div
                           key={`${fileName}-${index}`}
-                          p={3}
-                          bg={bgCard}
-                          borderRadius="md"
-                          borderColor={borderPrimary}
-                          align="center"
-                          transition="border-color 0.15s ease-out, background-color 0.15s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out"
-                          style={{
-                            borderWidth: '1px',
-                            borderStyle: 'solid',
-                          }}
-                          _hover={{
-                            borderColor: borderHover,
-                            bg: bgHover,
-                            transform: 'translateY(-1px)',
-                            boxShadow: 'sm',
-                          }}
+                          className={cn(
+                            'p-4 rounded-md border flex items-center transition-all duration-150 ease-out',
+                            'hover:-translate-y-0.5 hover:shadow-sm',
+                            isDarkMode
+                              ? 'bg-gray-800 border-gray-700 hover:border-blue-600 hover:bg-gray-700'
+                              : 'bg-white border-gray-200 hover:border-blue-200 hover:bg-gray-50'
+                          )}
                         >
-                          <Icon
-                            as={FiFile}
-                            color="blue.500"
-                            boxSize={4}
-                            className="mr-2"
-                          />
-                          <Text
-                            fontSize="sm"
-                            color="gray.700"
-                            noOfLines={1}
-                            flex="1"
-                          >
+                          <FiFile className="h-4 w-4 text-blue-500 mr-2" />
+                          <span className="text-sm flex-1 truncate">
                             {fileName}
-                          </Text>
-                          <IconButton
-                            aria-label="Remove file"
-                            icon={<FiTrash2 size="14px" />}
+                          </span>
+                          <Button
                             size="sm"
                             variant="ghost"
-                            colorScheme="red"
                             onClick={() => clearUploadedFile(fileName)}
                             disabled={isUploading || isProcessing}
-                          />
-                        </Flex>
+                            className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            <FiTrash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       ))}
-                    </VStack>
-                  </Box>
+                    </div>
+                  </div>
                 )}
 
                 {/* Figures Section */}
                 {figureFiles.length > 0 && (
-                  <Box>
-                    <Text
-                      fontWeight="semibold"
-                      color="gray.600"
-                      mb={3}
-                      fontSize="sm"
+                  <div>
+                    <h3
+                      className={cn(
+                        'font-semibold mb-3 text-sm',
+                        isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                      )}
                     >
                       Figures
-                    </Text>
-                    <SimpleGrid columns={2} spacing={2}>
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2">
                       {figureFiles.map((fileName, index) => (
-                        <Box
+                        <div
                           key={`${fileName}-${index}`}
-                          position="relative"
-                          borderRadius="md"
-                          overflow="hidden"
-                          borderWidth="1px"
-                          borderColor={borderPrimary}
-                          bg={bgCard}
-                          _hover={{
-                            borderColor: borderHover,
-                            transform: 'translateY(-1px)',
-                            boxShadow: 'sm',
-                          }}
-                          transition="border-color 0.15s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out"
+                          className={cn(
+                            'relative rounded-md overflow-hidden border transition-all duration-150 ease-out',
+                            'hover:-translate-y-0.5 hover:shadow-sm',
+                            isDarkMode
+                              ? 'border-gray-700 bg-gray-800 hover:border-blue-600'
+                              : 'border-gray-200 bg-white hover:border-blue-200'
+                          )}
                         >
-                          <AspectRatio ratio={1}>
-                            <Box bg={bgTertiary} p={2}>
-                              <Text
-                                fontSize="sm"
-                                color="gray.600"
-                                noOfLines={2}
-                                textAlign="center"
+                          <div className="aspect-square">
+                            <div
+                              className={cn(
+                                'h-full p-2 flex items-center justify-center',
+                                isDarkMode ? 'bg-gray-700' : 'bg-gray-100'
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  'text-sm text-center line-clamp-2',
+                                  isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                                )}
                               >
                                 {fileName}
-                              </Text>
-                            </Box>
-                          </AspectRatio>
-                          <IconButton
-                            aria-label="Remove figure"
-                            icon={<FiTrash2 size="12px" />}
+                              </span>
+                            </div>
+                          </div>
+                          <Button
                             size="sm"
-                            variant="solid"
-                            colorScheme="red"
+                            variant="destructive"
                             onClick={() => clearUploadedFile(fileName)}
                             disabled={isUploading || isProcessing}
-                            className="absolute top-1 right-1 opacity-80"
-                          />
-                        </Box>
+                            className="absolute top-1 right-1 h-6 w-6 p-0 opacity-80 hover:opacity-100"
+                          >
+                            <FiTrash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       ))}
-                    </SimpleGrid>
-                  </Box>
+                    </div>
+                  </div>
                 )}
-              </VStack>
+              </div>
             )}
-          </Box>
-        </Box>
+          </div>
+        </div>
       );
     }
   );

@@ -1,7 +1,5 @@
-import { logger } from '@/lib/monitoring/logger';
-import { createStandaloneToast } from '@chakra-ui/react';
-
-const { toast } = createStandaloneToast();
+import { logger } from '@/utils/clientLogger';
+import { toast } from '@/hooks/use-toast';
 
 interface RequestMetrics {
   count: number;
@@ -45,15 +43,12 @@ class RateLimitMonitor {
       });
 
       // Show critical toast
-      if (typeof window !== 'undefined' && toast) {
+      if (typeof window !== 'undefined') {
         toast({
           title: 'High Request Rate',
           description:
             'You are approaching the rate limit. Please wait a moment before continuing.',
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-          position: 'bottom-right',
+          variant: 'destructive',
         });
       }
     } else if (
@@ -68,15 +63,11 @@ class RateLimitMonitor {
       });
 
       // Show warning toast
-      if (typeof window !== 'undefined' && toast) {
+      if (typeof window !== 'undefined') {
         toast({
           title: 'Request Rate Warning',
           description:
             'You are making many requests. The app may slow down to prevent rate limiting.',
-          status: 'warning',
-          duration: 3000,
-          isClosable: true,
-          position: 'bottom-right',
         });
       }
     }

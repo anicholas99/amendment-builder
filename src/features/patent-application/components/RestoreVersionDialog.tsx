@@ -1,17 +1,16 @@
 import React from 'react';
+import { Save, Trash2, X } from 'lucide-react';
 import {
   AlertDialog,
-  AlertDialogBody,
   AlertDialogContent,
+  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogOverlay,
-  Button,
-  VStack,
-  Text,
-  HStack,
-} from '@chakra-ui/react';
-import { FiSave, FiTrash2, FiX } from 'react-icons/fi';
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface RestoreVersionDialogProps {
   isOpen: boolean;
@@ -32,111 +31,108 @@ export const RestoreVersionDialog: React.FC<RestoreVersionDialogProps> = ({
   isSaving = false,
   isRestoring = false,
 }) => {
-  const cancelRef = React.useRef<HTMLButtonElement>(null);
+  const { isDarkMode } = useThemeContext();
   const isProcessing = isSaving || isRestoring;
 
   return (
     <AlertDialog
-      isOpen={isOpen}
-      leastDestructiveRef={cancelRef}
-      onClose={onClose}
-      closeOnOverlayClick={!isProcessing}
-      closeOnEsc={!isProcessing}
+      open={isOpen}
+      onOpenChange={open => !open && !isProcessing && onClose()}
     >
-      <AlertDialogOverlay>
-        <AlertDialogContent>
-          <AlertDialogHeader fontSize="lg" fontWeight="bold">
-            Unsaved Changes Detected
-          </AlertDialogHeader>
+      <AlertDialogContent className="sm:max-w-lg">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Unsaved Changes Detected</AlertDialogTitle>
+        </AlertDialogHeader>
+        <AlertDialogDescription className="space-y-4">
+          <p>
+            You have unsaved changes in your working draft. What would you like
+            to do before loading content from "{versionName}"?
+          </p>
 
-          <AlertDialogBody>
-            <VStack spacing={4} align="stretch">
-              <Text>
-                You have unsaved changes in your working draft. 
-                What would you like to do before loading content from "{versionName}"?
-              </Text>
-              
-              <VStack spacing={3} align="stretch" pt={2}>
-                <HStack
-                  p={3}
-                  borderWidth="1px"
-                  borderRadius="md"
-                  borderColor="green.200"
-                  bg="green.50"
-                  _dark={{ bg: 'green.900', borderColor: 'green.700' }}
-                >
-                  <FiSave color="green" />
-                  <Text fontSize="sm">
-                    <Text as="span" fontWeight="semibold">Save current draft</Text> - 
-                    Create a new snapshot of your working draft before loading the selected content
-                  </Text>
-                </HStack>
+          <div className="space-y-3 pt-2">
+            <div
+              className={cn(
+                'flex items-start gap-3 p-4 border rounded-md',
+                isDarkMode
+                  ? 'bg-green-900/20 border-green-700'
+                  : 'bg-green-50 border-green-200'
+              )}
+            >
+              <Save className="h-5 w-5 text-green-600 mt-0.5" />
+              <div className="text-sm">
+                <span className="font-semibold">Save current draft</span> -
+                Create a new snapshot of your working draft before loading the
+                selected content
+              </div>
+            </div>
 
-                <HStack
-                  p={3}
-                  borderWidth="1px"
-                  borderRadius="md"
-                  borderColor="orange.200"
-                  bg="orange.50"
-                  _dark={{ bg: 'orange.900', borderColor: 'orange.700' }}
-                >
-                  <FiTrash2 color="orange" />
-                  <Text fontSize="sm">
-                    <Text as="span" fontWeight="semibold">Discard changes</Text> - 
-                    Replace your working draft with content from the selected version
-                  </Text>
-                </HStack>
+            <div
+              className={cn(
+                'flex items-start gap-3 p-4 border rounded-md',
+                isDarkMode
+                  ? 'bg-orange-900/20 border-orange-700'
+                  : 'bg-orange-50 border-orange-200'
+              )}
+            >
+              <Trash2 className="h-5 w-5 text-orange-600 mt-0.5" />
+              <div className="text-sm">
+                <span className="font-semibold">Discard changes</span> - Replace
+                your working draft with content from the selected version
+              </div>
+            </div>
 
-                <HStack
-                  p={3}
-                  borderWidth="1px"
-                  borderRadius="md"
-                  borderColor="gray.200"
-                  bg="gray.50"
-                  _dark={{ bg: 'gray.700', borderColor: 'gray.600' }}
-                >
-                  <FiX color="gray" />
-                  <Text fontSize="sm">
-                    <Text as="span" fontWeight="semibold">Cancel</Text> - 
-                    Keep working on your current draft
-                  </Text>
-                </HStack>
-              </VStack>
-            </VStack>
-          </AlertDialogBody>
-
-          <AlertDialogFooter>
-            <HStack spacing={3}>
-              <Button
-                ref={cancelRef}
-                onClick={onClose}
-                isDisabled={isProcessing}
-                variant="ghost"
-              >
-                Cancel
-              </Button>
-              <Button
-                colorScheme="orange"
-                onClick={onDiscardAndRestore}
-                isLoading={isRestoring && !isSaving}
-                isDisabled={isProcessing}
-                loadingText="Restoring..."
-              >
-                Discard & Restore
-              </Button>
-              <Button
-                colorScheme="green"
-                onClick={onSaveAndRestore}
-                isLoading={isSaving}
-                isDisabled={isProcessing}
-                loadingText="Saving..."
-              >
-                Save & Restore
-              </Button>
-            </HStack>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialogOverlay>
+            <div
+              className={cn(
+                'flex items-start gap-3 p-4 border rounded-md',
+                isDarkMode
+                  ? 'bg-gray-700 border-gray-600'
+                  : 'bg-gray-50 border-gray-200'
+              )}
+            >
+              <X className="h-5 w-5 text-gray-600 mt-0.5" />
+              <div className="text-sm">
+                <span className="font-semibold">Cancel</span> - Keep working on
+                your current draft
+              </div>
+            </div>
+          </div>
+        </AlertDialogDescription>
+        <AlertDialogFooter>
+          <div className="flex gap-3">
+            <Button onClick={onClose} disabled={isProcessing} variant="ghost">
+              Cancel
+            </Button>
+            <Button
+              onClick={onDiscardAndRestore}
+              disabled={isProcessing}
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              {isRestoring && !isSaving ? (
+                <>
+                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
+                  Restoring...
+                </>
+              ) : (
+                'Discard & Restore'
+              )}
+            </Button>
+            <Button
+              onClick={onSaveAndRestore}
+              disabled={isProcessing}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {isSaving ? (
+                <>
+                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
+                  Saving...
+                </>
+              ) : (
+                'Save & Restore'
+              )}
+            </Button>
+          </div>
+        </AlertDialogFooter>
+      </AlertDialogContent>
     </AlertDialog>
   );
-}; 
+};

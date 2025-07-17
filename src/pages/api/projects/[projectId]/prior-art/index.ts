@@ -1,11 +1,12 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { CustomApiRequest } from '@/types/api';
 import { z } from 'zod';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { projectIdQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
 import { PriorArtServerService } from '@/server/services/prior-art.server-service';
 import { PriorArtDataToSave } from '@/types/domain/priorArt';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 interface PriorArtBody {
   patentNumber?: string;
@@ -74,11 +75,10 @@ async function handler(
         userId,
         tenantId
       );
-      res.status(200).json({
+      return apiResponse.ok(res, {
         priorArt: priorArt,
         count: priorArt.length,
       });
-      break;
 
     case 'POST':
       // Validation is handled by middleware, no need to check again
@@ -88,15 +88,13 @@ async function handler(
         tenantId,
         req.body as PriorArtDataToSave
       );
-      res.status(201).json({
+      return apiResponse.ok(res, {
         success: true,
         savedPriorArt: savedPriorArt,
       });
-      break;
 
     default:
-      res.setHeader('Allow', ['GET', 'POST']);
-      res.status(405).json({ error: `Method ${req.method} Not Allowed` });
+      return apiResponse.methodNotAllowed(res, ['GET', 'POST']);
   }
 }
 

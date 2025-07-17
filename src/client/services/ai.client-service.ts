@@ -1,7 +1,7 @@
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import {
   CombinedAnalysisParams,
   CombinedAnalysisResult,
@@ -32,14 +32,17 @@ export class AiApiService {
 
       const result = await response.json();
 
+      // Handle wrapped response format - API returns { data: { analysis: ... } }
+      const unwrappedResult = result.data || result;
+
       // The API returns the result directly, not wrapped in an analysis property
       // So we need to wrap it to match our type definition
-      if (result.analysis) {
-        return result;
+      if (unwrappedResult.analysis) {
+        return unwrappedResult;
       }
 
       // If the result is the analysis itself, wrap it
-      return { analysis: result };
+      return { analysis: unwrappedResult };
     } catch (error) {
       logger.error('Failed to run combined analysis:', { error });
       if (error instanceof ApplicationError) {

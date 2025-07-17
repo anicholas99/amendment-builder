@@ -1,17 +1,12 @@
 import React, { useState } from 'react';
-import {
-  Box,
-  Text,
-  Flex,
-  IconButton,
-  Input,
-  Icon,
-  useToast,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import { FiEdit, FiPlus } from 'react-icons/fi';
+import { useToast } from '@/hooks/useToastWrapper';
+import { FiEdit, FiPlus, FiGrid } from 'react-icons/fi';
 import CustomEditable from '../../../../../components/common/CustomEditable';
 import { FigureMetadataProps } from './types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { StandardTooltip } from '@/components/common/StandardTooltip';
+import { cn } from '@/lib/utils';
 
 const FigureMetadata: React.FC<
   FigureMetadataProps & {
@@ -24,16 +19,11 @@ const FigureMetadata: React.FC<
     onAddNewFigure,
     onRenameFigure,
     onUpdateDescription,
+    onManageAllFigures,
   }) => {
     const toast = useToast();
     const [isEditingFigure, setIsEditingFigure] = useState(false);
     const [figureDraft, setFigureDraft] = useState('');
-
-    // Theme-aware colors
-    const figureNumBg = useColorModeValue('gray.50', 'gray.700');
-    const figureNumHoverBg = useColorModeValue('gray.100', 'gray.600');
-    const prefixColor = useColorModeValue('gray.500', 'gray.400');
-    const editIconColor = useColorModeValue('gray.400', 'gray.500');
 
     const startEditingFigure = () => {
       if (!onRenameFigure) return;
@@ -41,11 +31,25 @@ const FigureMetadata: React.FC<
       setIsEditingFigure(true);
     };
 
-    const cancelEditingFigure = () => setIsEditingFigure(false);
+    const cancelEditingFigure = () => {
+      setIsEditingFigure(false);
+      setFigureDraft('');
+    };
 
     const saveFigureNumber = () => {
       if (!onRenameFigure) return;
-      if (!figureDraft.trim() || !/^\d+[A-Za-z]*$/i.test(figureDraft.trim())) {
+
+      const trimmedDraft = figureDraft.trim();
+      const originalNumber = figureNum.replace(/FIG\.\s*/i, '');
+
+      // Check if the figure number has actually changed
+      if (trimmedDraft === originalNumber) {
+        // No change, just exit edit mode
+        setIsEditingFigure(false);
+        return;
+      }
+
+      if (!trimmedDraft || !/^\d+[A-Za-z]*$/i.test(trimmedDraft)) {
         toast({
           title: 'Invalid format',
           description: 'Figure number must be in format "1", "1A", etc.',
@@ -54,83 +58,89 @@ const FigureMetadata: React.FC<
         });
         return;
       }
-      onRenameFigure(figureDraft.trim());
+
+      onRenameFigure(trimmedDraft);
       setIsEditingFigure(false);
     };
 
     return (
-      <Box width="100%">
-        <Flex align="flex-start" className="w-full gap-2">
-          <Box className="w-25 relative">
+      <div className="w-full">
+        <div className="flex items-center w-full gap-2">
+          <div className="w-25 relative">
             {isEditingFigure ? (
-              <Flex
-                align="center"
-                bg={figureNumBg}
-                borderRadius="md"
-                p="4px 8px"
-              >
-                <Text fontSize="sm" mr="4px" color={prefixColor}>
-                  FIG.
-                </Text>
+              <div className="flex items-center bg-muted rounded-md p-1 px-2">
+                <span className="text-sm mr-1 text-muted-foreground">FIG.</span>
                 <Input
                   value={figureDraft}
                   onChange={e => setFigureDraft(e.target.value)}
-                  size="sm"
+                  className="h-6 text-sm bg-transparent border-none p-1 pl-1 w-8"
                   autoFocus
                   onKeyDown={e => {
                     if (e.key === 'Enter') saveFigureNumber();
                     if (e.key === 'Escape') cancelEditingFigure();
                   }}
                   onBlur={saveFigureNumber}
-                  variant="unstyled"
-                  textAlign="left"
-                  pl="4px"
-                  width="60px"
                 />
-              </Flex>
+              </div>
             ) : (
-              <Flex
-                align="center"
-                onClick={onRenameFigure ? startEditingFigure : undefined}
-                cursor={onRenameFigure ? 'pointer' : 'default'}
-                bg={figureNumBg}
-                _hover={onRenameFigure ? { bg: figureNumHoverBg } : {}}
-                borderRadius="md"
-                p="4px 8px"
-                transition="background-color 0.15s ease-out, transform 0.15s ease-out"
-              >
-                <Text fontSize="sm" color="text.primary" noOfLines={1}>
-                  {figureNum}
-                </Text>
-                {onRenameFigure && (
-                  <Icon as={FiEdit} ml="auto" color={editIconColor} />
+              <div
+                className={cn(
+                  'flex items-center rounded-md p-1 px-2 transition-all duration-150 ease-out',
+                  'bg-muted',
+                  onRenameFigure
+                    ? 'cursor-pointer hover:bg-accent'
+                    : 'cursor-default'
                 )}
-              </Flex>
+                onClick={onRenameFigure ? startEditingFigure : undefined}
+              >
+                <span className="text-sm text-foreground truncate">
+                  {figureNum}
+                </span>
+                {onRenameFigure && (
+                  <FiEdit className="ml-auto w-3 h-3 text-gray-400 dark:text-gray-500" />
+                )}
+              </div>
             )}
-          </Box>
+          </div>
 
-          <IconButton
-            icon={<Icon as={FiPlus} />}
-            aria-label="Add new figure"
-            size="sm"
-            variant="ghost"
-            onClick={onAddNewFigure}
-            minWidth="20px"
-            p="4px"
-          />
+          <StandardTooltip label="Add new figure">
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Add new figure"
+              onClick={onAddNewFigure}
+              className="min-w-5 p-1 h-6"
+            >
+              <FiPlus className="w-3 h-3" />
+            </Button>
+          </StandardTooltip>
 
-          <Box className="flex-1 relative -mt-px">
+          {onManageAllFigures && (
+            <StandardTooltip label="Manage all figures">
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Manage all figures"
+                onClick={onManageAllFigures}
+                className="min-w-5 p-1 h-6"
+              >
+                <FiGrid className="w-3 h-3" />
+              </Button>
+            </StandardTooltip>
+          )}
+
+          <div className="flex-1 relative">
             <CustomEditable
-              value={figure?.description || ''}
+              value={figure?.title || ''}
               onChange={onUpdateDescription}
               placeholder="Describe this figure..."
-              fontSize="sm"
-              p="4px 8px"
+              fontSize="xs"
+              padding="4px 8px"
               staticBorder
             />
-          </Box>
-        </Flex>
-      </Box>
+          </div>
+        </div>
+      </div>
     );
   }
 );

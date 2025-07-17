@@ -3,12 +3,13 @@ import { AuthenticatedRequest } from '@/types/middleware';
 import { CustomApiRequest } from '@/types/api';
 import { z } from 'zod';
 
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
+import { apiResponse } from '@/utils/api/responses';
 
 // Import repository functions
 import { batchUpdateDocuments } from '../../../repositories/documentRepository';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 // Initialize apiLogger
 const apiLogger = createApiLogger('documents-batch-update');
@@ -53,7 +54,7 @@ const handler = async (
     results,
   };
   apiLogger.logResponse(200, responseBody);
-  res.status(200).json(responseBody);
+  return apiResponse.ok(res, responseBody);
 };
 
 // Create the batch-update endpoint

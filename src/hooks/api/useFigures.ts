@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/apiClient';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { InventionData } from '@/types/invention';
 import {
@@ -13,6 +13,14 @@ import { FigureApiService } from '@/services/api/figureApiService';
 import { FigureStatus } from '@/constants/database-enums';
 import { useQueryClient } from '@tanstack/react-query';
 
+// Extend the Figure type to include the database ID
+export interface FigureWithId extends Figure {
+  _id?: string; // Database figure ID for API calls
+  title?: string;
+}
+
+export type FiguresWithIds = Record<string, FigureWithId>;
+
 // Export the query key factory for figures
 export const figureKeys = {
   all: ['figures'] as const,
@@ -22,9 +30,9 @@ export const figureKeys = {
 interface DatabaseFigure {
   id: string;
   figureKey?: string;
-  fileName: string;
+  fileName?: string;
   description?: string;
-  url: string;
+  url?: string;
   uploadedAt: string;
   sizeBytes: number;
   mimeType: string;
@@ -47,75 +55,112 @@ export function useFigures(projectId: string, inventionData?: InventionData) {
 
   return useQuery({
     queryKey: queryKeys.projects.figures(projectId), // Use standard query key
-    queryFn: async (): Promise<Figures> => {
+    queryFn: async (): Promise<FiguresWithIds> => {
       try {
         // First, try to fetch the new normalized data
         try {
           const normalizedResponse =
             await FigureApiService.listFiguresWithElements(projectId);
 
-          logger.debug('[useFigures] Raw normalized response', {
+          logger.info('[useFigures] Raw normalized response', {
             projectId,
+            totalFigures: normalizedResponse.figures.length,
             figures: normalizedResponse.figures.map(f => ({
               id: f.id,
               figureKey: f.figureKey,
               status: f.status,
               fileName: f.fileName,
               hasBlobName: !!f.blobName,
+              description: f.description,
             })),
           });
 
-          if (normalizedResponse.figures.length > 0) {
-            logger.info('[useFigures] Using normalized figure data', {
-              projectId,
-              figureCount: normalizedResponse.figures.length,
-            });
+          // Always use normalized data if the endpoint succeeded
+          logger.info('[useFigures] Using normalized figure data', {
+            projectId,
+            figureCount: normalizedResponse.figures.length,
+            hasPendingFigures: normalizedResponse.figures.some(
+              f => f.status === 'PENDING'
+            ),
+            hasAssignedFigures: normalizedResponse.figures.some(
+              f => f.status === 'ASSIGNED'
+            ),
+            figureStatuses: normalizedResponse.figures.map(f => ({
+              figureKey: f.figureKey,
+              status: f.status,
+              hasFileName: !!f.fileName,
+              hasBlobName: !!f.blobName,
+            })),
+          });
 
-            // Convert normalized data to the legacy Figures format
-            const convertedFigures: Figures = {};
+          // Convert normalized data to the legacy Figures format
+          const convertedFigures: FiguresWithIds = {};
 
-            normalizedResponse.figures.forEach(figure => {
-              if (figure.figureKey) {
-                // Convert elements array to the legacy elements object format
-                const elementsObject: Record<string, string> = {};
+          normalizedResponse.figures.forEach(figure => {
+            if (figure.figureKey) {
+              // Convert elements array to the legacy elements object format
+              const elementsObject: Record<string, string> = {};
+              if (figure.elements && figure.elements.length > 0) {
                 figure.elements.forEach(element => {
                   // Prefer elementName over calloutDescription for display
                   const displayValue =
                     element.elementName || element.calloutDescription || '';
                   elementsObject[element.elementKey] = displayValue;
                 });
+              }
 
-                // If figure has content, use it. Otherwise, check for image URL
-                const imageUrl = figure.fileName
+              // If figure has content, use it. Otherwise, check for image URL
+              // ASSIGNED figures should have images, regardless of fileName
+              // Check both status and blobName for more reliable detection
+              const isAssigned = figure.status === 'ASSIGNED';
+              const hasFile = !!(figure.fileName || figure.blobName);
+              const imageUrl =
+                isAssigned && hasFile
                   ? `/api/projects/${projectId}/figures/${figure.id}/download?v=${Date.now()}`
                   : '';
 
-                convertedFigures[figure.figureKey] = {
-                  // Prefer title over description for display
-                  description: figure.title || figure.description || '',
-                  elements: elementsObject,
-                  type: 'image',
-                  content: '',
-                  image: imageUrl,
-                };
-              }
-            });
+              // Enhanced logging for debugging (can be removed in production)
+              logger.debug('[useFigures] Processing figure', {
+                figureKey: figure.figureKey,
+                status: figure.status,
+                willHaveImage: !!imageUrl,
+              });
 
-            return convertedFigures;
-          } else {
+              convertedFigures[figure.figureKey] = {
+                // Use description field (title is for internal use)
+                description: figure.description || '',
+                title: figure.title || `Figure ${figure.figureKey}`,
+                elements: elementsObject,
+                type: 'image',
+                content: '',
+                image: imageUrl,
+                _id: figure.id, // Include the database ID
+              };
+            }
+          });
+
+          // If no figures found, try legacy approach as normalized might be missing newly created figures
+          if (Object.keys(convertedFigures).length === 0) {
             logger.info(
-              '[useFigures] No normalized figures found, checking legacy format',
+              '[useFigures] No figures from normalized endpoint, trying legacy format',
               {
                 projectId,
               }
             );
+            throw new Error('No figures found, falling back to legacy');
           }
+
+          return convertedFigures;
         } catch (normalizedError) {
           // If normalized endpoint fails, fall back to legacy approach
-          logger.debug(
-            '[useFigures] Normalized endpoint not available, using legacy format',
+          logger.warn(
+            '[useFigures] Normalized endpoint failed, falling back to legacy format',
             {
               projectId,
+              error:
+                normalizedError instanceof Error
+                  ? normalizedError.message
+                  : String(normalizedError),
             }
           );
         }
@@ -124,15 +169,19 @@ export function useFigures(projectId: string, inventionData?: InventionData) {
         const response = await apiFetch(
           API_ROUTES.PROJECTS.FIGURES.LIST(projectId)
         );
-        const data: FiguresResponse = await response.json();
+        const result = await response.json();
 
-        logger.debug('[useFigures] Fetched figures from database', {
+        // Handle standardized API response format
+        const data: FiguresResponse = result.data || result;
+
+        logger.info('[useFigures] Legacy API response', {
           projectId,
           figureCount: data.figures.length,
           figures: data.figures.map(f => ({
             id: f.id,
             figureKey: f.figureKey,
             fileName: f.fileName,
+            status: f.status,
           })),
         });
 
@@ -140,7 +189,7 @@ export function useFigures(projectId: string, inventionData?: InventionData) {
         const figureContent = inventionData?.figures || {};
 
         // Combine uploaded files with content
-        const combinedFigures: Figures = {};
+        const combinedFigures: FiguresWithIds = {};
 
         // First, add all content-based figures
         Object.entries(figureContent).forEach(([figureKey, content]) => {
@@ -173,7 +222,8 @@ export function useFigures(projectId: string, inventionData?: InventionData) {
             type: content.type || 'image',
             content: content.content || '',
             image: '', // Will be set below if there's an uploaded file
-          } as Figure;
+            _id: content._id, // Include the database ID
+          } as FigureWithId;
         });
 
         // Then, merge in uploaded files
@@ -182,48 +232,40 @@ export function useFigures(projectId: string, inventionData?: InventionData) {
           const figureKey = dbFigure.figureKey;
 
           if (figureKey) {
-            // Log figure details for debugging
-            logger.debug('[useFigures] Processing figure with figureKey', {
-              id: dbFigure.id,
-              figureKey: dbFigure.figureKey,
-              status: dbFigure.status,
-              fileName: dbFigure.fileName,
-            });
-
             // For figures with a figureKey, process both ASSIGNED and PENDING figures
             // PENDING figures should show as empty slots, ASSIGNED figures have images
             if (
               dbFigure.status !== FigureStatus.ASSIGNED &&
               dbFigure.status !== FigureStatus.PENDING
             ) {
-              logger.debug('[useFigures] Skipping non-carousel figure', {
-                id: dbFigure.id,
-                figureKey: dbFigure.figureKey,
-                status: dbFigure.status,
-              });
               return; // Skip UPLOADED and other statuses
             }
 
             // Handle PENDING vs ASSIGNED figures differently
             if (dbFigure.status === FigureStatus.PENDING) {
               // PENDING figures should appear as empty slots
-              if (!combinedFigures[figureKey]) {
-                logger.info(
-                  '[useFigures] Creating empty slot for PENDING figure',
-                  {
-                    figureKey,
-                    figureId: dbFigure.id,
-                    status: dbFigure.status,
-                  }
-                );
+              logger.info(
+                '[useFigures] Found PENDING figure - creating empty slot',
+                {
+                  figureKey,
+                  figureId: dbFigure.id,
+                  status: dbFigure.status,
+                  existsInCombined: !!combinedFigures[figureKey],
+                }
+              );
 
+              if (!combinedFigures[figureKey]) {
                 combinedFigures[figureKey] = {
                   description: dbFigure.description || '',
                   elements: {},
                   type: 'image',
                   content: '',
                   image: '', // No image for PENDING figures
-                } as Figure;
+                  _id: dbFigure.id, // Include the database ID
+                } as FigureWithId;
+              } else {
+                // Update the existing figure with the database ID
+                combinedFigures[figureKey]._id = dbFigure.id;
               }
             } else if (dbFigure.status === FigureStatus.ASSIGNED) {
               // ASSIGNED figures have images
@@ -259,7 +301,8 @@ export function useFigures(projectId: string, inventionData?: InventionData) {
                   type: 'image',
                   content: '',
                   image: dbFigure.url,
-                } as Figure;
+                  _id: dbFigure.id, // Include the database ID
+                } as FigureWithId;
               }
             }
           }
@@ -271,7 +314,7 @@ export function useFigures(projectId: string, inventionData?: InventionData) {
           uploadedFigures: data.figures.length,
           combinedFigures: Object.keys(combinedFigures).length,
           figuresWithImages: Object.values(combinedFigures).filter(
-            (f: Figure) => f.image
+            (f: FigureWithId) => f.image
           ).length,
         });
 
@@ -284,7 +327,7 @@ export function useFigures(projectId: string, inventionData?: InventionData) {
 
         // Fallback to just content if API fails
         const figureContent = inventionData?.figures || {};
-        const fallbackFigures: Figures = {};
+        const fallbackFigures: FiguresWithIds = {};
 
         Object.entries(figureContent).forEach(([figureKey, content]) => {
           fallbackFigures[figureKey] = {
@@ -293,7 +336,8 @@ export function useFigures(projectId: string, inventionData?: InventionData) {
             type: content.type || 'image',
             content: content.content || '',
             image: '',
-          } as Figure;
+            _id: content._id, // Include the database ID
+          } as FigureWithId;
         });
 
         return fallbackFigures;
@@ -302,14 +346,15 @@ export function useFigures(projectId: string, inventionData?: InventionData) {
     enabled: !!projectId,
     // Prevent automatic background refetches that cause UI flicker
     // We'll manually refetch when needed after mutations complete
-    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    staleTime: 30 * 1000, // Consider data fresh for 30 seconds
     refetchOnWindowFocus: false,
-    refetchOnMount: true, // Still fetch on initial mount
+    refetchOnMount: true, // Refetch on mount
     // Prevent multiple components from triggering simultaneous fetches
     refetchInterval: false,
     refetchIntervalInBackground: false,
-    // Share the same query instance across components
-    structuralSharing: true,
+    // IMPORTANT: Disable structural sharing to prevent React Query from
+    // merging old and new data in unexpected ways
+    structuralSharing: false,
     // Add gcTime to prevent immediate garbage collection and refetch
     gcTime: 5 * 60 * 1000, // 5 minutes
   });

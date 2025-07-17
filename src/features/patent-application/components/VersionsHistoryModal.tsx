@@ -1,41 +1,50 @@
 import React, { useState, useEffect } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import {
-  Button,
-  Text,
-  Box,
-  Spinner,
-  IconButton,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalFooter,
-  ModalBody,
-  ModalCloseButton,
-  AlertDialog,
-  AlertDialogOverlay,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogBody,
-  AlertDialogFooter,
-  Badge,
-  HStack,
-  useDisclosure,
-  Tooltip,
-  useToast,
-  VStack,
-  Divider,
-} from '@chakra-ui/react';
-import { FaHistory, FaTrash } from 'react-icons/fa';
+import { logger } from '@/utils/clientLogger';
 import { format } from 'date-fns';
+import { FaHistory, FaTrash } from 'react-icons/fa';
 import {
   useProjectVersionsQuery,
   useDeleteVersionMutation,
 } from '@/hooks/api/useProjectVersions';
 import type { ProjectVersionsResponse } from '@/types/api/responses';
 import { RestoreVersionDialog } from './RestoreVersionDialog';
-import { Icon } from '@chakra-ui/react';
+import { LoadingState } from '@/components/common/LoadingState';
+import { useToast } from '@/hooks/useToastWrapper';
+
+// shadcn/ui imports
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Box } from '@/components/ui/box';
+import { Text } from '@/components/ui/text';
+import { Heading } from '@/components/ui/heading';
+import { VStack, HStack } from '@/components/ui/stack';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { IconButton } from '@/components/ui/icon-button';
+import { Divider } from '@/components/ui/divider';
 
 // Version is an element of the ProjectVersionsResponse array
 export type Version = ProjectVersionsResponse[number];
@@ -58,9 +67,13 @@ export const VersionsHistoryModal: React.FC<VersionsHistoryModalProps> = ({
   onSaveCurrentVersion,
 }) => {
   const [versionToDelete, setVersionToDelete] = useState<Version | null>(null);
-  const [versionToRestore, setVersionToRestore] = useState<Version | null>(null);
+  const [versionToRestore, setVersionToRestore] = useState<Version | null>(
+    null
+  );
   const [isRestoring, setIsRestoring] = useState(false);
   const [isSavingBeforeRestore, setIsSavingBeforeRestore] = useState(false);
+  const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const [isRestoreDialogOpen, setIsRestoreDialogOpen] = useState(false);
   const toast = useToast();
 
   // React Query hooks
@@ -72,20 +85,12 @@ export const VersionsHistoryModal: React.FC<VersionsHistoryModalProps> = ({
   } = useProjectVersionsQuery(projectId);
   const deleteVersionMutation = useDeleteVersionMutation();
 
-  // Alert dialog for delete confirmation
-  const {
-    isOpen: isAlertOpen,
-    onOpen: onAlertOpen,
-    onClose: onAlertClose,
-  } = useDisclosure();
-  const cancelRef = React.useRef<HTMLButtonElement>(null);
-
-  // Restore version dialog
-  const {
-    isOpen: isRestoreDialogOpen,
-    onOpen: onRestoreDialogOpen,
-    onClose: onRestoreDialogClose,
-  } = useDisclosure();
+  // Refetch versions when modal opens to ensure fresh data
+  useEffect(() => {
+    if (isOpen) {
+      refetch();
+    }
+  }, [isOpen, refetch]);
 
   // Handle error states with toast
   useEffect(() => {
@@ -100,14 +105,12 @@ export const VersionsHistoryModal: React.FC<VersionsHistoryModalProps> = ({
           title: 'No Versions',
           description: 'Project not found or has no saved versions.',
           status: 'info',
-          duration: 3000,
         });
       } else {
         toast({
           title: 'Error',
           description: errorMessage,
           status: 'error',
-          duration: 5000,
         });
       }
     }
@@ -116,7 +119,7 @@ export const VersionsHistoryModal: React.FC<VersionsHistoryModalProps> = ({
   const handleLoad = (version: Version) => {
     if (hasUnsavedChanges) {
       setVersionToRestore(version);
-      onRestoreDialogOpen();
+      setIsRestoreDialogOpen(true);
     } else {
       performRestore(version.id);
     }
@@ -131,9 +134,9 @@ export const VersionsHistoryModal: React.FC<VersionsHistoryModalProps> = ({
       logger.error('Failed to restore version:', error);
       toast({
         title: 'Restoration Failed',
-        description: 'Unable to restore the selected version. Please try again.',
+        description:
+          'Unable to restore the selected version. Please try again.',
         status: 'error',
-        duration: 5000,
       });
     } finally {
       setIsRestoring(false);
@@ -142,15 +145,15 @@ export const VersionsHistoryModal: React.FC<VersionsHistoryModalProps> = ({
 
   const handleSaveAndRestore = async () => {
     if (!versionToRestore || !onSaveCurrentVersion) return;
-    
+
     setIsSavingBeforeRestore(true);
     try {
       // Generate a timestamp-based version name
       const timestamp = new Date().toLocaleString();
       await onSaveCurrentVersion(`Auto-saved before restore - ${timestamp}`);
-      
+
       // After saving, perform the restore
-      onRestoreDialogClose();
+      setIsRestoreDialogOpen(false);
       await performRestore(versionToRestore.id);
     } catch (error) {
       logger.error('Failed to save before restore:', error);
@@ -158,7 +161,6 @@ export const VersionsHistoryModal: React.FC<VersionsHistoryModalProps> = ({
         title: 'Save Failed',
         description: 'Unable to save current changes. Please try again.',
         status: 'error',
-        duration: 5000,
       });
     } finally {
       setIsSavingBeforeRestore(false);
@@ -167,20 +169,20 @@ export const VersionsHistoryModal: React.FC<VersionsHistoryModalProps> = ({
 
   const handleDiscardAndRestore = async () => {
     if (!versionToRestore) return;
-    
-    onRestoreDialogClose();
+
+    setIsRestoreDialogOpen(false);
     await performRestore(versionToRestore.id);
   };
 
   const handleDelete = async (versionId: string) => {
     setVersionToDelete(versions.find(v => v.id === versionId) || null);
-    onAlertOpen();
+    setIsAlertOpen(true);
   };
 
   const confirmDeleteVersion = async () => {
     if (!versionToDelete) return;
 
-    onAlertClose(); // Close confirmation dialog
+    setIsAlertOpen(false); // Close confirmation dialog
 
     deleteVersionMutation.mutate(
       { projectId, versionId: versionToDelete.id },
@@ -189,8 +191,7 @@ export const VersionsHistoryModal: React.FC<VersionsHistoryModalProps> = ({
           toast({
             title: 'Version Deleted',
             description: `Successfully deleted version: ${versionToDelete.name}`,
-            status: 'info',
-            duration: 3000,
+            status: 'success',
           });
           setVersionToDelete(null);
         },
@@ -202,7 +203,6 @@ export const VersionsHistoryModal: React.FC<VersionsHistoryModalProps> = ({
               (error as any)?.message ||
               'Failed to delete the selected version.',
             status: 'error',
-            duration: 5000,
           });
           setVersionToDelete(null);
         },
@@ -211,261 +211,174 @@ export const VersionsHistoryModal: React.FC<VersionsHistoryModalProps> = ({
   };
 
   return (
-    <>
-      <Modal
-        isOpen={isOpen}
-        onClose={onClose}
-        size="2xl"
-        scrollBehavior="inside"
-      >
-        <ModalOverlay />
-        <ModalContent bg="white" _dark={{ bg: 'gray.800' }}>
-          <ModalHeader 
-            color="gray.800" 
-            borderBottomWidth="1px"
-            borderColor="gray.200"
-            _dark={{ 
-              color: 'gray.200',
-              borderColor: 'gray.700' 
-            }}
-          >
-            Version Management
-          </ModalHeader>
-          <ModalCloseButton 
-            color="gray.500"
-            _dark={{ color: 'gray.400' }}
-          />
-          <ModalBody>
+    <TooltipProvider>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-2xl max-h-[95vh] overflow-hidden">
+          <DialogHeader className="border-b border-border pb-4">
+            <DialogTitle className="text-lg font-semibold">
+              Version Management
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto">
             {/* Working Draft Indicator */}
-            <Box
-              p={4}
-              mb={4}
-              borderWidth="1px"
-              borderRadius="lg"
-              borderColor="blue.200"
-              bg="blue.50"
-              _dark={{ bg: 'blue.900', borderColor: 'blue.700' }}
-            >
-              <HStack justify="space-between">
-                <VStack align="start" spacing={1}>
+            <Box className="p-4 mb-4 border border-blue-200 bg-blue-50 rounded-lg dark:bg-blue-900 dark:border-blue-700">
+              <HStack className="justify-between">
+                <VStack className="items-start space-y-1">
                   <HStack>
-                    <Badge colorScheme="blue" fontSize="sm">
+                    <Badge
+                      variant="secondary"
+                      className="bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100"
+                    >
                       Working Draft
                     </Badge>
-                    <Text 
-                      fontWeight="semibold"
-                      color="gray.800"
-                      _dark={{ color: 'gray.200' }}
-                    >
+                    <Text className="font-semibold text-foreground">
                       Live Editor
                     </Text>
                   </HStack>
-                  <Text fontSize="sm" color="gray.600" _dark={{ color: 'gray.400' }}>
-                    Your active document - always editable and separate from saved versions
+                  <Text className="text-sm text-muted-foreground">
+                    Your active document - always editable and separate from
+                    saved versions
                   </Text>
                 </VStack>
                 {hasUnsavedChanges && (
-                  <Badge colorScheme="orange" fontSize="xs">
+                  <Badge
+                    variant="secondary"
+                    className="bg-orange-100 text-orange-800 dark:bg-orange-800 dark:text-orange-100 text-xs"
+                  >
                     Unsaved Changes
                   </Badge>
                 )}
               </HStack>
             </Box>
 
-            <Divider 
-              mb={4} 
-              borderColor="gray.200"
-              _dark={{ borderColor: 'gray.600' }}
-            />
+            <Divider className="mb-4" />
 
             {/* Version History List */}
             {isLoading ? (
-              <Box
-                display="flex"
-                justifyContent="center"
-                alignItems="center"
-                height="200px"
-              >
-                <Spinner 
-                  size="xl" 
-                  color="blue.500"
-                  _dark={{ color: 'blue.400' }}
+              <Box className="py-8">
+                <LoadingState
+                  variant="spinner"
+                  message="Loading version history..."
                 />
               </Box>
+            ) : error ? (
+              <Alert variant="destructive">
+                <AlertDescription>{error.message}</AlertDescription>
+              </Alert>
             ) : versions.length === 0 ? (
-              <Box p={4}>
-                <Text 
-                  textAlign="center" 
-                  color="gray.500"
-                  _dark={{ color: 'gray.400' }}
-                >
-                  No saved versions yet. Save your first version to create a snapshot.
+              <Box className="p-4">
+                <Text className="text-center text-muted-foreground">
+                  No saved versions yet. Save your first version to create a
+                  snapshot.
                 </Text>
               </Box>
             ) : (
-              <VStack spacing={3} align="stretch">
-                <VStack align="start" spacing={1} mb={2}>
-                  <Text 
-                    fontSize="sm" 
-                    fontWeight="semibold" 
-                    color="gray.700"
-                    _dark={{ color: 'gray.300' }}
-                  >
+              <VStack className="space-y-3 items-stretch">
+                <VStack className="items-start space-y-1 mb-2">
+                  <Text className="text-sm font-semibold text-foreground">
                     Saved Versions
                   </Text>
-                  <Text 
-                    fontSize="xs" 
-                    color="gray.500"
-                    _dark={{ color: 'gray.400' }}
-                  >
+                  <Text className="text-xs text-muted-foreground">
                     Restore any version to continue editing from that point
                   </Text>
                 </VStack>
-                
+
                 {versions.map(version => (
                   <HStack
                     key={version.id}
-                    justify="space-between"
-                    p={3}
-                    borderWidth="1px"
-                    borderRadius="lg"
-                    borderColor="gray.200"
-                    bg="white"
-                    _dark={{ 
-                      bg: 'gray.700', 
-                      borderColor: 'gray.600',
-                      _hover: { bg: 'gray.600' }
-                    }}
-                    _hover={{ 
-                      bg: 'gray.50'
-                    }}
-                    transition="all 0.2s"
+                    className="justify-between p-4 border border-border bg-card rounded-lg hover:bg-accent/50 transition-all duration-200"
                   >
-                    <VStack align="start" spacing={1}>
-                      <Text 
-                        fontWeight="medium"
-                        color="gray.800"
-                        _dark={{ color: 'gray.200' }}
-                      >
+                    <VStack className="items-start space-y-1">
+                      <Text className="font-medium text-foreground">
                         {version.name}
                       </Text>
-                      <Text 
-                        fontSize="sm" 
-                        color="gray.500"
-                        _dark={{ color: 'gray.400' }}
-                      >
+                      <Text className="text-sm text-muted-foreground">
                         {format(
                           new Date(version.createdAt),
                           'MMM d, yyyy h:mm a'
                         )}
                       </Text>
                     </VStack>
-                    <HStack spacing={2}>
-                      <Tooltip label="Restore this version" placement="top">
-                        <IconButton
-                          aria-label="Restore version"
-                          icon={<Icon as={FaHistory} color="blue.500" _dark={{ color: 'blue.400' }} />}
-                          onClick={() => handleLoad(version)}
-                          size="sm"
-                          variant="ghost"
-                          _hover={{
-                            bg: 'blue.50',
-                            _dark: { bg: 'blue.900' }
-                          }}
-                        />
+                    <HStack className="space-x-2">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <IconButton
+                            aria-label="Restore version"
+                            onClick={() => handleLoad(version)}
+                            size="sm"
+                            variant="ghost"
+                            className="hover:bg-blue-50 dark:hover:bg-blue-900"
+                          >
+                            <FaHistory className="h-4 w-4 text-blue-500 dark:text-blue-400" />
+                          </IconButton>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Restore this version</p>
+                        </TooltipContent>
                       </Tooltip>
-                      <Tooltip label="Delete this version" placement="top">
-                        <IconButton
-                          aria-label="Delete version"
-                          icon={<Icon as={FaTrash} color="red.500" _dark={{ color: 'red.400' }} />}
-                          onClick={() => handleDelete(version.id)}
-                          size="sm"
-                          variant="ghost"
-                          isDisabled={deleteVersionMutation.isPending}
-                          _hover={{
-                            bg: 'red.50',
-                            _dark: { bg: 'red.900' }
-                          }}
-                        />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <IconButton
+                            aria-label="Delete version"
+                            onClick={() => handleDelete(version.id)}
+                            size="sm"
+                            variant="ghost"
+                            disabled={deleteVersionMutation.isPending}
+                            className="hover:bg-red-50 dark:hover:bg-red-900"
+                          >
+                            <FaTrash className="h-4 w-4 text-red-500 dark:text-red-400" />
+                          </IconButton>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Delete this version</p>
+                        </TooltipContent>
                       </Tooltip>
                     </HStack>
                   </HStack>
                 ))}
               </VStack>
             )}
-          </ModalBody>
-          <ModalFooter
-            borderTopWidth="1px"
-            borderColor="gray.200"
-            _dark={{ borderColor: 'gray.700' }}
-          >
-            <Button 
-              variant="outline" 
+          </div>
+
+          <DialogFooter className="border-t border-border pt-4">
+            <Button
+              variant="outline"
               onClick={onClose}
-              borderColor="gray.300"
-              color="gray.700"
-              _dark={{ 
-                borderColor: 'gray.600',
-                color: 'gray.300',
-                _hover: { bg: 'gray.700' }
-              }}
+              className="border-border text-foreground hover:bg-accent"
             >
               Close
             </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog
-        isOpen={isAlertOpen}
-        leastDestructiveRef={cancelRef}
-        onClose={onAlertClose}
-      >
-        <AlertDialogOverlay />
-        <AlertDialogContent
-          bg="white"
-          _dark={{ bg: 'gray.800' }}
-        >
-          <AlertDialogHeader 
-            fontSize="lg" 
-            fontWeight="bold"
-            color="gray.800"
-            _dark={{ color: 'gray.200' }}
-          >
-            Delete Version
+      <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+        <AlertDialogContent className="bg-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-bold text-foreground">
+              Delete Version
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-foreground">
+              Are you sure you want to delete version{' '}
+              <span className="font-bold">
+                "{versionToDelete?.name || 'Unnamed Version'}"
+              </span>
+              ? This action cannot be undone.
+            </AlertDialogDescription>
           </AlertDialogHeader>
-
-          <AlertDialogBody
-            color="gray.700"
-            _dark={{ color: 'gray.300' }}
-          >
-            Are you sure you want to delete version{' '}
-            <Text as="span" fontWeight="bold">
-              "{versionToDelete?.name || 'Unnamed Version'}"
-            </Text>
-            ? This action cannot be undone.
-          </AlertDialogBody>
-
           <AlertDialogFooter>
-            <Button 
-              ref={cancelRef} 
-              onClick={onAlertClose}
-              variant="ghost"
-              _dark={{
-                _hover: { bg: 'gray.700' }
-              }}
-            >
+            <AlertDialogCancel className="hover:bg-accent">
               Cancel
-            </Button>
-            <Button
-              colorScheme="red"
+            </AlertDialogCancel>
+            <AlertDialogAction
               onClick={confirmDeleteVersion}
-              ml={3}
-              isLoading={deleteVersionMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={deleteVersionMutation.isPending}
             >
               Delete
-            </Button>
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -474,7 +387,7 @@ export const VersionsHistoryModal: React.FC<VersionsHistoryModalProps> = ({
       {versionToRestore && (
         <RestoreVersionDialog
           isOpen={isRestoreDialogOpen}
-          onClose={onRestoreDialogClose}
+          onClose={() => setIsRestoreDialogOpen(false)}
           onSaveAndRestore={handleSaveAndRestore}
           onDiscardAndRestore={handleDiscardAndRestore}
           versionName={versionToRestore.name || 'Unnamed Version'}
@@ -482,7 +395,7 @@ export const VersionsHistoryModal: React.FC<VersionsHistoryModalProps> = ({
           isRestoring={isRestoring}
         />
       )}
-    </>
+    </TooltipProvider>
   );
 };
 

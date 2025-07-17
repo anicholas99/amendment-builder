@@ -2,13 +2,14 @@ import type { NextApiResponse, NextApiRequest } from 'next';
 import { CustomApiRequest } from '@/types/api';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { extractPriorArtFromInventionData } from '@/client/services/patent/priorArtExtractionService';
 import { InventionData } from '@/types/invention';
 import { getProjectTenantId, addProjectPriorArt } from '@/repositories/project';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
 import { ApplicationError } from '@/lib/error';
+import { apiResponse } from '@/utils/api/responses';
 
 const querySchema = z.object({
   projectId: z.string().uuid(),
@@ -19,8 +20,7 @@ async function baseHandler(
   res: NextApiResponse
 ): Promise<void> {
   if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
+    return apiResponse.methodNotAllowed(res, ['POST']);
   }
 
   const { projectId } = req.query as z.infer<typeof querySchema>;
@@ -38,16 +38,14 @@ async function baseHandler(
           error: e,
           body: bodyData,
         });
-        res.status(400).json({ error: 'Invalid JSON in request body' });
-        return;
+        return apiResponse.badRequest(res, 'Invalid JSON in request body');
       }
     }
 
     const { inventionData } = bodyData;
 
     if (!inventionData) {
-      res.status(400).json({ error: 'Missing invention data' });
-      return;
+      return apiResponse.badRequest(res, 'Missing invention data');
     }
 
     // Extract prior art references
@@ -98,7 +96,7 @@ async function baseHandler(
       }
     }
 
-    res.status(200).json({
+    return apiResponse.ok(res, {
       success: true,
       extracted: extractedReferences.length,
       saved: savedReferences.length,

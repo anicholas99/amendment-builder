@@ -1,6 +1,17 @@
 import { z } from 'zod';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+
+/**
+ * Formats Zod validation errors into a human-readable message
+ */
+function formatZodErrors(error: z.ZodError): string {
+  const fieldErrors = error.errors.map(err => {
+    const path = err.path.join('.');
+    return `${path}: ${err.message}`;
+  });
+
+  return fieldErrors.join(', ');
+}
 
 /**
  * Validates raw API response data against a Zod schema.
@@ -22,17 +33,9 @@ export function validateApiResponse<T extends z.ZodTypeAny>(
     return result.data;
   }
 
-  // Log the detailed validation error for debugging purposes
-  logger.error('API Response Validation Failed', {
-    error: result.error.flatten(),
-    rawData: data, // Be cautious with logging sensitive data in production
-  });
+  const errorMessage = `API response validation failed: ${formatZodErrors(result.error)}`;
 
-  throw new ApplicationError(
-    ErrorCode.VALIDATION_FAILED,
-    'API response validation failed',
-    400
-  );
+  throw new ApplicationError(ErrorCode.VALIDATION_FAILED, errorMessage, 400);
 }
 
 /**
@@ -55,15 +58,7 @@ export function validateRequestBody<T extends z.ZodTypeAny>(
     return result.data;
   }
 
-  // Log the detailed validation error for debugging purposes
-  logger.error('Request Body Validation Failed', {
-    error: result.error.flatten(),
-    rawData: data, // Be cautious with logging sensitive data in production
-  });
+  const errorMessage = `Request body validation failed: ${formatZodErrors(result.error)}`;
 
-  throw new ApplicationError(
-    ErrorCode.VALIDATION_FAILED,
-    'Request body validation failed',
-    400
-  );
+  throw new ApplicationError(ErrorCode.VALIDATION_FAILED, errorMessage, 400);
 }

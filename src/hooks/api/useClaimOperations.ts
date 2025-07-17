@@ -1,18 +1,19 @@
 /**
  * Centralized hook for Claim-related API mutations.
+ * Uses simplified string array format for all claim operations.
  */
 import React from 'react';
 import { UseMutationOptions, useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/utils/toast';
 import { useApiMutation } from '@/lib/api/queryClient';
 import { ClaimsClientService } from '@/client/services/claims.client-service';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useProjectData } from '@/contexts/ProjectDataContext';
 import { ApplicationError } from '@/lib/error';
-import { showSuccessToast, showErrorToast } from '@/utils/toast';
 
 /**
  * Hook for parsing claim elements
+ * @returns Array of claim element strings
  */
 export function useParseClaim() {
   const queryClient = useQueryClient();
@@ -45,7 +46,7 @@ export function useParseClaim() {
       );
 
       logger.info('[useParseClaim] Parsed elements', {
-        elementCount: (elements as any[]).length,
+        elementCount: elements.length,
       });
 
       return elements;
@@ -68,6 +69,7 @@ export function useParseClaim() {
 
 /**
  * Hook for generating search queries from parsed elements
+ * @returns Array of search query strings
  */
 export function useGenerateQueries() {
   const queryClient = useQueryClient();
@@ -78,7 +80,7 @@ export function useGenerateQueries() {
       parsedElements,
       projectId,
     }: {
-      parsedElements: string[]; // V2 format
+      parsedElements: string[]; // Always string array now
       projectId: string;
     }) => {
       logger.info('[useGenerateQueries] Generating queries', {
@@ -86,16 +88,16 @@ export function useGenerateQueries() {
         projectId,
       });
 
-      const _queries = await ClaimsClientService.generateSearchQueries(
+      const queries = await ClaimsClientService.generateSearchQueries(
         parsedElements,
         projectId
       );
 
       logger.info('[useGenerateQueries] Generated queries', {
-        queryCount: _queries.length,
+        queryCount: queries.length,
       });
 
-      return _queries;
+      return queries;
     },
 
     onSuccess: _queries => {
@@ -114,82 +116,22 @@ export function useGenerateQueries() {
 }
 
 // ============================================================================
-// V2 Hooks - Simplified string array format
+// Smart Hooks - These are now the primary hooks
 // ============================================================================
 
 /**
- * V2 Hook to parse a claim into string elements.
+ * Primary hook for parsing claims with toast notifications
  */
-export function useParseClaimV2(
+export function useParseClaimSmart(
   options?: UseMutationOptions<
-    string[], // Simple string array response
-    ApplicationError,
-    {
-      claimText: string;
-      projectId: string;
-    }
-  >
-) {
-  const toast = useToast();
-  return useApiMutation<
     string[],
+    ApplicationError,
     {
       claimText: string;
       projectId: string;
     }
-  >({
-    mutationFn: async ({ claimText, projectId }) => {
-      return await ClaimsClientService.parseClaimElementsV2(
-        claimText,
-        projectId
-      );
-    },
-    onSuccess: () => {
-      showSuccessToast(toast, 'Claim parsed successfully (V2).');
-    },
-    onError: (error: ApplicationError) => {
-      showErrorToast(toast, error.message || 'Failed to parse claim.');
-    },
-    ...options,
-  });
-}
-
-/**
- * V2 Hook to generate queries from string elements.
- */
-export function useGenerateQueriesV2(
-  options?: UseMutationOptions<
-    string[], // Array of search query strings
-    ApplicationError,
-    { elements: string[]; projectId: string }
   >
 ) {
-  const toast = useToast();
-  return useApiMutation<string[], { elements: string[]; projectId: string }>({
-    mutationFn: async ({ elements, projectId }) => {
-      return await ClaimsClientService.generateSearchQueriesV2(
-        elements,
-        projectId
-      );
-    },
-    onSuccess: () => {
-      showSuccessToast(toast, 'Search queries generated successfully (V2).');
-    },
-    onError: (error: ApplicationError) => {
-      showErrorToast(toast, error.message || 'Failed to generate queries.');
-    },
-    ...options,
-  });
-}
-
-// ============================================================================
-// Feature Flag Aware Wrappers
-// ============================================================================
-
-/**
- * Smart hook that uses V2 (now the only version)
- */
-export function useParseClaimSmart() {
   const toast = useToast();
 
   return useApiMutation<
@@ -200,22 +142,20 @@ export function useParseClaimSmart() {
     }
   >({
     mutationFn: async ({ claimText, projectId }) => {
-      return await ClaimsClientService.parseClaimElementsV2(
-        claimText,
-        projectId
-      );
+      return await ClaimsClientService.parseClaimElements(claimText, projectId);
     },
     onSuccess: () => {
-      showSuccessToast(toast, 'Claim parsed successfully.');
+      toast.success('Claim parsed successfully.');
     },
     onError: (error: ApplicationError) => {
-      showErrorToast(toast, error.message || 'Failed to parse claim.');
+      toast.error(error.message || 'Failed to parse claim.');
     },
+    ...options,
   });
 }
 
 /**
- * Smart hook for query generation (now always uses V2)
+ * Primary hook for query generation with toast notifications
  */
 export function useGenerateQueriesSmart(
   options?: UseMutationOptions<
@@ -244,17 +184,24 @@ export function useGenerateQueriesSmart(
         throw new Error('Either elements or parsedElements must be provided');
       }
 
-      return await ClaimsClientService.generateSearchQueriesV2(
+      return await ClaimsClientService.generateSearchQueries(
         elementsToUse,
         projectId
       );
     },
     onSuccess: () => {
-      showSuccessToast(toast, 'Search queries generated successfully.');
+      toast.success('Search queries generated successfully.');
     },
     onError: (error: ApplicationError) => {
-      showErrorToast(toast, error.message || 'Failed to generate queries.');
+      toast.error(error.message || 'Failed to generate queries.');
     },
     ...options,
   });
 }
+
+// ============================================================================
+// Aliases for backward compatibility
+// ============================================================================
+
+export const useParseClaimV2 = useParseClaimSmart;
+export const useGenerateQueriesV2 = useGenerateQueriesSmart;

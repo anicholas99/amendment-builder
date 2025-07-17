@@ -1,13 +1,14 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getProjectWorkspace } from '@/repositories/project/core.repository';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { ClaimData } from '@/types/claimTypes';
-import { figureRepository } from '@/repositories/figureRepository';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { figureRepository } from '@/repositories/figure';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { z } from 'zod';
+import { apiResponse } from '@/utils/api/responses';
 
 // Query validation schema
 const querySchema = z.object({
@@ -26,8 +27,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 
   if (req.method !== 'GET') {
-    res.setHeader('Allow', ['GET']);
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return apiResponse.methodNotAllowed(res, ['GET']);
   }
 
   try {
@@ -79,7 +79,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       figuresWithElements: figuresWithElements,
     };
 
-    return res.status(200).json({
+    return apiResponse.ok(res, {
       success: true,
       data: workspaceData,
     });

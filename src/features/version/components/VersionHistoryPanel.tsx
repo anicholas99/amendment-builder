@@ -1,16 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import {
-  Box,
-  Text,
-  IconButton,
-  VStack,
-  Flex,
-  Icon,
-  Divider,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import { FiX } from 'react-icons/fi';
+import { logger } from '@/utils/clientLogger';
+import { cn } from '@/lib/utils';
+import { X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { useThemeContext } from '@/contexts/ThemeContext';
 // Update import path for InventionData
 import { InventionData } from '../../../types/invention';
 import { formatDistanceToNow } from 'date-fns';
@@ -64,88 +58,92 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
   currentVersionIndex,
   onRestoreVersion,
 }) => {
-  // Move color values outside event handlers
-  const cardBg = useColorModeValue('bg.card', 'bg.card');
-  const hoverBg = useColorModeValue('bg.hover', 'bg.hoverDark');
+  const { isDarkMode } = useThemeContext();
 
   if (!isOpen) return null;
 
   return (
-    <Box
-      position="absolute" // Or adjust based on final layout needs
-      top="60px" // May need adjustment
-      right="20px" // May need adjustment
-      width="350px"
-      maxHeight="60vh"
-      overflowY="auto"
-      bg="bg.card"
-      borderRadius="md"
-      boxShadow="lg"
-      zIndex={1000}
-      borderWidth="1px" // Added border for better visibility
-      borderColor="border.primary"
+    <div
+      className={cn(
+        'absolute top-[60px] right-[20px] w-[350px] max-h-[60vh] overflow-y-auto rounded-md shadow-lg z-[1000] border',
+        isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'
+      )}
     >
-      <Box
-        p={3}
-        bg="bg.secondary"
-        borderBottomWidth={1}
-        borderColor="border.primary"
+      <div
+        className={cn(
+          'p-4 border-b',
+          isDarkMode
+            ? 'bg-gray-700 border-gray-600'
+            : 'bg-gray-50 border-gray-200'
+        )}
       >
-        <Flex justify="space-between" align="center">
-          <Text fontWeight="bold">Version History</Text>
-          <IconButton
-            aria-label="Close panel"
-            icon={<Icon as={FiX} />}
-            size="sm"
+        <div className="flex justify-between items-center">
+          <span className="font-bold">Version History</span>
+          <Button
             variant="ghost"
+            size="sm"
             onClick={onClose}
-          />
-        </Flex>
-      </Box>
+            className="h-8 w-8 p-0"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close panel</span>
+          </Button>
+        </div>
+      </div>
 
       {versionHistory.length === 0 ? (
-        <Box p={4} className="text-center">
-          <Text color="gray.500">No version history available</Text>
-        </Box>
+        <div className="p-4 text-center">
+          <span className={cn(isDarkMode ? 'text-gray-400' : 'text-gray-500')}>
+            No version history available
+          </span>
+        </div>
       ) : (
-        <VStack spacing={0} align="stretch" divider={<Divider />}>
+        <div className="divide-y">
           {versionHistory.map((version, index) => {
             const prevVersion = index > 0 ? versionHistory[index - 1] : null;
             const changes = getVersionChanges(prevVersion, version);
+            const isCurrentVersion = currentVersionIndex === index;
 
             return (
-              <Box
+              <div
                 key={index}
-                p={3}
-                bg={currentVersionIndex === index ? 'blue.50' : cardBg}
-                className="cursor-pointer transition-bg"
-                onMouseEnter={(e: React.MouseEvent<HTMLDivElement>) => {
-                  if (currentVersionIndex !== index) {
-                    e.currentTarget.style.backgroundColor = hoverBg;
-                  }
-                }}
-                onMouseLeave={(e: React.MouseEvent<HTMLDivElement>) => {
-                  if (currentVersionIndex !== index) {
-                    e.currentTarget.style.backgroundColor = cardBg;
-                  }
-                }}
+                className={cn(
+                  'p-4 cursor-pointer transition-colors',
+                  isCurrentVersion
+                    ? isDarkMode
+                      ? 'bg-blue-900/50'
+                      : 'bg-blue-50'
+                    : isDarkMode
+                      ? 'hover:bg-gray-700'
+                      : 'hover:bg-gray-50'
+                )}
                 onClick={() => onRestoreVersion(index)}
               >
-                <Flex justify="space-between" className="mb-1">
-                  <Text fontWeight="medium">Version {index + 1}</Text>
-                  <Text fontSize="sm" color="gray.500">
+                <div className="flex justify-between mb-1">
+                  <span className="font-medium">Version {index + 1}</span>
+                  <span
+                    className={cn(
+                      'text-sm',
+                      isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                    )}
+                  >
                     {index === versionHistory.length - 1 ? 'Current' : ''}
-                  </Text>
-                </Flex>
-                <Text fontSize="sm" color="gray.600" noOfLines={1}>
+                  </span>
+                </div>
+                <div
+                  className={cn(
+                    'text-sm truncate',
+                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                  )}
+                >
                   {changes}
-                </Text>
-              </Box>
+                </div>
+              </div>
             );
           })}
-        </VStack>
+        </div>
       )}
-    </Box>
+    </div>
   );
 };
 

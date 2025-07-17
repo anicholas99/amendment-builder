@@ -1,12 +1,13 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { processCitationMatchArray } from '@/features/citation-extraction/utils/citation';
 import { getSearchHistoryWithTenant } from '@/repositories/search';
 import { findTopCitationMatches } from '@/repositories/citationMatchRepository';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
 import { ApplicationError, ErrorCode } from '@/lib/error';
+import { apiResponse } from '@/utils/api/responses';
 
 const apiLogger = createApiLogger('citation-matches/top-results');
 
@@ -19,7 +20,7 @@ const querySchema = z.object({
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   // Only allow GET requests
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return apiResponse.methodNotAllowed(res, ['GET']);
   }
 
   try {
@@ -81,17 +82,14 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       }
     }
 
-    return res.status(200).json({
+    return apiResponse.ok(res, {
       groupedResults,
       totalMatches: processedMatches.length,
       deepAnalysisSummary,
     });
   } catch (error) {
     apiLogger.error('Error fetching top citation matches', { error });
-    return res.status(500).json({
-      error: 'Internal Server Error',
-      details: (error as Error).message,
-    });
+    return apiResponse.serverError(res, new Error('Internal Server Error'));
   }
 }
 

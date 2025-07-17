@@ -13,6 +13,21 @@ export interface ConsistencyIssue {
   suggestion?: string;
 }
 
+export interface ClaimEligibility101Result {
+  eligible: boolean;
+  verdict: '§101 Eligible' | 'Risk of §101 Rejection' | '§101 Ineligible';
+  issue?: string;
+  recommendation?: string;
+  confidence: number;
+  analysis: {
+    isAbstractIdea: boolean;
+    abstractIdeaCategory?: 'mathematical_concepts' | 'mental_processes' | 'organizing_human_activity';
+    hasSignificantlyMore: boolean;
+    technicalImprovement?: string;
+    practicalApplication?: string;
+  };
+}
+
 export interface PatentSection {
   name: string;
   content: string;
@@ -73,7 +88,12 @@ export interface EnhancePatentSectionResult {
  */
 export interface PatentConsistencyIssue {
   section: string;
-  type: 'missing_reference' | 'terminology' | 'claim_support' | 'format' | 'contradiction';
+  type:
+    | 'missing_reference'
+    | 'terminology'
+    | 'claim_support'
+    | 'format'
+    | 'contradiction';
   severity: 'error' | 'warning' | 'info';
   message: string;
   suggestion?: string;
@@ -96,4 +116,13 @@ export interface ClaimRevision {
   }>;
   confidence: number;
   reasoning: string;
+}
+
+export interface BatchRevisionResult {
+  summary: {
+    total: number;
+    successful: number;
+    failed: number;
+  };
+  revisions: ClaimRevision[];
 }

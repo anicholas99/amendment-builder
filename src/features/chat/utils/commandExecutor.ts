@@ -1,7 +1,7 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 // import { ChatApiService } from '@/services/api/chatApiService';
 import { ChatCommand } from '../types';
-import { environment } from '@/config/environment';
+import { isDevelopment } from '@/config/environment.client';
 
 interface CommandExecutorOptions {
   projectId: string;
@@ -30,15 +30,15 @@ export const executeCommand = async (
       fullCommand: cmd,
     });
 
-    if (environment.isDevelopment) {
-      logger.log('Executing command', { type: cmd.type || 'unknown' });
+    if (isDevelopment) {
+      logger.info('Executing command', { type: cmd.type || 'unknown' });
     }
 
     // Handle patent document refresh commands differently
     if (cmd.type === 'patent_document_updated') {
       logger.debug('[TITLE UPDATE DEBUG] Patent document refresh triggered');
-      if (environment.isDevelopment) {
-        logger.log('Handling patent document refresh');
+      if (isDevelopment) {
+        logger.info('Handling patent document refresh');
       }
       // For patent documents, just trigger a refresh since the backend already updated the data
       if (onContentUpdate) {
@@ -52,8 +52,8 @@ export const executeCommand = async (
       logger.debug('[TITLE UPDATE DEBUG] Project data refresh triggered', {
         field: cmd.field,
       });
-      if (environment.isDevelopment) {
-        logger.log('Handling project data refresh');
+      if (isDevelopment) {
+        logger.info('Handling project data refresh');
       }
       // For project data updates (like claims), just trigger a refresh since the backend already updated the data
       if (onContentUpdate) {

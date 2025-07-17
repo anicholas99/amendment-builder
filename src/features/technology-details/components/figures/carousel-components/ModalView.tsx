@@ -1,14 +1,13 @@
 import React from 'react';
 import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  Button,
-  useColorModeValue,
-} from '@chakra-ui/react';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export interface ModalViewProps {
   isOpen: boolean;
@@ -26,7 +25,6 @@ const ModalView: React.FC<ModalViewProps> = ({
   title,
   children,
 }) => {
-  const bgColor = useColorModeValue('white', 'gray.800');
   const [isClosing, setIsClosing] = React.useState(false);
   const isMountedRef = React.useRef(true);
 
@@ -53,45 +51,17 @@ const ModalView: React.FC<ModalViewProps> = ({
   }, [onClose, isClosing]);
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={handleClose}
-      size="6xl"
-      motionPreset="scale"
-      isCentered
-      closeOnOverlayClick={!isClosing}
-      closeOnEsc={!isClosing}
-      preserveScrollBarGap
-      blockScrollOnMount
-      returnFocusOnClose
-    >
-      <ModalOverlay />
-      <ModalContent bg={bgColor} maxHeight="95vh" maxW="95vw">
-        <ModalHeader as="h3" borderBottomWidth="1px">
-          {title}
-        </ModalHeader>
+    <Dialog open={isOpen} onOpenChange={open => !open && handleClose()}>
+      <DialogContent className="max-w-[90vw] max-h-[90vh] w-fit h-fit bg-card">
+        <DialogHeader className="border-b border-border">
+          <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
+        </DialogHeader>
 
-        <ModalBody
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          padding={6}
-          overflow="auto"
-        >
+        <div className="flex items-center justify-center p-4 max-h-[calc(90vh-80px)] overflow-hidden">
           {children}
-        </ModalBody>
-
-        <ModalFooter borderTopWidth="1px">
-          <Button
-            colorScheme="blue"
-            onClick={handleClose}
-            isDisabled={isClosing}
-          >
-            Close
-          </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

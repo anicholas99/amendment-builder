@@ -1,9 +1,8 @@
 import { useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { inventionQueryKeys } from '@/lib/queryKeys/inventionKeys';
-import { Figure, Figures } from '../carousel-components/types';
-import { logger } from '@/lib/monitoring/logger';
-import { queryKeys } from '@/config/reactQueryConfig';
+import { Figure } from '../carousel-components/types';
+import { FiguresWithIds } from '@/hooks/api/useFigures';
+import { logger } from '@/utils/clientLogger';
+import { useFigureDescriptionOptimistic } from './useFigureDescriptionOptimistic';
 
 // This hook has been refactored to be stateless. It no longer manages
 // local state for editing or drafts. It provides a simple utility
@@ -11,8 +10,8 @@ import { queryKeys } from '@/config/reactQueryConfig';
 // The parent component is now responsible for all state management.
 
 interface UseFigureDescriptionProps {
-  figures: Figures | null;
-  onUpdate: (figures: Figures) => void | Promise<void>;
+  figures: FiguresWithIds | null;
+  onUpdate: (figures: FiguresWithIds) => void | Promise<void>;
   currentFigureKey: string;
   projectId?: string;
 }
@@ -23,48 +22,28 @@ export const useFigureDescription = ({
   currentFigureKey,
   projectId,
 }: UseFigureDescriptionProps) => {
-  const queryClient = useQueryClient();
-
-  // Update a figure's description
-  const handleUpdateDescription = useCallback(
-    async (newDescription: string) => {
-      if (!figures || !figures[currentFigureKey]) {
-        logger.error(
-          `Figure with key ${currentFigureKey} not found for update.`
-        );
-        return;
-      }
-
-      const updatedFigures = structuredClone(figures) as Figures;
-      updatedFigures[currentFigureKey].description = newDescription;
-
-      // Optimistically update cache so UI shows new description immediately
-      if (projectId) {
-        queryClient.setQueryData<Figures>(
-          queryKeys.projects.figures(projectId),
-          old => {
-            const draft = structuredClone(old || {});
-            if (draft[currentFigureKey]) {
-              draft[currentFigureKey].description = newDescription;
-            }
-            return draft;
-          }
-        );
-      }
-      await onUpdate(updatedFigures);
-    },
-    [figures, currentFigureKey, onUpdate, projectId, queryClient]
-  );
+  // Use the optimistic version for better UX
+  const { handleUpdateDescription, isUpdating } =
+    useFigureDescriptionOptimistic({
+      figures,
+      onUpdate,
+      currentFigureKey,
+      projectId,
+    });
 
   // Update a whole figure object
   const handleUpdateFigure = useCallback(
     async (updatedFigure: Figure) => {
       if (!figures) return;
-      const newFigures = structuredClone(figures) as Figures;
-      newFigures[currentFigureKey] = updatedFigure;
-      await onUpdate(newFigures);
+
+      // This function should also be refactored to use proper APIs
+      // For now, keeping it as a no-op since it's not clear what updates it handles
+      logger.warn(
+        '[useFigureDescription] handleUpdateFigure called but should use specific APIs',
+        { currentFigureKey }
+      );
     },
-    [figures, currentFigureKey, onUpdate]
+    [currentFigureKey]
   );
 
   return {

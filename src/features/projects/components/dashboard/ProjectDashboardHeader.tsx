@@ -1,15 +1,8 @@
 import React from 'react';
-import {
-  Box,
-  Flex,
-  Heading,
-  Button,
-  Text,
-  Stack,
-  Icon,
-} from '@chakra-ui/react';
 import { FiPlus } from 'react-icons/fi';
 import { useTheme } from '@/contexts/ThemeContext';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface ProjectDashboardHeaderProps {
   projectCount: number;
@@ -24,58 +17,36 @@ export const ProjectDashboardHeader: React.FC<ProjectDashboardHeaderProps> = ({
 }) => {
   const { isDarkMode } = useTheme();
 
-  // Dark mode aware colors
-  const statNumberColor = isDarkMode ? '#F7FAFC' : '#2D3748';
-  const headingColor = isDarkMode ? '#FFFFFF' : '#2D3748';
-  const statLabelColor = isDarkMode ? '#A0AEC0' : '#718096';
-  const descriptionColor = isDarkMode ? '#CBD5E0' : '#718096';
-
   return (
-    <Box width="100%" className="max-w-full mb-6">
-      <Flex
-        direction="row"
-        justify="space-between"
-        align="center"
-        className="mb-6"
-      >
-        <Box>
-          <Heading
-            size="lg"
-            className="mb-1"
-            fontWeight="700"
-            color={isDarkMode ? 'white' : 'gray.700'}
-          >
+    <div className="w-full max-w-full mb-6">
+      <div className="flex flex-row justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold mb-1 text-foreground">
             Projects Dashboard{tenantName ? ` (${tenantName})` : ''}
-          </Heading>
-          <Text fontSize="md" color={isDarkMode ? 'gray.300' : 'gray.500'}>
+          </h1>
+          <p className="text-base text-muted-foreground">
             Manage your invention projects and generate patent documents
-          </Text>
-        </Box>
-        <Box className="mt-4">
-          <Stack direction="row" spacing={6}>
-            <Box>
-              <Text fontSize="sm" color={isDarkMode ? 'gray.400' : 'gray.500'}>
-                Total Projects
-              </Text>
-              <Text
-                fontSize="xl"
-                fontWeight="600"
-                color={isDarkMode ? 'gray.50' : 'gray.700'}
-              >
+          </p>
+        </div>
+        <div className="mt-4">
+          <div className="flex flex-row items-center space-x-6">
+            <div>
+              <p className="text-sm text-muted-foreground">Total Projects</p>
+              <p className="text-xl font-semibold text-foreground">
                 {projectCount}
-              </Text>
-            </Box>
+              </p>
+            </div>
             <Button
-              leftIcon={<Icon as={FiPlus} />}
-              variant="primary"
               onClick={onOpenNewProjectModal}
-              size="md"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              size="default"
             >
+              <FiPlus className="mr-2" />
               New Project
             </Button>
-          </Stack>
-        </Box>
-      </Flex>
-    </Box>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };

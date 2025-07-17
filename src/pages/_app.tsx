@@ -1,5 +1,4 @@
 import React, { useEffect, useState, lazy, Suspense } from 'react';
-import { ChakraProvider } from '@chakra-ui/react';
 import type { AppProps } from 'next/app';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
@@ -12,19 +11,23 @@ import { ProjectProviders } from '../contexts';
 import { SidebarProvider } from '../contexts/SidebarContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { LayoutProvider } from '../contexts/LayoutContext';
+import { Toaster } from '@/components/ui/toaster';
 import '../styles/globals.css';
 import '../styles/transitions.css';
-import '../styles/darkMode.css';
-import '../styles/ultraDarkMode.css';
 import '../styles/appLayout.css';
 import '../styles/resizeHandle.css';
+import '../styles/scrollbar.css';
+import '../styles/chat-animations.css';
 import { AuthProvider } from '../contexts/AuthProvider';
 import { TenantProvider } from '../contexts/TenantContext';
-import theme from 'src/theme';
-import { environment } from '@/config/environment';
+import { isDevelopment } from '@/config/environment.client';
 import { initializeApiSecurity } from '@/lib/api/apiClient';
-import { requestManager } from '@/lib/api/requestManager';
+import { RequestManager } from '@/lib/api/requestManager';
 import { useSessionRefresh } from '@/hooks/useSessionRefresh';
+import { RequestManagerProvider } from '@/contexts/RequestManagerContext';
+import { logger } from '@/utils/clientLogger';
+import { ClientServicesProvider } from '@/contexts/ClientServicesContext';
+import { OptimizedLoadingProvider } from '@/components/common/OptimizedLoadingStrategy';
 
 // Lazy load React Query DevTools - only loaded in development
 const ReactQueryDevtools = lazy(() =>
@@ -51,7 +54,7 @@ const isPublicRoute = (pathname: string): boolean => {
 };
 
 // Note: migrateLogging has been removed as modifying global console is an anti-pattern
-// Use the structured logger from '@/lib/monitoring/logger' for logging needs
+// Use the structured logger from '@/server/logger' for logging needs
 
 function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -67,12 +70,20 @@ function MyApp({ Component, pageProps }: AppProps) {
 
   // Initialize security features on client side
   useEffect(() => {
-    const initSecurity = async () => {
-      await initializeApiSecurity();
-      // Pre-warm cache with critical requests to prevent rate limiting on page refresh
-      await requestManager.prewarmCache();
+    const initApp = async () => {
+      try {
+        // Initialize API security (CSRF, etc.)
+        await initializeApiSecurity();
+
+        // Pre-warm critical API caches on app load
+        // Create a temporary instance for initial cache warming
+        const requestManager = new RequestManager();
+        await requestManager.prewarmCache();
+      } catch (error) {
+        logger.error('Failed to initialize app:', error);
+      }
     };
-    initSecurity();
+    initApp();
   }, []);
 
   return (
@@ -86,18 +97,21 @@ function MyApp({ Component, pageProps }: AppProps) {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <TenantProvider>
-              <ChakraProvider theme={theme}>
-                {/* Pass router down to AppInner */}
-                <AppInner
-                  Component={Component}
-                  pageProps={pageProps}
-                  isPublicPage={isPublicPage}
-                />
-              </ChakraProvider>
+              <RequestManagerProvider>
+                <ClientServicesProvider>
+                  {/* Pass router down to AppInner */}
+                  <AppInner
+                    Component={Component}
+                    pageProps={pageProps}
+                    isPublicPage={isPublicPage}
+                  />
+                  <Toaster />
+                </ClientServicesProvider>
+              </RequestManagerProvider>
             </TenantProvider>
           </AuthProvider>
           {/* React Query DevTools for debugging in development */}
-          {environment.isDevelopment && (
+          {isDevelopment && (
             <Suspense fallback={<div>Loading...</div>}>
               <ReactQueryDevtools initialIsOpen={false} />
             </Suspense>
@@ -128,13 +142,15 @@ function AppInner({ Component, pageProps, isPublicPage }: AppInnerProps) {
       <SidebarProvider>
         <LayoutProvider>
           <ProjectProviders>
-            {isPublicPage ? (
-              <Component {...pageProps} />
-            ) : (
-              <AuthGuard>
+            <OptimizedLoadingProvider>
+              {isPublicPage ? (
                 <Component {...pageProps} />
-              </AuthGuard>
-            )}
+              ) : (
+                <AuthGuard>
+                  <Component {...pageProps} />
+                </AuthGuard>
+              )}
+            </OptimizedLoadingProvider>
           </ProjectProviders>
         </LayoutProvider>
       </SidebarProvider>

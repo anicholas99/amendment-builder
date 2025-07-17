@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import { FullAnalysisResponse } from '../../../types/priorArtAnalysisTypes';
 
 interface UseDependentClaimSuggestionsOptions {
@@ -111,6 +111,7 @@ export const useDependentClaimSuggestions = ({
       status: 'success',
       duration: 2000,
       isClosable: true,
+      position: 'bottom-right',
     });
 
     // If this suggestion was in the list, mark it as dismissed

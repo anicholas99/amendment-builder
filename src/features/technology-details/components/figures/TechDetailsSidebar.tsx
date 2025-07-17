@@ -1,21 +1,16 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Box, Flex, Icon, useToast } from '@chakra-ui/react';
-import {
-  FiMessageCircle,
-  FiFileText,
-  FiImage,
-  FiBookmark,
-} from 'react-icons/fi';
+import { MessageCircle, FileText, Image } from 'lucide-react';
+import { useToast } from '@/hooks/useToastWrapper';
 
 import { SidebarContainer } from '../../../../components/layouts/containers';
-import { SavedPriorArtTabWrapper } from '../SavedPriorArtTabWrapper';
-import { SavedPriorArtTabManager } from '../SavedPriorArtTabManager';
-import ChatInterface from '@/features/chat/components/ChatInterface';
+import EnhancedChatInterface from '@/features/chat/components/EnhancedChatInterface';
 import { FiguresTab as SharedFiguresTab } from '@/components';
+import { LinkedPatentFiles } from '../LinkedPatentFiles';
 
 import { TechDetailsSidebarProps } from '../../types/techDetailsSidebar';
 import { InventionData } from '@/types';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
+import { TECHNOLOGY_TAB_TITLES } from '../../constants/tabs';
 
 // Using shared FiguresTab component for consistency across sidebars
 
@@ -55,6 +50,8 @@ const TechDetailsSidebar: React.FC<
       tenantId: '', // Will be populated by ChatInterface if needed
       status: 'draft' as const,
       textInput: inventionData.description || '',
+      hasPatentContent: false,
+      hasProcessedInvention: true, // Since we have inventionData
       createdAt: new Date(),
       lastModified: new Date().toISOString(),
       documents: [],
@@ -66,15 +63,13 @@ const TechDetailsSidebar: React.FC<
   // Handle chat content update
   const handleChatContentUpdate = useCallback(
     (action: string) => {
-      logger.log('[TechDetailsSidebar] Chat content update:', { action });
+      logger.info('[TechDetailsSidebar] Chat content update:', { action });
 
       if (action === 'refresh') {
         // Trigger a refresh of the invention data
         // The parent component should handle this refresh
-        toast({
+        toast.info({
           title: 'Refreshing invention data...',
-          status: 'info',
-          duration: 2000,
         });
         // Call the update handler to trigger a refresh
         if (inventionData) {
@@ -96,15 +91,15 @@ const TechDetailsSidebar: React.FC<
         onFigureChange={setCurrentFigure}
       />
     ),
-    [projectId, currentFigure, setCurrentFigure]
-  ); // Note: inventionData removed from dependencies
+    [projectId, inventionData, currentFigure, setCurrentFigure]
+  );
 
   // These tabs are currently placeholders and can be wired up later.
   const chatTabContent = useMemo(
     () => (
-      <Box height="100%" overflow="hidden">
+      <div className="h-full overflow-hidden">
         {projectId && projectDataForChat ? (
-          <ChatInterface
+          <EnhancedChatInterface
             projectData={projectDataForChat}
             onContentUpdate={handleChatContentUpdate}
             setPreviousContent={() => {
@@ -114,56 +109,47 @@ const TechDetailsSidebar: React.FC<
             projectId={projectId}
           />
         ) : (
-          <Box p={4} color="text.secondary">
-            Loading project...
-          </Box>
+          <div className="p-4 text-muted-foreground">Loading project...</div>
         )}
-      </Box>
+      </div>
     ),
     [projectId, projectDataForChat, handleChatContentUpdate]
   );
 
-  const priorArtTabContent = useMemo(
+  const projectFilesTabContent = useMemo(
     () => (
-      <SavedPriorArtTabManager>
-        {({
-          savedPriorArt,
-          isLoading,
-          handleRemovePriorArt,
-          handleOpenPriorArtDetails,
-        }) => (
-          <SavedPriorArtTabWrapper
-            savedPriorArt={savedPriorArt}
-            onRemovePriorArt={handleRemovePriorArt}
-            onOpenPriorArtDetails={handleOpenPriorArtDetails}
-          />
-        )}
-      </SavedPriorArtTabManager>
+      <div className="h-full overflow-y-auto bg-muted/30">
+        {/* Unified Project Files View */}
+        {projectId && <LinkedPatentFiles projectId={projectId} />}
+      </div>
     ),
-    []
+    [projectId]
   );
 
   const tabIcons = useMemo(
     () => [
-      <Flex key="figuresIcon" align="center" justify="center" height="24px">
-        <Icon as={FiImage} boxSize="16px" />
-      </Flex>,
-      <Flex key="priorArtIcon" align="center" justify="center" height="24px">
-        <Icon as={FiBookmark} boxSize="16px" />
-      </Flex>,
-      <Flex key="chatIcon" align="center" justify="center" height="24px">
-        <Icon as={FiMessageCircle} boxSize="16px" />
-      </Flex>,
+      <div key="figuresIcon" className="flex items-center justify-center h-6">
+        <Image className="h-4 w-4" />
+      </div>,
+      <div
+        key="referenceDocsIcon"
+        className="flex items-center justify-center h-6"
+      >
+        <FileText className="h-4 w-4" />
+      </div>,
+      <div key="chatIcon" className="flex items-center justify-center h-6">
+        <MessageCircle className="h-4 w-4" />
+      </div>,
     ],
     []
   );
 
-  const tabTitles = useMemo(() => ['Figures', 'Saved Prior Art', 'Chat'], []);
+  const tabTitles = useMemo(() => [...TECHNOLOGY_TAB_TITLES], []);
 
   // Create stable references for tab contents
   const tabContents = useMemo(
-    () => [figuresTabContent, priorArtTabContent, chatTabContent],
-    [figuresTabContent, priorArtTabContent, chatTabContent]
+    () => [figuresTabContent, projectFilesTabContent, chatTabContent],
+    [figuresTabContent, projectFilesTabContent, chatTabContent]
   );
 
   return (

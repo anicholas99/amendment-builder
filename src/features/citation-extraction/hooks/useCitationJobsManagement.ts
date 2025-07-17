@@ -1,11 +1,11 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import { useQueryClient } from '@tanstack/react-query';
 import { CitationJob } from '@/features/search/hooks/useCitationJobs';
 import { GroupedCitation } from '@/features/search/hooks/useCitationMatches';
 import { CitationClientService } from '@/client/services/citation.client-service';
 import { citationJobKeys } from '@/lib/queryKeys/citationKeys';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useCitationStore } from '../store';
 
 interface UseCitationJobsManagementProps {
@@ -94,6 +94,30 @@ export function useCitationJobsManagement({
       rerunningRefs.add(selectedReference);
     }
 
+    // Helper function to check if a completed job should still show as optimistic
+    const shouldCompletedJobShowAsOptimistic = (job: CitationJob): boolean => {
+      // If we have data, don't show as optimistic
+      if (refsWithData.has(job.referenceNumber!)) {
+        return false;
+      }
+      
+      // If the job completed more than 5 minutes ago and we still have no data,
+      // stop showing as optimistic to prevent infinite spinning
+      if (job.completedAt) {
+        const completedTime = new Date(job.completedAt).getTime();
+        const now = Date.now();
+        const fiveMinutesMs = 5 * 60 * 1000;
+        
+        if (now - completedTime > fiveMinutesMs) {
+          return false;
+        }
+      }
+      
+      // For recently completed jobs (< 5 minutes), keep showing as optimistic
+      // in case the data is still being processed
+      return true;
+    };
+
     // Create statuses from the latest jobs only
     const realStatuses = Array.from(latestJobsByRef.values()).map(
       (job: CitationJob) => ({
@@ -106,8 +130,7 @@ export function useCitationJobsManagement({
           job.status === 'RUNNING' ||
           job.status === 'PROCESSING' ||
           job.status === 'CREATED' ||
-          (job.status === 'COMPLETED' &&
-            !refsWithData.has(job.referenceNumber!)),
+          (job.status === 'COMPLETED' && shouldCompletedJobShowAsOptimistic(job)),
       })
     );
 
@@ -131,23 +154,39 @@ export function useCitationJobsManagement({
     selectedReference,
   ]);
 
-  // Clear optimistic refs when jobs appear
+  // Clear optimistic refs when jobs appear OR when they fail
   useEffect(() => {
     if (!activeSearchId || Object.keys(optimisticRefs).length === 0) return;
 
-    // Find which optimistic refs now have real jobs
+    const clearSpecificOptimisticRefs =
+      useCitationStore.getState().clearSpecificOptimisticRefs;
+
+    // Find which optimistic refs now have real jobs OR failed jobs
     const refsWithJobs: string[] = [];
+    const refsWithFailedJobs: string[] = [];
+    
     Object.keys(optimisticRefs).forEach(ref => {
-      if (allCitationJobs.some(job => job.referenceNumber === ref)) {
-        refsWithJobs.push(ref);
+      const job = allCitationJobs.find(job => job.referenceNumber === ref);
+      if (job) {
+        if (job.status === 'FAILED' || job.status === 'ERROR') {
+          refsWithFailedJobs.push(ref);
+        } else {
+          refsWithJobs.push(ref);
+        }
       }
     });
 
-    // Clear optimistic refs that now have real jobs
-    if (refsWithJobs.length > 0) {
-      const clearSpecificOptimisticRefs =
-        useCitationStore.getState().clearSpecificOptimisticRefs;
-      clearSpecificOptimisticRefs(activeSearchId, refsWithJobs);
+    // Clear optimistic refs that now have real jobs or failed
+    const refsToClean = [...refsWithJobs, ...refsWithFailedJobs];
+    if (refsToClean.length > 0) {
+      clearSpecificOptimisticRefs(activeSearchId, refsToClean);
+      
+      if (refsWithFailedJobs.length > 0) {
+        logger.warn('[useCitationJobsManagement] Cleared optimistic refs for failed jobs', {
+          failedRefs: refsWithFailedJobs,
+          activeSearchId,
+        });
+      }
     }
   }, [activeSearchId, optimisticRefs, allCitationJobs]);
 

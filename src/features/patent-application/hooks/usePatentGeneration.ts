@@ -1,12 +1,7 @@
-import { useState, useCallback } from 'react';
-import { useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import { useGeneratePatentMutation } from '@/hooks/api/useProjects';
-import { useQueryClient } from '@tanstack/react-query';
-import { patentKeys, projectKeys } from '@/lib/queryKeys';
-import { getProjectRelatedInvalidationKeys } from '@/lib/queryKeys';
-import { versionQueryKeys } from '@/lib/queryKeys/versionQueryKeys';
-import { draftQueryKeys } from '@/lib/queryKeys/draftQueryKeys';
 
 export interface UsePatentGenerationReturn {
   isGenerating: boolean;
@@ -15,100 +10,149 @@ export interface UsePatentGenerationReturn {
     versionName?: string,
     selectedRefs?: string[]
   ) => Promise<void>;
+  resetProgress: () => void;
+  setContentReady: () => void; // New function to signal content is ready
 }
 
 /**
- * Hook for patent generation - handles generating patent content and UI updates
- * Simplified to ensure proper UI refresh after generation
+ * Simplified patent generation hook that follows codebase patterns
+ * Uses React Query's built-in loading state and simple progress tracking
  */
 export const usePatentGeneration = (
   projectId: string
 ): UsePatentGenerationReturn => {
   const toast = useToast();
-  const queryClient = useQueryClient();
-  const [generationProgress, setGenerationProgress] = useState(0);
   const generateMutation = useGeneratePatentMutation();
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [isLoadingContent, setIsLoadingContent] = useState(false);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const maxTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      if (maxTimeoutRef.current) {
+        clearTimeout(maxTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const resetProgress = useCallback(() => {
+    setGenerationProgress(0);
+    setIsLoadingContent(false);
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    if (maxTimeoutRef.current) {
+      clearTimeout(maxTimeoutRef.current);
+      maxTimeoutRef.current = null;
+    }
+  }, []);
+
+  const setContentReady = useCallback(() => {
+    setIsLoadingContent(false);
+    setGenerationProgress(100);
+    // Clear the max timeout when content is ready
+    if (maxTimeoutRef.current) {
+      clearTimeout(maxTimeoutRef.current);
+      maxTimeoutRef.current = null;
+    }
+    // Clear the progress interval as well
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+  }, []);
 
   const handleGeneratePatent = useCallback(
     async (versionName?: string, selectedRefs?: string[]) => {
       try {
-        // Start progress
-        setGenerationProgress(10);
+        logger.info('[PatentGeneration] Starting generation', {
+          projectId,
+          versionName,
+          selectedRefs,
+        });
 
-        // Simulate progress updates
-        const progressInterval = setInterval(() => {
-          setGenerationProgress(prev => Math.min(prev + 10, 90));
-        }, 1000);
+        // Reset and immediately start progress to show loading state
+        setGenerationProgress(0);
+        setIsLoadingContent(true);
+
+        // Start progress simulation immediately for instant feedback
+        let currentProgress = 5; // Start at 5% immediately
+        setGenerationProgress(currentProgress);
+
+        progressIntervalRef.current = setInterval(() => {
+          currentProgress += Math.random() * 3 + 1; // Random increment 1-4%
+          if (currentProgress >= 95) {
+            currentProgress = 95; // Cap at 95% until complete
+            if (progressIntervalRef.current) {
+              clearInterval(progressIntervalRef.current);
+              progressIntervalRef.current = null;
+            }
+          }
+          setGenerationProgress(Math.round(currentProgress));
+        }, 800); // Update every 800ms for smooth progress
+
+        // Maximum timeout fallback - ensure we always complete after 60 seconds
+        maxTimeoutRef.current = setTimeout(() => {
+          logger.warn('[PatentGeneration] Maximum timeout reached, forcing completion');
+          setContentReady();
+        }, 60000); // 60 seconds maximum to account for slow API calls
 
         // Generate patent
-        const result = await generateMutation.mutateAsync({
+        await generateMutation.mutateAsync({
           projectId,
           versionName:
             versionName || `Patent v${new Date().toISOString().split('T')[0]}`,
           selectedRefs,
         });
 
-        // Clear progress interval
-        clearInterval(progressInterval);
-        setGenerationProgress(100);
+        // API call complete, but keep loading state until content is ready
+        // Progress stays at 95% until setContentReady is called
 
-        // Force refresh all project-related data
-        const keysToInvalidate = getProjectRelatedInvalidationKeys(projectId);
-        await Promise.all(
-          keysToInvalidate.map((key: readonly string[]) =>
-            queryClient.invalidateQueries({ queryKey: key })
-          )
+        logger.info(
+          '[PatentGeneration] API generation completed, waiting for content',
+          {
+            projectId,
+          }
         );
-
-        // Also invalidate version-specific queries
-        await queryClient.invalidateQueries({
-          queryKey: versionQueryKeys.all(projectId),
-        });
-        await queryClient.invalidateQueries({
-          queryKey: versionQueryKeys.latest(projectId),
-        });
-
-        // CRITICAL: Invalidate draft documents to ensure UI updates
-        await queryClient.invalidateQueries({
-          queryKey: draftQueryKeys.all(projectId),
-        });
-        
-        // Force refetch draft documents to ensure immediate UI update
-        await queryClient.refetchQueries({
-          queryKey: draftQueryKeys.all(projectId),
-          type: 'active',
-        });
-
-        // Show success message
-        toast({
-          title: 'Patent Generated Successfully',
-          description:
-            'Your patent application has been generated and is ready for review.',
-          status: 'success',
-          duration: 5000,
-        });
-
-        // Reset progress after a delay
-        setTimeout(() => {
-          setGenerationProgress(0);
-        }, 1000);
       } catch (error) {
-        logger.error('[Patent Generation] Failed:', error);
+        logger.error('[PatentGeneration] Generation failed', {
+          projectId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        // Clean up on error
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+        setGenerationProgress(0);
+        setIsLoadingContent(false);
+
         toast({
           title: 'Generation Failed',
-          description: 'Unable to generate patent. Please try again.',
+          description:
+            'Failed to generate patent application. Please try again.',
           status: 'error',
           duration: 5000,
         });
-        setGenerationProgress(0);
+
+        throw error;
       }
     },
-    [generateMutation, projectId, toast, queryClient]
+    [projectId, generateMutation, toast, setContentReady]
   );
 
   return {
-    isGenerating: generateMutation.isPending,
+    isGenerating: generateMutation.isPending || isLoadingContent,
     generationProgress,
     handleGeneratePatent,
+    resetProgress,
+    setContentReady,
   };
 };

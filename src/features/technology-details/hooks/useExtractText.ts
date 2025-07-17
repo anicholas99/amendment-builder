@@ -2,9 +2,8 @@
  * React Query hook for text extraction operations
  * Used in Technology Details feature for extracting text from uploaded files
  */
-import { useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
-import { showSuccessToast } from '@/utils/toast';
+import { useToast } from '@/utils/toast';
+import { logger } from '@/utils/clientLogger';
 import { useExtractTextMutation as useApiExtractTextMutation } from '@/hooks/api/useInvention';
 
 /**
@@ -17,7 +16,7 @@ export const useExtractText = () => {
   const extract = (file: File) => {
     return extractTextMutation.mutate(file, {
       onSuccess: (data, variables) => {
-        showSuccessToast(toast, 'Text extracted successfully');
+        toast.success('Text extracted successfully');
         logger.info('Text extracted from file', {
           fileName: variables.name,
         });

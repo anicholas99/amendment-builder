@@ -8,7 +8,6 @@
 
 import {
   environment,
-  logger,
   API_CONFIG,
   FEATURES,
   OPENAI_CONFIG,
@@ -18,7 +17,7 @@ import {
 import { API_ROUTES } from '../constants/apiRoutes';
 
 // Re-export environment configuration
-export { environment, logger, API_CONFIG, FEATURES, OPENAI_CONFIG, DB_CONFIG };
+export { environment, API_CONFIG, FEATURES, OPENAI_CONFIG, DB_CONFIG };
 
 // Application configuration
 export const config = {

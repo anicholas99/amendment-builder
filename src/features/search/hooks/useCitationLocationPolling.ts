@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { SearchApiService } from '@/client/services/search.client-service';
 
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { isApiError } from '@/types/safe-type-helpers';
 
 // Assuming TableCitationMatch interface is similar/compatible with API response

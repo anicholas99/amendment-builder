@@ -38,31 +38,31 @@ const securityHeaders = [
     {
       key: 'Content-Security-Policy',
       value: process.env.NODE_ENV === 'production' 
-        ? "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';"
-        : "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' data:; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com http://localhost:*; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';",
+        ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';"
+        : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com http://localhost:*; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';",
     }
   ] : process.env.CSP_MODE === 'report-only' ? [
     // Report-Only mode for testing strict CSP
     {
       key: 'Content-Security-Policy-Report-Only',
       value: process.env.NODE_ENV === 'production' 
-        ? "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; report-uri /api/csp-report;"
-        : "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' data:; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com http://localhost:*; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; report-uri /api/csp-report;",
+        ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; report-uri /api/csp-report;"
+        : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com http://localhost:*; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; report-uri /api/csp-report;",
     },
     // Keep existing permissive CSP while testing
     {
       key: 'Content-Security-Policy',
       value: process.env.NODE_ENV === 'production' 
-        ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss://; frame-ancestors 'none';"
-        : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self'; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss://;",
+        ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss://; frame-ancestors 'none';"
+        : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss://;",
     }
   ] : [
-    // Default: Current permissive CSP
+    // Default: Improved CSP - strict for scripts, permissive for styles
     {
       key: 'Content-Security-Policy',
       value: process.env.NODE_ENV === 'production' 
-        ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss://; frame-ancestors 'none';"
-        : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self'; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss://;",
+        ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';"
+        : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com http://localhost:*; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';",
     }
   ])
 ];
@@ -136,10 +136,6 @@ const nextConfig = {
     apiUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api',
     appEnv: process.env.NEXT_PUBLIC_APP_ENV || 'development',
   },
-
-  // Fix for node-cron and other Node.js-specific modules
-  // Note: This webpack config is still used even with Turbopack for certain edge cases
-  // The warning about "Webpack is configured while Turbopack is not" is just informational
   webpack: (config, { isServer }) => {
     // If it's a client-side bundle, add node-cron to the list of modules to not parse
     if (!isServer) {
@@ -168,5 +164,13 @@ const nextConfig = {
   },
 };
 
-// Export with Bundle Analyzer
-module.exports = withBundleAnalyzer(nextConfig);
+// Conditionally apply the bundle analyzer to avoid conflicts with Turbopack
+// and only apply webpack config if not using turbopack
+const finalConfig =
+  process.env.ANALYZE === 'true' ? withBundleAnalyzer(nextConfig) : nextConfig;
+
+if (process.argv.includes('--turbo')) {
+  delete finalConfig.webpack;
+}
+
+module.exports = finalConfig;

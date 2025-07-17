@@ -1,17 +1,19 @@
 import React from 'react';
 import {
-  Box,
   Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Text,
-  useColorModeValue,
-  Badge,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import {
   Tooltip,
-} from '@chakra-ui/react';
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { CoverageMatrix } from '../../../types/priorArtAnalysisTypes';
 
 interface CoverageMatrixTableProps {
@@ -35,30 +37,30 @@ const CoverageMatrixTable: React.FC<CoverageMatrixTableProps> = ({
     switch (value) {
       case 'Yes':
         return {
-          bg: useColorModeValue('red.100', 'red.800'),
-          color: useColorModeValue('red.800', 'red.100'),
+          className:
+            'bg-red-100 text-red-800 border-red-200 dark:bg-red-800 dark:text-red-100 dark:border-red-700',
           text: 'Yes',
           tooltipText: 'This element is fully disclosed in the reference',
         };
       case 'Partial':
         return {
-          bg: useColorModeValue('orange.100', 'orange.800'),
-          color: useColorModeValue('orange.800', 'orange.100'),
+          className:
+            'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-800 dark:text-orange-100 dark:border-orange-700',
           text: 'Partial',
           tooltipText:
             'This element is partially disclosed or has relevant teachings in the reference',
         };
       case 'No':
         return {
-          bg: useColorModeValue('green.100', 'green.800'),
-          color: useColorModeValue('green.800', 'green.100'),
+          className:
+            'bg-green-100 text-green-800 border-green-200 dark:bg-green-800 dark:text-green-100 dark:border-green-700',
           text: 'No',
           tooltipText: 'This element is not disclosed in the reference',
         };
       default:
         return {
-          bg: useColorModeValue('gray.100', 'gray.800'),
-          color: useColorModeValue('gray.800', 'gray.100'),
+          className:
+            'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700',
           text: 'Unknown',
           tooltipText: 'Unknown coverage status',
         };
@@ -68,70 +70,74 @@ const CoverageMatrixTable: React.FC<CoverageMatrixTableProps> = ({
   // Return placeholder if no data or empty matrix
   if (!coverageMatrix || elements.length === 0 || referenceIds.length === 0) {
     return (
-      <Box
-        p={4}
-        borderWidth="1px"
-        borderRadius="md"
-        bg={useColorModeValue('gray.50', 'gray.700')}
-      >
-        <Text fontSize="sm" color={useColorModeValue('gray.600', 'gray.400')}>
+      <div className="p-4 border rounded-md bg-muted">
+        <p className="text-sm text-muted-foreground">
           No coverage matrix data available.
-        </Text>
-      </Box>
+        </p>
+      </div>
     );
   }
 
   return (
-    <Box overflowX="auto" borderWidth="1px" borderRadius="md" shadow="sm">
-      <Table size="sm" variant="simple">
-        <Thead bg={useColorModeValue('gray.50', 'gray.700')}>
-          <Tr>
-            <Th width="40%">Claim Element</Th>
-            {referenceIds.map(refId => (
-              <Th
-                key={refId}
-                textAlign="center"
-                width={`${60 / referenceIds.length}%`}
-              >
-                {refId}
-              </Th>
-            ))}
-          </Tr>
-        </Thead>
-        <Tbody>
-          {elements.map(element => (
-            <Tr key={element}>
-              <Td>
-                <Text fontSize="xs">{element}</Text>
-              </Td>
-              {referenceIds.map(refId => {
-                // Get the coverage value or use 'No' as fallback if not specified
-                const coverageValue = coverageMatrix[element][refId] || 'No';
-                const { bg, color, text, tooltipText } = getBadgeProps(
-                  coverageValue as 'Yes' | 'Partial' | 'No'
-                );
+    <TooltipProvider>
+      <div className="overflow-x-auto border rounded-md shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted">
+              <TableHead className="w-[40%] font-medium">
+                Claim Element
+              </TableHead>
+              {referenceIds.map(refId => (
+                <TableHead
+                  key={refId}
+                  className="text-center font-medium"
+                  style={{ width: `${60 / referenceIds.length}%` }}
+                >
+                  {refId}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {elements.map(element => (
+              <TableRow key={element}>
+                <TableCell>
+                  <p className="text-xs">{element}</p>
+                </TableCell>
+                {referenceIds.map(refId => {
+                  // Get the coverage value or use 'No' as fallback if not specified
+                  const coverageValue = coverageMatrix[element][refId] || 'No';
+                  const { className, text, tooltipText } = getBadgeProps(
+                    coverageValue as 'Yes' | 'Partial' | 'No'
+                  );
 
-                return (
-                  <Td key={`${element}-${refId}`} textAlign="center">
-                    <Tooltip label={tooltipText} placement="top">
-                      <Badge
-                        px={2}
-                        py={1}
-                        borderRadius="full"
-                        bg={bg}
-                        color={color}
-                      >
-                        {text}
-                      </Badge>
-                    </Tooltip>
-                  </Td>
-                );
-              })}
-            </Tr>
-          ))}
-        </Tbody>
-      </Table>
-    </Box>
+                  return (
+                    <TableCell
+                      key={`${element}-${refId}`}
+                      className="text-center"
+                    >
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Badge
+                            variant="outline"
+                            className={`px-2 py-1 rounded-full ${className}`}
+                          >
+                            {text}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{tooltipText}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </TooltipProvider>
   );
 };
 

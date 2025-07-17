@@ -23,8 +23,6 @@ export const env = {
   // API
   RATE_LIMIT_WINDOW: environment.api.rateLimitWindow,
   MAX_REQUESTS_PER_WINDOW: environment.api.maxRequestsPerWindow,
-  API_KEY: environment.api.apiKey,
-  INTERNAL_API_KEY: environment.api.internalApiKey,
 
   // Auth
   AUTH0_SECRET: environment.auth.sessionSecret,

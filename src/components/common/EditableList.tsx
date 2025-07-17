@@ -1,15 +1,8 @@
 import React, { useState } from 'react';
-import {
-  VStack,
-  Flex,
-  Text,
-  Input,
-  IconButton,
-  Box,
-  Icon,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import { FiTrash2, FiPlus } from 'react-icons/fi';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Trash2, Plus } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import EditableField from './EditableField';
 
 interface EditableListProps {
@@ -28,9 +21,6 @@ const EditableList = ({
   fontSize = 'md',
 }: EditableListProps) => {
   const [newItem, setNewItem] = useState('');
-
-  const trashIconColor = useColorModeValue('gray.500', 'gray.400');
-  const trashIconHoverColor = useColorModeValue('red.500', 'red.400');
 
   const handleAddItem = () => {
     if (newItem.trim()) {
@@ -51,14 +41,28 @@ const EditableList = ({
     onChange(newItems);
   };
 
+  // Font size mapping
+  const getFontSizeClass = () => {
+    switch (fontSize) {
+      case 'sm':
+        return 'text-sm';
+      case 'md':
+        return 'text-base';
+      case 'lg':
+        return 'text-lg';
+      case 'xl':
+        return 'text-xl';
+      default:
+        return 'text-base';
+    }
+  };
+
   return (
-    <VStack align="stretch" spacing={1.5}>
+    <div className="flex flex-col gap-1.5">
       {items.map((item, index) => (
-        <Flex key={index} align="flex-start" height="32px">
-          <Text mr="8px" mt="4px" fontSize={fontSize}>
-            •
-          </Text>
-          <Box flex="1" minWidth="0">
+        <div key={index} className="flex items-start h-[32px]">
+          <span className={cn('mr-2 mt-1', getFontSizeClass())}>•</span>
+          <div className="flex-1 min-w-0">
             <EditableField
               value={item}
               onChange={value => handleUpdateItem(index, value)}
@@ -67,55 +71,53 @@ const EditableList = ({
               isTextarea={Boolean(item && item.length > 50)}
               isReadOnly={isReadOnly}
             />
-          </Box>
+          </div>
           {!isReadOnly && (
-            <IconButton
-              aria-label="Remove item"
-              icon={<Icon as={FiTrash2} />}
-              size="sm"
+            <Button
               variant="ghost"
+              size="sm"
+              className={cn(
+                'ml-2 h-8 w-8 p-0',
+                'text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400',
+                'transition-colors duration-150 ease-out'
+              )}
               onClick={() => handleRemoveItem(index)}
-              ml="8px"
-              color={trashIconColor}
-              _hover={{ color: trashIconHoverColor }}
-              transition="color 0.15s ease-out"
-            />
+              aria-label="Remove item"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           )}
-        </Flex>
+        </div>
       ))}
       {!isReadOnly && (
-        <Flex align="flex-start" height="32px">
-          <Text mr="8px" mt="4px" fontSize={fontSize}>
-            •
-          </Text>
-          <Box flex="1">
+        <div className="flex items-start h-[32px]">
+          <span className={cn('mr-2 mt-1', getFontSizeClass())}>•</span>
+          <div className="flex-1">
             <Input
               placeholder={placeholder}
               value={newItem}
               onChange={e => setNewItem(e.target.value)}
-              size="md"
-              minH="32px"
-              fontSize={fontSize}
-              w="100%"
+              className={cn('min-h-[32px] w-full', getFontSizeClass())}
               onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                 if (e.key === 'Enter') {
                   handleAddItem();
                 }
               }}
             />
-          </Box>
-          <IconButton
-            aria-label="Add item"
-            icon={<Icon as={FiPlus} />}
-            size="sm"
+          </div>
+          <Button
             variant="ghost"
+            size="sm"
+            className="ml-2 h-8 w-8 p-0"
             onClick={handleAddItem}
             disabled={!newItem.trim()}
-            ml="8px"
-          />
-        </Flex>
+            aria-label="Add item"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
       )}
-    </VStack>
+    </div>
   );
 };
 

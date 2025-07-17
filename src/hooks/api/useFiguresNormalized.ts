@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FigureApiService } from '@/services/api/figureApiService';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { queryKeys } from '@/config/reactQueryConfig';
 import { STALE_TIME } from '@/constants/time';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 
 /**
  * Hook to fetch figures with their elements using the normalized structure
@@ -115,8 +115,14 @@ export function useAddElementToFigure() {
       return FigureApiService.addElementToFigure(projectId, figureId, element);
     },
     onSuccess: (_, variables) => {
+      // Invalidate figures query to trigger immediate refetch
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.figures(variables.projectId),
+      });
+
+      // Invalidate project elements query for "All" view synchronization
+      queryClient.invalidateQueries({
+        queryKey: ['projects', variables.projectId, 'elements', 'all'],
       });
 
       toast({
@@ -168,8 +174,14 @@ export function useRemoveElementFromFigure() {
       );
     },
     onSuccess: (_, variables) => {
+      // Invalidate figures query to trigger immediate refetch
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.figures(variables.projectId),
+      });
+
+      // Invalidate project elements query for "All" view synchronization
+      queryClient.invalidateQueries({
+        queryKey: ['projects', variables.projectId, 'elements', 'all'],
       });
 
       toast({
@@ -224,8 +236,14 @@ export function useUpdateElementCallout() {
       });
     },
     onSuccess: (_, variables) => {
+      // Invalidate figures query to trigger immediate refetch
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.figures(variables.projectId),
+      });
+
+      // Invalidate project elements query for "All" view synchronization
+      queryClient.invalidateQueries({
+        queryKey: ['projects', variables.projectId, 'elements', 'all'],
       });
 
       toast({
@@ -274,8 +292,14 @@ export function useUpdateElementName() {
       return FigureApiService.updateElementName(projectId, elementKey, name);
     },
     onSuccess: (_, variables) => {
+      // Invalidate figures query to trigger immediate refetch
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.figures(variables.projectId),
+      });
+
+      // Invalidate project elements query for "All" view synchronization
+      queryClient.invalidateQueries({
+        queryKey: ['projects', variables.projectId, 'elements', 'all'],
       });
 
       toast({

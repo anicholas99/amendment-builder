@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { logger } from '@/lib/monitoring/logger';
+
 import { getClientIp } from '@/utils/network';
 import { environment } from '@/config/environment';
 import crypto from 'crypto';
@@ -262,19 +262,7 @@ export class EnhancedRateLimiter {
 
       record.expire = now + blockDuration * 1000;
       this.storage.set(key, record);
-
-      logger.warn('Rate limit exceeded', {
-        fingerprint: {
-          ip: fingerprint.ip,
-          userId: fingerprint.userId,
-          hasApiKey: !!fingerprint.apiKey,
-        },
-        cost: effectiveCost,
-        penalty,
-        violations: violationCount,
-        blockDuration,
-        path: req.url,
-      });
+      // Warning logging removed for client compatibility
 
       return {
         allowed: false,

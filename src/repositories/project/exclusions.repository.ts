@@ -1,5 +1,5 @@
 import { prisma } from '../../lib/prisma';
-import { logger } from '../../lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ProjectExclusionMetadata } from './types';
 
 /**

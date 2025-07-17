@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { useToast } from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
+import { useToast } from '@/hooks/useToastWrapper';
 import { InventionData } from '@/types';
 import { findClaimDependencies } from '../utils/validation';
 import { extractClaimPreamble, extractClaimType } from '../utils/analysis';
@@ -26,7 +26,7 @@ export const useClaimManagement = (
   // Handle changing a claim's text
   const handleClaimChange = useCallback(
     (claimNumber: string, text: string) => {
-      logger.log(
+      logger.info(
         `Updating claim ${claimNumber} with text (${text.length} chars)`
       );
 
@@ -74,7 +74,7 @@ export const useClaimManagement = (
   // Handle deleting a claim
   const handleDeleteClaim = useCallback(
     (claimNumber: string) => {
-      logger.log(`Deleting claim ${claimNumber}`);
+      logger.info(`Deleting claim ${claimNumber}`);
 
       if (!analyzedInvention) {
         logger.error('Cannot delete claim: No invention data available');
@@ -199,7 +199,7 @@ export const useClaimManagement = (
 
   // Handle adding a new claim (stub)
   const handleAddClaim = useCallback(() => {
-    logger.log('Adding new claim with text:', {
+    logger.info('Adding new claim with text:', {
       text: newClaimText,
       dependsOn: newClaimDependsOn,
     });
@@ -287,7 +287,7 @@ export const useClaimManagement = (
   // Handle inserting a new claim (stub)
   const handleInsertNewClaim = useCallback(
     (afterClaimNumber: string, text: string = '', dependsOn: string = '') => {
-      logger.log('Inserting new claim after claim', { afterClaimNumber });
+      logger.info('Inserting new claim after claim', { afterClaimNumber });
 
       if (!analyzedInvention) {
         logger.error('Cannot insert claim: No invention data available');

@@ -3,8 +3,8 @@
  * Handles conversion between database models and UI-ready types
  */
 
-import { logger } from '@/lib/monitoring/logger';
-import { safeJsonParse } from '@/utils/json-utils';
+import { logger } from '@/utils/clientLogger';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import {
   SavedCitationJob,
   SavedCitationMatch,
@@ -143,11 +143,7 @@ export function processCitationJob(
 export function processCitationMatch(
   raw: SavedCitationMatch
 ): ProcessedCitationMatch {
-  logger.debug('[processCitationMatch] Processing citation match', {
-    id: raw.id,
-    hasLocationData: !!raw.locationData,
-    hasReasoningScore: raw.reasoningScore !== null,
-  });
+  // Remove per-match debug logging - only log issues
 
   // Parse location data if present
   let parsedLocation: CitationLocation | null = null;
@@ -160,17 +156,9 @@ export function processCitationMatch(
     if (parsed && typeof parsed === 'object' && 'foundInAbstract' in parsed) {
       // It's valid location JSON
       parsedLocation = parsed as CitationLocation;
-      logger.debug('[processCitationMatch] Parsed location data as JSON', {
-        matchId: raw.id,
-        hasLocations: !!parsedLocation?.claimLocations?.length,
-      });
     } else {
       // It's a simple string like "Paragraph 30", keep it as is
       locationDataRaw = raw.locationData;
-      logger.debug('[processCitationMatch] Kept location data as string', {
-        matchId: raw.id,
-        locationData: locationDataRaw,
-      });
     }
   }
 
@@ -184,7 +172,7 @@ export function processCitationMatch(
     // Validate that reasoningScore is a valid number
     const scoreValue = Number(raw.reasoningScore);
     if (isNaN(scoreValue) || scoreValue < 0 || scoreValue > 1) {
-      logger.error('[processCitationMatch] Invalid reasoning score detected', {
+      logger.warn('[processCitationMatch] Invalid reasoning score detected', {
         matchId: raw.id,
         reasoningScore: raw.reasoningScore,
         scoreType: typeof raw.reasoningScore,
@@ -198,12 +186,6 @@ export function processCitationMatch(
         keyPoints: undefined, // We don't have this in the current schema
         timestamp: new Date(raw.updatedAt), // Use updatedAt as timestamp
       };
-      logger.debug('[processCitationMatch] Built reasoning data', {
-        matchId: raw.id,
-        hasReasoning: true,
-        scoreValue,
-        summaryLength: raw.reasoningSummary?.length || 0,
-      });
     }
   }
 
@@ -260,12 +242,6 @@ export function processCitationMatch(
     hasReasoning: !!parsedReasoning,
   };
 
-  logger.debug('[processCitationMatch] Successfully processed match', {
-    id: processed.id,
-    hasLocation: processed.hasLocation,
-    hasReasoning: processed.hasReasoning,
-  });
-
   return processed;
 }
 
@@ -281,16 +257,18 @@ export function processCitationJobArray(
     }
   >
 ): ProcessedCitationJob[] {
-  logger.debug('[processCitationJobArray] Processing job array', {
-    count: rawJobs.length,
-  });
+  // Only log summary information
+  if (rawJobs.length === 0) {
+    return [];
+  }
 
   const processedJobs: ProcessedCitationJob[] = [];
+  let errorCount = 0;
 
   for (const job of rawJobs) {
     try {
       if (!job) {
-        logger.warn('[processCitationJobArray] Skipping null/undefined job');
+        errorCount++;
         continue;
       }
 
@@ -303,18 +281,20 @@ export function processCitationJobArray(
         {
           jobId: job?.id || 'unknown',
           error: error instanceof Error ? error.message : 'Unknown error',
-          stack: error instanceof Error ? error.stack : undefined,
         }
       );
-      // Skip this job - don't add fake data
+      errorCount++;
     }
   }
 
-  logger.debug('[processCitationJobArray] Successfully processed jobs', {
-    inputCount: rawJobs.length,
-    outputCount: processedJobs.length,
-    skippedCount: rawJobs.length - processedJobs.length,
-  });
+  // Log summary only when there are issues or significant processing
+  if (errorCount > 0 || processedJobs.length > 10) {
+    logger.info('[processCitationJobArray] Processing summary', {
+      inputCount: rawJobs.length,
+      outputCount: processedJobs.length,
+      errorCount,
+    });
+  }
 
   return processedJobs;
 }
@@ -326,18 +306,18 @@ export function processCitationJobArray(
 export function processCitationMatchArray(
   rawMatches: SavedCitationMatch[]
 ): ProcessedCitationMatch[] {
-  logger.debug('[processCitationMatchArray] Processing match array', {
-    count: rawMatches.length,
-  });
+  // Only log summary information
+  if (rawMatches.length === 0) {
+    return [];
+  }
 
   const processedMatches: ProcessedCitationMatch[] = [];
+  let errorCount = 0;
 
   for (const match of rawMatches) {
     try {
       if (!match) {
-        logger.warn(
-          '[processCitationMatchArray] Skipping null/undefined match'
-        );
+        errorCount++;
         continue;
       }
 
@@ -350,18 +330,20 @@ export function processCitationMatchArray(
         {
           matchId: match?.id || 'unknown',
           error: error instanceof Error ? error.message : 'Unknown error',
-          stack: error instanceof Error ? error.stack : undefined,
         }
       );
-      // Skip this match - don't add fake data
+      errorCount++;
     }
   }
 
-  logger.debug('[processCitationMatchArray] Successfully processed matches', {
-    inputCount: rawMatches.length,
-    outputCount: processedMatches.length,
-    skippedCount: rawMatches.length - processedMatches.length,
-  });
+  // Log summary only when there are issues or significant processing
+  if (errorCount > 0 || processedMatches.length > 10) {
+    logger.info('[processCitationMatchArray] Processing summary', {
+      inputCount: rawMatches.length,
+      outputCount: processedMatches.length,
+      errorCount,
+    });
+  }
 
   return processedMatches;
 }
@@ -375,8 +357,7 @@ export function serializeCitationJob(
   resultsData?: string;
   deepAnalysisJson?: string;
 } {
-  logger.debug('[serializeCitationJob] Serializing job', { id: processed.id });
-
+  // Remove per-job debug logging
   const serialized: Partial<SavedCitationJob> & {
     resultsData?: string;
     deepAnalysisJson?: string;
@@ -412,10 +393,7 @@ export function serializeCitationJob(
 export function serializeCitationMatch(
   processed: ProcessedCitationMatch
 ): Partial<SavedCitationMatch> {
-  logger.debug('[serializeCitationMatch] Serializing match', {
-    id: processed.id,
-  });
-
+  // Remove per-match debug logging
   const serialized = {
     id: processed.id,
     searchHistoryId: processed.searchHistoryId,

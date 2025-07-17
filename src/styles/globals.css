@@ -1,8 +1,153 @@
 /* Import custom utility styles for CSP compliance */
 @import './scrollbar.css';
 @import './utilities.css';
+@import './animations.css';
 
-/* Global styles */
+/* Tailwind CSS Base */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Instant theme switching - Industry standard approach */
+/* Disable ALL transitions and animations during theme switch */
+html.theme-switching,
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+}
+
+/* Performance optimization: Use CSS containment */
+.theme-switching {
+  contain: style;
+}
+
+/* Optional: For ultra-smooth theme switching, you can use will-change */
+/* But only on the root element during switching */
+html.theme-switching {
+  will-change: color, background-color;
+}
+
+/* Layer for shadcn/ui components */
+@layer base {
+  :root {
+    /* shadcn/ui CSS variables - Light mode */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 221 83% 53%;
+    --radius: 0.5rem;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    /* Added Tailwind blue palette variables to fix invisible text in chat bubbles and other components */
+    --blue-400: 213 90% 66%; /* #60a5fa */
+    --blue-500: 213 100% 59%; /* #3b82f6 */
+    --blue-600: 213 90% 48%; /* #2563eb */
+  }
+
+  .dark {
+    /* shadcn/ui CSS variables - Dark mode */
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 221 83% 53%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    /* Dark mode blue palette */
+    --blue-400: 213 90% 66%; /* #60a5fa */
+    --blue-500: 213 100% 59%; /* #3b82f6 */
+    --blue-600: 213 90% 48%; /* #2563eb */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+/* Tooltip specific styles to prevent clipping */
+@layer components {
+  /* Ensure Radix UI tooltip portal content appears above everything with maximum z-index */
+  [data-radix-popper-content-wrapper] {
+    z-index: 99999 !important;
+    position: relative;
+  }
+
+  /* Tooltip content styling overrides with maximum z-index */
+  [data-radix-tooltip-content] {
+    z-index: 99999 !important;
+    position: relative !important;
+    pointer-events: none;
+    max-width: 300px;
+    word-wrap: break-word;
+  }
+
+  /* Force tooltip portal to have highest z-index */
+  [data-radix-tooltip-portal] {
+    z-index: 99999 !important;
+  }
+
+  /* Override any container overflow that might clip tooltips */
+  .tooltip-container {
+    position: relative;
+    z-index: auto;
+  }
+
+  /* Ensure all Radix UI portals have high z-index */
+  body > div[data-radix-portal] {
+    z-index: 99999 !important;
+  }
+
+  /* Additional tooltip portal overrides */
+  div[data-state][data-side][role='tooltip'] {
+    z-index: 99999 !important;
+  }
+}
+
+/* Global CSS Variables */
 :root {
   /* Layout dimensions - Single source of truth */
   --header-height: 50px;
@@ -18,82 +163,64 @@
     ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono',
     'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro',
     'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace;
+
+  /* Typography system */
+  --font-body:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial,
+    sans-serif;
+  --font-heading:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial,
+    sans-serif;
+  --font-patent: 'Times New Roman', Georgia, serif;
 }
 
-/* Base styles */
+/* Reset and Base Styles */
 * {
   box-sizing: border-box;
-  padding: 0;
-  margin: 0;
 }
 
 html,
 body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
   max-width: 100vw;
   overflow-x: hidden;
-  height: 100%;
+  overflow-y: hidden;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Helvetica,
+    Arial,
+    sans-serif;
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: #fff;
-}
+/* Body styles are now handled by Tailwind base layer above */
 
 a {
   color: inherit;
   text-decoration: none;
 }
 
-/* Dark mode preferences */
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+/* Root layout configuration */
+#__next,
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-/* Ensure proper scrolling */
+/* Scrollbar Styling - Custom scrollbar styles in scrollbar.css */
 .scrollable-content {
   overflow-y: auto;
   overflow-x: hidden;
   height: 100%;
 }
 
-/* Fix scrollbar behavior */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  width: 10px;
-  background: rgba(0, 0, 0, 0.05);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 24px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
-}
-
-/* Base styling for editor components */
-.DraftEditor-root {
-  background: white;
-  min-height: 1000px;
-  padding: 1rem;
-}
-
-.DraftEditor-editorContainer {
-  min-height: 1000px;
-}
-
-.public-DraftStyleDefault-block {
-  margin: 0.25em 0;
-}
-
-/* Text alignment classes */
+/* Text alignment utilities */
 .align-left {
   text-align: left;
 }
@@ -106,258 +233,359 @@ a {
   text-align: right;
 }
 
-/* Root layout configuration */
-html,
-body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  overflow: hidden;
-  font-family: var(--font-body);
+/* Editor Components */
+.DraftEditor-root {
+  background: hsl(var(--background));
+  min-height: 1000px;
+  padding: 1rem;
 }
 
-/* Force full-height flex layout */
-#__next,
-#root {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+.DraftEditor-editorContainer {
+  min-height: 1000px;
 }
 
-/* Default scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
+.public-DraftStyleDefault-block {
+  margin: 0.25em 0;
 }
 
-::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 24px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
-}
-
-/* Ensure proper scrolling */
-[role='tabpanel'] > div {
-  min-width: 100%;
-  min-height: min-content;
-  padding-bottom: 8px;
-}
-
-/* Fix scrollbar behavior */
-[role='tabpanel'] {
-  overflow-y: auto !important;
-  min-height: 0;
-}
-
-.chakra-tabs__tabpanel {
-  min-height: 0;
-  overflow-y: auto !important;
-}
-
-/* Standard scrollbars for any element with auto or scroll overflow */
-*[style*='overflow: auto'],
-*[style*='overflow: scroll'],
-*[style*='overflow-y: auto'],
-*[style*='overflow-y: scroll'] {
-  scrollbar-width: thin;
-  -ms-overflow-style: auto;
-}
-
-/* Hide default scrollbars except where needed */
-.view-layout-wrapper,
-[role='main'],
-[data-chakra-component='Grid'] {
-  /* overflow: hidden !important; */ /* Commented out to allow shadow visibility */
-}
-
-/* Remove unwanted scrollbars on main views */
-/* [data-page='claim-refinement'] {
-  overflow: hidden !important;
-} */
-
-/* Ensure the header is above the sidebar */
+/* Layout Components - Using shadcn/ui CSS variables */
 .app-header {
-  z-index: 100 !important;
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: none !important;
+  z-index: 100;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border));
 }
 
-/* Fix dark mode sidebar-header connection issue */
-.chakra-ui-dark .app-header {
-  background-color: var(--chakra-colors-gray-800) !important;
-}
-
-/* Add to fix sidebar position */
 .sidebar-wrapper {
   z-index: 15;
-  background-color: var(--chakra-colors-gray-800) !important;
-  margin-top: 0 !important;
-  border-top: none !important;
+  background: hsl(var(--card));
+  border-right: 1px solid hsl(var(--border));
 }
 
-/* Remove all gap-causing elements */
-body::after,
-body::before,
-.header-container::before,
-.header-container::after,
-header::before,
-header::after {
-  display: none !important;
-}
-
-/* Ensure main content always stays in light mode */
+/* Content area styling */
 .main-content {
-  background-color: white !important;
-  color: initial !important;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
 }
 
-/* Ensure icons in main content area are visible */
+/* Selection styling */
+::selection {
+  background-color: hsl(var(--primary) / 0.2);
+  color: hsl(var(--foreground));
+}
+
+/* Focus styles for accessibility */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Tab panel scrolling */
+[role='tabpanel'] {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* Icon visibility */
 .main-content svg {
   color: inherit;
 }
 
-/* Make sure action buttons are visible */
-.main-content [aria-label*='edit'] svg,
-.main-content [aria-label*='delete'] svg,
-.main-content [aria-label*='Edit'] svg,
-.main-content [aria-label*='Delete'] svg,
-.main-content [aria-label*='add'] svg,
-.main-content [aria-label*='trash'] svg {
-  color: inherit !important;
+/* Header avatar alignment */
+header .avatar {
+  margin: 0;
+  vertical-align: middle;
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
 }
 
-/* Ensure our Generate Claim 1 button has the correct styling */
-.main-content button[data-testid='generate-claim1-button'] {
-  background-color: #5b83d9 !important;
-  color: white !important;
-  border: none !important;
+/* Responsive utilities */
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 0px;
+  }
 }
 
-/* Ensure the SVG inside our button is white */
-.main-content button[data-testid='generate-claim1-button'] svg path {
-  stroke: white !important;
-  fill: none !important;
+/* Print styles */
+@media print {
+  .no-print {
+    display: none;
+  }
 }
 
-/* Fix specifically for generate buttons */
-.main-content
-  button:has(.chakra-button__icon):not([data-testid='generate-claim1-button']),
-.main-content
-  [role='button']:has(svg):not([data-testid='generate-claim1-button']) {
-  display: inline-flex;
-  align-items: center;
-  outline: revert !important;
-  border-style: revert !important;
+/* Animation preferences - Keep !important for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
-/* Ensure main Generate buttons have proper styling */
-.main-content button:has(svg[data-icon='refresh']),
-.main-content button:has(svg[data-icon='generate']) {
-  /* Force standard button appearance */
-  background-color: var(--chakra-colors-blue-500) !important;
-  color: white !important;
-  border-radius: var(--chakra-radii-md) !important;
-  padding: var(--chakra-space-2) var(--chakra-space-4) !important;
+/* Shimmer animation for progress bars */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
-/* Main content Generate buttons should have blue style */
-button[data-icon='refresh'],
-button[data-icon='refresh'] svg,
-.chakra-button:has(svg[data-icon='refresh']),
-button[aria-label*='Generate'],
-button[aria-label*='generate'] {
-  background-color: var(--chakra-colors-blue-500) !important;
-  color: white !important;
-  border-radius: var(--chakra-radii-md) !important;
-  border: none !important;
-  padding: 8px 16px !important;
-  cursor: pointer !important;
+.animate-shimmer {
+  animation: shimmer 2s linear infinite;
 }
 
-/* Base styling */
-:root {
-  --font-body: var(--chakra-fonts-body);
-  --font-heading: var(--chakra-fonts-heading);
-  --font-patent: var(--chakra-fonts-patent);
+/* Analyze button pulse-glow animation */
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 2px rgba(59, 130, 246, 0.1);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 4px rgba(59, 130, 246, 0.2);
+    transform: scale(1.005);
+  }
 }
 
-/* Fix user profile elements alignment in header */
-header .chakra-avatar,
-header .chakra-avatar + div,
-header .chakra-avatar + span,
-header [data-testid='user-menu'],
-header
-  [data-testid='user-menu']
-  > *:not([role='menu']):not(.chakra-menu__menu-list) {
-  display: inline-flex !important;
-  align-items: center !important;
-  vertical-align: middle !important;
+/* Shimmer effect for analyze button */
+@keyframes shimmer-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
-/* Allow dropdown menus to position correctly */
-header [data-testid='user-menu'] [role='menu'],
-header [data-testid='user-menu'] .chakra-menu__menu-list {
-  display: block !important;
-  position: fixed !important;
+/* Floating animation for ProcessingAnimation component */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
 }
 
-/* Specific fix for the user email display next to avatar */
-header .chakra-avatar + div,
-header .chakra-avatar ~ span,
-header [aria-label*='user'] + div,
-header span:has(+ .chakra-avatar),
-header [data-testid='user-email'],
-header [data-testid='user-name'] {
-  line-height: 1 !important;
-  height: 28px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  vertical-align: middle !important;
-  margin-left: 8px !important;
+.animate-float {
+  animation: float 3s ease-in-out infinite;
 }
 
-/* Fix the email dropdown button */
-header [aria-label*='user'] button,
-header .chakra-menu__menu-button:has(+ [role='menu']),
-header button:has([aria-label*='user']),
-header button:has(.chakra-avatar) {
-  display: inline-flex !important;
-  align-items: center !important;
-  height: 36px !important;
-  padding: 0 8px !important;
-  gap: 8px !important;
+/* Enhanced skeleton animations */
+@keyframes shimmer-enhanced {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
-/* Ensure the AN circle and text are aligned */
-header .chakra-avatar {
-  margin: 0 !important;
-  vertical-align: middle !important;
+@keyframes wave {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
-/* Set consistent sizing for user elements */
-header .chakra-avatar {
-  width: 32px !important;
-  height: 32px !important;
-  font-size: 14px !important;
+@keyframes pulse-enhanced {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
 }
 
-/* Create proper container for user elements */
-header > div > div:last-child,
-header [role='navigation'] > div:last-child {
-  display: flex !important;
-  align-items: center !important;
-  gap: 4px !important;
-  height: 36px !important;
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow: 0 0 5px hsl(var(--primary) / 0.2);
+  }
+  50% {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.4);
+  }
+}
+
+/* Animation classes */
+.animate-shimmer {
+  animation: shimmer-enhanced 2s linear infinite;
+}
+
+.animate-wave::after {
+  animation: wave 2s ease-in-out infinite;
+}
+
+.animate-pulse-enhanced {
+  animation: pulse-enhanced 1.5s ease-in-out infinite;
+}
+
+.glow-effect {
+  animation: glow 2s ease-in-out infinite;
+}
+
+/* Skeleton content placeholders */
+.skeleton-text {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 0%,
+    hsl(var(--muted) / 0.5) 50%,
+    hsl(var(--muted)) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-enhanced 1.5s ease-in-out infinite;
+}
+
+.skeleton-avatar {
+  background: radial-gradient(
+    circle,
+    hsl(var(--muted)) 0%,
+    hsl(var(--muted) / 0.3) 70%,
+    hsl(var(--muted)) 100%
+  );
+}
+
+.skeleton-card {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--card)) 0%,
+    hsl(var(--muted) / 0.3) 50%,
+    hsl(var(--card)) 100%
+  );
+  background-size: 200% 200%;
+  animation: shimmer-enhanced 2s ease-in-out infinite;
+}
+
+/* Patent generation animations */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeOutScale {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+/* Tailwind animation utilities */
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.fade-in {
+  animation-name: fadeIn;
+}
+
+.slide-in-from-top-2 {
+  --tw-enter-translate-y: -0.5rem;
+  animation-name: slideInFromTop;
+}
+
+.zoom-in-50 {
+  --tw-enter-scale: 0.5;
+  animation-name: zoomIn;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromTop {
+  from {
+    transform: translateY(var(--tw-enter-translate-y));
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes zoomIn {
+  from {
+    transform: scale(var(--tw-enter-scale));
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Smooth transitions for patent editor */
+.scale-102 {
+  transform: scale(1.02);
+}
+
+.blur-sm {
+  filter: blur(4px);
+}
+
+.blur-0 {
+  filter: blur(0);
+}
+
+.delay-300 {
+  animation-delay: 300ms;
+}
+
+.duration-300 {
+  animation-duration: 300ms;
+}
+
+.duration-500 {
+  animation-duration: 500ms;
+}
+
+.duration-700 {
+  animation-duration: 700ms;
+}
+
+.duration-1000 {
+  animation-duration: 1000ms;
 }

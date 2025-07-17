@@ -5,47 +5,38 @@ import React, {
   useCallback,
   useState,
 } from 'react';
-import {
-  Box,
-  Flex,
-  VStack,
-  Spinner,
-  Text,
-  Avatar,
-  useToast,
-  IconButton,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import ReactMarkdown, { Components } from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-// @ts-ignore
-import remarkBreaks from 'remark-breaks';
-import { FiCpu, FiChevronDown } from 'react-icons/fi';
+import { ChevronDown } from 'lucide-react';
+
+// Import shadcn/ui components
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 // Import types
 import { ChatInterfaceProps } from '../types';
 
 // Import components
-import { ChatHeader } from './ChatHeader';
 import { ChatInput } from './ChatInput';
 import { MessagesContainer } from './MessageList';
-import { ThinkingAnimation } from './ThinkingAnimation';
-import { ClaimRevisionDiff } from './ClaimRevisionDiff';
 import { ClaimReferenceLink } from './ClaimReferenceLink';
 import { MemoizedMarkdownRenderer } from './MemoizedMarkdownRenderer';
+import { LoadingState } from '@/components/common/LoadingState';
+import { UploadedDocuments } from './UploadedDocuments';
 
 // Import hooks
 import { useChatHistory } from '../hooks/useChatHistory';
 import { useChatStream } from '../hooks/useChatStream';
 import { useMarkdownConfig } from '../hooks/useMarkdownConfig';
+import { useTimeout } from '@/hooks/useTimeout';
+import { useUploadPatentFile } from '@/hooks/api/useUploadPatentFile';
+import { useToast } from '@/hooks/useToastWrapper';
+import { useSessionDocuments } from '@/hooks/api/useSessionDocuments';
+import { useLinkedDocuments } from '@/hooks/api/useLinkedDocuments';
 
 // Import utilities
-import { getAssistantInfo, formatPatentClaim } from '../utils/chatHelpers';
+import { getAssistantInfo } from '../utils/chatHelpers';
 
-// Import animations (only keeping ones still in use)
-import { fadeInUp, subtlePulse } from '../styles/animations';
-
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 // Add instance counter outside component
 let chatInstanceCounter = 0;
@@ -60,10 +51,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   // Create unique instance ID
   const _instanceId = useRef(++chatInstanceCounter);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const _toast = useToast();
+  const lastAssistantRef = useRef<HTMLDivElement>(null);
 
   // Scroll state management
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [shouldScrollUserMessage, setShouldScrollUserMessage] = useState(false);
+  const lastMessageCountRef = useRef(0);
+
+  // File upload integration
+  const uploadPatentFile = useUploadPatentFile();
+  const toast = useToast();
+  const [uploadingFileName, setUploadingFileName] = useState<string | null>(
+    null
+  );
 
   // Get assistant info based on page context
   const assistantInfo = useMemo(
@@ -71,14 +71,38 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     [pageContext]
   );
 
+  // Create stable session ID for this chat instance
+  const chatSessionId = useRef(
+    `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  );
+
+  // Fetch documents for this session
+  const { data: sessionDocuments = [], refetch: refetchDocuments } =
+    useSessionDocuments(projectId, chatSessionId.current);
+
+  // Fetch linked documents
+  const { data: linkedDocuments = [] } = useLinkedDocuments(projectId);
+
+  // Combine all available documents
+  const allDocuments = useMemo(() => {
+    const docsMap = new Map();
+
+    // Add linked documents first (they persist across sessions)
+    linkedDocuments.forEach(doc =>
+      docsMap.set(doc.id, { ...doc, source: 'linked' })
+    );
+
+    // Add session documents (may override linked ones if same ID)
+    sessionDocuments.forEach(doc =>
+      docsMap.set(doc.id, { ...doc, source: 'session' })
+    );
+
+    return Array.from(docsMap.values());
+  }, [sessionDocuments, linkedDocuments]);
+
   // Use custom hooks
-  const {
-    messages,
-    loadingHistory,
-    clearChat,
-    sendMessage,
-    isAssistantTyping,
-  } = useChatHistory(projectId, pageContext, projectData);
+  const { messages, loadingHistory, sendMessage, isAssistantTyping } =
+    useChatHistory(projectId, pageContext, projectData);
 
   const { handleSendMessage, cleanup } = useChatStream({
     projectId,
@@ -87,6 +111,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     onContentUpdate,
     sendMessage,
     messages,
+    sessionId: chatSessionId.current,
   });
 
   // isStreaming is always false now
@@ -100,13 +125,81 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   // Track if this is the initial load to avoid smooth scrolling animation
   const isInitialLoad = useRef(true);
-  const previousMessageCount = useRef(0);
+
+  // Handle file upload for chat context
+  const handleFileSelect = useCallback(
+    async (file: File) => {
+      if (!projectId) {
+        toast.error({
+          title: 'No project selected',
+          description: 'Please select a project before uploading files',
+        });
+        return;
+      }
+
+      // Set uploading state
+      setUploadingFileName(file.name);
+
+      try {
+        const result = await uploadPatentFile.mutateAsync({
+          projectId,
+          file,
+          linkToProject: false, // Session-only by default for chat
+          fileType: 'uploaded-doc',
+          sessionId: chatSessionId.current, // Use stable session ID
+        });
+
+        // Refetch documents to show the new one
+        await refetchDocuments();
+
+        // Notify user that file is available for chat
+        toast.success({
+          title: 'Document ready',
+          description: `"${file.name}" is now available in this chat session`,
+        });
+
+        // Send a message to acknowledge the upload
+        handleSendMessage(
+          `I've uploaded "${file.name}" for reference. You can now ask me questions about it.`,
+          [],
+          null
+        );
+      } catch (error) {
+        toast.error({
+          title: 'Upload failed',
+          description:
+            error instanceof Error
+              ? error.message
+              : 'Failed to upload document',
+        });
+      } finally {
+        setUploadingFileName(null);
+      }
+    },
+    [projectId, uploadPatentFile, toast, handleSendMessage, refetchDocuments]
+  );
+
+  // Handle document click - send a message asking about it
+  const handleDocumentClick = useCallback(
+    (doc: { title: string; patentNumber: string }) => {
+      const documentName = doc.title || doc.patentNumber;
+      handleSendMessage(`Tell me about "${documentName}"`, [], null);
+    },
+    [handleSendMessage]
+  );
+
+  // Initialize the ref with actual message count after messages is available
+  useEffect(() => {
+    if (lastMessageCountRef.current === 0 && messages.length > 0) {
+      lastMessageCountRef.current = messages.length;
+    }
+  }, [messages.length]);
 
   // Check if user is at bottom of chat
   const checkIfAtBottom = useCallback(() => {
     const container = messagesContainerRef.current;
     if (container) {
-      const threshold = 100; // pixels from bottom
+      const threshold = 10; // consider within 10px of the bottom as "at bottom"
       const isAtBottomNow =
         container.scrollHeight - container.scrollTop - container.clientHeight <
         threshold;
@@ -114,7 +207,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, []);
 
-  // Scroll to bottom function
+  // Modified scroll to bottom function
   const scrollToBottom = useCallback((smooth = true) => {
     const container = messagesContainerRef.current;
     if (container) {
@@ -126,68 +219,164 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, []);
 
-  // Scroll to bottom with retry mechanism for visibility
-  const scrollToBottomWhenVisible = useCallback(
-    (forceInstant: boolean = false) => {
-      const attemptScroll = () => {
-        if (messagesContainerRef.current) {
-          const container = messagesContainerRef.current;
-          const isVisible = container.offsetParent !== null;
-          const hasHeight = container.scrollHeight > 0;
+  // Ensure the chat view scrolls to the bottom immediately after a user message
+  const handleSendMessageWrapper = useCallback(
+    (content: string) => {
+      // Mark that we need to position the just-sent user message
+      setShouldScrollUserMessage(true);
 
-          if (isVisible && hasHeight) {
-            // Use the new scroll function
-            scrollToBottom(!forceInstant);
-
-            // Update the previous message count
-            previousMessageCount.current = messages.length;
-
-            // Mark that initial load is complete
-            if (isInitialLoad.current && !loadingHistory) {
-              isInitialLoad.current = false;
-            }
-
-            return true;
-          }
-        }
-        return false;
-      };
-
-      // Try immediately first
-      if (attemptScroll()) return;
-
-      // If not ready, retry with increasing delays
-      let attempts = 0;
-      const maxAttempts = 10;
-      const retryScroll = () => {
-        attempts++;
-
-        if (attemptScroll()) {
-          return;
-        }
-
-        if (attempts < maxAttempts) {
-          setTimeout(retryScroll, attempts * 50); // 50ms, 100ms, 150ms, etc.
-        } else {
-          logger.debug('[ChatInterface] Gave up scrolling after max attempts');
-        }
-      };
-
-      setTimeout(retryScroll, 50);
+      // Send the message (synchronous state update in our hook)
+      handleSendMessage(content, [], null);
     },
-    [messages.length, loadingHistory, scrollToBottom]
+    [handleSendMessage]
   );
 
+  // Watch for new user message and scroll it up
   useEffect(() => {
-    scrollToBottomWhenVisible();
-  }, [messages.length, isAssistantTyping, scrollToBottomWhenVisible]);
+    // Check if we have a new message and we're expecting to scroll
+    if (
+      messages.length > lastMessageCountRef.current &&
+      shouldScrollUserMessage
+    ) {
+      const container = messagesContainerRef.current;
+      if (!container) return;
 
-  // Scroll to bottom when messages finish loading - force instant scroll
-  useEffect(() => {
-    if (!loadingHistory) {
-      scrollToBottomWhenVisible(true); // Force instant scroll when loading completes
+      // Use requestAnimationFrame to ensure DOM has painted
+      requestAnimationFrame(() => {
+        const messageElements = Array.from(
+          container.querySelectorAll('[data-message-index]')
+        ) as HTMLElement[];
+        // Find the most recent user message element by traversing from the end
+        const userMessageElement = [...messageElements]
+          .reverse()
+          .find(el => el.getAttribute('data-role') === 'user');
+
+        if (userMessageElement) {
+          // Reset flag first
+          setShouldScrollUserMessage(false);
+
+          // Calculate position to scroll message near the top
+          const containerRect = container.getBoundingClientRect();
+          const elementRect = userMessageElement.getBoundingClientRect();
+          const currentScrollTop = container.scrollTop;
+          const elementOffsetFromContainerTop =
+            elementRect.top - containerRect.top;
+          const targetScrollTop =
+            currentScrollTop + elementOffsetFromContainerTop - 20; // 20px from top for padding
+
+          logger.debug('[ChatInterface] Scrolling user message up', {
+            targetScrollTop,
+            currentScrollTop,
+          });
+
+          container.scrollTo({
+            top: Math.max(0, targetScrollTop),
+            behavior: 'smooth',
+          });
+
+          // Update isAtBottom state after scroll
+          // We'll use useTimeout after setting up the state
+          requestAnimationFrame(() => {
+            // Set a flag to run the timeout
+            setShouldCheckBottom(true);
+          });
+        }
+      });
     }
-  }, [loadingHistory, scrollToBottomWhenVisible]);
+
+    lastMessageCountRef.current = messages.length;
+  }, [messages, shouldScrollUserMessage, checkIfAtBottom]);
+
+  // Add state for timeout-based bottom check
+  const [shouldCheckBottom, setShouldCheckBottom] = useState(false);
+
+  // Use useTimeout for delayed bottom check
+  useTimeout(
+    () => {
+      if (shouldCheckBottom) {
+        checkIfAtBottom();
+        setShouldCheckBottom(false);
+      }
+    },
+    shouldCheckBottom ? 300 : null
+  );
+
+  // ChatGPT-style scrolling for assistant messages
+  useEffect(() => {
+    if (messages.length === 0 || shouldScrollUserMessage) return;
+
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.role === 'assistant' && isAtBottom) {
+      // Use setTimeout directly instead of storing function in state
+      // eslint-disable-next-line no-restricted-globals
+      const scrollTimer = setTimeout(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+
+        // Find all assistant message elements
+        const messageElements = container.querySelectorAll(
+          '[data-role="assistant"]'
+        );
+        const lastAssistantElement = messageElements[
+          messageElements.length - 1
+        ] as HTMLElement;
+
+        if (lastAssistantElement) {
+          // Calculate the position of the assistant message relative to the container
+          const containerRect = container.getBoundingClientRect();
+          const elementRect = lastAssistantElement.getBoundingClientRect();
+
+          // Calculate how much to scroll to put the message at the top of the container
+          const currentScrollTop = container.scrollTop;
+          const elementOffsetFromContainerTop =
+            elementRect.top - containerRect.top;
+          const targetScrollTop =
+            currentScrollTop + elementOffsetFromContainerTop - 20; // 20px padding
+
+          logger.debug('[ChatInterface] Scrolling assistant message', {
+            currentScrollTop,
+            elementOffsetFromContainerTop,
+            targetScrollTop,
+          });
+
+          // Scroll only within the container
+          container.scrollTo({
+            top: targetScrollTop,
+            behavior: 'smooth',
+          });
+        }
+      }, 200); // 200ms delay for DOM to update
+
+      // Cleanup timer on unmount or when dependencies change
+      return () => clearTimeout(scrollTimer);
+    }
+  }, [messages, shouldScrollUserMessage, isAtBottom]);
+
+  // Simplified scroll to bottom when visible
+  const scrollToBottomWhenVisible = useCallback(
+    (forceInstant: boolean = false) => {
+      // Don't auto-scroll if we're about to scroll a user message
+      if (shouldScrollUserMessage) {
+        return;
+      }
+
+      const container = messagesContainerRef.current;
+      if (!container) return;
+
+      const isVisible = container.offsetParent !== null;
+      const hasHeight = container.scrollHeight > 0;
+
+      if (isVisible && hasHeight) {
+        scrollToBottom(!forceInstant);
+
+        // Mark that initial load is complete
+        if (isInitialLoad.current && !loadingHistory) {
+          isInitialLoad.current = false;
+        }
+      }
+    },
+    [loadingHistory, scrollToBottom, shouldScrollUserMessage]
+  );
 
   // Use MutationObserver to detect when the component becomes visible
   useEffect(() => {
@@ -205,7 +394,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
     // Create observer to watch for visibility changes
     const observer = new MutationObserver(() => {
-      scrollToBottomWhenVisible(true); // Force instant scroll when visibility changes
+      // DISABLED: Conflicting with ChatGPT-style scrolling
+      // if (!shouldScrollUserMessage) {
+      //   scrollToBottomWhenVisible(true);
+      // }
     });
 
     // Start observing the parent element for style changes
@@ -218,14 +410,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       });
     }
 
-    // Initial scroll - force instant
-    scrollToBottomWhenVisible(true);
-
     return () => {
       container.removeEventListener('scroll', handleScroll);
       observer.disconnect();
     };
-  }, [scrollToBottomWhenVisible, checkIfAtBottom]);
+  }, [scrollToBottomWhenVisible, checkIfAtBottom, shouldScrollUserMessage]);
 
   // --- Auto-scroll while streaming ------------------------------------------------
   useEffect(() => {
@@ -235,18 +424,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     let prevHeight = container.scrollHeight;
     const ResizeObs = (window as any).ResizeObserver;
     if (!ResizeObs) {
-      return; // Older browsers – skip auto-scroll enhancement
+      return;
     }
 
     const observer = new ResizeObs((entries: any[]) => {
       const entry = entries[0];
-      const newHeight = entry.contentRect ? entry.contentRect.height : container.scrollHeight;
+      const newHeight = entry.contentRect
+        ? entry.contentRect.height
+        : container.scrollHeight;
       if (newHeight !== prevHeight) {
         prevHeight = newHeight;
-        // If user was already at bottom, keep them pinned to bottom
-        if (isAtBottom) {
-          scrollToBottom(false);
-        }
+        // Only auto-scroll during streaming if user is at bottom and not handling user message
+        // Removed unused isScrollable variable
+        // DISABLED: Conflicting with ChatGPT-style scrolling
+        // if (isAtBottom && container.scrollHeight > container.clientHeight && !shouldScrollUserMessage) {
+        //   scrollToBottom(false);
+        // }
       }
     });
 
@@ -254,95 +447,114 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     return () => {
       observer.disconnect();
     };
-  }, [isAtBottom, scrollToBottom]);
+  }, [isAtBottom, scrollToBottom, shouldScrollUserMessage]);
 
   // Cleanup on unmount
   useEffect(() => {
     return cleanup;
   }, [cleanup]);
 
-  // Memoized format patent claim text function
-  const formatPatentClaimMemo = useCallback((text: string) => {
-    return text.replace(/([;,])\s*/g, '$1\n');
-  }, []);
+  // Memoized format patent claim text function - only format actual patent claims
+  const formatPatentClaimMemo = useCallback(
+    (text: string) => {
+      // Only format text that is clearly a patent claim
+      if (pageContext === 'claim-refinement' && /^Claim\s+\d+:\s*/.test(text)) {
+        // Apply patent claim formatting only to actual claims
+        return text.replace(/([;,])\s*/g, '$1\n');
+      }
+      // Return text unchanged for all other cases
+      return text;
+    },
+    [pageContext]
+  );
 
   // Process claim references before markdown
-  const processClaimReferences = useCallback((text: string): React.ReactNode[] => {
-    const claimRefPattern = /\b(claim\s+(\d+))\b/gi;
-    const parts: React.ReactNode[] = [];
-    let lastIndex = 0;
-    let match;
-    let keyIndex = 0;
+  const processClaimReferences = useCallback(
+    (text: string): React.ReactNode[] => {
+      const claimRefPattern = /\b(claim\s+(\d+))\b/gi;
+      const parts: React.ReactNode[] = [];
+      let lastIndex = 0;
+      let match;
+      let keyIndex = 0;
 
-    while ((match = claimRefPattern.exec(text)) !== null) {
-      // Add text before the match
-      if (match.index > lastIndex) {
+      while ((match = claimRefPattern.exec(text)) !== null) {
+        // Add text before the match
+        if (match.index > lastIndex) {
+          parts.push(
+            <React.Fragment key={`text-${keyIndex++}`}>
+              {text.slice(lastIndex, match.index)}
+            </React.Fragment>
+          );
+        }
+
+        // Add the claim reference link
+        const claimNumber = parseInt(match[2]);
+        parts.push(
+          <ClaimReferenceLink
+            key={`claim-${keyIndex++}`}
+            claimNumber={claimNumber}
+            projectId={projectId}
+            onClick={num => {
+              // Could navigate to claim editor or show in modal
+              logger.info('[ChatInterface] Claim reference clicked', {
+                claimNumber: num,
+              });
+            }}
+          />
+        );
+
+        lastIndex = match.index + match[0].length;
+      }
+
+      // Add remaining text
+      if (lastIndex < text.length) {
         parts.push(
           <React.Fragment key={`text-${keyIndex++}`}>
-            {text.slice(lastIndex, match.index)}
+            {text.slice(lastIndex)}
           </React.Fragment>
         );
       }
 
-      // Add the claim reference link
-      const claimNumber = parseInt(match[2]);
-      parts.push(
-        <ClaimReferenceLink
-          key={`claim-${keyIndex++}`}
-          claimNumber={claimNumber}
-          projectId={projectId}
-          onClick={(num) => {
-            // Could navigate to claim editor or show in modal
-            logger.info('[ChatInterface] Claim reference clicked', { claimNumber: num });
-          }}
-        />
-      );
-
-      lastIndex = match.index + match[0].length;
-    }
-
-    // Add remaining text
-    if (lastIndex < text.length) {
-      parts.push(
-        <React.Fragment key={`text-${keyIndex++}`}>
-          {text.slice(lastIndex)}
-        </React.Fragment>
-      );
-    }
-
-    return parts.length > 0 ? parts : [text];
-  }, [projectId]);
+      return parts.length > 0 ? parts : [text];
+    },
+    [projectId]
+  );
 
   // Custom text component that processes claim references
-  const MarkdownComponentsWithClaims = useMemo(() => ({
-    ...MarkdownComponents,
-    p: ({ children }: any) => {
-      const processedChildren = React.Children.map(children, (child) => {
-        if (typeof child === 'string') {
-          return processClaimReferences(child);
-        }
-        return child;
-      });
+  const MarkdownComponentsWithClaims = useMemo(
+    () => ({
+      ...MarkdownComponents,
+      p: ({ children }: any) => {
+        const processedChildren = React.Children.map(children, child => {
+          if (typeof child === 'string') {
+            return processClaimReferences(child);
+          }
+          return child;
+        });
 
-      return (
-        <Text mb={4} lineHeight="1.7" fontSize="sm" whiteSpace="pre-wrap">
-          {processedChildren}
-        </Text>
-      );
-    },
-    text: ({ children }: any) => {
-      if (typeof children === 'string') {
-        return <>{processClaimReferences(children)}</>;
-      }
-      return children;
-    },
-    // Preserve the code handler from MarkdownComponents for Mermaid support
-    code: MarkdownComponents.code,
-  }), [MarkdownComponents, processClaimReferences]);
+        return (
+          <p className="mb-2 leading-relaxed text-sm">{processedChildren}</p>
+        );
+      },
+      text: ({ children }: any) => {
+        if (typeof children === 'string') {
+          return <>{processClaimReferences(children)}</>;
+        }
+        return children;
+      },
+      // Preserve the code handler from MarkdownComponents for Mermaid support
+      code: MarkdownComponents.code,
+    }),
+    [MarkdownComponents, processClaimReferences]
+  );
 
   // Memoized render dual content function
   const renderDualContent = useCallback(
-    (content: string, isStreamingThisMessage: boolean, justCompleted?: boolean) => {
+    (
+      content: string,
+      isStreamingThisMessage: boolean,
+      justCompleted?: boolean
+    ) => {
       return (
         <MemoizedMarkdownRenderer
           content={content}
@@ -350,132 +562,97 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           pageContext={pageContext}
           projectId={projectId}
           formatPatentClaim={formatPatentClaimMemo}
-          MarkdownComponentsWithClaims={MarkdownComponentsWithClaims as Components}
+          MarkdownComponentsWithClaims={MarkdownComponentsWithClaims as any}
           justCompleted={justCompleted}
         />
       );
     },
-    [pageContext, projectId, formatPatentClaimMemo, MarkdownComponentsWithClaims]
+    [
+      pageContext,
+      projectId,
+      formatPatentClaimMemo,
+      MarkdownComponentsWithClaims,
+    ]
   );
 
-  // Handle refresh
-  const handleRefresh = useCallback(() => {
-    window.location.reload();
-  }, []);
-
-  // Handle send message wrapper
-  const handleSendMessageWrapper = useCallback(
-    (content: string) => {
-      // The new handleSendMessage doesn't need messages or setMessages
-      handleSendMessage(content, [], null);
-    },
-    [handleSendMessage]
-  );
+  // Show loading state while chat is initializing
+  if (loadingHistory) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <LoadingState
+          variant="spinner"
+          size="lg"
+          message="Loading chat history..."
+        />
+      </div>
+    );
+  }
 
   return (
-    <Box height="100%" display="flex" flexDirection="column" bg="bg.primary">
-      {/* Header */}
-      <ChatHeader
-        assistantInfo={assistantInfo}
-        onRefresh={handleRefresh}
-        onClearChat={clearChat}
-      />
-
+    <div className="h-full flex flex-col bg-background">
       {/* Messages Container */}
-      <Box
-        ref={messagesContainerRef}
-        flex="1"
-        overflowY="auto"
-        p={4}
-        className="thin-scrollbar"
-      >
-        {loadingHistory ? (
-          <Flex justify="center" align="center" height="100%">
-            <Spinner size="lg" thickness="4px" color="blue.500" />
-          </Flex>
-        ) : (
-          <VStack spacing={4} align="stretch">
+      <ScrollArea className="flex-1 px-3 md:px-4 py-4">
+        <div
+          ref={messagesContainerRef}
+          className="h-full overflow-y-auto"
+          style={{
+            scrollbarWidth: 'thin',
+            msOverflowStyle: 'auto',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
+          <div className="space-y-4">
             <MessagesContainer
               messages={messages}
               isStreaming={isStreaming}
               markdownComponents={MarkdownComponents}
               renderDualContent={renderDualContent}
               assistantInfoColor={assistantInfo.color}
-              markdownTextColor="text.primary"
+              markdownTextColor="text-primary"
+              lastAssistantRef={lastAssistantRef}
             />
 
-            {/* Enhanced thinking indicator with smooth transitions */}
-            {isAssistantTyping && !messages.some((m: any) => m.isStreaming) && (
-              <Box
-                animation={`${fadeInUp} 0.3s ease-out`}
-                style={{
-                  willChange: 'transform, opacity',
-                  backfaceVisibility: 'hidden',
-                }}
-              >
-                <Flex align="flex-start" gap={3}>
-                  <Avatar
-                    size="sm"
-                    bg="blue.500"
-                    icon={<FiCpu />}
-                    flexShrink={0}
-                  />
-                  <Box
-                    bg="bg.card"
-                    p={4}
-                    borderRadius="lg"
-                    border="1px solid"
-                    borderColor="border.primary"
-                    animation={`${subtlePulse} 2s ease-in-out infinite`}
-                    maxW="85%"
-                    style={{
-                      willChange: 'opacity',
-                      backfaceVisibility: 'hidden',
-                      transform: 'translateZ(0)',
-                    }}
-                  >
-                    <ThinkingAnimation color={assistantInfo.color} />
-                  </Box>
-                </Flex>
-              </Box>
-            )}
-          </VStack>
-        )}
+            {/* Spacer to ensure there's always room to scroll messages up */}
+            <div className="h-[60vh]" aria-hidden="true" />
+          </div>
 
-        {/* Scroll-to-bottom button */}
-        {!isAtBottom && !loadingHistory && (
-          <IconButton
-            aria-label="Scroll to bottom"
-            icon={<FiChevronDown />}
-            position="absolute"
-            bottom={4}
-            right={4}
-            size="sm"
-            borderRadius="full"
-            bg={useColorModeValue('white', 'gray.700')}
-            color={useColorModeValue('gray.600', 'gray.300')}
-            _hover={{
-              bg: useColorModeValue('gray.100', 'gray.600'),
-              transform: 'translateY(-2px)',
-            }}
-            boxShadow="0 2px 8px rgba(0, 0, 0, 0.15)"
-            transition="all 0.2s ease"
-            onClick={() => scrollToBottom(true)}
-            zIndex={2}
-          />
-        )}
+          {/* Scroll-to-bottom button */}
+          {!isAtBottom && !loadingHistory && (
+            <Button
+              variant="secondary"
+              size="icon"
+              className={cn(
+                'fixed bottom-4 right-4 w-8 h-8 rounded-full shadow-lg z-10',
+                'hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200'
+              )}
+              onClick={() => scrollToBottom(true)}
+            >
+              <ChevronDown className="w-4 h-4" />
+            </Button>
+          )}
 
-        {/* Scroll anchor */}
-        <div ref={messagesEndRef} />
-      </Box>
+          {/* Scroll anchor */}
+          <div ref={messagesEndRef} />
+        </div>
+      </ScrollArea>
+
+      {/* Uploaded Documents */}
+      <UploadedDocuments
+        documents={allDocuments}
+        isUploading={uploadPatentFile.isPending || !!uploadingFileName}
+        uploadingFileName={uploadingFileName || undefined}
+        onDocumentClick={handleDocumentClick}
+      />
 
       {/* Input Container */}
       <ChatInput
         onSendMessage={handleSendMessageWrapper}
         isAssistantTyping={isAssistantTyping}
         assistantColor={assistantInfo.color}
+        onFileSelect={handleFileSelect}
+        isUploadingFile={uploadPatentFile.isPending}
       />
-    </Box>
+    </div>
   );
 };
 

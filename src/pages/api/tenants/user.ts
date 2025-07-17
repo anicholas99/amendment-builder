@@ -1,5 +1,5 @@
 import { NextApiResponse } from 'next';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { CustomApiRequest } from '@/types/api';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { throwUnauthorized } from '@/middleware/errorHandling';
@@ -9,8 +9,9 @@ import {
   TenantResult,
 } from '../../../repositories/tenantRepository';
 import { AuthenticatedRequest } from '@/types/middleware';
-import { safeJsonParse } from '@/utils/json-utils';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { safeJsonParse } from '@/utils/jsonUtils';
+import { SecurePresets } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // No request body needed for this GET-only endpoint
 interface EmptyBody {}
@@ -50,7 +51,7 @@ const handler = async (
     logger.warn(`User ${userId} has no tenant associations`);
   }
 
-  return res.status(200).json({ tenants });
+  return res.status(200).json({ tenants }); // REVERT: Keep original format for frontend compatibility
 };
 
 // Use the user-private preset as this returns data specific to the authenticated user

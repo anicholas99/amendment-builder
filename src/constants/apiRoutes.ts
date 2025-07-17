@@ -26,6 +26,7 @@ export const API_ROUTES = {
     PREFERENCES: {
       ACTIVE_PROJECT: '/api/user/preferences/activeProject',
       ACTIVE_DOCUMENT: '/api/user/preferences/activeDocument',
+      UI: '/api/user/preferences/ui',
     },
     PRIVACY: '/api/users/privacy',
   },
@@ -78,6 +79,8 @@ export const API_ROUTES = {
     UPDATE_FIELD: (id: string) => `/api/projects/${id}/update-field`,
     GENERATE_APPLICATION_SECTIONS: (id: string) =>
       `/api/projects/${id}/generate-application-sections`,
+    REGENERATE_SECTION: (id: string) =>
+      `/api/projects/${id}/regenerate-section`,
 
     // Project features
     EXCLUSIONS: (projectId: string) => `/api/projects/${projectId}/exclusions`,
@@ -127,26 +130,25 @@ export const API_ROUTES = {
 
     // New claims-specific routes under projects
     CLAIMS: {
-      UPDATE: (projectId: string, claimId: string) =>
-        `/api/projects/${projectId}/claims/${claimId}`,
       LIST: (projectId: string) => `/api/projects/${projectId}/claims`,
-      PARSE: (projectId: string) => `/api/projects/${projectId}/claims/parse`,
-      GENERATE_QUERIES: (projectId: string) =>
-        `/api/projects/${projectId}/claims/queries`,
-      GENERATE_DEPENDENT: (projectId: string) =>
-        `/api/projects/${projectId}/claims/generate-dependent`,
+      CREATE: (projectId: string) => `/api/projects/${projectId}/claims`,
+      UPDATE: (claimId: string) => `/api/claims/${claimId}`,
+      DELETE: (claimId: string) => `/api/claims/${claimId}`,
+      RENUMBER: (claimId: string) => `/api/claims/${claimId}/renumber`,
+      INSERT: (projectId: string) => `/api/projects/${projectId}/claims/insert`,
+      BATCH_INSERT: (projectId: string) =>
+        `/api/projects/${projectId}/claims/batch-insert`,
+      BATCH_UPDATE: (projectId: string) =>
+        `/api/projects/${projectId}/claims/batch-update`,
+      UPDATE_NUMBER: (claimId: string) => `/api/claims/${claimId}/number`,
+      VERSIONS: '/api/claims/versions',
       GENERATE_CLAIM1: (projectId: string) =>
         `/api/projects/${projectId}/claims/generate-claim1`,
-      MIRROR: (projectId: string) =>
-        `/api/projects/${projectId}/claims/mirror`,
-
-      // V2 endpoints for migration
-      V2: {
-        PARSE: (projectId: string) =>
-          `/api/projects/${projectId}/claims/parse/v2`,
-        GENERATE_QUERIES: (projectId: string) =>
-          `/api/projects/${projectId}/claims/queries/v2`,
-      },
+      PARSE: (projectId: string) =>
+        `/api/projects/${projectId}/claims/parse/v2`,
+      GENERATE_QUERIES: (projectId: string) =>
+        `/api/projects/${projectId}/claims/queries/v2`,
+      MIRROR: (projectId: string) => `/api/projects/${projectId}/claims/mirror`,
     },
 
     // Versions
@@ -172,6 +174,9 @@ export const API_ROUTES = {
     // Search history for a project
     SEARCH_HISTORY: (projectId: string) =>
       `/api/projects/${projectId}/search-history`,
+
+    // Claim version tracking
+    CLAIM_HASH: (projectId: string) => `/api/projects/${projectId}/claim-hash`,
   },
 
   // ============ SEARCH & HISTORY ============
@@ -180,7 +185,6 @@ export const API_ROUTES = {
     CREATE: '/api/search-history',
     LIST: '/api/search-history',
     ASYNC_SEARCH: '/api/search-history/async-search',
-    UPDATE: '/api/search-history/update',
     FOR_VERSION: '/api/search-history/for-version',
     CLEAR: '/api/search-history/clear',
 
@@ -215,7 +219,8 @@ export const API_ROUTES = {
     BY_ID: (id: string) => `/api/citation-jobs/${id}`,
     STATUS: (id: string) => `/api/citation-jobs/${id}/status`,
     DEEP_ANALYSIS: (id: string) => `/api/citation-jobs/${id}/deep-analysis`,
-  },
+    REFRESH: (id: string) => `/api/citation-jobs/${id}/refresh`,
+  } as const,
 
   CITATION_MATCHES: {
     BY_SEARCH: '/api/citation-matches/by-search',
@@ -232,15 +237,11 @@ export const API_ROUTES = {
 
   // ============ CLAIMS ============
   CLAIMS: {
-    // Legacy routes (being moved under projects)
-    // PARSE: '/api/parse-claim', // MOVED to PROJECTS.CLAIMS.PARSE
-    // GENERATE_CLAIM1: '/api/ai/generate-claim1', // MOVED to PROJECTS.CLAIMS.GENERATE_CLAIM1
     GENERATE_QUERIES: '/api/generate-queries',
     GENERATE_SUGGESTIONS: '/api/generate-suggestions',
     GENERATE_DEPENDENT: '/api/generate-dependent-claims',
     DETAILS: (claimId: string) => `/api/claims/${claimId}`,
-    HISTORY: (claimId: string) => `/api/claims/${claimId}/history`,
-    HISTORY_BATCH: '/api/claims/history/batch',
+    VERSIONS: '/api/claims/versions',
   },
 
   // ============ PRIOR ART ============
@@ -256,6 +257,18 @@ export const API_ROUTES = {
     COMBINED_ANALYSES_BY_SEARCH: (searchHistoryId: string) =>
       `/api/combined-analyses/${searchHistoryId}`,
     GENERATE_FIGURE_DETAILS: '/api/ai/generate-figure-details',
+
+    // AI Audit endpoints
+    AUDIT: {
+      LOGS: '/api/ai-audit/logs',
+      LOG_BY_ID: (auditLogId: string) => `/api/ai-audit/logs/${auditLogId}`,
+      MARK_REVIEWED: (auditLogId: string) =>
+        `/api/ai-audit/logs/${auditLogId}/review`,
+      EXPORT: (projectId: string) => `/api/ai-audit/export/${projectId}`,
+      EXPORT_DOWNLOAD: (projectId: string) =>
+        `/api/ai-audit/export/${projectId}/download`,
+      STATS: (projectId: string) => `/api/ai-audit/stats/${projectId}`,
+    },
   },
 
   // ANALYZE section removed - no longer needed

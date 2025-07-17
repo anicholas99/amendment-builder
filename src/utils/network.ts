@@ -1,6 +1,6 @@
 import { NextApiRequest } from 'next';
 import { IncomingMessage } from 'http';
-import { environment } from '@/config/environment';
+import { isDevelopment, isProduction } from '@/config/environment.client';
 
 /**
  * Gets the client IP address from various request headers
@@ -56,8 +56,7 @@ export function getOrigin(req: NextApiRequest | any): string {
   const host = req.headers.host;
   if (host) {
     const protocol =
-      req.headers['x-forwarded-proto'] ||
-      (environment.isProduction ? 'https' : 'http');
+      req.headers['x-forwarded-proto'] || (isProduction ? 'https' : 'http');
     return `${protocol}://${host}`;
   }
 
@@ -78,5 +77,5 @@ export function getProtocol(req?: IncomingMessage): string {
     }
   }
 
-  return environment.isProduction ? 'https' : 'http';
+  return isProduction ? 'https' : 'http';
 }

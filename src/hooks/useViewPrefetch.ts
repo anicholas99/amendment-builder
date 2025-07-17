@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 /**
  * Hook to prefetch lazy-loaded view components

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Button, Heading, Progress, Text, Stack } from '@chakra-ui/react';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 
 interface AnalysisControlsPanelProps {
   isAnalyzing: boolean;
@@ -32,73 +33,62 @@ export const AnalysisControlsPanel: React.FC<AnalysisControlsPanelProps> = ({
     selectedReferenceNumbers.length === 0;
 
   return (
-    <Box>
+    <div>
       <Button
-        colorScheme="blue"
         size="lg"
         onClick={onAnalyze}
-        isLoading={isAnalyzing}
-        isDisabled={isDisabled}
-        mb={2}
+        disabled={isDisabled}
+        className="mb-2"
       >
-        Analyze Selected References ({selectedReferenceNumbers.length})
+        {isAnalyzing
+          ? 'Analyzing...'
+          : `Analyze Selected References (${selectedReferenceNumbers.length})`}
       </Button>
 
       {hasAnalysisData && (
         <Button
-          colorScheme="gray"
           variant="outline"
-          size="md"
+          size="default"
           onClick={onReAnalyze}
-          isLoading={isAnalyzing}
-          isDisabled={isDisabled}
-          ml={3}
+          disabled={isDisabled}
+          className="ml-3"
         >
-          Re-run Analysis
+          {isAnalyzing ? 'Analyzing...' : 'Re-run Analysis'}
         </Button>
       )}
 
       {isAnalyzing ? (
-        <Box>
-          <Heading size="sm" mb={2}>
-            Analyzing...
-          </Heading>
-          <Progress
-            value={analysisProgress}
-            hasStripe
-            isAnimated
-            colorScheme="blue"
-            size="sm"
-            mb={3}
-          />
-          <Text fontSize="sm" color="gray.500">
+        <div>
+          <h3 className="text-base font-medium mb-2">Analyzing...</h3>
+          <Progress value={analysisProgress} className="mb-3" />
+          <p className="text-sm text-muted-foreground">
             This may take up to 30 seconds to complete analysis.
-          </Text>
-          <Stack direction="column" spacing={4} mt={4}>
-            <Text fontSize="sm" color="gray.600">
+          </p>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
               The analysis includes:
-            </Text>
-            <Text fontSize="sm" color="gray.500">
+            </p>
+            <p className="text-sm text-muted-foreground">
               • Novelty assessment against each reference
-            </Text>
-            <Text fontSize="sm" color="gray.500">
+            </p>
+            <p className="text-sm text-muted-foreground">
               • Non-obviousness evaluation (§103)
-            </Text>
-            <Text fontSize="sm" color="gray.500">
+            </p>
+            <p className="text-sm text-muted-foreground">
               • Risk profiling and mitigation strategies
-            </Text>
-          </Stack>
-        </Box>
+            </p>
+          </div>
+        </div>
       ) : (
         (!claim1Text || selectedReferenceNumbers.length === 0) &&
         selectedSearchId && (
-          <Text fontSize="sm" color="gray.500" mt={2}>
+          <p className="text-sm text-muted-foreground mt-2">
             {!claim1Text
               ? 'Please ensure Claim 1 is written before analysis'
               : 'Please select at least one reference to analyze'}
-          </Text>
+          </p>
         )
       )}
-    </Box>
+    </div>
   );
 };

@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { logger } from '@/lib/monitoring/logger';
 
 /**
  * Schemas for Patentability Score JSON Blobs
@@ -66,7 +65,7 @@ export function parseElementAnalysis(
     const parsed = JSON.parse(jsonString);
     return ElementAnalysisArraySchema.parse(parsed);
   } catch (error) {
-    logger.error('Failed to parse element analysis:', error);
+    // Error logging removed for client compatibility
     return null;
   }
 }
@@ -85,7 +84,7 @@ export function parseOverlapMatrix(
     const parsed = JSON.parse(jsonString);
     return OverlapMatrixSchema.parse(parsed);
   } catch (error) {
-    logger.error('Failed to parse overlap matrix:', error);
+    // Error logging removed for client compatibility
     return null;
   }
 }
@@ -104,7 +103,7 @@ export function parseRecommendations(
     const parsed = JSON.parse(jsonString);
     return RecommendationsArraySchema.parse(parsed);
   } catch (error) {
-    logger.error('Failed to parse recommendations:', error);
+    // Error logging removed for client compatibility
     return null;
   }
 }
@@ -124,7 +123,7 @@ export function stringifyElementAnalysis(
     const validated = ElementAnalysisArraySchema.parse(analysis);
     return JSON.stringify(validated);
   } catch (error) {
-    logger.error('Failed to stringify element analysis:', error);
+    // Error logging removed for client compatibility
     return null;
   }
 }
@@ -144,7 +143,7 @@ export function stringifyOverlapMatrix(
     const validated = OverlapMatrixSchema.parse(matrix);
     return JSON.stringify(validated);
   } catch (error) {
-    logger.error('Failed to stringify overlap matrix:', error);
+    // Error logging removed for client compatibility
     return null;
   }
 }
@@ -164,7 +163,7 @@ export function stringifyRecommendations(
     const validated = RecommendationsArraySchema.parse(recommendations);
     return JSON.stringify(validated);
   } catch (error) {
-    logger.error('Failed to stringify recommendations:', error);
+    // Error logging removed for client compatibility
     return null;
   }
 }

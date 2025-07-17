@@ -1,7 +1,7 @@
 import { NextApiResponse, NextApiRequest } from 'next';
 import { z } from 'zod';
 import { CustomApiRequest } from '@/types/api';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { AuthenticatedRequest } from '@/types/middleware';
 import {
   getUserPreference,
@@ -14,7 +14,8 @@ import {
   findProjectByIdForTenantUser,
   getProjectTenantId,
 } from '../../../repositories/project';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Validation schema for PUT request
 const putBodySchema = z.object({
@@ -58,7 +59,7 @@ const baseHandler = async (
           tenantId
         );
         if (preferredProject) {
-          return res.status(200).json({
+          return apiResponse.ok(res, {
             activeProjectId: activeProjectIdPreference,
           });
         }
@@ -76,11 +77,11 @@ const baseHandler = async (
       );
 
       if (!recentProjectId) {
-        return res.status(200).json({ activeProjectId: null });
+        return apiResponse.ok(res, { activeProjectId: null });
       }
 
       // Return the project ID of the most recent project
-      return res.status(200).json({
+      return apiResponse.ok(res, {
         activeProjectId: recentProjectId,
       });
 
@@ -119,7 +120,7 @@ const baseHandler = async (
         );
       }
 
-      return res.status(200).json({ success: true });
+      return apiResponse.ok(res, { success: true });
 
     case 'DELETE':
       // Remove the active project preference using repository
@@ -129,7 +130,7 @@ const baseHandler = async (
         `Removed active project preference for user ${userId} if it existed.`
       );
 
-      return res.status(200).json({ success: true });
+      return apiResponse.ok(res, { success: true });
 
     default:
       res.setHeader('Allow', ['GET', 'PUT', 'DELETE']);
@@ -144,18 +145,8 @@ const baseHandler = async (
 const activeProjectTenantResolver = async (
   req: AuthenticatedRequest
 ): Promise<string | null> => {
-  // For GET requests, use user's tenant (read-only)
-  if (req.method === 'GET') {
-    return req.user?.tenantId || null;
-  }
-
-  // For PUT requests, resolve from the project being set as active
-  if (req.method === 'PUT' && req.body?.activeProjectId) {
-    const project = await getProjectTenantId(req.body.activeProjectId);
-    return project?.tenantId || null;
-  }
-
-  // For DELETE requests, use the user's current tenant
+  // For all methods, use the user's tenant since this is a user preference
+  // The user should only be able to set projects from their current tenant as active
   return req.user?.tenantId || null;
 };
 

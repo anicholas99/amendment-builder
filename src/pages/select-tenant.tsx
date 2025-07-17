@@ -1,31 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import {
-  Box,
-  Center,
-  VStack,
-  Heading,
-  Text,
-  Button,
-  SimpleGrid,
-  Card,
-  CardBody,
-  useColorModeValue,
-  Spinner,
-} from '@chakra-ui/react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTenant } from '@/contexts/TenantContext';
-import { logger } from '@/lib/monitoring/logger';
-import { saveLastSelectedTenant } from '@/utils/tenantPreferences';
+import { logger } from '@/utils/clientLogger';
+import { MinimalSpinner } from '@/components/common/MinimalSpinner';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function SelectTenant() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { userTenants, isLoading: tenantsLoading } = useTenant();
   const [isSelecting, setIsSelecting] = useState(false);
-
-  // Use theme colors for better dark mode support
-  const spinnerColor = useColorModeValue('blue.500', 'blue.400');
 
   useEffect(() => {
     // If not authenticated, redirect to login
@@ -34,8 +20,11 @@ export default function SelectTenant() {
       return;
     }
 
+    // Don't process tenant logic while still loading
+    if (tenantsLoading) return;
+
     // If user has only one tenant, auto-redirect
-    if (!tenantsLoading && userTenants && userTenants.length === 1) {
+    if (userTenants && userTenants.length === 1) {
       handleTenantSelect(userTenants[0].slug);
     }
   }, [user, authLoading, userTenants, tenantsLoading]);
@@ -44,10 +33,8 @@ export default function SelectTenant() {
     setIsSelecting(true);
 
     try {
-      // Save the selected tenant as user preference
-      saveLastSelectedTenant(tenantSlug);
-
-      // Redirect to the tenant's projects page
+      // Navigate directly without saving preference
+      // Tenant context is determined by URL, not stored preferences
       await router.push(`/${tenantSlug}/projects`);
     } catch (error) {
       logger.error('Failed to select tenant:', error);
@@ -55,96 +42,78 @@ export default function SelectTenant() {
     }
   };
 
-  // Loading state
-  if (authLoading || tenantsLoading || isSelecting) {
+  const isLoading = authLoading || tenantsLoading || isSelecting;
+
+  if (isLoading) {
     return (
-      <Center height="100vh" bg="bg.primary">
-        <VStack spacing={4}>
-          <Spinner size="xl" color={spinnerColor} />
-          <Text color="text.primary">Loading organizations...</Text>
-        </VStack>
-      </Center>
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background">
+        <MinimalSpinner
+          size="md"
+          message={isSelecting ? 'Switching organizations...' : undefined}
+        />
+      </div>
     );
   }
 
   // No tenants
   if (!userTenants || userTenants.length === 0) {
     return (
-      <Center height="100vh" bg="bg.primary">
-        <VStack spacing={4}>
-          <Heading size="lg" color="text.primary">
-            No Organizations
-          </Heading>
-          <Text color="text.primary">
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="space-y-4 text-center">
+          <h1 className="text-2xl font-bold">No Organizations</h1>
+          <p className="text-muted-foreground">
             You don't have access to any organizations.
-          </Text>
-          <Text fontSize="sm" color="text.secondary">
+          </p>
+          <p className="text-sm text-muted-foreground">
             Please contact your administrator for access.
-          </Text>
-        </VStack>
-      </Center>
+          </p>
+        </div>
+      </div>
     );
   }
 
   // Multiple tenants - show selector
   return (
-    <Center minHeight="100vh" bg="bg.primary" py={8}>
-      <Box maxW="800px" w="full" px={4}>
-        <VStack spacing={8}>
-          <VStack spacing={2}>
-            <Heading size="xl" color="text.primary">
-              Select Organization
-            </Heading>
-            <Text color="text.secondary">
+    <div className="flex min-h-screen items-center justify-center bg-background py-8">
+      <div className="w-full max-w-3xl px-4">
+        <div className="space-y-8">
+          <div className="space-y-2 text-center">
+            <h1 className="text-3xl font-bold">Select Organization</h1>
+            <p className="text-muted-foreground">
               Choose the organization you want to work with
-            </Text>
-          </VStack>
+            </p>
+          </div>
 
-          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} w="full">
+          <div className="grid gap-4 md:grid-cols-2">
             {userTenants.map(tenant => (
               <Card
                 key={tenant.id}
-                cursor="pointer"
+                className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg"
                 onClick={() => handleTenantSelect(tenant.slug)}
-                bg="bg.card"
-                borderWidth="1px"
-                borderColor="border.light"
-                boxShadow="md"
-                _hover={{
-                  bg: 'bg.hover',
-                  transform: 'translateY(-2px)',
-                  boxShadow: 'lg',
-                  borderColor: 'border.primary',
-                }}
-                transition="all 0.2s"
               >
-                <CardBody>
-                  <VStack align="start" spacing={2}>
-                    <Heading size="md" color="text.primary">
-                      {tenant.name}
-                    </Heading>
-                    <Text fontSize="sm" color="text.secondary">
+                <CardContent className="p-6">
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold">{tenant.name}</h3>
+                    <p className="text-sm text-muted-foreground">
                       {tenant.slug}
-                    </Text>
-                  </VStack>
-                </CardBody>
+                    </p>
+                  </div>
+                </CardContent>
               </Card>
             ))}
-          </SimpleGrid>
+          </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push('/api/auth/logout')}
-            color="text.primary"
-            _hover={{
-              bg: 'bg.hover',
-            }}
-          >
-            Sign out
-          </Button>
-        </VStack>
-      </Box>
-    </Center>
+          <div className="text-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push('/api/auth/logout')}
+            >
+              Sign out
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

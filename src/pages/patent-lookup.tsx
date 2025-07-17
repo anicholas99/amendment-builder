@@ -1,27 +1,22 @@
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import {
-  Box,
-  Button,
-  VStack,
-  Heading,
-  Input,
-  Text,
-  Divider,
-  Container,
-  useToast,
-  Flex,
   Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Badge,
-  Spinner,
-  Textarea,
-} from '@chakra-ui/react';
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import ViewLayout from '../components/layouts/ViewLayout';
+import { LoadingState } from '@/components/common/LoadingState';
 import { useBulkPatentLookup } from '@/hooks/api/usePatentLookup';
+import { useToast } from '@/hooks/useToastWrapper';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 /**
  * Patent Bulk Lookup Page
@@ -29,12 +24,14 @@ import { useBulkPatentLookup } from '@/hooks/api/usePatentLookup';
  * This page allows looking up multiple patents at once using PatBase.
  */
 export default function PatentLookup() {
+  const { isDarkMode } = useThemeContext();
   const [patentReferences, setPatentReferences] = useState(
     'US20150148005A1\nUS9467515B1\nUS73404388B2'
   );
 
   // React Query hook
   const patentLookup = useBulkPatentLookup();
+  const toast = useToast();
 
   // Clean patent reference numbers
   const cleanPatentNumbers = (inputText: string): string[] => {
@@ -68,7 +65,6 @@ export default function PatentLookup() {
 
     if (references.length === 0) {
       // Use manual toast for validation error
-      const toast = useToast();
       toast({
         title: 'Validation Error',
         description: 'Please enter at least one patent reference number',
@@ -85,115 +81,154 @@ export default function PatentLookup() {
 
   // Header content for ViewLayout
   const header = (
-    <Flex justify="space-between" align="center" px={8} py={4}>
-      <Heading size="lg">Patent Bulk Lookup</Heading>
-    </Flex>
+    <div className="flex justify-between items-center px-8 py-4">
+      <h1 className="text-2xl font-semibold">Patent Bulk Lookup</h1>
+    </div>
   );
 
   // Main content for ViewLayout
   const mainContent = (
-    <Container maxW="100%" p={5} h="100%" overflowY="auto">
-      <VStack spacing={8} align="stretch">
+    <div className="container max-w-full p-4 h-full overflow-y-auto">
+      <div className="space-y-8">
         {patentLookup.error && (
-          <Box p={4} bg="red.100" borderRadius="md">
-            <Text color="red.800">{patentLookup.error.message}</Text>
-          </Box>
+          <div className="p-4 bg-red-100 dark:bg-red-900/20 rounded-md">
+            <p className="text-red-800 dark:text-red-200">
+              {patentLookup.error.message}
+            </p>
+          </div>
         )}
 
         {/* Patent References Input */}
-        <Box p={5} borderWidth="1px" borderRadius="lg" bg="bg.card">
-          <Heading size="md" mb={4}>
-            Bulk Patent Lookup
-          </Heading>
-          <Text mb={4}>
+        <div
+          className={cn(
+            'p-4 border rounded-lg',
+            isDarkMode
+              ? 'bg-gray-800 border-gray-700'
+              : 'bg-white border-gray-200'
+          )}
+        >
+          <h2 className="text-lg font-semibold mb-4">Bulk Patent Lookup</h2>
+          <p
+            className={cn(
+              'mb-4',
+              isDarkMode ? 'text-gray-300' : 'text-gray-600'
+            )}
+          >
             Enter patent reference numbers (one per line or comma-separated) to
             retrieve details from PatBase.
-          </Text>
+          </p>
 
-          <VStack spacing={4} align="stretch" mb={4}>
+          <div className="space-y-4 mb-4">
             <Textarea
               value={patentReferences}
               onChange={e => setPatentReferences(e.target.value)}
               placeholder="Enter patent numbers (e.g., US9467515B1)"
               rows={5}
+              className={cn(
+                isDarkMode ? 'bg-gray-900 border-gray-600' : 'bg-white'
+              )}
             />
 
             <Button
-              colorScheme="blue"
+              className="w-full"
               onClick={lookupPatents}
-              isLoading={patentLookup.isPending}
-              width="full"
+              disabled={patentLookup.isPending}
             >
-              Lookup Patents
+              {patentLookup.isPending ? (
+                <>
+                  <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Looking up...
+                </>
+              ) : (
+                'Lookup Patents'
+              )}
             </Button>
-          </VStack>
-        </Box>
+          </div>
+        </div>
 
-        <Divider />
+        <Separator />
 
         {/* Results Table */}
         {(patentLookup.isPending || patentLookup.data) && (
-          <Box p={5} borderWidth="1px" borderRadius="lg" bg="bg.card">
-            <Heading size="md" mb={4}>
-              Results
-            </Heading>
+          <div
+            className={cn(
+              'p-4 border rounded-lg',
+              isDarkMode
+                ? 'bg-gray-800 border-gray-700'
+                : 'bg-white border-gray-200'
+            )}
+          >
+            <h2 className="text-lg font-semibold mb-4">Results</h2>
 
             {patentLookup.isPending ? (
-              <Flex justify="center" align="center" direction="column" py={8}>
-                <Spinner size="xl" mb={4} />
-                <Text>Looking up patent details...</Text>
-              </Flex>
+              <LoadingState
+                variant="spinner"
+                message="Looking up patent details..."
+                minHeight="200px"
+              />
             ) : patentLookup.data ? (
-              <Box overflowX="auto">
-                <Table variant="simple">
-                  <Thead>
-                    <Tr>
-                      <Th>Patent Number</Th>
-                      <Th>Title</Th>
-                      <Th>Date</Th>
-                      <Th>Assignee</Th>
-                      <Th>Status</Th>
-                    </Tr>
-                  </Thead>
-                  <Tbody>
-                    {patentLookup.data.results.map((result, index) => (
-                      <Tr key={index}>
-                        <Td>
-                          <Text fontWeight="normal">
-                            {result.referenceNumber}
-                          </Text>
-                        </Td>
-                        <Td maxW="300px">
-                          {result.found ? (
-                            <Text noOfLines={2}>
-                              {cleanTitle(
-                                result.title || '',
-                                result.referenceNumber || result.patentNumber
-                              )}
-                            </Text>
-                          ) : (
-                            <Text color="gray.500">Not available</Text>
-                          )}
-                        </Td>
-                        <Td>{result.publicationDate || 'N/A'}</Td>
-                        <Td>{result.assignee || 'N/A'}</Td>
-                        <Td>
-                          {result.found ? (
-                            <Badge colorScheme="green">Found</Badge>
-                          ) : (
-                            <Badge colorScheme="red">Not Found</Badge>
-                          )}
-                        </Td>
-                      </Tr>
-                    ))}
-                  </Tbody>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Patent Number</TableHead>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Assignee</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {patentLookup.data.results.map(
+                      (result: any, index: number) => (
+                        <TableRow key={index}>
+                          <TableCell>
+                            <span className="font-normal">
+                              {result.referenceNumber}
+                            </span>
+                          </TableCell>
+                          <TableCell className="max-w-[300px]">
+                            {result.found ? (
+                              <span className="line-clamp-2">
+                                {cleanTitle(
+                                  result.title || '',
+                                  result.referenceNumber || result.patentNumber
+                                )}
+                              </span>
+                            ) : (
+                              <span
+                                className={cn(
+                                  isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                                )}
+                              >
+                                Not available
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {result.publicationDate || 'N/A'}
+                          </TableCell>
+                          <TableCell>{result.assignee || 'N/A'}</TableCell>
+                          <TableCell>
+                            {result.found ? (
+                              <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                                Found
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive">Not Found</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    )}
+                  </TableBody>
                 </Table>
-              </Box>
+              </div>
             ) : null}
-          </Box>
+          </div>
         )}
-      </VStack>
-    </Container>
+      </div>
+    </div>
   );
 
   return (

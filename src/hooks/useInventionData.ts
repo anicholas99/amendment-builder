@@ -1,12 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import { useApiQuery, useApiMutation } from '@/lib/api/queryClient';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { InventionData } from '@/types';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { inventionQueryKeys } from '@/lib/queryKeys/inventionKeys';
 import { STALE_TIME, GC_TIME } from '@/constants/time';
+import { keepPreviousData } from '@tanstack/react-query';
 
 /**
  * Custom hook to fetch invention data for a project
@@ -20,6 +21,7 @@ export function useInventionData(projectId: string | undefined) {
     staleTime: STALE_TIME.DEFAULT,
     gcTime: GC_TIME.DEFAULT,
     refetchOnWindowFocus: false, // Prevent refetch on window focus
+    placeholderData: keepPreviousData, // Keep showing previous data while fetching
   });
 }
 

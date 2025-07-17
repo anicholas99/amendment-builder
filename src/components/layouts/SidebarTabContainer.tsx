@@ -1,14 +1,7 @@
 import React, { ReactNode } from 'react';
-import {
-  Box,
-  Tabs,
-  TabList,
-  Tab,
-  TabPanels,
-  TabPanel,
-  HStack,
-  Badge,
-} from '@chakra-ui/react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface SidebarTabContainerProps {
   activeTab: string;
@@ -34,99 +27,63 @@ const SidebarTabContainer: React.FC<SidebarTabContainerProps> = ({
   const activeTabIndex = parseInt(activeTab, 10) || 0;
 
   return (
-    <Box
-      position="absolute"
-      top="0"
-      left="0"
-      right="0"
-      height="100%"
-      borderWidth="1px"
-      borderColor="border.primary"
-      borderRadius="lg"
-      overflow="hidden"
-      boxShadow="sm"
-      width="100%"
-      bg="bg.primary"
-    >
+    <div className="absolute inset-0 border border-border rounded-lg overflow-hidden shadow-sm bg-background">
       <Tabs
-        variant="line"
-        colorScheme="blue"
-        onChange={handleTabChange}
-        defaultIndex={activeTabIndex}
-        index={activeTabIndex}
-        size="sm"
-        h="100%"
-        display="flex"
-        flexDirection="column"
-        w="100%"
+        value={activeTabIndex.toString()}
+        onValueChange={value => handleTabChange(parseInt(value))}
+        className="h-full flex flex-col"
       >
-        <TabList
-          bg="bg.card"
-          minH="48px"
-          flexShrink={0}
-          w="100%"
-          borderBottomWidth="1px"
-          borderBottomColor="border.primary"
-          _dark={{ bg: 'bg.card', borderBottomColor: 'border.primary' }}
-        >
+        <TabsList className="w-full justify-start rounded-none border-b bg-muted/50 h-12 px-0">
           {tabTitles.map((title, index) => (
-            <Tab key={index} p="12px 20px" fontWeight="medium" fontSize="sm">
+            <TabsTrigger
+              key={index}
+              value={index.toString()}
+              className="px-5 py-3 text-sm font-medium data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+            >
               {tabIcons[index] ? (
-                <HStack spacing={1}>
+                <div className="flex items-center gap-1">
                   {tabIcons[index]}
                   <span>{title}</span>
                   {notifications?.[index] && (
-                    <Badge
-                      colorScheme="blue"
-                      variant="solid"
-                      borderRadius="full"
-                      px={2}
-                      fontWeight="bold"
-                      fontSize="0.8em"
-                      boxShadow="0 0 8px rgba(66, 153, 225, 0.6)"
-                    >
+                    <Badge className="ml-2 px-2 py-0 text-xs font-bold bg-blue-600 hover:bg-blue-700 shadow-[0_0_8px_rgba(66,153,225,0.6)]">
                       New
                     </Badge>
                   )}
-                </HStack>
+                </div>
               ) : (
                 <>
                   {title}
                   {notifications?.[index] && (
-                    <Badge
-                      colorScheme="blue"
-                      variant="solid"
-                      borderRadius="full"
-                      px={2}
-                      fontWeight="bold"
-                      fontSize="0.8em"
-                      boxShadow="0 0 8px rgba(66, 153, 225, 0.6)"
-                    >
+                    <Badge className="ml-2 px-2 py-0 text-xs font-bold bg-blue-600 hover:bg-blue-700 shadow-[0_0_8px_rgba(66,153,225,0.6)]">
                       New
                     </Badge>
                   )}
                 </>
               )}
-            </Tab>
+            </TabsTrigger>
           ))}
-        </TabList>
+        </TabsList>
 
-        <TabPanels flex="1" overflow="hidden" position="relative">
+        <div className="flex-1 overflow-hidden relative">
           {tabContents.map((content, index) => (
-            <TabPanel
+            <TabsContent
               key={index}
-              p={0}
-              h="100%"
-              overflow="auto"
-              display={activeTabIndex === index ? 'block' : 'none'}
+              value={index.toString()}
+              className={cn(
+                'h-full overflow-auto m-0 absolute inset-0 transition-opacity',
+                activeTabIndex === index
+                  ? 'opacity-100 z-10'
+                  : 'opacity-0 pointer-events-none'
+              )}
+              forceMount
             >
-              {/* Only render the content if this tab is active to prevent unnecessary renders */}
-              {activeTabIndex === index ? content : null}
-            </TabPanel>
+              {/* Keep all tabs mounted to preserve state, just hide inactive ones */}
+              {content}
+            </TabsContent>
           ))}
-        </TabPanels>
+        </div>
       </Tabs>
-    </Box>
+    </div>
   );
 };
 

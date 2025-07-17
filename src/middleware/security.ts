@@ -179,39 +179,17 @@ export function corsMiddleware(
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader(
     'Access-Control-Allow-Methods',
-    'GET, POST, PUT, DELETE'
+    'GET, POST, PUT, DELETE, OPTIONS'
   );
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'Content-Type, Authorization, X-Requested-With, X-Tenant-Slug'
+    'Content-Type, Authorization, X-Requested-With'
   );
   res.setHeader('Access-Control-Max-Age', '86400');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
-    res.status(204).end();
-    return;
-  }
-
-  next();
-}
-
-export function validateApiKey(
-  req: NextApiRequest,
-  res: NextApiResponse,
-  next: () => void
-) {
-  // Skip API key validation in development
-  if (environment.isDevelopment) {
-    next();
-    return;
-  }
-
-  const apiKey = req.headers['x-api-key'];
-  const validApiKey = environment.api.apiKey;
-
-  if (!validApiKey || apiKey !== validApiKey) {
-    res.status(401).json({ error: 'Invalid API key' });
+    res.status(200).end();
     return;
   }
 

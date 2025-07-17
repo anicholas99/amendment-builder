@@ -5,11 +5,9 @@
  * This service layer properly separates business logic from data access.
  */
 
-import { logger } from '@/lib/monitoring/logger';
-import { ApplicationError, ErrorCode } from '@/lib/error';
+import { logger } from '@/server/logger';
 // Import from consolidated repositories
 import {
-  saveCitationResult,
   update as updateCitationJob,
   findById as getCitationJobById,
 } from '@/repositories/citationJobRepository';
@@ -27,10 +25,7 @@ import {
   PatentMetadata,
 } from '@/repositories/citationUtils';
 import { QueueService } from '@/lib/queue/queueService';
-import { Prisma } from '@prisma/client';
 import { environment } from '@/config/environment';
-
-const queueService = new QueueService();
 
 type ProcessResultsParams = {
   jobId: string;
@@ -41,6 +36,13 @@ type ProcessResultsParams = {
 };
 
 export class CitationProcessingService {
+  private queueService: QueueService;
+
+  constructor(queueService?: QueueService) {
+    // Accept queueService as a parameter for proper request isolation
+    this.queueService = queueService || new QueueService();
+  }
+
   /**
    * Main orchestration method for processing citation results
    */
@@ -218,7 +220,7 @@ export class CitationProcessingService {
     );
 
     const TOP_N_MATCHES = 2;
-    const matchesToCreate: Prisma.CitationMatchCreateManyInput[] = [];
+    const matchesToCreate: any[] = [];
 
     // Process each search input
     for (let i = 0; i < searchInputs.length; i++) {
@@ -255,7 +257,7 @@ export class CitationProcessingService {
           // Mark as legacy extraction
           analysisSource: 'RAW_EXTRACTION',
           isTopResult: false,
-        } as Prisma.CitationMatchCreateManyInput;
+        };
 
         matchesToCreate.push(matchData);
       }
@@ -294,7 +296,7 @@ export class CitationProcessingService {
 
     // Queue unique reasoning jobs (one per element)
     const uniqueElements = new Map<string, any>();
-    citationMatches.forEach((match: { id: string; elementText?: string; citationText?: string }) => {
+    citationMatches.forEach((match: any) => {
       if (
         match.parsedElementText &&
         !uniqueElements.has(match.parsedElementText)
@@ -312,7 +314,7 @@ export class CitationProcessingService {
     const { AIAnalysisService } = await import('@/server/ai/reasoningService');
 
     const entries = Array.from(uniqueElements.entries());
-    for (const [elementText, match] of entries) {
+    for (const [_elementText, match] of entries) {
       try {
         // Process reasoning directly instead of queuing
         setImmediate(async () => {
@@ -389,7 +391,7 @@ export class CitationProcessingService {
     }
 
     try {
-      await queueService.enqueue('citation-examiner-analysis', { jobId });
+      await this.queueService.enqueue('citation-examiner-analysis', { jobId });
       logger.info(
         `[CitationProcessing] Queued examiner analysis for job ${jobId}`
       );
@@ -404,12 +406,12 @@ export class CitationProcessingService {
    * Save results and consolidate matches
    */
   private async saveResultsAndConsolidate(
-    jobId: string,
-    searchHistoryId: string,
-    resultsData: string,
-    searchInputs: string[],
-    jobStatus: string,
-    errorMessage?: string
+    _jobId: string,
+    _searchHistoryId: string,
+    _resultsData: string,
+    _searchInputs: string[],
+    _jobStatus: string,
+    _errorMessage?: string
   ) {
     // 1. Save raw results
     // Note: saveCitationResult expects a transaction client as first parameter
@@ -421,6 +423,3 @@ export class CitationProcessingService {
     // Placeholder for actual job queuing logic for location and reasoning
   }
 }
-
-// Export singleton instance
-export const citationProcessingService = new CitationProcessingService();

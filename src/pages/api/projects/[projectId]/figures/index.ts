@@ -1,18 +1,26 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { StorageServerService } from '@/server/services/storage.server-service';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { figureRepository } from '@/repositories/figureRepository';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+import { figureRepository } from '@/repositories/figure';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
+import formidable from 'formidable';
+import {
+  validateFileMetadata,
+  FILE_SIZE_LIMITS,
+  figureUploadFieldsSchema,
+  type FigureUploadFields,
+} from '@/lib/validation/schemas/fileUploadSchemas';
 
 const apiLogger = createApiLogger('projects/figures');
 
 // Query validation for projectId
 const querySchema = z.object({
   projectId: z.string(),
+  includeElements: z.enum(['true', 'false']).optional(),
 });
 
 export const config = {
@@ -62,9 +70,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         const tenantId = req.user!.tenantId!;
 
         // Import and use the repository
-        const { listProjectFigures } = await import(
-          '@/repositories/figureRepository'
-        );
+        const { listProjectFigures } = await import('@/repositories/figure');
         const figures = await listProjectFigures(projectId, userId, tenantId);
 
         // Transform to API response format
@@ -86,13 +92,101 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     if (req.method === 'POST') {
       // Upload new figure
-      apiLogger.info('Uploading figure for project', { projectId });
+      apiLogger.info('Starting figure upload for project', { projectId });
+
+      // Pre-validate the request using formidable with strict limits
+      const form = formidable({
+        maxFileSize: FILE_SIZE_LIMITS.IMAGE,
+        maxFiles: 1,
+        allowEmptyFiles: false,
+        keepExtensions: true,
+      });
+
+      apiLogger.info('Parsing multipart form data for figure upload');
+
+      const [fields, files] = await form.parse(req);
+      const file = files.file?.[0];
+
+      if (!file) {
+        throw new ApplicationError(
+          ErrorCode.VALIDATION_REQUIRED_FIELD,
+          'No file provided in upload request'
+        );
+      }
+
+      // Validate file metadata using our Zod schema
+      apiLogger.info('Validating figure file metadata', {
+        filename: file.originalFilename,
+        size: file.size,
+        mimetype: file.mimetype,
+      });
+
+      try {
+        validateFileMetadata(file, 'image');
+      } catch (validationError) {
+        apiLogger.warn('Figure validation failed', {
+          filename: file.originalFilename,
+          error:
+            validationError instanceof Error
+              ? validationError.message
+              : String(validationError),
+        });
+
+        throw new ApplicationError(
+          ErrorCode.VALIDATION_INVALID_FORMAT,
+          validationError instanceof Error
+            ? validationError.message
+            : 'Invalid image format'
+        );
+      }
+
+      // Validate form fields
+      const fieldData: FigureUploadFields = {
+        projectId: fields.projectId?.[0] || projectId,
+        figureKey: fields.figureKey?.[0],
+        description: fields.description?.[0],
+      };
+
+      try {
+        figureUploadFieldsSchema.parse(fieldData);
+      } catch (fieldError) {
+        apiLogger.warn('Figure field validation failed', {
+          fields: fieldData,
+          error:
+            fieldError instanceof Error
+              ? fieldError.message
+              : String(fieldError),
+        });
+
+        throw new ApplicationError(
+          ErrorCode.VALIDATION_FAILED,
+          'Invalid upload parameters'
+        );
+      }
+
+      // Validation passed, proceed with secure upload
+      apiLogger.info('Figure validation passed, proceeding with upload', {
+        projectId,
+        figureKey: fieldData.figureKey,
+        userId: req.user?.id,
+        tenantId: req.user?.tenantId,
+      });
 
       // Tenant ID is guaranteed by the secure preset
       const tenantId = req.user!.tenantId!;
+      const userId = req.user!.id;
 
       // Call the storage service to handle the secure upload
-      const response = await StorageServerService.uploadFigure(req, tenantId);
+      // StorageServerService will perform additional security checks (fileGuard, malware scan)
+      const response = await StorageServerService.uploadFigure(
+        file,
+        {
+          projectId,
+          userId,
+          figureKey: fieldData.figureKey,
+        },
+        tenantId
+      );
 
       apiLogger.info('Figure uploaded successfully', {
         projectId,
@@ -107,8 +201,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
-    apiLogger.error('Failed to list figures', {
+    apiLogger.error('Failed to handle figures request', {
       projectId,
+      method: req.method,
       error: error instanceof Error ? error : String(error),
     });
 
@@ -121,7 +216,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       res,
       error,
       500,
-      'Failed to retrieve figures. Please try again later.'
+      'Failed to process request. Please try again later.'
     );
   }
 }

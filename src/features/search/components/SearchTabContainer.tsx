@@ -1,21 +1,17 @@
-import React, { useCallback, useState, useMemo } from 'react';
-import {
-  Box,
-  VStack,
-  Icon,
-  Text,
-  Spinner,
-  Center,
-  useToast,
-  useColorModeValue,
-  useDisclosure,
-} from '@chakra-ui/react';
+import React, {
+  useCallback,
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+} from 'react';
+import { cn } from '@/lib/utils';
 import { FiSearch } from 'react-icons/fi';
-import { SearchHistoryTab } from './SearchHistoryTab';
-import { SearchHeader } from './SearchHeader';
+import { SearchHistoryTabShadcn } from './SearchHistoryTabShadcn';
+import { SearchHeaderShadcn } from './SearchHeaderShadcn';
 import { OutOfSyncConfirmationDialog } from './OutOfSyncConfirmationDialog';
-import { SearchEmptyState } from './SearchEmptyState';
-import { logger } from '@/lib/monitoring/logger';
+import { SearchEmptyStateShadcn } from './SearchEmptyStateShadcn';
+import { logger } from '@/utils/clientLogger';
 import { ProcessedSearchHistoryEntry } from '@/types/domain/searchHistory';
 import { ProcessedSavedPriorArt } from '@/types/domain/priorArt';
 import { PriorArtReference } from '@/types/claimTypes';
@@ -23,6 +19,9 @@ import type { UseClaimSyncStateReturn } from '@/features/claim-refinement/hooks/
 import { useDebounce } from '@/hooks/useDebounce';
 import { useOptimisticSearch } from '../hooks/useOptimisticSearch';
 import { useSearchExecution } from '../hooks/useSearchExecution';
+import { LoadingState } from '@/components/common/LoadingState';
+import { useThemeContext } from '@/contexts/ThemeContext';
+import { toast } from '@/hooks/use-toast';
 
 interface SearchTabContainerProps {
   // Data
@@ -80,7 +79,7 @@ interface SearchTabContainerProps {
 
 /**
  * Search Tab Container - Provides search functionality and history
- * Refactored for better maintainability with extracted hooks and components
+ * Migrated to shadcn/ui with exact visual consistency
  */
 export const SearchTabContainer: React.FC<SearchTabContainerProps> = ({
   searchHistory,
@@ -108,24 +107,71 @@ export const SearchTabContainer: React.FC<SearchTabContainerProps> = ({
   claimSetVersionId,
   onPatentNumberSelected,
 }) => {
-  const toast = useToast();
-  const spinnerColor = useColorModeValue('blue.500', 'blue.300');
+  const { isDarkMode } = useThemeContext();
+  const lastSearchClickRef = useRef<number>(0);
+
+  // Track completed searches to prevent duplicate toasts
+  const completedSearchesToastedRef = useRef<Set<string>>(new Set());
+  const previousSearchHistoryRef = useRef<ProcessedSearchHistoryEntry[]>([]);
+
+  // Monitor search history for completion and show toast
+  useEffect(() => {
+    if (!isActive || !searchHistory || searchHistory.length === 0) return;
+
+    const previousHistory = previousSearchHistoryRef.current;
+
+    // Check for newly completed searches
+    searchHistory.forEach(currentEntry => {
+      const previousEntry = previousHistory.find(e => e.id === currentEntry.id);
+
+      // Search completion toast
+      if (
+        previousEntry?.citationExtractionStatus === 'processing' &&
+        currentEntry.citationExtractionStatus === 'completed' &&
+        !completedSearchesToastedRef.current.has(currentEntry.id)
+      ) {
+        completedSearchesToastedRef.current.add(currentEntry.id);
+        const resultCount = currentEntry.results?.length || 0;
+
+        logger.info(
+          '[SearchTabContainer] 🎉 SHOWING TOAST - Search completed!',
+          {
+            entryId: currentEntry.id,
+            resultCount,
+            previousStatus: previousEntry?.citationExtractionStatus,
+            currentStatus: currentEntry.citationExtractionStatus,
+          }
+        );
+
+        toast({
+          title: 'Search Complete',
+          description: `Found ${resultCount} patent${resultCount !== 1 ? 's' : ''} matching your search criteria.`,
+          variant: 'success',
+        });
+      }
+    });
+
+    // Update previous history reference
+    previousSearchHistoryRef.current = searchHistory;
+  }, [searchHistory, isActive, toast]);
+
+  // Clear toast tracking when project changes
+  useEffect(() => {
+    completedSearchesToastedRef.current.clear();
+  }, [projectId]);
 
   // Debounce parsing flag to avoid quick flicker when component mounts
   const debouncedParsing = useDebounce(isParsingClaim, 200);
 
   // Out-of-sync confirmation dialog state
-  const {
-    isOpen: isOutOfSyncDialogOpen,
-    onOpen: openOutOfSyncDialog,
-    onClose: closeOutOfSyncDialog,
-  } = useDisclosure();
+  const [isOutOfSyncDialogOpen, setIsOutOfSyncDialogOpen] = useState(false);
 
   // Use optimistic search hook
   const {
     optimisticSearch,
     displaySearchHistory,
     searchStartTimeRef,
+    correlationIdRef,
     startOptimisticSearch,
     clearOptimisticSearch,
   } = useOptimisticSearch(searchHistory);
@@ -168,6 +214,7 @@ export const SearchTabContainer: React.FC<SearchTabContainerProps> = ({
     onStartOptimisticSearch: startOptimisticSearch,
     onClearOptimisticSearch: clearOptimisticSearch,
     searchStartTimeRef,
+    correlationIdRef,
   });
 
   /**
@@ -175,31 +222,38 @@ export const SearchTabContainer: React.FC<SearchTabContainerProps> = ({
    */
   const handleSearch = useCallback(
     async (mode: 'basic' | 'advanced') => {
+      // Prevent rapid double-clicks
+      const now = Date.now();
+      if (now - lastSearchClickRef.current < 300) {
+        logger.debug('[SearchTabContainer] Ignoring rapid double-click');
+        return;
+      }
+      lastSearchClickRef.current = now;
+
       // Always show confirmation dialog when claim 1 is out-of-sync
       if (claimSyncState?.syncStatus === 'out-of-sync') {
-        openOutOfSyncDialog();
+        setIsOutOfSyncDialogOpen(true);
         return;
       }
 
       // Otherwise proceed with search
       await executeSearch(mode);
     },
-    [claimSyncState, openOutOfSyncDialog, executeSearch]
+    [claimSyncState, executeSearch]
   );
 
   /**
    * Handle proceeding with search using old data
    */
   const handleProceedWithOldData = useCallback(async () => {
-    closeOutOfSyncDialog();
+    setIsOutOfSyncDialogOpen(false);
 
     // Check if we actually have queries to search with
     if (!hasQueries) {
       toast({
         title: 'No search queries available',
         description: 'Please re-sync Claim 1 to generate search queries.',
-        status: 'error',
-        duration: 5000,
+        variant: 'destructive',
       });
       return;
     }
@@ -209,23 +263,22 @@ export const SearchTabContainer: React.FC<SearchTabContainerProps> = ({
       title: 'Searching with previous data',
       description:
         'Using search queries from the last sync. Results may not match your current claim.',
-      status: 'info',
-      duration: 5000,
+      variant: 'info',
     });
 
     await executeSearch('basic');
-  }, [closeOutOfSyncDialog, hasQueries, toast, executeSearch]);
+  }, [hasQueries, toast, executeSearch]);
 
   /**
    * Handle syncing before search
    */
   const handleSyncBeforeSearch = useCallback(() => {
-    closeOutOfSyncDialog();
+    setIsOutOfSyncDialogOpen(false);
     // Trigger the sync process
     if (claimSyncState?.resync) {
       claimSyncState.resync();
     }
-  }, [closeOutOfSyncDialog, claimSyncState]);
+  }, [claimSyncState]);
 
   /**
    * Handle clearing search history
@@ -242,15 +295,15 @@ export const SearchTabContainer: React.FC<SearchTabContainerProps> = ({
 
       toast({
         title: 'History Cleared',
-        status: 'success',
-        duration: 2000,
+        description: 'Search history has been cleared.',
+        variant: 'success',
       });
     } catch (error) {
       logger.error('[SearchTabContainer] Failed to clear history:', { error });
       toast({
         title: 'Failed to clear history',
-        status: 'error',
-        duration: 3000,
+        description: 'Failed to clear search history.',
+        variant: 'destructive',
       });
     }
   }, [projectId, refreshProjectData, toast]);
@@ -267,8 +320,8 @@ export const SearchTabContainer: React.FC<SearchTabContainerProps> = ({
 
         toast({
           title: 'Search deleted',
-          status: 'success',
-          duration: 2000,
+          description: 'Search entry has been deleted.',
+          variant: 'success',
         });
       } catch (error) {
         logger.error('[SearchTabContainer] Failed to delete search:', {
@@ -276,18 +329,31 @@ export const SearchTabContainer: React.FC<SearchTabContainerProps> = ({
         });
         toast({
           title: 'Failed to delete search',
-          status: 'error',
-          duration: 3000,
+          description: 'Failed to delete search entry.',
+          variant: 'destructive',
         });
       }
     },
     [refreshProjectData, toast]
   );
 
+  // Loading state while projects load
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[400px]">
+        <LoadingState
+          variant="spinner"
+          size="lg"
+          message="Loading search data..."
+        />
+      </div>
+    );
+  }
+
   return (
-    <Box h="100%" display="flex" flexDirection="column">
+    <div className="h-full flex flex-col">
       {/* Search Header */}
-      <SearchHeader
+      <SearchHeaderShadcn
         claimSyncState={claimSyncState}
         isSearching={isSearching}
         debouncedParsing={debouncedParsing}
@@ -299,19 +365,21 @@ export const SearchTabContainer: React.FC<SearchTabContainerProps> = ({
       />
 
       {/* Search History */}
-      <Box flex="1" overflow="hidden">
+      <div className="flex-1 overflow-hidden">
         {isLoading ? (
-          <Center pt={20}>
-            <VStack spacing={4}>
-              <Spinner size="lg" color={spinnerColor} />
-              <Text color="text.secondary">Loading search data...</Text>
-            </VStack>
-          </Center>
+          <div className="flex items-center justify-center pt-20">
+            <LoadingState
+              variant="spinner"
+              size="lg"
+              message="Loading search data..."
+            />
+          </div>
         ) : searchHistory.length === 0 ? (
-          <SearchEmptyState />
+          <SearchEmptyStateShadcn />
         ) : (
-          <SearchHistoryTab
-            searchHistory={displaySearchHistory}
+          <SearchHistoryTabShadcn
+            searchHistory={searchHistory}
+            displaySearchHistory={displaySearchHistory}
             onSavePriorArt={onSavePriorArt}
             savedPriorArt={savedPriorArt.map(art => ({
               number: art.patentNumber,
@@ -337,16 +405,16 @@ export const SearchTabContainer: React.FC<SearchTabContainerProps> = ({
             refreshSavedArtData={refreshProjectData}
           />
         )}
-      </Box>
+      </div>
 
       {/* Out-of-sync Confirmation Dialog */}
       <OutOfSyncConfirmationDialog
         isOpen={isOutOfSyncDialogOpen}
-        onClose={closeOutOfSyncDialog}
+        onClose={() => setIsOutOfSyncDialogOpen(false)}
         hasQueries={hasQueries}
         onProceedWithOldData={handleProceedWithOldData}
         onSyncBeforeSearch={handleSyncBeforeSearch}
       />
-    </Box>
+    </div>
   );
 };

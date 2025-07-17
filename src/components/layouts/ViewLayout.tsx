@@ -7,8 +7,8 @@ import React, {
   useMemo,
 } from 'react';
 
-// Framework-agnostic UI components
-import { Grid, Box } from '@chakra-ui/react';
+// Import shadcn/ui utilities
+import { cn } from '@/lib/utils';
 
 // Context hooks
 import { useLayout } from '../../contexts/LayoutContext';
@@ -49,6 +49,7 @@ interface ViewLayoutProps {
  * - Optional resizable panels with persisted width
  * - Island mode for floating panel effect
  * - Dark mode support
+ * - Responsive panel sizing that adapts to screen changes
  *
  * @example
  * ```tsx
@@ -79,15 +80,7 @@ const ViewLayout: React.FC<ViewLayoutProps> = ({
 
   // Local state
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Memoize color values based on theme
-  const colors = useMemo(
-    () => ({
-      bg: isDarkMode ? '#1A202C' : '#f3f4f6',
-      borderColor: isDarkMode ? '#2D3748' : '#E5E7EB',
-    }),
-    [isDarkMode]
-  );
+  const [isLayoutReady, setIsLayoutReady] = useState(false);
 
   // Get layout configuration based on mode
   const layoutConfig = islandMode
@@ -101,22 +94,38 @@ const ViewLayout: React.FC<ViewLayoutProps> = ({
 
   // Initialize main panel width for resizable layout
   useEffect(() => {
-    if (isResizable && containerRef.current && !mainPanelWidth) {
-      const containerWidth = containerRef.current.clientWidth - 2 * 32;
-      const calculatedMainWidth =
-        (containerWidth - VIEW_LAYOUT_CONFIG.PANEL_GAP) *
-        (VIEW_LAYOUT_CONFIG.MAIN_PANEL.DEFAULT_WIDTH_PERCENTAGE / 100);
-      setMainPanelWidth(calculatedMainWidth);
+    if (isResizable && !mainPanelWidth) {
+      // Set initial width as percentage
+      setMainPanelWidth('50%');
     }
   }, [isResizable, mainPanelWidth, setMainPanelWidth]);
+
+  // Mark layout as ready after initial render to enable transitions
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLayoutReady(true);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Handle resize stop event
   const handleResizeStop: ResizeCallback = useCallback(
     (e, direction, ref) => {
-      const newWidth = ref.offsetWidth;
-      setMainPanelWidth(newWidth);
+      if (!containerRef.current) return;
+
+      const newPixelWidth = ref.offsetWidth;
+      const containerWidth = containerRef.current.clientWidth;
+      const padding = islandMode ? layoutConfig.CONTAINER_PADDING.RIGHT * 2 : 0;
+      const availableWidth = containerWidth - padding;
+
+      // Convert to percentage for responsive storage
+      const percentage = (newPixelWidth / availableWidth) * 100;
+      const clampedPercentage = Math.min(75, Math.max(25, percentage));
+      const percentageString = `${clampedPercentage.toFixed(1)}%`;
+
+      setMainPanelWidth(percentageString);
     },
-    [setMainPanelWidth]
+    [setMainPanelWidth, islandMode, layoutConfig]
   );
 
   // Determine grid columns based on sidebar presence
@@ -124,63 +133,54 @@ const ViewLayout: React.FC<ViewLayoutProps> = ({
     ? `${VIEW_LAYOUT_CONFIG.MAIN_PANEL.GRID_RATIO} ${VIEW_LAYOUT_CONFIG.SIDEBAR_PANEL.GRID_RATIO}`
     : '1fr';
 
-  // Build padding string from config
-  const containerPadding = `${layoutConfig.CONTAINER_PADDING.TOP}px ${layoutConfig.CONTAINER_PADDING.RIGHT}px ${layoutConfig.CONTAINER_PADDING.BOTTOM}px ${layoutConfig.CONTAINER_PADDING.LEFT}px`;
-
-  // Use viewport-relative bottom padding in island mode for consistent zoom behavior
-  const containerPaddingWithVH = islandMode
-    ? `${VIEW_LAYOUT_CONFIG.ISLAND_MODE.CONTAINER_PADDING.TOP}px ${VIEW_LAYOUT_CONFIG.ISLAND_MODE.CONTAINER_PADDING.RIGHT}px ${VIEW_LAYOUT_CONFIG.ISLAND_MODE.CONTAINER_PADDING.BOTTOM_VH} ${VIEW_LAYOUT_CONFIG.ISLAND_MODE.CONTAINER_PADDING.LEFT}px`
-    : containerPadding;
-
   // Responsive padding for better space utilization
-  const responsivePadding = {
-    base: islandMode ? '16px 16px 5vh 16px' : '16px 16px',
-    md: islandMode ? '16px 20px 5vh 20px' : '16px 20px',
-    lg: islandMode
-      ? `${VIEW_LAYOUT_CONFIG.ISLAND_MODE.CONTAINER_PADDING.TOP}px 24px ${VIEW_LAYOUT_CONFIG.ISLAND_MODE.CONTAINER_PADDING.BOTTOM_VH} 24px`
-      : `${layoutConfig.CONTAINER_PADDING.TOP}px 24px ${layoutConfig.CONTAINER_PADDING.BOTTOM}px 24px`,
-  };
+  const responsivePadding = useMemo(() => {
+    if (islandMode) {
+      return {
+        base: '16px 16px 5vh 16px',
+        md: '16px 20px 5vh 20px',
+        lg: `${VIEW_LAYOUT_CONFIG.ISLAND_MODE.CONTAINER_PADDING.TOP}px 24px ${VIEW_LAYOUT_CONFIG.ISLAND_MODE.CONTAINER_PADDING.BOTTOM_VH} 24px`,
+      };
+    }
+    return {
+      base: '16px 16px',
+      md: '16px 20px',
+      lg: `${layoutConfig.CONTAINER_PADDING.TOP}px 24px ${layoutConfig.CONTAINER_PADDING.BOTTOM}px 24px`,
+    };
+  }, [islandMode, layoutConfig]);
+
+  // Use the percentage value directly from context/default
+  const currentPanelWidth = mainPanelWidth || defaultMainPanelWidth;
 
   return (
-    <Box
-      position="relative"
-      className="view-layout-wrapper"
-      overflow="hidden"
-      bg={colors.bg}
-      borderWidth={islandMode ? '0' : '1px'}
-      borderStyle={islandMode ? 'none' : 'solid'}
-      borderColor={islandMode ? 'transparent' : colors.borderColor}
-      borderRadius={islandMode ? '0' : 'lg'}
+    <div
       ref={containerRef}
-      zIndex="1"
-      display="block"
-      height="100%"
+      className={cn(
+        'relative view-layout-wrapper overflow-hidden flex flex-col h-full min-h-0 z-[1]',
+        isDarkMode ? 'bg-gray-900' : 'bg-muted',
+        islandMode
+          ? 'rounded-none border-0'
+          : 'rounded-lg border border-border',
+        isLayoutReady ? 'layout-ready' : ''
+      )}
       {...rest}
     >
       {/* Header Section */}
-      <Box position="relative" mb={2} zIndex="10" flexShrink={0}>
-        {header}
-      </Box>
+      <div className="relative mb-2 z-[25] flex-shrink-0">{header}</div>
 
       {/* Main Content Area */}
-      <Box
-        style={{
-          width: '100%',
-          position: 'relative',
-          zIndex: 11,
-        }}
-      >
+      <div className="flex-1 min-h-0 overflow-hidden w-full relative z-[5]">
         {isResizable ? (
           /* Resizable Layout */
-          <Box
-            display="flex"
-            p={responsivePadding}
-            mt={{ base: '12px', md: '16px', lg: '24px' }}
-            position="relative"
+          <div
+            className="flex relative mt-3 md:mt-4 lg:mt-6"
+            style={{
+              padding: islandMode ? '16px 16px 5vh 16px' : '16px',
+            }}
           >
             {/* Resizable Main Panel */}
             <ResizablePanel
-              width={mainPanelWidth || defaultMainPanelWidth}
+              width={currentPanelWidth}
               height={containerHeight}
               onResizeStop={handleResizeStop}
               minWidth={minMainPanelWidth}
@@ -197,13 +197,13 @@ const ViewLayout: React.FC<ViewLayoutProps> = ({
 
             {/* Sidebar Panel */}
             {sidebarContent && (
-              <Box
-                flex="1"
-                minWidth={VIEW_LAYOUT_CONFIG.SIDEBAR_PANEL.MIN_WIDTH}
-                position="relative"
-                zIndex="1"
-                height={containerHeight}
-                ml={{ base: 4, md: 5, lg: 6 }}
+              <div
+                className="flex-1 relative z-[5]"
+                style={{
+                  minWidth: VIEW_LAYOUT_CONFIG.SIDEBAR_PANEL.MIN_WIDTH,
+                  height: containerHeight,
+                  marginLeft: `${VIEW_LAYOUT_CONFIG.PANEL_GAP}px`,
+                }}
               >
                 <ContentPanel
                   isDarkMode={isDarkMode}
@@ -212,18 +212,19 @@ const ViewLayout: React.FC<ViewLayoutProps> = ({
                 >
                   {sidebarContent}
                 </ContentPanel>
-              </Box>
+              </div>
             )}
-          </Box>
+          </div>
         ) : (
           /* Fixed Layout using Grid */
-          <Grid
-            templateColumns={gridTemplateColumns}
-            gap={{ base: 4, md: 5, lg: 6 }}
-            p={responsivePadding}
-            mt={{ base: '12px', md: '16px', lg: '24px' }}
-            position="relative"
-            height={islandMode ? containerHeight : 'auto'}
+          <div
+            className="grid relative mt-3 md:mt-4 lg:mt-6"
+            style={{
+              gridTemplateColumns,
+              gap: `${VIEW_LAYOUT_CONFIG.PANEL_GAP}px`,
+              padding: islandMode ? '16px 16px 5vh 16px' : '16px',
+              height: islandMode ? containerHeight : 'auto',
+            }}
           >
             {/* Main Content Panel */}
             <ContentPanel
@@ -244,19 +245,19 @@ const ViewLayout: React.FC<ViewLayoutProps> = ({
                 {sidebarContent}
               </ContentPanel>
             )}
-          </Grid>
+          </div>
         )}
 
         {/* Optional Bottom Content */}
         {bottomContent && (
-          <Box mt={3} px={8} position="relative" zIndex="2" flexShrink={0}>
+          <div className="mt-3 px-8 relative z-[2] flex-shrink-0">
             {bottomContent}
-          </Box>
+          </div>
         )}
 
         {/* Resize handle styles are now in resizeHandle.css */}
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 };
 

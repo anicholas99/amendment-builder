@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import { normalizeClaims } from '@/utils/dataHelpers';
 
 interface AnalyzedInvention {

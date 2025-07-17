@@ -1,5 +1,5 @@
 import { Project } from '@prisma/client';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { apiFetch } from '@/lib/api/apiClient';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import {

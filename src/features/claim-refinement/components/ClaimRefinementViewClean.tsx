@@ -1,12 +1,14 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
+import { useRouter } from 'next/router';
 import { useProjectData } from '@/contexts/ProjectDataContext';
+import { useCurrentProjectId } from '@/hooks/useCurrentProjectId';
 import { useClaimRefinementView } from '../hooks/useClaimRefinementView';
 import { useSearchHistory } from '@/hooks/api/useSearchHistory';
 import ClaimSidebar from './ClaimSidebar';
-import ClaimMainPanel from './ClaimMainPanel';
-import ClaimHeader from './ClaimHeader';
+import ClaimMainPanelShadcn from './ClaimMainPanelShadcn';
+import ClaimHeaderShadcn from './ClaimHeaderShadcn';
 import { EditParsedClaimDataModal } from './modals/EditParsedClaimDataModal';
 import ViewLayout from '../../../components/layouts/ViewLayout';
 import { VIEW_LAYOUT_CONFIG } from '@/constants/layout';
@@ -20,13 +22,14 @@ import {
   useSavePriorArt,
   useDeletePriorArt,
 } from '@/hooks/api/usePriorArt';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { emitPriorArtEvent } from '@/features/search/utils/priorArtEvents';
 import { useTemporaryState } from '@/hooks/useTemporaryState';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface ClaimRefinementViewCleanProps {
   analyzedInvention?: Record<string, unknown>;
-  setAnalyzedInvention?: (invention: Record<string, unknown>) => void;
+  _setAnalyzedInvention?: (invention: Record<string, unknown>) => void;
 }
 
 /**
@@ -36,18 +39,85 @@ interface ClaimRefinementViewCleanProps {
  */
 const ClaimRefinementViewClean: React.FC<ClaimRefinementViewCleanProps> = ({
   analyzedInvention,
-  setAnalyzedInvention,
+  _setAnalyzedInvention, // Prefixed with underscore - prop reserved for future use
 }) => {
-  const { activeProjectId } = useProjectData();
-  const [claimViewMode, setClaimViewMode] = useState<'list' | 'box'>('box');
+  // Prefer the route-derived projectId first, then fall back to context.
+  // This guarantees that project-scoped data (e.g., saved prior art) loads immediately
+  // on initial render even before the ProjectDataContext is fully hydrated.
+  const { activeProjectId: contextProjectId } = useProjectData();
+  const routeProjectId = useCurrentProjectId();
+  const activeProjectId = routeProjectId || contextProjectId;
+  const queryClient = useQueryClient();
+  const router = useRouter();
+
+  // Get view mode from URL params, defaulting to 'box'
+  const urlViewMode = router.query.viewMode as string;
+  const [claimViewMode, setClaimViewMode] = useState<'box' | 'compact'>(() => {
+    if (urlViewMode === 'box' || urlViewMode === 'compact') {
+      return urlViewMode;
+    }
+    // Map 'list' to 'box' for backwards compatibility
+    if (urlViewMode === 'list') {
+      return 'box';
+    }
+    return 'box';
+  });
+
+  // Update URL when view mode changes
+  useEffect(() => {
+    if (claimViewMode && router.isReady) {
+      const currentQuery = { ...router.query };
+      if (claimViewMode !== 'box') {
+        // Only add to URL if not default
+        currentQuery.viewMode = claimViewMode;
+      } else {
+        // Remove from URL if default
+        delete currentQuery.viewMode;
+      }
+
+      // Use shallow routing to avoid page reload
+      router.push(
+        {
+          pathname: router.pathname,
+          query: currentQuery,
+        },
+        undefined,
+        { shallow: true }
+      );
+    }
+  }, [claimViewMode, router.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Only refetch if the project changes or we suspect external updates
+  useEffect(() => {
+    // Don't refetch on every mount - trust the cache and optimistic updates
+    logger.debug('[ClaimRefinementView] Component mounted', {
+      projectId: activeProjectId,
+    });
+  }, [activeProjectId]);
 
   // All complex claim-related logic is now in the hook.
   const hookResult = useClaimRefinementView({
     projectId: activeProjectId || '',
   });
 
+  // Cleanup effect to ensure navigation is never blocked
+  useEffect(() => {
+    return () => {
+      // Clear any potential blocking states when unmounting
+      logger.debug('[ClaimRefinementView] Cleaning up on unmount');
+
+      // Clear any pending React Query operations
+      queryClient.cancelQueries();
+
+      // Restore body scroll if it was locked
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+    };
+  }, [queryClient]);
+
   // Fetch search history for the current project
-  const { data: searchHistory = [], isLoading: isLoadingSearchHistory } =
+  // Currently unused but may be needed for future features
+  const { data: _searchHistory = [], isLoading: _isLoadingSearchHistory } =
     useSearchHistory(activeProjectId);
 
   /* ============================
@@ -57,26 +127,28 @@ const ClaimRefinementViewClean: React.FC<ClaimRefinementViewCleanProps> = ({
   const { priorArt: savedPriorArt } = usePriorArtWithStatus(activeProjectId);
 
   // Map raw DB records to UI-friendly ProcessedSavedPriorArt
-  const processedSavedPriorArt: ProcessedSavedPriorArt[] = React.useMemo(() => {
-    return savedPriorArt.map(item => {
-      const priorArtData: PriorArtReference = {
-        number: item.patentNumber,
-        patentNumber: item.patentNumber,
-        title: item.title || '',
-        abstract: item.abstract || undefined,
-        source: 'Manual', // Saved items are user-selected
-        relevance: 100,
-        url: item.url || undefined,
-        authors: item.authors ? [item.authors] : undefined,
-        publicationDate: item.publicationDate || undefined,
-      };
+  // Note: This processed data is passed to child components
+  const _processedSavedPriorArt: ProcessedSavedPriorArt[] =
+    React.useMemo(() => {
+      return savedPriorArt.map(item => {
+        const priorArtData: PriorArtReference = {
+          number: item.patentNumber,
+          patentNumber: item.patentNumber,
+          title: item.title || '',
+          abstract: item.abstract || undefined,
+          source: 'Manual', // Saved items are user-selected
+          relevance: 100,
+          url: item.url || undefined,
+          authors: item.authors ? [item.authors] : undefined,
+          publicationDate: item.publicationDate || undefined,
+        };
 
-      return {
-        ...item,
-        priorArtData,
-      } as ProcessedSavedPriorArt;
-    });
-  }, [savedPriorArt]);
+        return {
+          ...item,
+          priorArtData,
+        } as ProcessedSavedPriorArt;
+      });
+    }, [savedPriorArt]);
 
   // Mutation hook to save a prior-art reference
   const savePriorArtMutation = useSavePriorArt();
@@ -147,7 +219,15 @@ const ClaimRefinementViewClean: React.FC<ClaimRefinementViewCleanProps> = ({
   };
 
   const onToggleViewMode = () => {
-    setClaimViewMode(prev => (prev === 'box' ? 'list' : 'box'));
+    setClaimViewMode(prev => {
+      if (prev === 'box') return 'compact';
+      if (prev === 'compact') return 'box';
+      return 'box';
+    });
+  };
+
+  const onSelectViewMode = (mode: 'box' | 'compact') => {
+    setClaimViewMode(mode);
   };
 
   // Local state for the "Add New Claim" form.
@@ -155,11 +235,25 @@ const ClaimRefinementViewClean: React.FC<ClaimRefinementViewCleanProps> = ({
   const [isAddingClaim, setIsAddingClaim] = useState(false);
   const [newClaimText, setNewClaimText] = useState('');
   const [newClaimDependsOn, setNewClaimDependsOn] = useState('');
+  const [isSubmittingClaim, setIsSubmittingClaim] = useState(false);
+  const [addClaimCooldown, setAddClaimCooldown] = useState(false);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
 
   // Track the last added claim number for UI feedback
-  const [lastAddedClaimNumber, setLastAddedClaimNumber] = useTemporaryState<
+  // Currently unused but kept for potential future UI enhancements
+  const [_lastAddedClaimNumber, setLastAddedClaimNumber] = useTemporaryState<
     string | undefined
   >(undefined, 3000);
+
+  // Update countdown timer
+  useEffect(() => {
+    if (cooldownRemaining > 0) {
+      const timer = setTimeout(() => {
+        setCooldownRemaining(prev => Math.max(0, prev - 100));
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldownRemaining]);
 
   const handleAddClaim = useCallback(async () => {
     // Ensure the method exists before calling
@@ -170,7 +264,15 @@ const ClaimRefinementViewClean: React.FC<ClaimRefinementViewCleanProps> = ({
       return;
     }
 
+    // Prevent rapid clicks with cooldown
+    if (addClaimCooldown) {
+      return;
+    }
+
     try {
+      setIsSubmittingClaim(true);
+      setAddClaimCooldown(true);
+
       // Call the hook's method to add the claim (now async)
       const newClaimNumber = await hookResult.handleAddNewClaim({
         text: newClaimText,
@@ -186,11 +288,30 @@ const ClaimRefinementViewClean: React.FC<ClaimRefinementViewCleanProps> = ({
       setIsAddingClaim(false);
       setNewClaimText('');
       setNewClaimDependsOn('');
+
+      // Set cooldown timer
+      setCooldownRemaining(1500);
+
+      // Keep cooldown active for 1.5 seconds after successful add
+      setTimeout(() => {
+        setAddClaimCooldown(false);
+      }, 1500);
     } catch (error) {
       // Error handling is done in the hook, just log here
       logger.error('[ClaimRefinementViewClean] Failed to add claim', { error });
+      // Reset cooldown on error so user can retry
+      setAddClaimCooldown(false);
+      setCooldownRemaining(0);
+    } finally {
+      setIsSubmittingClaim(false);
     }
-  }, [newClaimText, newClaimDependsOn, hookResult, setLastAddedClaimNumber]);
+  }, [
+    newClaimText,
+    newClaimDependsOn,
+    hookResult,
+    setLastAddedClaimNumber,
+    addClaimCooldown,
+  ]);
 
   const handleCancelAddClaim = useCallback(() => {
     setIsAddingClaim(false);
@@ -217,14 +338,19 @@ const ClaimRefinementViewClean: React.FC<ClaimRefinementViewCleanProps> = ({
   return (
     <DndProvider backend={HTML5Backend}>
       <ViewLayout
-        header={<ClaimHeader />}
+        header={<ClaimHeaderShadcn />}
         mainContent={
-          <ClaimMainPanel
+          <ClaimMainPanelShadcn
             projectId={activeProjectId || ''}
-            claims={hookResult.claims}
+            claims={hookResult.claims?.map(claim => ({
+              id: claim.id,
+              claimNumber: claim.number,
+              text: claim.text,
+            }))}
             isLoadingClaims={hookResult.isLoadingClaims}
             claimViewMode={claimViewMode}
             onToggleViewMode={onToggleViewMode}
+            onSelectViewMode={onSelectViewMode}
             onGenerateClaim1={hookResult.onGenerateClaim1}
             isRegeneratingClaim1={hookResult.isGeneratingClaim1}
             onClaimChange={hookResult.handleClaimChange}
@@ -239,6 +365,10 @@ const ClaimRefinementViewClean: React.FC<ClaimRefinementViewCleanProps> = ({
             setNewClaimText={setNewClaimText}
             newClaimDependsOn={newClaimDependsOn}
             setNewClaimDependsOn={setNewClaimDependsOn}
+            isSubmittingClaim={isSubmittingClaim}
+            newlyAddedClaimNumbers={hookResult.newlyAddedClaimNumbers}
+            isAddClaimDisabled={addClaimCooldown}
+            cooldownRemaining={cooldownRemaining}
           />
         }
         sidebarContent={
@@ -255,16 +385,26 @@ const ClaimRefinementViewClean: React.FC<ClaimRefinementViewCleanProps> = ({
             isParsingClaim={hookResult.isParsingClaim}
             searchMode="basic"
             messages={[]}
-            onSendMessage={() => {}}
+            onSendMessage={() => {
+              // Intentionally empty - placeholder for future chat functionality
+            }}
             handleRemovePriorArt={handleRemovePriorArt}
             onSavePriorArt={handleSavePriorArt}
-            onOpenPriorArtDetails={() => {}}
+            onOpenPriorArtDetails={() => {
+              // Intentionally empty - placeholder for future prior art details modal
+            }}
             analysisData={null}
             isAnalyzing={false}
-            handleAnalyzePriorArt={() => {}}
-            handleOpenApplyModal={() => {}}
-            analyzedInvention={analyzedInvention}
-            handleInsertNewClaim={() => {}}
+            handleAnalyzePriorArt={() => {
+              // Intentionally empty - placeholder for future prior art analysis
+            }}
+            handleOpenApplyModal={() => {
+              // Intentionally empty - placeholder for future apply modal
+            }}
+            analyzedInvention={analyzedInvention ?? null}
+            handleInsertNewClaim={() => {
+              // Intentionally empty - placeholder for future claim insertion
+            }}
             selectedReference={null}
             handleClaimChange={hookResult.handleClaimChange}
             claims={hookResult.claims}

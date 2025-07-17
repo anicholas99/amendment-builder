@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
-import { createApiLogger } from '../../../lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import {
   TenantResult,
   getUserActiveTenant,
@@ -9,7 +9,7 @@ import {
 } from '../../../repositories/tenantRepository';
 import { CustomApiRequest } from '@/types/api';
 import { AuthenticatedRequest } from '@/types/middleware';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
 
 const apiLogger = createApiLogger('tenants/active');
 
@@ -64,8 +64,10 @@ async function handler(
 
           const response = { activeTenant };
           apiLogger.logResponse(200, response);
-          res.status(200).json(response);
-          return;
+          return res.status(200).json({
+            success: true,
+            data: response,
+          });
         } catch (error) {
           apiLogger.logError(
             error instanceof Error ? error : new Error('Unknown error'),
@@ -100,8 +102,10 @@ async function handler(
           apiLogger.info('Updated active tenant', { userId, tenantId });
           const response = { success: true };
           apiLogger.logResponse(200, response);
-          res.status(200).json(response);
-          return;
+          return res.status(200).json({
+            success: true,
+            data: response,
+          });
         } catch (error) {
           apiLogger.logError(
             error instanceof Error ? error : new Error('Unknown error'),

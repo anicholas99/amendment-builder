@@ -12,6 +12,9 @@ const customJestConfig = {
   moduleNameMapper: {
     // Handle module aliases (if you're using them in your app)
     '^@/(.*)$': '<rootDir>/src/$1',
+    // Mock static assets
+    '\\.(css|less|sass|scss)$': 'identity-obj-proxy',
+    '\\.(gif|ttf|eot|svg|png)$': '<rootDir>/__mocks__/fileMock.js',
   },
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',
@@ -36,14 +39,10 @@ const customJestConfig = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/.next/',
-    // Files that have @jest-environment node should be run with jest.config.node.js
-    '<rootDir>/src/repositories/__tests__/userRepository.test.ts',
-    '<rootDir>/src/repositories/project/__tests__/projectRepository.test.ts',
-    '<rootDir>/src/pages/api/auth/__tests__/auth.strategic.test.ts',
   ],
   // Handle ESM modules
   transformIgnorePatterns: [
-    'node_modules/(?!(@panva/hkdf|@auth0/nextjs-auth0)/)',
+    'node_modules/(?!(.*\\.mjs$|@panva/hkdf|@auth0/nextjs-auth0|openai)/)',
   ],
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
 };

@@ -3,7 +3,7 @@ import formidable from 'formidable';
 import fs from 'fs/promises';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { fileGuard } from '@/lib/security/fileGuard';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import {
   BlobServiceClient,
   StorageSharedKeyCredential,
@@ -13,10 +13,7 @@ import { env } from '@/config/env';
 import { v4 as uuidv4 } from 'uuid';
 import mammoth from 'mammoth';
 import pdfParse from 'pdf-parse';
-import {
-  createProjectFigure,
-  FigureUploadData,
-} from '@/repositories/figureRepository';
+import { createProjectFigure, FigureUploadData } from '@/repositories/figure';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { environment } from '@/config/environment';
 import { scanFile } from '@/lib/security/malwareScanner';
@@ -41,8 +38,9 @@ const AZURE_STORAGE_CONNECTION_STRING = env.AZURE_STORAGE_CONNECTION_STRING!;
 const CONTAINER_NAME = env.AZURE_STORAGE_CONTAINER_NAME;
 const INVENTION_CONTAINER_NAME = env.AZURE_STORAGE_INVENTION_CONTAINER_NAME;
 
-// Private container for secure storage
+// Private containers for secure storage
 const FIGURES_CONTAINER = 'figures-private';
+const PATENT_FILES_CONTAINER = 'patent-files-private';
 
 let blobServiceClient: BlobServiceClient;
 
@@ -64,7 +62,12 @@ export class StorageServerService {
    * Upload figure securely with database tracking and private storage
    */
   static async uploadFigure(
-    req: NextApiRequest,
+    file: formidable.File,
+    fields: {
+      projectId: string;
+      userId: string;
+      figureKey?: string;
+    },
     tenantId: string
   ): Promise<{
     id: string;
@@ -76,12 +79,7 @@ export class StorageServerService {
       '[StorageServerService] Starting secure figure upload process...'
     );
 
-    const form = formidable({ maxFileSize: MAX_FILE_SIZE });
-    const [fields, files] = await form.parse(req);
-
-    const file = files.file?.[0];
-    const projectId = fields.projectId?.[0];
-    const figureKey = fields.figureKey?.[0];
+    const { projectId, userId, figureKey } = fields;
 
     if (!file) {
       logger.warn('[StorageServerService] No file found in form data');
@@ -106,14 +104,7 @@ export class StorageServerService {
       guardResult = await fileGuard(file, {
         acceptedTypes: ACCEPTED_IMAGE_TYPES,
         maxSize: MAX_FILE_SIZE,
-        allowedExtensions: [
-          '.jpg',
-          '.jpeg',
-          '.png',
-          '.gif',
-          '.bmp',
-          '.webp',
-        ],
+        allowedExtensions: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'],
         sanitizeFilename: true,
       });
     } catch (guardError) {
@@ -187,7 +178,7 @@ export class StorageServerService {
         },
         metadata: {
           originalName: originalFilename,
-          uploadedBy: (req as AuthenticatedRequest).user?.id || 'unknown',
+          uploadedBy: userId,
           projectId: projectId,
           tenantId: tenantId,
         },
@@ -213,7 +204,7 @@ export class StorageServerService {
         mimeType: file.mimetype || 'application/octet-stream',
         sizeBytes: file.size,
         figureKey: figureKey || undefined,
-        uploadedBy: (req as AuthenticatedRequest).user?.id || 'unknown',
+        uploadedBy: userId,
       };
 
       logger.info(
@@ -292,9 +283,7 @@ export class StorageServerService {
     });
 
     // Import repository function (will work after Prisma generation)
-    const { getProjectFigure } = await import(
-      '@/repositories/figureRepository'
-    );
+    const { getProjectFigure } = await import('@/repositories/figure');
 
     // Verify access control
     const figure = await getProjectFigure(figureId, userId, tenantId);
@@ -408,15 +397,11 @@ export class StorageServerService {
 
   /**
    * Extracts text content from an uploaded document (DOCX, PDF, TXT).
-   * @param req The NextApiRequest object from the API route.
+   * @param file The parsed formidable file object.
    * @returns The extracted text content as a string.
    */
-  static async extractTextFromFile(req: NextApiRequest): Promise<string> {
+  static async extractTextFromFile(file: formidable.File): Promise<string> {
     logger.debug('[StorageServerService] Starting text extraction process...');
-
-    const form = formidable({ maxFileSize: MAX_FILE_SIZE });
-    const [_fields, files] = await form.parse(req);
-    const file = files.file?.[0];
 
     if (!file) {
       throw new ApplicationError(
@@ -461,21 +446,47 @@ export class StorageServerService {
       }
 
       let extractedText = '';
+
+      // Add timeout wrapper for text extraction operations
+      const extractWithTimeout = async (
+        extractionFn: () => Promise<string>,
+        timeoutMs: number = 30000
+      ) => {
+        return Promise.race([
+          extractionFn(),
+          new Promise<string>((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Text extraction timeout')),
+              timeoutMs
+            )
+          ),
+        ]);
+      };
+
       if (
         guardResult.detectedMimeType ===
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       ) {
-        const result = await mammoth.extractRawText({ path: filepath });
-        extractedText = result.value;
+        logger.info('[StorageServerService] Extracting text from DOCX file');
+        extractedText = await extractWithTimeout(async () => {
+          const result = await mammoth.extractRawText({ path: filepath });
+          return result.value;
+        });
       } else if (guardResult.detectedMimeType === 'application/pdf') {
-        const dataBuffer = await fs.readFile(filepath);
-        const data = await pdfParse(dataBuffer);
-        extractedText = data.text;
+        logger.info('[StorageServerService] Extracting text from PDF file');
+        extractedText = await extractWithTimeout(async () => {
+          const dataBuffer = await fs.readFile(filepath);
+          const data = await pdfParse(dataBuffer);
+          return data.text;
+        });
       } else if (
         guardResult.detectedMimeType === 'text/plain' ||
         guardResult.extension === '.txt'
       ) {
-        extractedText = await fs.readFile(filepath, 'utf-8');
+        logger.info('[StorageServerService] Reading text from TXT file');
+        extractedText = await extractWithTimeout(async () => {
+          return await fs.readFile(filepath, 'utf-8');
+        });
       }
 
       if (!extractedText) {
@@ -489,10 +500,148 @@ export class StorageServerService {
         `[StorageServerService] Successfully extracted text. Length: ${extractedText.length}`
       );
       return extractedText;
+    } catch (error) {
+      logger.error('[StorageServerService] Text extraction failed', {
+        originalFilename,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+    // Note: File cleanup is handled by the calling function (uploadPatentDocument)
+    // to avoid double cleanup issues
+  }
+
+  /**
+   * Upload patent document securely (private storage)
+   */
+  static async uploadPatentDocument(
+    file: formidable.File,
+    fields: {
+      userId: string;
+      tenantId: string;
+    }
+  ): Promise<{
+    blobName: string;
+    fileName: string;
+    mimeType: string;
+    size: number;
+  }> {
+    logger.debug('[StorageServerService] Starting patent document upload...');
+
+    if (!file) {
+      throw new ApplicationError(
+        ErrorCode.VALIDATION_REQUIRED_FIELD,
+        'No file provided'
+      );
+    }
+
+    const originalFilename = file.originalFilename || 'unnamed-patent';
+
+    // Validate file
+    let guardResult;
+    try {
+      guardResult = await fileGuard(file, {
+        acceptedTypes: ACCEPTED_DOCUMENT_TYPES,
+        maxSize: MAX_FILE_SIZE,
+        allowedExtensions: ['.pdf', '.docx', '.doc', '.txt'],
+        sanitizeFilename: true,
+      });
+    } catch (guardError) {
+      logger.warn('[StorageServerService] Patent file validation failed', {
+        filename: originalFilename,
+        error:
+          guardError instanceof Error ? guardError.message : String(guardError),
+      });
+      throw new ApplicationError(
+        ErrorCode.VALIDATION_INVALID_FORMAT,
+        guardError instanceof Error ? guardError.message : 'Invalid file format'
+      );
+    }
+
+    // Malware scan
+    try {
+      const scanResult = await scanFile(file, false);
+      logger.info('[StorageServerService] Malware scan completed', {
+        filename: guardResult.sanitizedFilename,
+        clean: scanResult.clean,
+      });
+    } catch (scanError) {
+      logger.error('[StorageServerService] Malware scan failed', {
+        filename: guardResult.sanitizedFilename,
+        error: scanError,
+      });
+    }
+
+    const connectionString = environment.azure.storageConnectionString;
+    if (!connectionString) {
+      throw new ApplicationError(
+        ErrorCode.CONFIG_MISSING,
+        'Azure Storage connection string not configured'
+      );
+    }
+
+    try {
+      // Generate secure blob name with tenant isolation
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const blobName = `${fields.tenantId}/${fields.userId}/${uuidv4()}-${timestamp}-${guardResult.sanitizedFilename}`;
+
+      const blobServiceClient =
+        BlobServiceClient.fromConnectionString(connectionString);
+      const containerClient = blobServiceClient.getContainerClient(
+        PATENT_FILES_CONTAINER
+      );
+
+      // Ensure private container exists
+      await containerClient.createIfNotExists(); // Private by default
+
+      const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+      // Upload to private blob storage
+      await blockBlobClient.uploadFile(file.filepath, {
+        blobHTTPHeaders: {
+          blobContentType: file.mimetype || 'application/octet-stream',
+        },
+        metadata: {
+          originalName: originalFilename,
+          uploadedBy: fields.userId,
+          tenantId: fields.tenantId,
+          uploadedAt: new Date().toISOString(),
+        },
+      });
+
+      logger.info(
+        '[StorageServerService] Patent document uploaded successfully',
+        {
+          blobName,
+          container: PATENT_FILES_CONTAINER,
+          size: file.size,
+        }
+      );
+
+      return {
+        blobName,
+        fileName: originalFilename,
+        mimeType: file.mimetype || 'application/octet-stream',
+        size: file.size,
+      };
+    } catch (error) {
+      logger.error('[StorageServerService] Patent upload failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ApplicationError(
+        ErrorCode.STORAGE_UPLOAD_FAILED,
+        `Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     } finally {
-      // Ensure the temporary file is always cleaned up
-      await fs.unlink(filepath);
-      logger.debug(`[StorageServerService] Cleaned up temp file: ${filepath}`);
+      // Cleanup temp file
+      try {
+        await fs.unlink(file.filepath);
+        logger.debug('[StorageServerService] Cleaned up temp file');
+      } catch (cleanupError) {
+        logger.warn('[StorageServerService] Failed to cleanup temp file', {
+          error: cleanupError,
+        });
+      }
     }
   }
 

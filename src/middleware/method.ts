@@ -26,9 +26,9 @@ export type HttpMethod =
  * @param handler - The handler to execute if method matches
  * @returns A middleware-wrapped handler
  */
-export function withMethod<T = unknown>(
+export function withMethod(
   method: HttpMethod | HttpMethod[],
-  handler: ApiHandler<T>
+  handler: ApiHandler
 ): ComposedHandler {
   const allowedMethods = Array.isArray(method) ? method : [method];
 

@@ -7,13 +7,10 @@ import {
   findUserByEmail,
   createUser,
 } from '../../../repositories/userRepository';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { AuthenticatedRequest } from '@/types/middleware';
-import {
-  SecurePresets,
-  TenantResolvers,
-} from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 // Initialize apiLogger
 const apiLogger = createApiLogger('users');
@@ -33,7 +30,7 @@ const handler = async (
   res: NextApiResponse
 ): Promise<void> => {
   apiLogger.logRequest(req);
-  
+
   // User is guaranteed by middleware
   const { id: requestingUserId } = req.user!;
 
@@ -46,8 +43,10 @@ const handler = async (
       const users = await findUsers();
       apiLogger.info(`Found ${users.length} users`, { requestingUserId });
       apiLogger.logResponse(200, { count: users.length });
-      res.status(200).json(users); // Set status and body
-      return; // Return void
+      return res.status(200).json({
+        success: true,
+        data: users,
+      }); // Return standardized response
 
     case 'POST': {
       // Validate body for POST request
@@ -100,8 +99,10 @@ const handler = async (
       });
 
       apiLogger.logResponse(201, { userId: user.id });
-      res.status(201).json(user); // Set status and body
-      return; // Return void
+      return res.status(201).json({
+        success: true,
+        data: user,
+      }); // Return standardized response
     }
 
     default:

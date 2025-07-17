@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 
 /**
  * Schema for structured data in invention uploads

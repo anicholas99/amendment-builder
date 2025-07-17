@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ProcessedCitationMatch } from '@/types/domain/citation';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 /**
  * Hook for managing citation table UI state following established patterns
@@ -11,10 +11,10 @@ export const useCitationTableState = (
 ) => {
   // Column visibility states
   const [showLocationColumn, setShowLocationColumn] = useState(false);
-  
+
   // Security: Only allow actions column if user has permission to save citations
   const canShowActions = Boolean(onSaveCitationMatch);
-  
+
   // Show actions column by default if user has save permission
   const [showActionsColumn, setShowActionsColumn] = useState(true);
 

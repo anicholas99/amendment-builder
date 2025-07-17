@@ -1,42 +1,44 @@
-import React, { useState } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { environment } from '@/config/environment';
-import {
-  Box,
-  Button,
-  Heading,
-  Text,
-  VStack,
-  HStack,
-  Spinner,
-  Badge,
-  Alert,
-  AlertIcon,
-  Accordion,
-  AccordionItem,
-  AccordionButton,
-  AccordionPanel,
-  AccordionIcon,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  SimpleGrid,
-  useColorModeValue,
-  Card,
-  CardHeader,
-  CardBody,
-  Select,
-  FormControl,
-  FormLabel,
-  Icon,
-  useToast,
-} from '@chakra-ui/react';
+import React, { useState, useRef, useEffect } from 'react';
+import { logger } from '@/utils/clientLogger';
+import { isDevelopment } from '@/config/environment.client';
 import { FiFileText, FiCheckCircle, FiClock } from 'react-icons/fi';
+import { LoadingMinimal } from '@/components/common/LoadingState';
 import { PriorArtReference } from '../../../types/claimTypes';
 import { useQueueCitationExtraction } from '@/hooks/api/useCitationExtraction';
+import { useToast } from '@/hooks/useToastWrapper';
+
+// shadcn/ui imports
+import { Box } from '@/components/ui/box';
+import { Button } from '@/components/ui/button';
+import { Heading } from '@/components/ui/heading';
+import { Text } from '@/components/ui/text';
+import { VStack, HStack } from '@/components/ui/stack';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { SimpleGrid } from '@/components/ui/grid';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { FormControl, FormLabel } from '@/components/ui/form';
 
 interface CitationExtractionPanelProps {
   parsedElements: string[];
@@ -68,8 +70,6 @@ const CitationExtractionPanel: React.FC<CitationExtractionPanelProps> = ({
   const [citationResults] = useState<ReferenceResult[]>([]);
 
   const toast = useToast();
-  const secondaryBg = useColorModeValue('bg.secondary', 'bg.secondary');
-  const primaryBorder = useColorModeValue('border.primary', 'border.primary');
 
   // React Query mutation
   const queueCitationMutation = useQueueCitationExtraction({
@@ -107,8 +107,6 @@ const CitationExtractionPanel: React.FC<CitationExtractionPanelProps> = ({
         title: 'No References',
         description: 'No references available for citation extraction',
         status: 'error',
-        duration: 5000,
-        isClosable: true,
       });
       return;
     }
@@ -128,11 +126,25 @@ const CitationExtractionPanel: React.FC<CitationExtractionPanelProps> = ({
   const renderStatusBadge = () => {
     switch (jobStatus) {
       case 'processing':
-        return <Badge colorScheme="purple">Processing</Badge>;
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100"
+          >
+            Processing
+          </Badge>
+        );
       case 'completed':
-        return <Badge colorScheme="green">Completed</Badge>;
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100"
+          >
+            Completed
+          </Badge>
+        );
       case 'failed':
-        return <Badge colorScheme="red">Failed</Badge>;
+        return <Badge variant="destructive">Failed</Badge>;
       default:
         return null;
     }
@@ -147,17 +159,19 @@ const CitationExtractionPanel: React.FC<CitationExtractionPanelProps> = ({
   };
 
   return (
-    <VStack spacing={6} align="stretch" width="100%">
+    <VStack className="space-y-6 items-stretch w-full">
       {/* Control Section */}
-      <Card borderRadius="lg" variant="outline">
-        <CardHeader bg={secondaryBg} borderTopRadius="lg" py={3}>
-          <HStack justify="space-between">
-            <Heading size="md">Citation Extraction Controls</Heading>
+      <Card className="rounded-lg border">
+        <CardHeader className="bg-muted/50 border-b py-4">
+          <HStack className="justify-between">
+            <CardTitle className="text-lg">
+              Citation Extraction Controls
+            </CardTitle>
             {jobStatus !== 'idle' && renderStatusBadge()}
           </HStack>
         </CardHeader>
-        <CardBody>
-          <VStack spacing={4} align="stretch">
+        <CardContent className="pt-6">
+          <VStack className="space-y-4 items-stretch">
             <Text>
               Extract specific citations from prior art references that match
               your claim elements. The system will analyze the top 5 references
@@ -168,91 +182,80 @@ const CitationExtractionPanel: React.FC<CitationExtractionPanelProps> = ({
               <FormControl>
                 <FormLabel htmlFor="threshold">Relevance Threshold</FormLabel>
                 <Select
-                  id="threshold"
-                  value={selectedThreshold}
-                  onChange={e => setSelectedThreshold(parseInt(e.target.value))}
-                  width="full"
+                  value={selectedThreshold.toString()}
+                  onValueChange={value => setSelectedThreshold(parseInt(value))}
                 >
-                  <option value={40}>
-                    40% - More results, lower relevance
-                  </option>
-                  <option value={60}>60% - Balanced (Recommended)</option>
-                  <option value={80}>
-                    80% - Fewer results, higher relevance
-                  </option>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select threshold" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="40">
+                      40% - More results, lower relevance
+                    </SelectItem>
+                    <SelectItem value="60">
+                      60% - Balanced (Recommended)
+                    </SelectItem>
+                    <SelectItem value="80">
+                      80% - Fewer results, higher relevance
+                    </SelectItem>
+                  </SelectContent>
                 </Select>
               </FormControl>
 
               <Button
-                leftIcon={isLoading ? <Spinner size="sm" /> : <FiFileText />}
-                colorScheme="blue"
                 onClick={handleExtractCitations}
-                isLoading={isLoading}
-                loadingText={
-                  jobStatus === 'processing' ? 'Processing...' : 'Loading...'
-                }
-                isDisabled={
+                disabled={
                   isLoading ||
                   parsedElements.length === 0 ||
                   references.length === 0
                 }
-                height="40px"
-                alignSelf="flex-end"
+                className="self-end h-10"
               >
-                Extract Citations
+                <HStack className="space-x-2">
+                  {isLoading ? <LoadingMinimal size="sm" /> : <FiFileText />}
+                  <span>
+                    {jobStatus === 'processing'
+                      ? 'Processing...'
+                      : 'Extract Citations'}
+                  </span>
+                </HStack>
               </Button>
             </SimpleGrid>
 
             {/* Input Summary */}
-            <Box mt={2}>
-              <Heading size="sm" mb={2}>
+            <Box className="mt-2">
+              <Heading size="sm" className="mb-2">
                 Extraction Inputs
               </Heading>
               <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
-                <Box
-                  p={3}
-                  borderWidth={1}
-                  borderRadius="md"
-                  borderColor={primaryBorder}
-                >
-                  <HStack mb={2}>
-                    <Icon as={FiCheckCircle} color="green.500" />
-                    <Text fontWeight="bold">Claim Elements:</Text>
+                <Box className="p-4 border border-border rounded-md">
+                  <HStack className="mb-2">
+                    <FiCheckCircle className="text-green-500" />
+                    <Text className="font-bold">Claim Elements:</Text>
                   </HStack>
-                  <Text fontSize="sm" color="gray.600">
+                  <Text className="text-sm text-muted-foreground">
                     {getElementsForExtraction().length} elements will be used
                     (all elements)
                   </Text>
                 </Box>
 
-                <Box
-                  p={3}
-                  borderWidth={1}
-                  borderRadius="md"
-                  borderColor={primaryBorder}
-                >
-                  <HStack mb={2}>
-                    <Icon as={FiCheckCircle} color="green.500" />
-                    <Text fontWeight="bold">References:</Text>
+                <Box className="p-4 border border-border rounded-md">
+                  <HStack className="mb-2">
+                    <FiCheckCircle className="text-green-500" />
+                    <Text className="font-bold">References:</Text>
                   </HStack>
-                  <Text fontSize="sm" color="gray.600">
+                  <Text className="text-sm text-muted-foreground">
                     Top {getTopReferences().length} references will be analyzed
                   </Text>
                 </Box>
 
                 {jobId && (
-                  <Box
-                    p={3}
-                    borderWidth={1}
-                    borderRadius="md"
-                    borderColor={primaryBorder}
-                    gridColumn="span 2"
-                  >
-                    <HStack mb={2}>
-                      <Icon as={FiClock} color="blue.500" />
-                      <Text fontWeight="bold">Job ID:</Text>
+                  <Box className="p-4 border border-border rounded-md col-span-2">
+                    <HStack className="mb-2">
+                      <FiClock className="text-blue-500" />
+                      <Text className="font-bold">Job ID:</Text>
                     </HStack>
-                    <Text fontSize="sm" color="gray.600">
+                    <Text className="text-sm text-muted-foreground">
                       {jobId}
                     </Text>
                   </Box>
@@ -261,139 +264,159 @@ const CitationExtractionPanel: React.FC<CitationExtractionPanelProps> = ({
             </Box>
 
             {error && (
-              <Alert status="error" borderRadius="md">
-                <AlertIcon />
-                <Box flex="1">
-                  <Text fontWeight="bold">Error:</Text>
-                  <Text>{error.message}</Text>
-                  {environment.isDevelopment && (
-                    <Box
-                      mt={2}
-                      p={2}
-                      bg="red.50"
-                      fontSize="xs"
-                      fontFamily="monospace"
-                      whiteSpace="pre-wrap"
-                    >
-                      <Text fontWeight="bold">Debug Info:</Text>
-                      {JSON.stringify(error, null, 2)}
-                    </Box>
-                  )}
-                  {/* Retry button for failed jobs */}
-                  {jobStatus === 'failed' && (
-                    <Button
-                      mt={3}
-                      size="sm"
-                      colorScheme="orange"
-                      onClick={() => {
-                        queueCitationMutation.reset();
-                        handleExtractCitations();
-                      }}
-                      leftIcon={<FiFileText />}
-                    >
-                      Retry Citation Extraction
-                    </Button>
-                  )}
-                </Box>
+              <Alert variant="destructive" className="rounded-md">
+                <AlertDescription>
+                  <Box className="flex-1">
+                    <Text className="font-bold">Error:</Text>
+                    <Text>{error.message}</Text>
+                    {/* Developer-only debug info */}
+                    {isDevelopment && (
+                      <Box className="mt-4 p-2 bg-muted rounded-md text-xs font-mono">
+                        <Text className="font-bold">Debug Info:</Text>
+                        {JSON.stringify(error, null, 2)}
+                      </Box>
+                    )}
+                    {/* Retry button for failed jobs */}
+                    {jobStatus === 'failed' && (
+                      <Button
+                        className="mt-3"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          queueCitationMutation.reset();
+                          handleExtractCitations();
+                        }}
+                      >
+                        <HStack className="space-x-2">
+                          <FiFileText />
+                          <span>Retry Citation Extraction</span>
+                        </HStack>
+                      </Button>
+                    )}
+                  </Box>
+                </AlertDescription>
               </Alert>
             )}
 
             {/* Waiting for results message */}
             {isLoading && jobStatus !== 'idle' && (
-              <Alert status="info" borderRadius="md">
-                <AlertIcon />
-                <HStack flex="1">
-                  <Text fontWeight="bold">Processing citation extraction:</Text>
-                  <Spinner size="sm" />
-                  <Text>Analyzing references for relevant citations...</Text>
-                </HStack>
+              <Alert className="rounded-md">
+                <AlertDescription>
+                  <HStack className="flex-1">
+                    <Text className="font-bold">
+                      Processing citation extraction:
+                    </Text>
+                    <LoadingMinimal size="sm" />
+                    <Text>Analyzing references for relevant citations...</Text>
+                  </HStack>
+                </AlertDescription>
               </Alert>
             )}
           </VStack>
-        </CardBody>
+        </CardContent>
       </Card>
 
       {/* Results Section */}
       {(citationResults.length > 0 ||
         (jobStatus === 'completed' && extractionCompleted)) && (
-        <Card borderRadius="lg" variant="outline">
-          <CardHeader bg={secondaryBg} borderTopRadius="lg" py={3}>
-            <Heading size="md">Citation Results</Heading>
+        <Card className="rounded-lg border">
+          <CardHeader className="bg-muted/50 border-b py-4">
+            <CardTitle className="text-lg">Citation Results</CardTitle>
           </CardHeader>
-          <CardBody>
+          <CardContent className="pt-6">
             {citationResults.length === 0 && jobStatus === 'completed' ? (
-              <Alert status="info">
-                <AlertIcon />
-                Citations were processed successfully, but no results were
-                found.
+              <Alert>
+                <AlertDescription>
+                  Citations were processed successfully, but no results were
+                  found.
+                </AlertDescription>
               </Alert>
             ) : (
-              <Accordion allowMultiple defaultIndex={[0]}>
+              <Accordion
+                type="multiple"
+                defaultValue={['0']}
+                className="w-full"
+              >
                 {citationResults.map((referenceResult, refIndex) => (
                   <AccordionItem
                     key={refIndex}
-                    mb={4}
-                    borderWidth={1}
-                    borderRadius="md"
+                    value={refIndex.toString()}
+                    className="mb-4 border border-border rounded-md"
                   >
-                    <h2>
-                      <AccordionButton>
-                        <Box flex="1" textAlign="left" fontWeight="medium">
-                          {referenceResult.reference}
-                          <Badge ml={2} colorScheme="blue" fontSize="xs">
+                    <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center space-x-2 font-medium">
+                          <span>{referenceResult.reference}</span>
+                          <Badge
+                            variant="secondary"
+                            className="bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100 text-xs"
+                          >
                             {referenceResult.citations.length} citations
                           </Badge>
-                        </Box>
-                        <AccordionIcon />
-                      </AccordionButton>
-                    </h2>
-                    <AccordionPanel pb={4}>
+                        </div>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4">
                       {referenceResult.citations.length === 0 ? (
-                        <Text color="gray.500">
+                        <Text className="text-muted-foreground">
                           No citations found for this reference.
                         </Text>
                       ) : (
                         <>
-                          <Text fontSize="sm" mb={3} color="gray.600">
+                          <Text className="text-sm mb-3 text-muted-foreground">
                             Showing the highest relevancy citation match for
                             each element.
                           </Text>
-                          <Table variant="simple" size="sm">
-                            <Thead>
-                              <Tr>
-                                <Th width="30%">Element</Th>
-                                <Th width="50%">Best Citation Match</Th>
-                                <Th width="20%">Relevance</Th>
-                              </Tr>
-                            </Thead>
-                            <Tbody>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="w-[30%]">
+                                  Element
+                                </TableHead>
+                                <TableHead className="w-[50%]">
+                                  Best Citation Match
+                                </TableHead>
+                                <TableHead className="w-[20%]">
+                                  Relevance
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
                               {referenceResult.citations.map(
                                 (
                                   citation: CitationResult,
                                   citIndex: number
                                 ) => (
-                                  <Tr key={citIndex}>
-                                    <Td>
-                                      <Text fontSize="sm" fontWeight="medium">
+                                  <TableRow key={citIndex}>
+                                    <TableCell>
+                                      <Text className="text-sm font-medium">
                                         {citation.claimElement ||
                                           'No element data available'}
                                       </Text>
-                                    </Td>
-                                    <Td>
-                                      <Text fontSize="sm">
+                                    </TableCell>
+                                    <TableCell>
+                                      <Text className="text-sm">
                                         {citation.citation ||
                                           'No citation text'}
                                       </Text>
-                                    </Td>
-                                    <Td>
+                                    </TableCell>
+                                    <TableCell>
                                       <Badge
-                                        colorScheme={
+                                        variant={
                                           (citation.rankPercentage ?? 0) > 0.6
-                                            ? 'green'
+                                            ? 'default'
                                             : (citation.rankPercentage ?? 0) >
                                                 0.4
-                                              ? 'yellow'
-                                              : 'red'
+                                              ? 'secondary'
+                                              : 'destructive'
+                                        }
+                                        className={
+                                          (citation.rankPercentage ?? 0) > 0.6
+                                            ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+                                            : (citation.rankPercentage ?? 0) >
+                                                0.4
+                                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'
+                                              : ''
                                         }
                                       >
                                         {(
@@ -401,20 +424,20 @@ const CitationExtractionPanel: React.FC<CitationExtractionPanelProps> = ({
                                         ).toFixed(2)}
                                         %
                                       </Badge>
-                                    </Td>
-                                  </Tr>
+                                    </TableCell>
+                                  </TableRow>
                                 )
                               )}
-                            </Tbody>
+                            </TableBody>
                           </Table>
                         </>
                       )}
-                    </AccordionPanel>
+                    </AccordionContent>
                   </AccordionItem>
                 ))}
               </Accordion>
             )}
-          </CardBody>
+          </CardContent>
         </Card>
       )}
     </VStack>

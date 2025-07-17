@@ -1,8 +1,18 @@
 import React from 'react';
-import { Box, Text, Button, Flex } from '@chakra-ui/react';
-import { IconButton, Badge } from '@chakra-ui/react';
 import { FiX, FiEye } from 'react-icons/fi';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 import { PriorArtReference } from '../../../types/claimTypes';
+import { getRelevanceBadgeClasses } from '../../search/utils/searchHistoryUtils';
 
 interface PriorArtDetailsModalProps {
   isOpen: boolean;
@@ -10,134 +20,105 @@ interface PriorArtDetailsModalProps {
   priorArt: PriorArtReference | null;
 }
 
-// Helper function to determine badge color based on relevance score
-const getBadgeColorScheme = (relevance: number | undefined): string => {
-  if (typeof relevance !== 'number') return 'gray'; // Default color
-  if (relevance >= 0.8) return 'green';
-  if (relevance >= 0.6) return 'yellow';
-  return 'red';
-};
-
 const PriorArtDetailsModal: React.FC<PriorArtDetailsModalProps> = ({
   isOpen,
   onClose,
   priorArt,
 }) => {
-  if (!isOpen || !priorArt) return null;
+  if (!priorArt) return null;
 
   return (
-    <Box
-      position="fixed"
-      top="0"
-      left="0"
-      right="0"
-      bottom="0"
-      bg="blackAlpha.600"
-      zIndex={1000}
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      onClick={onClose}
-    >
-      <Box
-        bg="white"
-        borderRadius="md"
-        boxShadow="xl"
-        width="90%"
-        maxWidth="800px"
-        maxHeight="90vh"
-        overflow="hidden"
-        onClick={(e: React.MouseEvent) => e.stopPropagation()}
-      >
-        <Flex
-          p={4}
-          borderBottomWidth="1px"
-          justify="space-between"
-          align="center"
-        >
-          <Text fontSize="lg" fontWeight="bold">
-            Prior Art Details
-          </Text>
-          <IconButton
-            aria-label="Close"
-            icon={<FiX />}
-            size="sm"
-            onClick={onClose}
-          />
-        </Flex>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] p-0">
+        <DialogHeader className="p-4 border-b">
+          <div className="flex justify-between items-center">
+            <DialogTitle className="text-lg font-bold">
+              Prior Art Details
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Detailed information about the selected prior art reference
+            </DialogDescription>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="h-8 w-8 p-0"
+              aria-label="Close"
+            >
+              <FiX className="h-4 w-4" />
+            </Button>
+          </div>
+        </DialogHeader>
 
-        <Box p={4} maxHeight="calc(90vh - 120px)" overflowY="auto">
-          <Flex justify="space-between" align="center" mb={4}>
-            <Box>
-              <Text fontSize="xl" fontWeight="bold">
+        <div className="p-4 max-h-[calc(90vh-120px)] overflow-y-auto">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="text-xl font-bold">
                 {typeof priorArt.number === 'string'
                   ? priorArt.number.replace(/-/g, '')
                   : 'N/A'}
-              </Text>
-              <Text fontSize="md" color="gray.600">
+              </h3>
+              <p className="text-base text-muted-foreground">
                 {priorArt.title || 'No Title'}
-              </Text>
-            </Box>
+              </p>
+            </div>
             <Badge
-              colorScheme={getBadgeColorScheme(priorArt.relevance)}
-              fontSize="md"
+              className={cn(
+                'text-base',
+                typeof priorArt.relevance === 'number'
+                  ? getRelevanceBadgeClasses(priorArt.relevance)
+                  : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300'
+              )}
             >
               {typeof priorArt.relevance === 'number'
                 ? `${Math.round(priorArt.relevance * 100)}% Match`
                 : 'N/A'}
             </Badge>
-          </Flex>
+          </div>
 
-          <Box p={4} bg="red.50" borderRadius="md" mb={4}>
-            <Text fontWeight="medium" mb={2}>
-              Relevant Text:
-            </Text>
-            <Text>"{priorArt.relevantText || 'N/A'}"</Text>
-          </Box>
+          <div className="p-4 bg-red-50 dark:bg-red-950/20 rounded-md mb-4">
+            <p className="font-medium mb-2">Relevant Text:</p>
+            <p>"{priorArt.relevantText || 'N/A'}"</p>
+          </div>
 
-          <Box p={4} bg="gray.50" borderRadius="md" mb={4}>
-            <Text fontWeight="medium" mb={2}>
-              Publication Year:
-            </Text>
-            <Text>{priorArt.year || 'N/A'}</Text>
-          </Box>
+          <div className="p-4 bg-muted rounded-md mb-4">
+            <p className="font-medium mb-2">Publication Year:</p>
+            <p>{priorArt.year || 'N/A'}</p>
+          </div>
 
           {/* REMOVED: Abstract display
           {priorArt.abstract && (
-            <Box p={4} bg="gray.50" borderRadius="md" mb={4}>
-              <Text fontWeight="medium" mb={2}>
+            <div className="p-4 bg-muted rounded-md mb-4">
+              <p className="font-medium mb-2">
                 Abstract:
-              </Text>
-              <Text fontSize="sm" noOfLines={5}>
+              </p>
+              <p className="text-sm line-clamp-5">
                 {priorArt.abstract}
-              </Text>
-            </Box>
+              </p>
+            </div>
           )}
           */}
+        </div>
 
-          <Flex justify="space-between" mt={4}>
-            <Button
-              leftIcon={<FiEye />}
-              colorScheme="blue"
-              isDisabled={
-                typeof priorArt.number !== 'string' || !priorArt.number
-              }
-              onClick={() => {
-                if (typeof priorArt.number === 'string') {
-                  window.open(
-                    `https://patents.google.com/patent/${priorArt.number.replace(/-/g, '')}`,
-                    '_blank'
-                  );
-                }
-              }}
-            >
-              View Full Patent
-            </Button>
-            <Button onClick={onClose}>Close</Button>
-          </Flex>
-        </Box>
-      </Box>
-    </Box>
+        <DialogFooter className="p-4 border-t">
+          <Button
+            onClick={() =>
+              window.open(
+                `https://patents.google.com/patent/${typeof priorArt.number === 'string' ? priorArt.number.replace(/-/g, '') : ''}`,
+                '_blank'
+              )
+            }
+            className="gap-1"
+          >
+            <FiEye className="h-4 w-4" />
+            View Full Patent
+          </Button>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

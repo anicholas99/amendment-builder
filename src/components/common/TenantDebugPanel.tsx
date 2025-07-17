@@ -1,18 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Button,
-  Text,
-  VStack,
-  HStack,
-  Code,
-  Heading,
-  Alert,
-  AlertIcon,
-  AlertDescription,
-  Divider,
-  Badge,
-} from '@chakra-ui/react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
 import { useTenant } from '@/contexts/TenantContext';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -22,13 +12,9 @@ import {
   clearProjectCaches,
 } from '@/utils/tenantDebug';
 import { getCachedTenantSlug, getLastPathChecked } from '@/utils/tenant';
-import {
-  FiRefreshCw,
-  FiAlertTriangle,
-  FiCheckCircle,
-  FiDatabase,
-} from 'react-icons/fi';
+import { RefreshCw, AlertTriangle, CheckCircle, Database } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { cn } from '@/lib/utils';
 
 export const TenantDebugPanel: React.FC = () => {
   const { currentTenant, userTenants } = useTenant();
@@ -96,169 +82,165 @@ export const TenantDebugPanel: React.FC = () => {
   }
 
   return (
-    <Box
-      position="fixed"
-      bottom={4}
-      right={4}
-      bg="white"
-      shadow="xl"
-      rounded="lg"
-      p={4}
-      maxW="400px"
-      zIndex={9999}
-      borderWidth="1px"
-      borderColor={issues.length > 0 ? 'red.500' : 'green.500'}
+    <div
+      className={cn(
+        'fixed bottom-4 right-4 z-[9999] w-full max-w-[400px]',
+        'bg-card shadow-xl rounded-lg p-4 border',
+        issues.length > 0 ? 'border-red-500' : 'border-green-500'
+      )}
     >
-      <VStack align="stretch" spacing={3}>
-        <HStack justify="space-between">
-          <Heading size="sm">🏢 Tenant Debug</Heading>
+      <div className="flex flex-col gap-3">
+        <div className="flex justify-between items-center">
+          <h3 className="text-sm font-semibold">🏢 Tenant Debug</h3>
           {issues.length > 0 ? (
-            <Badge colorScheme="red">Issues Detected</Badge>
+            <Badge variant="destructive">Issues Detected</Badge>
           ) : (
-            <Badge colorScheme="green">All Good</Badge>
+            <Badge className="bg-green-600 hover:bg-green-700">All Good</Badge>
           )}
-        </HStack>
+        </div>
 
-        <Divider />
+        <Separator />
 
         {issues.length > 0 && (
-          <Alert status="error" size="sm">
-            <AlertIcon />
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              <VStack align="start" spacing={1}>
+              <div className="flex flex-col gap-1">
                 {issues.map((issue, i) => (
-                  <Text key={i} fontSize="xs">
+                  <p key={i} className="text-xs">
                     {issue}
-                  </Text>
+                  </p>
                 ))}
-              </VStack>
+              </div>
             </AlertDescription>
           </Alert>
         )}
 
-        <VStack align="stretch" spacing={2}>
-          <Box>
-            <Text fontSize="xs" fontWeight="bold">
-              Current URL:
-            </Text>
-            <Code fontSize="xs" w="full" p={1}>
+        <div className="flex flex-col gap-2">
+          <div>
+            <p className="text-xs font-bold">Current URL:</p>
+            <code className="text-xs w-full p-1 bg-muted rounded block">
               {debugInfo.pathname}
-            </Code>
-          </Box>
+            </code>
+          </div>
 
-          <Box>
-            <Text fontSize="xs" fontWeight="bold">
-              Extracted Tenant:
-            </Text>
-            <Code
-              fontSize="xs"
-              colorScheme={
-                debugInfo.extractedTenant === 'development' ? 'green' : 'orange'
-              }
+          <div>
+            <p className="text-xs font-bold">Extracted Tenant:</p>
+            <code
+              className={cn(
+                'text-xs px-2 py-1 rounded inline-block',
+                debugInfo.extractedTenant === 'development'
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                  : 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+              )}
             >
               {debugInfo.extractedTenant}
-            </Code>
-          </Box>
+            </code>
+          </div>
 
-          <Box>
-            <Text fontSize="xs" fontWeight="bold">
-              Context Tenant:
-            </Text>
-            <Code
-              fontSize="xs"
-              colorScheme={
-                currentTenant?.slug === 'development' ? 'green' : 'orange'
-              }
+          <div>
+            <p className="text-xs font-bold">Context Tenant:</p>
+            <code
+              className={cn(
+                'text-xs px-2 py-1 rounded inline-block',
+                currentTenant?.slug === 'development'
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                  : 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+              )}
             >
               {currentTenant?.slug || 'None'}
-            </Code>
-          </Box>
+            </code>
+          </div>
 
-          <Box>
-            <Text fontSize="xs" fontWeight="bold">
-              Cached Tenant:
-            </Text>
-            <Code
-              fontSize="xs"
-              colorScheme={cachedSlug === 'development' ? 'green' : 'orange'}
+          <div>
+            <p className="text-xs font-bold">Cached Tenant:</p>
+            <code
+              className={cn(
+                'text-xs px-2 py-1 rounded inline-block',
+                cachedSlug === 'development'
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                  : 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+              )}
             >
               {cachedSlug || 'None'}
-            </Code>
-          </Box>
+            </code>
+          </div>
 
-          <Box>
-            <Text fontSize="xs" fontWeight="bold">
-              Project Cache:
-            </Text>
-            <Code fontSize="xs" colorScheme={hasProjectCache ? 'blue' : 'gray'}>
+          <div>
+            <p className="text-xs font-bold">Project Cache:</p>
+            <code
+              className={cn(
+                'text-xs px-2 py-1 rounded inline-block',
+                hasProjectCache
+                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                  : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+              )}
+            >
               {hasProjectCache
                 ? `${cachedProjectCount} projects cached`
                 : 'No cache'}
-            </Code>
-          </Box>
+            </code>
+          </div>
 
-          <Box>
-            <Text fontSize="xs" fontWeight="bold">
-              Available Tenants:
-            </Text>
-            <HStack wrap="wrap" spacing={2}>
+          <div>
+            <p className="text-xs font-bold">Available Tenants:</p>
+            <div className="flex flex-wrap gap-2">
               {userTenants.map(tenant => (
                 <Badge
                   key={tenant.id}
-                  colorScheme={
-                    tenant.slug === currentTenant?.slug ? 'blue' : 'gray'
+                  variant={
+                    tenant.slug === currentTenant?.slug
+                      ? 'default'
+                      : 'secondary'
                   }
                 >
                   {tenant.slug}
                 </Badge>
               ))}
-            </HStack>
-          </Box>
-        </VStack>
+            </div>
+          </div>
+        </div>
 
-        <Divider />
+        <Separator />
 
-        <VStack spacing={2}>
+        <div className="flex flex-col gap-2">
           <Button
             size="sm"
-            colorScheme="purple"
-            leftIcon={<FiDatabase />}
+            className="w-full bg-purple-600 hover:bg-purple-700"
             onClick={handleClearProjectCache}
-            isLoading={isClearingProjects}
-            loadingText="Clearing..."
-            w="full"
+            disabled={isClearingProjects}
           >
-            Clear Project Cache & Refetch
+            <Database className="mr-2 h-4 w-4" />
+            {isClearingProjects
+              ? 'Clearing...'
+              : 'Clear Project Cache & Refetch'}
           </Button>
 
           <Button
             size="sm"
-            colorScheme="blue"
-            leftIcon={<FiCheckCircle />}
+            className="w-full"
             onClick={() => handleFixTenant('development')}
-            isLoading={isFixing}
-            loadingText="Fixing..."
-            w="full"
+            disabled={isFixing}
           >
-            Fix to Development Tenant
+            <CheckCircle className="mr-2 h-4 w-4" />
+            {isFixing ? 'Fixing...' : 'Fix to Development Tenant'}
           </Button>
 
           <Button
             size="sm"
-            colorScheme="red"
             variant="outline"
-            leftIcon={<FiRefreshCw />}
+            className="w-full border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
             onClick={clearAllTenantCaches}
-            w="full"
           >
+            <RefreshCw className="mr-2 h-4 w-4" />
             Clear All Caches & Reload
           </Button>
-        </VStack>
+        </div>
 
-        <Text fontSize="xs" color="gray.500" textAlign="center">
+        <p className="text-xs text-muted-foreground text-center">
           User: {user?.email || 'Not logged in'}
-        </Text>
-      </VStack>
-    </Box>
+        </p>
+      </div>
+    </div>
   );
 };

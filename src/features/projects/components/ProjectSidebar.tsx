@@ -12,31 +12,19 @@
  * ✅ IMPROVED: Clean separation of concerns
  * ✅ MAINTAINED: Identical UI/UX and functionality
  */
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  Box,
-  VStack,
-  Tooltip,
-  Icon,
-  useBreakpointValue,
-  useColorModeValue,
-  Flex,
-  Text,
-  IconButton,
-  HStack,
-  Button,
-  Accordion,
-  AccordionItem,
-  AccordionButton,
-  AccordionPanel,
-  AccordionIcon,
-} from '@chakra-ui/react';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from 'react';
 import { useRouter } from 'next/router';
-import { useDisclosure, useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
+import { delay } from '@/utils/delay';
 
 // Context imports
-import { useProjectData, useProjectAutosave } from '@/contexts';
+import { useProjectData } from '@/contexts';
 import { useActiveDocument } from '@/contexts/ActiveDocumentContext';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { useThemeContext } from '@/contexts/ThemeContext';
@@ -58,12 +46,8 @@ import {
 } from './ProjectSidebar/index';
 
 // Type imports
-import {
-  ProjectSidebarState,
-  ModalStates,
-  LoadingState,
-  ProjectSidebarProject,
-} from '../types/projectSidebar';
+import { ModalStates, LoadingState } from '../types/projectSidebar';
+import type { ProjectData } from '@/types/project';
 import {
   transformProjectsForSidebar,
   findProjectById,
@@ -75,16 +59,33 @@ import {
 } from '../utils/projectSidebarUtils';
 
 // Toast utilities
-import { useToast as useChakraToast, showErrorToast } from '@/utils/toast';
+import { useToast } from '@/hooks/useToastWrapper';
+
+// Tenant utilities
+import { getTenantFromRouter } from '@/utils/routerTenant';
+
+// shadcn/ui components
+import { cn } from '@/lib/utils';
 
 const ProjectSidebar = () => {
   // Core data and state
-  const { data, isLoading, refetch, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useProjects({
+  const {
+    data,
+    isLoading,
+    refetch,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useProjects({
     filterBy: 'all',
     sortBy: 'modified',
-    sortOrder: 'desc'
+    sortOrder: 'desc',
   });
-  const projects = data?.pages.flatMap(page => page.projects) ?? [];
+  const projects = useMemo(
+    () => (data?.pages.flatMap(page => page.projects) ?? []) as ProjectData[],
+    [data?.pages]
+  );
   const deleteProjectMutation = useDeleteProject();
   const createProjectMutation = useCreateProject();
   const queryClient = useQueryClient();
@@ -102,69 +103,150 @@ const ProjectSidebar = () => {
 
   // Router and navigation
   const router = useRouter();
-  const toast = useChakraToast();
+  const toast = useToast();
 
   // Transform projects for sidebar (replaces old structuredData approach)
   const sidebarProjects = transformProjectsForSidebar(projects);
-  
+
   // Debug logging
   React.useEffect(() => {
     logger.debug('[ProjectSidebar] Projects data updated', {
       projectCount: projects.length,
       activeProjectId,
-      projectsWithInvention: projects.filter((p: { invention?: unknown }) => p.invention).length,
+      projectsWithInvention: projects.filter((p: ProjectData) => p.invention)
+        .length,
+      firstPageProjectIds: projects.slice(0, 5).map(p => p.id), // Log first 5 project IDs
+      isActiveProjectInList: projects.some(p => p.id === activeProjectId),
+      projectsWithProcessedInvention: projects.filter(
+        (p: ProjectData) => p.hasProcessedInvention === true
+      ).length,
+      activeProjectData: projects.find(p => p.id === activeProjectId),
     });
-  }, [projects, activeProjectId]);
 
-  // Listen for invention processing completion and refetch
-  React.useEffect(() => {
-    const handleInventionProcessed = async (event: Event) => {
-      const customEvent = event as CustomEvent;
-      logger.debug('[ProjectSidebar] Invention processed event received', {
-        projectId: customEvent.detail?.projectId,
-        activeProjectId,
+    // More detailed logging for active project using transformed data
+    const activeProject = sidebarProjects.find(p => p.id === activeProjectId);
+    if (activeProject) {
+      logger.info('[ProjectSidebar] Active project details', {
+        id: activeProject.id,
+        name: activeProject.name,
+        hasProcessedInvention: activeProject.hasProcessedInvention,
+        hasInvention: !!activeProject.invention,
+        inventionTitle: activeProject.invention?.title,
+        inventionId: activeProject.invention?.id,
+        rawInvention: activeProject.invention,
       });
-      
-      // Force refetch the projects data
-      await refetch();
-      
-      // Add a small delay to ensure React Query has finished updating
-      setTimeout(() => {
-        // Force a re-render to ensure CollapsedProjectView gets updated data
-        setForceUpdate(prev => prev + 1);
-      }, 200);
-    };
+    }
+  }, [projects, activeProjectId, sidebarProjects]);
 
-    // Subscribe to a custom event that we'll emit when processing completes
-    window.addEventListener('invention-processed', handleInventionProcessed);
-    
-    return () => {
-      window.removeEventListener('invention-processed', handleInventionProcessed);
-    };
-  }, [refetch, activeProjectId]);
-  
   // Listen for project creation from other sources
   React.useEffect(() => {
     const handleProjectCreated = (event: Event) => {
-      const customEvent = event as CustomEvent;
+      const customEvent = event as CustomEvent<{ projectId?: string }>;
       logger.debug('[ProjectSidebar] Project created event received', {
-        projectId: customEvent.detail?.projectId
+        projectId: customEvent.detail?.projectId,
       });
-      
-      // No need to refetch - optimistic updates handle this
-      // Just force a re-render if needed
-      setForceUpdate(prev => prev + 1);
+
+      // React Query optimistic updates handle this - no action needed
     };
 
     window.addEventListener('project-created', handleProjectCreated);
-    
+
     return () => {
       window.removeEventListener('project-created', handleProjectCreated);
     };
   }, []);
-  
-  // Add a force update state to ensure UI refreshes
-  const [forceUpdate, setForceUpdate] = React.useState(0);
+
+  // Listen for invention processing to ensure sidebar updates
+  React.useEffect(() => {
+    const handleInventionProcessed = async (event: Event) => {
+      const customEvent = event as CustomEvent<{ projectId?: string }>;
+      const processedProjectId = customEvent.detail?.projectId;
+
+      logger.info('[ProjectSidebar] Invention processed event received', {
+        projectId: processedProjectId,
+        activeProjectId,
+        currentProjectCount: projects.length,
+      });
+
+      try {
+        // Force refetch to ensure the sidebar shows updated hasProcessedInvention status
+        // This should pick up the optimistically updated cache from the mutation
+        await refetch();
+
+        // Additional check: if the current project was processed, verify it updated correctly
+        if (processedProjectId && processedProjectId === activeProjectId) {
+          // Ensure the project remains active
+          setActiveProject(processedProjectId);
+
+          // Force a complete cache invalidation for this specific project
+          await queryClient.invalidateQueries({
+            queryKey: projectKeys.detail(processedProjectId),
+            refetchType: 'active',
+          });
+
+          // Also invalidate and refetch all project lists to ensure sidebar updates
+          await queryClient.invalidateQueries({
+            queryKey: projectKeys.lists(),
+            exact: false,
+            refetchType: 'active',
+          });
+
+          // Wait a moment for the queries to settle
+          await delay(100);
+
+          // Force another refetch to be absolutely sure
+          await refetch();
+
+          // Log success for debugging
+          logger.info(
+            '[ProjectSidebar] Successfully refreshed after invention processing',
+            {
+              projectId: processedProjectId,
+              newProjectCount: projects.length,
+            }
+          );
+        }
+
+        // Log the updated project state for debugging future issues
+        const updatedProject = projects.find(p => p.id === processedProjectId);
+        if (updatedProject) {
+          logger.info(
+            '[ProjectSidebar] Updated project state after invention processing',
+            {
+              projectId: processedProjectId,
+              hasProcessedInvention: updatedProject.hasProcessedInvention,
+              projectName: updatedProject.name,
+            }
+          );
+        } else {
+          logger.warn(
+            '[ProjectSidebar] Could not find processed project in list after refetch',
+            {
+              processedProjectId,
+              availableProjectIds: projects.map(p => p.id),
+            }
+          );
+        }
+      } catch (error) {
+        logger.error(
+          '[ProjectSidebar] Failed to refetch after invention processing',
+          {
+            error,
+            projectId: processedProjectId,
+          }
+        );
+      }
+    };
+
+    window.addEventListener('invention-processed', handleInventionProcessed);
+
+    return () => {
+      window.removeEventListener(
+        'invention-processed',
+        handleInventionProcessed
+      );
+    };
+  }, [activeProjectId, setActiveProject, refetch, projects, queryClient]);
 
   // DECOUPLED STATE: Replace single state object with individual states
   const [loadingState, setLoadingState] = useState<LoadingState>({
@@ -172,11 +254,27 @@ const ProjectSidebar = () => {
   });
   const [modalStates, setModalStates] = useState<ModalStates>({
     isNewProjectOpen: false,
-    isManageProjectsOpen: false,
     isSwitchModalOpen: false,
   });
   const [targetProjectId, setTargetProjectId] = useState<string | null>(null);
   const [expandedIndices, setExpandedIndices] = useState<number[]>([]);
+
+  // Refs for URL synchronization
+  const lastSyncedProjectIdRef = useRef<string | null>(null);
+
+  // Track the previous active project ID to detect actual changes
+  const previousActiveProjectIdRef = useRef<string | null>(null);
+
+  // Modal control functions
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const openNewProjectModal = useCallback(
+    () => setIsNewProjectModalOpen(true),
+    []
+  );
+  const closeNewProjectModal = useCallback(
+    () => setIsNewProjectModalOpen(false),
+    []
+  );
 
   // Memoized modal state setters to prevent re-render loops
   const openSwitchModal = useCallback(() => {
@@ -186,20 +284,6 @@ const ProjectSidebar = () => {
   const closeSwitchModal = useCallback(() => {
     setModalStates(prev => ({ ...prev, isSwitchModalOpen: false }));
   }, []);
-
-  // Refs for URL synchronization
-  const lastSyncedProjectIdRef = useRef<string | null>(null);
-
-  // Track the previous active project ID to detect actual changes
-  const previousActiveProjectIdRef = useRef<string | null>(null);
-
-  // Modal control functions
-  const {
-    isOpen: isNewProjectModalOpen,
-    onOpen: openNewProjectModal,
-    onClose: closeNewProjectModal,
-  } = useDisclosure();
-  const [isManageProjectsOpen, setIsManageProjectsOpen] = useState(false);
 
   // Project click handler - simplified
   const handleProjectClick = useCallback(
@@ -230,11 +314,7 @@ const ProjectSidebar = () => {
     setExpandedIndices(indices);
   }, []);
 
-  // Helper to safely get string values from router query
-  const getQueryString = (value: string | string[] | undefined): string => {
-    if (Array.isArray(value)) return value[0] || '';
-    return value || '';
-  };
+  // Removed - using centralized tenant utilities instead
 
   // Project creation handler
   const handleCreateProject = useCallback(
@@ -257,21 +337,27 @@ const ProjectSidebar = () => {
         if (newProject && newProject.id) {
           // Set empty invention data in the cache to prevent loading state
           queryClient.setQueryData(['invention', newProject.id], null);
-          
+
           // Also set the project detail cache
           queryClient.setQueryData(['projects', newProject.id], newProject);
-          
+
           // Pre-populate versions cache to prevent 404
           queryClient.setQueryData(['versions', newProject.id, 'latest'], null);
           queryClient.setQueryData(['versions', newProject.id, 'list'], []);
+
+          // IMPORTANT: Set the active project immediately to ensure it's tracked
+          setActiveProject(newProject.id);
+
+          // Force a refetch of the project list to ensure it includes the new project
+          await refetch();
         }
 
         // The UI will update immediately thanks to optimistic updates
         // No need to wait for refetch
-        
+
         // Navigate to the new project's technology page immediately
         if (newProject && newProject.id) {
-          const tenant = getQueryString(router.query.tenant) || 'development';
+          const tenant = getTenantFromRouter(router);
           const newPath = `/${tenant}/projects/${newProject.id}/technology`;
           await router.push(newPath);
         }
@@ -279,14 +365,17 @@ const ProjectSidebar = () => {
         logger.error('Error creating project:', error);
         throw error; // Re-throw for the modal to catch and display an error
       } finally {
-        setLoadingState({
-          isAnimating: false,
-          title: undefined,
-          subtitle: undefined,
-        });
+        setLoadingState({ isAnimating: false });
       }
     },
-    [createProjectMutation, closeNewProjectModal, router, queryClient]
+    [
+      createProjectMutation,
+      closeNewProjectModal,
+      queryClient,
+      router,
+      setActiveProject,
+      refetch,
+    ]
   );
 
   // Project deletion handler
@@ -335,7 +424,7 @@ const ProjectSidebar = () => {
     } else if (!isProjectPage && lastSyncedProjectIdRef.current) {
       lastSyncedProjectIdRef.current = null;
     }
-  }, [router.pathname, router.query.projectId, setActiveProject]);
+  }, [router.pathname, router.query, setActiveProject]);
 
   // Document synchronization effect
   useEffect(() => {
@@ -426,12 +515,15 @@ const ProjectSidebar = () => {
         });
       }}
     >
-      {(navigationHandlers: { handleProjectSwitch: (projectId: string) => Promise<void>; handleDocumentSelect: (projectId: string, documentType: string) => void; navigateToProjects: () => Promise<void> }) => (
+      {(navigationHandlers: {
+        handleProjectSwitch: (projectId: string) => Promise<void>;
+        handleDocumentSelect: (projectId: string, documentType: string) => void;
+        navigateToProjects: () => Promise<void>;
+      }) => (
         <ModalManager
           modalStates={{
             ...modalStates,
             isNewProjectOpen: isNewProjectModalOpen,
-            isManageProjectsOpen,
           }}
           projects={sidebarProjects}
           targetProject={targetProject}
@@ -455,16 +547,19 @@ const ProjectSidebar = () => {
               closeSwitchModal();
 
               // Keep loading overlay visible briefly to cover modal closing animation
-              await new Promise(resolve => setTimeout(resolve, 200));
+              await new Promise(resolve => {
+                // eslint-disable-next-line no-restricted-globals
+                const timer = setTimeout(resolve, 200);
+                return () => clearTimeout(timer);
+              });
             } catch (error) {
               logger.error('[ProjectSidebar] Project switch failed:', {
                 error,
               });
-              showErrorToast(
-                toast,
-                'Project switch failed',
-                'Please try again or refresh the page'
-              );
+              toast.error({
+                title: 'Project switch failed',
+                description: 'Please try again or refresh the page',
+              });
               // On error, close modal immediately
               setTargetProjectId(null);
               closeSwitchModal();
@@ -482,32 +577,17 @@ const ProjectSidebar = () => {
             closeSwitchModal();
           }}
           onCloseNewProject={closeNewProjectModal}
-          onCloseManageProjects={() => setIsManageProjectsOpen(false)}
         >
-          <Box
-            w={isSidebarHidden ? '0' : isSidebarCollapsed ? '60px' : '220px'}
-            maxWidth={
-              isSidebarHidden ? '0' : isSidebarCollapsed ? '60px' : '220px'
-            }
-            bg="bg.card"
-            color={isDarkMode ? 'white' : 'ipd.textDark'}
-            position="absolute"
-            top="0"
-            left={0}
-            bottom={0}
-            overflowY="auto"
-            overflowX="hidden"
-            zIndex={5}
-            transition="width 0.12s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
-            willChange="width"
-            display="flex"
-            flexDirection="column"
-            borderRightWidth="1px"
-            borderColor="border.primary"
-            boxShadow="0 2px 6px rgba(0, 0, 0, 0.05)"
-            visibility={isSidebarHidden ? 'hidden' : 'visible'}
-            opacity="1"
-            className="sidebar"
+          <div
+            className={cn(
+              'sidebar absolute top-0 left-0 bottom-0 z-[5] flex flex-col border-r overflow-y-auto overflow-x-hidden transition-all duration-120 ease-out will-change-[width] opacity-100',
+              'bg-card border-border text-card-foreground shadow-sm',
+              isSidebarHidden
+                ? 'w-0 max-w-0 invisible'
+                : isSidebarCollapsed
+                  ? 'w-[60px] max-w-[60px] visible'
+                  : 'w-[220px] max-w-[220px] visible'
+            )}
           >
             {/* Sidebar Header */}
             <SidebarHeader
@@ -515,7 +595,9 @@ const ProjectSidebar = () => {
               toggleSidebar={toggleSidebar}
               toggleSidebarVisibility={toggleSidebarVisibility}
               onOpenModal={openNewProjectModal}
-              onManageProjects={() => setIsManageProjectsOpen(true)}
+              onManageProjects={() => {
+                /* Manage projects modal removed */
+              }}
               projectCount={sidebarProjects.length}
               isDarkMode={isDarkMode}
               isPreloading={loadingState.isAnimating}
@@ -523,7 +605,7 @@ const ProjectSidebar = () => {
 
             {/* Projects List - Collapsible/Expandable */}
             <ProjectListManager
-              key={`project-list-${forceUpdate}`}
+              key={`project-list-${sidebarProjects.map(p => `${p.id}-${p.hasProcessedInvention}`).join('-')}`}
               projects={sidebarProjects}
               activeProject={activeProjectId}
               activeDocument={activeDocument}
@@ -574,7 +656,7 @@ const ProjectSidebar = () => {
                 isDarkMode={isDarkMode}
               />
             )}
-          </Box>
+          </div>
         </ModalManager>
       )}
     </NavigationManager>

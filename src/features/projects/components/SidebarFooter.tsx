@@ -1,7 +1,8 @@
 import React, { useCallback } from 'react';
-import { Icon, Text, Box, Flex, Button } from '@chakra-ui/react';
 import { FiList } from 'react-icons/fi';
 import { useThemeContext } from '../../../contexts/ThemeContext';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface SidebarFooterProps {
   navigateToProjects: () => void;
@@ -18,74 +19,36 @@ const SidebarFooter: React.FC<SidebarFooterProps> = React.memo(
     const isInDarkMode =
       isDarkMode !== undefined ? isDarkMode : darkModeFromContext;
 
-    const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
-        e.currentTarget.style.backgroundColor = isInDarkMode
-          ? 'rgba(255, 255, 255, 0.1)'
-          : '#f7fafc';
-        e.currentTarget.style.transform = 'translateY(-1px)';
-      },
-      [isInDarkMode]
-    );
-
-    const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
-        e.currentTarget.style.backgroundColor = isInDarkMode
-          ? 'rgba(255, 255, 255, 0.05)'
-          : 'white';
-        e.currentTarget.style.transform = 'translateY(0)';
-      },
-      [isInDarkMode]
-    );
-
     return (
-      <Box
-        p="3"
-        borderTopWidth="1px"
-        borderTopColor="border.primary"
-        bg="bg.card"
-        position="relative"
-        zIndex={1}
-        boxShadow="lg"
-      >
+      <div className="p-3 border-t border-border bg-background relative z-[1] shadow-lg">
         {/* View all projects button */}
-        <Box
+        <div
           onClick={navigateToProjects}
-          style={{
-            borderRadius: '6px',
-            padding: '8px 12px',
-            cursor: 'pointer',
-            backgroundColor: isInDarkMode
-              ? 'rgba(255, 255, 255, 0.05)'
-              : 'white',
-            border: '1px solid',
-            borderColor: isInDarkMode ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0',
-            transition:
-              'background-color 0.15s ease-out, transform 0.15s ease-out',
-          }}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
+          className={cn(
+            'rounded-md px-3 py-2 cursor-pointer border transition-all duration-150 ease-out hover:transform hover:-translate-y-px',
+            isInDarkMode
+              ? 'bg-white/5 border-white/10 hover:bg-white/10'
+              : 'bg-white border-gray-200 hover:bg-gray-50'
+          )}
         >
-          <Flex align="center" justify="center">
-            <Icon
-              as={FiList}
-              style={{
-                marginRight: '8px',
-                color: isInDarkMode ? '#90cdf4' : '#3182ce',
-                transition: 'color 0.15s ease-out',
-              }}
+          <div className="flex items-center justify-center">
+            <FiList
+              className={cn(
+                'mr-2 transition-colors duration-150',
+                isInDarkMode ? 'text-blue-300' : 'text-blue-600'
+              )}
             />
-            <Text
-              fontSize="sm"
-              color={isInDarkMode ? 'white' : 'gray.700'}
-              fontWeight="normal"
-              style={{ transition: 'color 0.15s ease-out' }}
+            <span
+              className={cn(
+                'text-sm font-normal transition-colors duration-150',
+                isInDarkMode ? 'text-white' : 'text-gray-700'
+              )}
             >
               View Dashboard
-            </Text>
-          </Flex>
-        </Box>
-      </Box>
+            </span>
+          </div>
+        </div>
+      </div>
     );
   }
 );

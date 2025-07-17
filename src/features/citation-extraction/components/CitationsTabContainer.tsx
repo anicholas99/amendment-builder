@@ -1,29 +1,28 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
-import { VStack, Box, Text } from '@chakra-ui/react';
-import {
-  useCitationMatches,
-  GroupedCitation,
-} from '@/features/search/hooks/useCitationMatches';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCitationMatches } from '@/features/search/hooks/useCitationMatches';
 import { useCitationStore } from '../store';
 import { useCitationPolling } from '../hooks/useCitationPolling';
 import { useCitationStatus } from '../hooks/useCitationStatus';
 import { useSearchHistory } from '@/hooks/api/useSearchHistory';
 import { useDeepAnalysis } from '@/features/search/hooks/useDeepAnalysis';
 import CombinedAnalysisInTabView from '@/features/search/components/CombinedAnalysisInTabView';
-import environment from '@/config/environment';
-import { usePriorArtManagement } from '@/features/search/hooks/usePriorArtManagement';
 import { ProcessedCitationMatch } from '@/types/domain/citation';
-import { SavedCitationUI } from '@/types/domain/priorArt';
-
-// Custom hooks
+import { useSaveCitation } from '@/hooks/api/useSaveCitation';
+import { useProjectPriorArt } from '@/hooks/api/usePriorArt';
+import { CitationJobWithAnalysis } from '@/types/api/citation';
+import type { CitationJob } from '@/features/search/hooks/useCitationJobs';
+// Removed direct Prisma type import to satisfy eslint-rule `local/no-direct-prisma-import`
 import { useCitationJobsManagement } from '../hooks/useCitationJobsManagement';
 import { useCombinedAnalysisState } from '../hooks/useCombinedAnalysisState';
 import { useReferenceActions } from '../hooks/useReferenceActions';
 import { useClaimsData } from '../hooks/useClaimsData';
 import { useAddClaimMutation, useClaimsQuery } from '@/hooks/api/useClaims';
-import { useToast as useChakraToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import { useSavedCitationState } from '../hooks/useSavedCitationState';
+import { useQueryClient } from '@tanstack/react-query';
+import { getCurrentTenant } from '@/lib/queryKeys/tenant';
+import { subscribeToCitationEvents } from '@/utils/events/citationEvents';
 
 // Components
 import { HistoricalViewBanner } from './HistoricalViewBanner';
@@ -42,12 +41,65 @@ interface CitationsTabContainerProps {
    * Callback function to apply amendments to claim 1
    */
   onApplyAmendmentToClaim1?: (original: string, revised: string) => void;
+  /**
+   * Exposes the reset function to parent components for navigation control
+   */
+  onResetToCitationResults?: (resetFn: () => void) => void;
 }
+
+// ------------------------------
+// Utility helpers
+// ------------------------------
+
+/**
+ * Supported job status values returned from the backend once they have been
+ * normalised for the UI layer. Note that `undefined` is used when we cannot
+ * confidently map an incoming status string.
+ */
+type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+
+/**
+ * Convert an arbitrary status string from the backend into a `JobStatus` value
+ * that is understood by the presentation layer.
+ *
+ * "RUNNING" & "CREATED" are treated as aliases for the generic
+ * "PROCESSING" state so that the UI can reuse the existing loading styling.
+ * Any *unknown* status will return `undefined` which allows a safe fallback
+ * path in rendering logic.
+ */
+const mapJobStatus = (status: string): JobStatus | undefined => {
+  switch (status) {
+    case 'PENDING':
+    case 'PROCESSING':
+    case 'COMPLETED':
+    case 'FAILED':
+      return status as JobStatus;
+    case 'RUNNING':
+    case 'CREATED':
+      return 'PROCESSING';
+    default:
+      return undefined;
+  }
+};
+
+// Type for a claim object
+interface Claim {
+  id: string;
+  number: number;
+  text: string;
+  inventionId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Type for claims data response
+type ClaimsData = Claim[] | { claims: Claim[] } | undefined;
 
 const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
   isActive = false,
   projectId,
   onApplyAmendmentToClaim1,
+  onResetToCitationResults,
 }) => {
   // Use individual selectors to avoid re-renders and infinite loops
   const activeSearchId = useCitationStore(state => state.activeSearchId);
@@ -56,6 +108,59 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
   const setSelectedReference = useCitationStore(
     state => state.setSelectedReference
   );
+  const clearAllState = useCitationStore(state => state.clearAllState);
+  const queryClient = useQueryClient();
+
+  // Clear citation store when project changes to prevent data leakage
+  useEffect(() => {
+    // Reset citation store state when switching projects
+    clearAllState();
+
+    // Invalidate all citation-related queries to prevent stale data
+    const tenant = getCurrentTenant();
+    queryClient.invalidateQueries({ queryKey: [tenant, 'citationJobs'] });
+    queryClient.invalidateQueries({ queryKey: [tenant, 'citationMatches'] });
+    queryClient.invalidateQueries({ queryKey: [tenant, 'examinerAnalysis'] });
+    queryClient.invalidateQueries({ queryKey: [tenant, 'deepAnalysis'] });
+    queryClient.invalidateQueries({ queryKey: [tenant, 'citations'] });
+    queryClient.invalidateQueries({ queryKey: [tenant, 'citationTopMatches'] });
+
+    logger.info(
+      '[CitationsTabContainer] Project changed, clearing citation state',
+      {
+        projectId,
+        tenant,
+      }
+    );
+  }, [projectId, clearAllState, queryClient]);
+
+  // Subscribe to citation events to stay synchronized with other views
+  useEffect(() => {
+    if (!projectId) return;
+
+    const unsubscribe = subscribeToCitationEvents(detail => {
+      // Only refresh if the event is for the current project
+      if (detail.projectId === projectId && detail.type === 'citation-saved') {
+        logger.info(
+          '[CitationsTabContainer] Citation saved event received, refreshing data',
+          { ...detail }
+        );
+
+        // Invalidate prior art queries to get fresh saved citations data
+        const tenant = getCurrentTenant();
+        queryClient.invalidateQueries({
+          queryKey: ['priorArt', 'project', projectId],
+          refetchType: 'all',
+        });
+        queryClient.invalidateQueries({
+          queryKey: [tenant, 'savedPriorArt', 'project', projectId],
+          refetchType: 'all',
+        });
+      }
+    });
+
+    return unsubscribe;
+  }, [projectId, queryClient]);
 
   // Fetch search history
   const { data: searchHistoryData } = useSearchHistory(projectId);
@@ -83,6 +188,29 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
   // Convert null to undefined for type compatibility
   const citationMatchesData = citationMatchesResponse || undefined;
 
+  // Simple logging when citation matches appear
+  useEffect(() => {
+    if (!isActive || !citationMatchesData || !activeSearchId) return;
+
+    const totalMatches =
+      citationMatchesData.groupedResults?.reduce(
+        (total, group) => total + group.matches.length,
+        0
+      ) || 0;
+
+    // Only log if we have matches (indicating extraction completed)
+    if (totalMatches > 0) {
+      logger.info(
+        '[CitationsTabContainer] 🎉 Citation extraction complete with matches',
+        {
+          searchId: activeSearchId,
+          totalMatches,
+          groupCount: citationMatchesData.groupedResults?.length || 0,
+        }
+      );
+    }
+  }, [citationMatchesData, activeSearchId, isActive]);
+
   // Custom hooks
   const {
     referenceStatuses,
@@ -106,56 +234,179 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
   const { claim1Text } = useClaimsData({ projectId });
   const { data: claimsData } = useClaimsQuery(projectId);
   const { mutate: addClaim } = useAddClaimMutation(projectId);
-  const toast = useChakraToast();
+  const toast = useToast();
+
+  // Track previous job statuses to detect completion transitions
+  const previousJobStatusesRef = useRef<Map<string, string>>(new Map());
+
+  // Toast notification when citation extraction transitions to complete
+  useEffect(() => {
+    if (!isActive || !citationJobsData || !activeSearchId) return;
+
+    const jobsArray: CitationJob[] = Array.isArray(citationJobsData)
+      ? citationJobsData
+      : citationJobsData?.jobs || [];
+    const currentJobStatuses = new Map<string, string>();
+
+    // Track current job statuses
+    jobsArray.forEach(job => {
+      if (job.referenceNumber) {
+        currentJobStatuses.set(job.referenceNumber, job.status);
+      }
+    });
+
+    // Check for jobs that transitioned to COMPLETED
+    const newlyCompletedJobs = jobsArray.filter(job => {
+      if (!job.referenceNumber || job.status !== 'COMPLETED') return false;
+
+      const previousStatus = previousJobStatusesRef.current.get(
+        job.referenceNumber
+      );
+      return previousStatus && previousStatus !== 'COMPLETED';
+    });
+
+    // Show toast if we have newly completed jobs and citation matches
+    if (newlyCompletedJobs.length > 0 && citationMatchesData) {
+      const totalMatches =
+        citationMatchesData.groupedResults?.reduce(
+          (total, group) => total + group.matches.length,
+          0
+        ) || 0;
+
+      // Only show toast if there are actual matches
+      if (totalMatches > 0) {
+        logger.info(
+          '[CitationsTabContainer] 🎉 Showing analysis complete toast',
+          {
+            searchId: activeSearchId,
+            newlyCompletedJobs: newlyCompletedJobs.length,
+            totalMatches,
+          }
+        );
+
+        const completedRefs = newlyCompletedJobs
+          .map(job => job.referenceNumber)
+          .filter(Boolean);
+
+        const refText =
+          completedRefs.length === 1
+            ? `Reference ${completedRefs[0]}`
+            : `${completedRefs.length} references`;
+
+        toast({
+          title: 'Analysis Complete',
+          description: `${refText} processed successfully.`,
+          status: 'success',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+    }
+
+    // Update previous job statuses
+    previousJobStatusesRef.current = currentJobStatuses;
+  }, [citationJobsData, activeSearchId, isActive, citationMatchesData, toast]);
+
+  // Clear previous job statuses when search changes
+  useEffect(() => {
+    previousJobStatusesRef.current.clear();
+  }, [activeSearchId]);
+
+  // Extract claims array from claimsData
+  const allClaims = useMemo(() => {
+    let claims: Claim[] = [];
+    const typedClaimsData = claimsData as ClaimsData;
+
+    if (typedClaimsData) {
+      if (Array.isArray(typedClaimsData)) {
+        claims = typedClaimsData;
+      } else if (
+        typeof typedClaimsData === 'object' &&
+        'claims' in typedClaimsData
+      ) {
+        claims = typedClaimsData.claims;
+      }
+    }
+
+    return claims;
+  }, [claimsData]);
 
   const {
     showCombinedAnalysis,
     selectedReferencesForCombined,
     combinedAnalysisResult,
-    isRunningCombinedAnalysis,
+    isLoadingCombinedAnalysis,
     handleCombinedAnalysis,
     handleBackFromCombinedAnalysis,
     handleRunCombinedAnalysis,
     clearCombinedAnalysisResult,
+    resetToCitationResults,
   } = useCombinedAnalysisState({
     activeSearchId,
     claim1Text,
     citationJobs,
+    allClaims,
+    projectId,
   });
 
-  // Citation saving functionality
-  const { handleSaveCitationMatch, savedPriorArtList } = usePriorArtManagement({
-    projectId,
-    selectedReference,
-    citationMatchesData: citationMatchesData?.groupedResults?.flatMap(
-      g => g.matches
-    ) as ProcessedCitationMatch[] | undefined,
-  });
+  // Get saved prior art data
+  const { data: savedPriorArtList, refetch: refetchPriorArt } =
+    useProjectPriorArt(projectId);
+
+  // Track if we've initialized on first active
+  const hasInitializedRef = useRef(false);
+
+  // Force refresh prior art data when tab becomes active for the first time
+  useEffect(() => {
+    if (isActive && !hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+      logger.info(
+        '[CitationsTabContainer] First activation after mount, refreshing prior art data'
+      );
+      // Force refresh to ensure we have fresh data
+      refetchPriorArt();
+    }
+  }, [isActive]); // Remove refetchPriorArt from dependencies - refetch functions are not stable
 
   // Use the new saved citation state hook
-  const { savedCitationIds, addOptimisticUpdate, savedCount } = useSavedCitationState({
-    savedPriorArtList,
-    citationMatchesData,
+  const { savedCitationIds, addOptimisticUpdate, removeOptimisticUpdate } =
+    useSavedCitationState({
+      savedPriorArtList: savedPriorArtList ?? [],
+      citationMatchesData,
+    });
+
+  // Citation saving functionality
+  const { saveCitation } = useSaveCitation({
+    projectId,
+    savedPriorArt: savedPriorArtList ?? [],
+    addOptimisticUpdate,
+    removeOptimisticUpdate,
   });
 
-  // Log saved count for debugging
+  // Expose reset function to parent components for navigation control
   useEffect(() => {
-    logger.info('[CitationsTabContainer] Saved citations count:', { 
-      savedCount,
-      savedCitationIds: savedCitationIds ? Array.from(savedCitationIds).slice(0, 5) : []
-    });
-  }, [savedCount, savedCitationIds]);
+    if (onResetToCitationResults) {
+      onResetToCitationResults(resetToCitationResults);
+    }
+  }, [onResetToCitationResults, resetToCitationResults]);
 
-  // Wrap handleSaveCitationMatch to add optimistic updates
+  // Convert Map to Set for compatibility with CitationMainView
+  const savedCitationIdsSet: Set<string> = useMemo(() => {
+    return new Set(Array.from(savedCitationIds.keys()));
+  }, [savedCitationIds]);
+
+  // Removed logging to prevent blocking
+
+  // Wrap saveCitation to add optimistic updates
   const handleSaveCitationMatchWithOptimistic = useCallback(
-    async (citationMatch: ProcessedCitationMatch) => {
-      // Add optimistic update immediately
-      addOptimisticUpdate(citationMatch.id);
-      
-      // Then save for real
-      await handleSaveCitationMatch(citationMatch);
+    (citationMatch: ProcessedCitationMatch) => {
+      // Add optimistic update immediately for instant UI feedback
+      addOptimisticUpdate(citationMatch.id, citationMatch.referenceNumber);
+
+      // Fire the save - it's already non-blocking
+      saveCitation(citationMatch);
     },
-    [handleSaveCitationMatch, addOptimisticUpdate]
+    [saveCitation, addOptimisticUpdate]
   );
 
   const handleSelectedSearchIdChange = useCallback(
@@ -173,12 +424,22 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
     (dependentClaimText: string) => {
       try {
         // Get current claims to find the highest claim number
-        const claims = Array.isArray(claimsData)
-          ? claimsData
-          : (claimsData as any)?.claims || [];
+        let claims: Claim[] = [];
+        const typedClaimsData = claimsData as ClaimsData;
+
+        if (typedClaimsData) {
+          if (Array.isArray(typedClaimsData)) {
+            claims = typedClaimsData;
+          } else if (
+            typeof typedClaimsData === 'object' &&
+            'claims' in typedClaimsData
+          ) {
+            claims = typedClaimsData.claims;
+          }
+        }
 
         const maxNumber = claims.reduce(
-          (currentMax: number, c: any) =>
+          (currentMax: number, c) =>
             c.number > currentMax ? c.number : currentMax,
           0
         );
@@ -189,18 +450,15 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
         addClaim(
           { number: newClaimNumber, text: dependentClaimText },
           {
-            onError: error => {
+            onError: (error: Error) => {
               logger.error(
                 '[CitationsTabContainer] Failed to add dependent claim',
                 { error }
               );
-              toast({
+              toast.error({
                 title: 'Failed to add claim',
                 description:
                   'An error occurred while adding the dependent claim',
-                status: 'error',
-                duration: 4000,
-                isClosable: true,
               });
             },
           }
@@ -210,12 +468,9 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
           '[CitationsTabContainer] Error in handleAddDependentClaim',
           { error }
         );
-        toast({
+        toast.error({
           title: 'Error',
           description: 'Something went wrong while adding the claim',
-          status: 'error',
-          duration: 4000,
-          isClosable: true,
         });
       }
     },
@@ -247,13 +502,14 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
 
     for (const group of citationMatchesData.groupedResults) {
       const match = group.matches.find(
-        m => m.referenceNumber === selectedReference
+        (m): m is ProcessedCitationMatch =>
+          (m as ProcessedCitationMatch).referenceNumber === selectedReference
       );
       if (match) {
         return {
-          title: match.referenceTitle,
-          applicant: match.referenceApplicant,
-          publicationDate: match.referencePublicationDate,
+          title: match.referenceTitle ?? undefined,
+          applicant: match.referenceApplicant ?? undefined,
+          publicationDate: match.referencePublicationDate ?? undefined,
         };
       }
     }
@@ -272,6 +528,16 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
     selectedReferenceMetadata,
   });
 
+  // Log reference actions state for debugging
+  useEffect(() => {
+    logger.info('[CitationsTabContainer] Reference actions state:', {
+      selectedReference,
+      isReferenceSaved,
+      isReferenceExcluded,
+      projectId,
+    });
+  }, [selectedReference, isReferenceSaved, isReferenceExcluded, projectId]);
+
   /* ==========================
    *  Deep Analysis Integration
    * ========================== */
@@ -281,11 +547,6 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
       : false;
   }, [citationMatchesData]);
 
-  // Only enable deep analysis if we have the data we need
-  const canUseDeepAnalysis = useMemo(() => {
-    return !!selectedReference && !!activeSearchId && citationJobs.length > 0;
-  }, [selectedReference, activeSearchId, citationJobs.length]);
-
   const {
     showDeepAnalysis,
     toggleDeepAnalysis,
@@ -294,7 +555,6 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
     hasHighRelevanceAnalysis,
     runDeepAnalysis,
     isRunningDeepAnalysis,
-    selectedJobId,
     isLoadingJobDetails,
     jobDetailsError,
     hasExistingDeepAnalysis,
@@ -306,25 +566,35 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
     hasMatchesForCurrentVersion,
   });
 
-  const isDeepAnalysisAvailable =
-    environment.features.enableDeepAnalysis || false;
-  const useEnhancedCitationTable =
-    environment.features.enableEnhancedCitationTable || false;
+  // Pass effectiveDeepAnalysis directly without transformation
+  const transformedEffectiveDeepAnalysis = effectiveDeepAnalysis;
+
+  // Transform citation history to keep Date objects for compatibility
+  const transformedCitationHistory = useMemo(() => {
+    return citationHistory.map(item => ({
+      ...item,
+      createdAt:
+        item.createdAt instanceof Date
+          ? item.createdAt
+          : new Date(item.createdAt),
+      status: item.status,
+    }));
+  }, [citationHistory]);
 
   const error = jobsError || citationMatchesError;
 
   if (error) {
     return (
-      <VStack h="100%" spacing={0} align="stretch">
-        <Box p={3}>
-          <Text color="red.500">Error: {error.message}</Text>
-        </Box>
-      </VStack>
+      <div className="h-full flex flex-col">
+        <div className="p-4">
+          <p className="text-destructive">Error: {error.message}</p>
+        </div>
+      </div>
     );
   }
 
   return (
-    <VStack h="100%" spacing={0} align="stretch" position="relative">
+    <div className="h-full flex flex-col relative">
       {!showCombinedAnalysis ? (
         <>
           {/* Historical View Banner */}
@@ -362,7 +632,7 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
             onRerunCitationExtraction={handleRerunCitationExtraction}
             isRerunningExtraction={isRerunningExtraction}
             onSaveCitationMatch={handleSaveCitationMatchWithOptimistic}
-            savedCitationIds={savedCitationIds}
+            savedCitationIds={savedCitationIdsSet}
             // Deep analysis
             showDeepAnalysis={showDeepAnalysis}
             hasDeepAnalysisData={!!effectiveDeepAnalysis}
@@ -370,13 +640,13 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
             isRunningDeepAnalysis={isRunningDeepAnalysis}
             onToggleDeepAnalysis={toggleDeepAnalysis}
             onRunDeepAnalysis={runDeepAnalysis}
-            effectiveDeepAnalysis={effectiveDeepAnalysis}
+            effectiveDeepAnalysis={transformedEffectiveDeepAnalysis}
             shouldShowDeepAnalysisPanel={shouldShowDeepAnalysisPanel}
             isLoadingJobDetails={isLoadingJobDetails}
             jobDetailsError={jobDetailsError}
             hasExistingDeepAnalysis={hasExistingDeepAnalysis}
             // Citation history
-            citationHistory={citationHistory}
+            citationHistory={transformedCitationHistory}
             onViewHistoricalRun={handleViewHistoricalRun}
             // Claim amendments
             onApplyAmendmentToClaim1={onApplyAmendmentToClaim1}
@@ -385,21 +655,42 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
       ) : (
         <CombinedAnalysisInTabView
           citationJobs={citationJobs.map(job => {
-            const referenceTitle = citationMatchesData?.groupedResults
-              ?.flatMap(g => g.matches)
-              .find(
-                m => m.referenceNumber === job.referenceNumber
-              )?.referenceTitle;
+            // Find the reference metadata for the current job
+            const referenceMatch = citationMatchesData?.groupedResults
+              ?.flatMap(
+                (group): ProcessedCitationMatch[] =>
+                  group.matches as ProcessedCitationMatch[]
+              )
+              .find(m => m.referenceNumber === job.referenceNumber);
 
-            return {
-              ...job,
-              referenceTitle: referenceTitle || undefined,
+            // Normalise job status for UI consumption
+            const mappedStatus = mapJobStatus(job.status);
+
+            // Build the citation job with analysis object
+            const citationJobWithAnalysis: CitationJobWithAnalysis = {
+              id: job.id,
+              referenceNumber: job.referenceNumber ?? undefined,
+              referenceTitle: referenceMatch?.referenceTitle ?? undefined,
+              referenceApplicant:
+                referenceMatch?.referenceApplicant ?? undefined,
+              deepAnalysisJson:
+                typeof job.deepAnalysisJson === 'string'
+                  ? job.deepAnalysisJson
+                  : undefined,
+              status: mappedStatus ?? 'PENDING', // Default to PENDING if status is unknown
+              createdAt:
+                job.createdAt instanceof Date
+                  ? job.createdAt.toISOString()
+                  : String(job.createdAt),
+              error: job.error ?? undefined,
             };
+
+            return citationJobWithAnalysis;
           })}
           searchHistoryId={activeSearchId}
           onBack={handleBackFromCombinedAnalysis}
           onRunCombinedAnalysis={handleRunCombinedAnalysis}
-          isLoading={isRunningCombinedAnalysis}
+          isLoading={isLoadingCombinedAnalysis}
           result={combinedAnalysisResult}
           selectedReferences={selectedReferencesForCombined}
           claim1Text={claim1Text}
@@ -410,7 +701,7 @@ const CitationsTabContainer: React.FC<CitationsTabContainerProps> = ({
           onAddDependentClaim={handleAddDependentClaim}
         />
       )}
-    </VStack>
+    </div>
   );
 };
 

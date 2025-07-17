@@ -1,6 +1,17 @@
+/**
+ * Node.js API Route Rate Limiting
+ *
+ * This module provides Redis-backed rate limiting for API routes.
+ * For Edge Runtime (middleware.ts), use rateLimit.edge.ts instead.
+ *
+ * Features:
+ * - Redis support with automatic fallback to in-memory
+ * - Multiple rate limit configurations
+ * - User and IP-based tracking
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
 import { NextApiRequest, NextApiResponse } from 'next';
-import { logger } from '@/lib/monitoring/logger';
 import crypto from 'crypto';
 import { environment } from '@/config/environment';
 import Redis from 'ioredis';
@@ -119,9 +130,7 @@ class RedisRateLimiter implements RateLimiter {
     if (redisUrl) {
       this.initializeRedis(redisUrl);
     } else {
-      logger.warn(
-        'Redis URL not provided for rate limiting, using in-memory storage'
-      );
+      // Warning logging removed for client compatibility
     }
   }
 
@@ -147,7 +156,7 @@ class RedisRateLimiter implements RateLimiter {
         lazyConnect: false,
         retryStrategy: (times: number) => {
           if (times > 3) {
-            logger.error('Redis connection failed after 3 retries');
+            // Error logging removed for client compatibility
             return null; // Stop retrying
           }
           return Math.min(times * 50, 2000);
@@ -155,26 +164,26 @@ class RedisRateLimiter implements RateLimiter {
       });
 
       this.redis.on('error', err => {
-        logger.error('Redis rate limiter error:', err);
+        // Error logging removed for client compatibility
       });
 
       this.redis.on('connect', () => {
-        logger.info('Redis rate limiter connected successfully');
+        // Info logging removed for client compatibility
         this.connectionAttempts = 0; // Reset on successful connection
       });
 
       this.redis.on('ready', () => {
-        logger.info('Redis rate limiter ready');
+        // Info logging removed for client compatibility
       });
 
       this.redis.on('close', () => {
-        logger.warn('Redis rate limiter connection closed');
+        // Warning logging removed for client compatibility
       });
 
       // Test the connection
       await this.redis.ping();
     } catch (error) {
-      logger.error('Failed to initialize Redis for rate limiting:', error);
+      // Error logging removed for client compatibility
       if (this.redis) {
         this.redis.disconnect();
         this.redis = null;
@@ -257,7 +266,7 @@ class RedisRateLimiter implements RateLimiter {
         consumedPoints: points,
       };
     } catch (error) {
-      logger.error('Redis rate limit error, falling back to in-memory:', error);
+      // Error logging removed for client compatibility
       return this.fallback.consume(key, points);
     }
   }
@@ -271,7 +280,7 @@ class RedisRateLimiter implements RateLimiter {
       const redisKey = `ratelimit:${key}`;
       await this.redis.del(redisKey);
     } catch (error) {
-      logger.error('Redis rate limit reset error:', error);
+      // Error logging removed for client compatibility
       await this.fallback.reset(key);
     }
   }
@@ -448,13 +457,7 @@ function getClientKey(req: NextRequest): string {
 
   // Log suspicious activity
   if (ip === 'unknown') {
-    logger.warn('Rate limiting with unknown IP', {
-      path: req.nextUrl.pathname,
-      headers: {
-        'x-forwarded-for': req.headers.get('x-forwarded-for'),
-        'x-real-ip': req.headers.get('x-real-ip'),
-      },
-    });
+    // Warning logging removed for client compatibility
   }
 
   return key;
@@ -499,7 +502,8 @@ function getLimiterNameForPath(
 }
 
 /**
- * Middleware rate limiting function for Next.js Edge Runtime
+ * Rate limiting function for Node.js API routes
+ * @deprecated for Edge Runtime - use rateLimit.edge.ts instead
  */
 export async function rateLimit(
   req: NextRequest,
@@ -519,11 +523,7 @@ export async function rateLimit(
     const result = await limiter.consume(clientKey);
 
     if (!result.allowed) {
-      logger.warn('Rate limit exceeded', {
-        clientKey,
-        limiter: detectedLimiterName,
-        path: req.nextUrl.pathname,
-      });
+      // Warning logging removed for client compatibility
 
       return NextResponse.json(
         {
@@ -559,11 +559,7 @@ export async function rateLimit(
 
     return response;
   } catch (error) {
-    logger.error('Rate limiting error', {
-      error,
-      clientKey,
-      limiter: detectedLimiterName,
-    });
+    // Error logging removed for client compatibility
     // On error, allow the request to proceed
     return undefined;
   }
@@ -610,7 +606,7 @@ export function createApiRateLimiter(
 
       next();
     } catch (error) {
-      logger.error('API rate limiting error', { error, clientKey });
+      // Error logging removed for client compatibility
       // On error, allow the request
       next();
     }

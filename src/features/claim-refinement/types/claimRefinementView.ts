@@ -51,7 +51,7 @@ export interface ViewState {
   openApplyModal: (data: { elementText: string; newLanguage: string }) => void;
 
   // View states
-  claimViewMode: 'list' | 'box';
+  claimViewMode: 'box' | 'compact';
   toggleClaimViewMode: () => void;
   searchMode: 'basic' | 'advanced';
 
@@ -113,7 +113,7 @@ export interface ApplyModalData {
 export interface ClaimRefinementState {
   // UI State
   activeTab: string;
-  claimViewMode: 'list' | 'box';
+  claimViewMode: 'box' | 'compact';
   loadingMessage: string;
 
   // Modal State

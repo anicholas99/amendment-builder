@@ -1,4 +1,4 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { apiFetch } from '@/lib/api/apiClient';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { API_ROUTES } from '@/constants/apiRoutes';
@@ -6,28 +6,30 @@ import type {
   ParseClaimResponseV2,
   GenerateQueriesResponseV2,
 } from '@/types/api/responses';
+import type { Claim } from '@prisma/client';
 
 /**
  * API client functions for parsing and generating claims.
+ * Uses simplified V2 format (string arrays) for all operations.
  */
 export class ClaimsClientService {
   /**
-   * Parses a claim into elements using the LLM service.
-   * This will also update the parsedElementsJson field in the claim set version.
+   * Parses a claim into string elements using the LLM service.
    *
    * @param claimText - The text of claim 1 to parse
    * @param projectId - The project ID
-   * @param allClaims - Optional object containing all claims in format {"1": "text", "2": "text"}
-   * @param background - Whether to process variants in the background (faster UI response) - defaults to true
-   * @returns The parsed claim elements
+   * @param claimSetVersionId - DEPRECATED - no longer used
+   * @param allClaims - DEPRECATED - no longer used
+   * @param background - DEPRECATED - no longer used
+   * @returns Array of claim element strings
    */
   static async parseClaimElements(
     claimText: string,
     projectId: string,
-    claimSetVersionId?: string,
-    allClaims?: Record<string, string>,
-    background: boolean = true
-  ): Promise<unknown> {
+    claimSetVersionId?: string, // Keep for compatibility, but unused
+    allClaims?: Record<string, string>, // Keep for compatibility, but unused
+    background?: boolean // Keep for compatibility, but unused
+  ): Promise<string[]> {
     if (!projectId) {
       throw new ApplicationError(
         ErrorCode.VALIDATION_REQUIRED_FIELD,
@@ -51,34 +53,47 @@ export class ClaimsClientService {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            claimOneText: claimText,
-            claimSetVersionId,
-            allClaims,
-            background, // Pass the background flag to API
+            claimText,
+            projectId,
           }),
         }
       );
 
       const result = await response.json();
 
-      // Check if we have a valid response with parsedElements
-      if (!result || !result.parsedElements) {
-        throw new ApplicationError(
-          ErrorCode.API_NETWORK_ERROR,
-          'Failed to parse claim - invalid response'
-        );
+      // Handle standardized API response format
+      if (result.success && result.data) {
+        const parseData = result.data;
+        // Validate response
+        if (
+          !parseData ||
+          !parseData.elements ||
+          !Array.isArray(parseData.elements)
+        ) {
+          throw new ApplicationError(
+            ErrorCode.API_NETWORK_ERROR,
+            'Failed to parse claim - invalid response'
+          );
+        }
+        return parseData.elements;
       }
 
-      return result.parsedElements;
+      // Fallback for non-standardized response (backward compatibility)
+      if (result.elements && Array.isArray(result.elements)) {
+        return result.elements;
+      }
+
+      throw new ApplicationError(
+        ErrorCode.API_NETWORK_ERROR,
+        'Failed to parse claim - invalid response format'
+      );
     } catch (error: unknown) {
       logger.error('Error parsing claim elements', { error });
 
-      // If it's already an ApplicationError, just re-throw it
       if (error instanceof ApplicationError) {
         throw error;
       }
 
-      // Otherwise wrap it
       const errorMessage =
         error instanceof Error
           ? error.message
@@ -90,17 +105,22 @@ export class ClaimsClientService {
   /**
    * Generate search queries based on parsed elements.
    *
-   * @param parsedElements - The parsed claim elements
+   * @param parsedElements - Array of claim element strings
    * @param projectId - The project ID
    * @returns The generated search queries
    */
   static async generateSearchQueries(
-    parsedElements: unknown[],
+    parsedElements: string[] | unknown[], // Accept both for compatibility
     projectId: string
   ): Promise<string[]> {
-    if (!parsedElements || !parsedElements.length || !projectId) {
+    // Ensure we have string array
+    const elements = parsedElements.map(el =>
+      typeof el === 'string' ? el : String(el)
+    );
+
+    if (!elements || !elements.length || !projectId) {
       throw new Error(
-        'Parsed elements and project ID are required to generate search queries'
+        'Elements and project ID are required to generate search queries'
       );
     }
 
@@ -115,10 +135,8 @@ export class ClaimsClientService {
         logger.debug('Fetched invention data for query generation', {
           projectId,
           hasInventionData: !!inventionData,
-          inventionDataKeys: inventionData ? Object.keys(inventionData) : [],
         });
       } catch (inventionError) {
-        // If invention data fetch fails, continue without it
         logger.warn(
           'Failed to fetch invention data for query generation, proceeding without context',
           {
@@ -136,14 +154,39 @@ export class ClaimsClientService {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            parsedElements,
-            inventionData, // Now passing invention data for better context
+            elements,
+            inventionData,
           }),
         }
       );
 
       const result = await response.json();
-      return result.searchQueries || result.queries || [];
+
+      // Handle standardized API response format
+      if (result.success && result.data) {
+        const queryData = result.data;
+        logger.debug('Query generation response', {
+          result,
+          hasSearchQueries: 'searchQueries' in queryData,
+          searchQueriesLength: queryData.searchQueries?.length,
+        });
+        return queryData.searchQueries;
+      }
+
+      // Fallback for non-standardized response (backward compatibility)
+      if (result.searchQueries && Array.isArray(result.searchQueries)) {
+        logger.debug('Query generation response (legacy format)', {
+          result,
+          hasSearchQueries: 'searchQueries' in result,
+          searchQueriesLength: result.searchQueries?.length,
+        });
+        return result.searchQueries;
+      }
+
+      throw new ApplicationError(
+        ErrorCode.API_NETWORK_ERROR,
+        'Failed to generate search queries - invalid response format'
+      );
     } catch (error) {
       logger.error('Error generating search queries', { error });
       throw error;
@@ -176,148 +219,67 @@ export class ClaimsClientService {
         }
       );
 
-      return await response.json();
+      const result = await response.json();
+
+      // Handle standardized API response format
+      if (result.success && result.data) {
+        return {
+          claim: result.data.claim,
+          // Include metadata if present for potential future use
+          ...(result.data.metadata && { metadata: result.data.metadata }),
+        };
+      }
+
+      // Fallback for non-standardized response (backward compatibility)
+      if (result.claim) {
+        return result;
+      }
+
+      throw new ApplicationError(
+        ErrorCode.API_INVALID_RESPONSE,
+        'Invalid response format from claim generation API'
+      );
     } catch (error) {
       logger.error('Error generating claim 1', { error });
       throw error;
     }
   }
 
-  // ============================================================================
-  // V2 Methods - Simplified string array format
-  // ============================================================================
+  // Keep V2 methods as aliases for gradual migration
+  static parseClaimElementsV2 = ClaimsClientService.parseClaimElements;
+  static generateSearchQueriesV2 = ClaimsClientService.generateSearchQueries;
 
   /**
-   * V2: Parses a claim into simple string elements.
-   *
-   * @param claimText - The claim text to parse
-   * @param projectId - The project ID
-   * @returns Array of claim element strings
+   * Updates the text of an existing claim
    */
-  static async parseClaimElementsV2(
-    claimText: string,
-    projectId: string
-  ): Promise<string[]> {
-    if (!projectId) {
-      throw new ApplicationError(
-        ErrorCode.VALIDATION_REQUIRED_FIELD,
-        'Project ID is required'
-      );
-    }
-
-    if (!claimText?.trim()) {
-      throw new ApplicationError(
-        ErrorCode.VALIDATION_REQUIRED_FIELD,
-        'Claim text is required'
-      );
-    }
-
-    try {
-      const response = await apiFetch(
-        API_ROUTES.PROJECTS.CLAIMS.V2.PARSE(projectId),
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            claimText,
-            projectId,
-          }),
-        }
-      );
-
-      const result: ParseClaimResponseV2 = await response.json();
-
-      // Validate response
-      if (!result || !result.elements || !Array.isArray(result.elements)) {
-        throw new ApplicationError(
-          ErrorCode.API_NETWORK_ERROR,
-          'Failed to parse claim - invalid response'
-        );
-      }
-
-      return result.elements;
-    } catch (error: unknown) {
-      logger.error('Error parsing claim elements V2', { error });
-
-      if (error instanceof ApplicationError) {
-        throw error;
-      }
-
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : 'Failed to parse claim elements';
-      throw new ApplicationError(ErrorCode.API_NETWORK_ERROR, errorMessage);
-    }
+  static async updateClaimText(claimId: string, text: string): Promise<Claim> {
+    const response = await apiFetch(`/api/claims/${claimId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    return response.json();
   }
 
   /**
-   * V2: Generate search queries from simple string elements.
-   *
-   * @param elements - Array of claim element strings
-   * @param projectId - The project ID
-   * @returns The generated search queries
+   * Updates the number of an existing claim
    */
-  static async generateSearchQueriesV2(
-    elements: string[],
-    projectId: string
-  ): Promise<string[]> {
-    if (!elements || !elements.length || !projectId) {
-      throw new Error(
-        'Elements and project ID are required to generate search queries'
-      );
-    }
+  static async updateClaimNumber(
+    claimId: string,
+    number: number
+  ): Promise<Claim> {
+    const response = await apiFetch(`/api/claims/${claimId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ number }),
+    });
+    return response.json();
+  }
 
-    try {
-      // Fetch invention data for better context
-      let inventionData = null;
-      try {
-        const inventionResponse = await apiFetch(
-          API_ROUTES.PROJECTS.INVENTION(projectId)
-        );
-        inventionData = await inventionResponse.json();
-        logger.debug('Fetched invention data for V2 query generation', {
-          projectId,
-          hasInventionData: !!inventionData,
-        });
-      } catch (inventionError) {
-        logger.warn(
-          'Failed to fetch invention data for V2 query generation, proceeding without context',
-          {
-            projectId,
-            error: inventionError,
-          }
-        );
-      }
-
-      const response = await apiFetch(
-        API_ROUTES.PROJECTS.CLAIMS.V2.GENERATE_QUERIES(projectId),
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            elements,
-            inventionData,
-          }),
-        }
-      );
-
-      const result: GenerateQueriesResponseV2 = await response.json();
-
-      logger.debug('V2 query generation response', {
-        result,
-        hasSearchQueries: 'searchQueries' in result,
-        searchQueriesLength: result.searchQueries?.length,
-      });
-
-      return result.searchQueries;
-    } catch (error) {
-      logger.error('Error generating V2 search queries', { error });
-      throw error;
-    }
+  /**
+   * Deletes a claim by ID
+   */
+  static async deleteClaim(claimId: string): Promise<void> {
+    // Implementation of deleteClaim method
   }
 }

@@ -1,5 +1,14 @@
 import React from 'react';
-import { Box, Text, Select, Icon, VStack, HStack } from '@chakra-ui/react';
+import { Box } from '@/components/ui/box';
+import { Text } from '@/components/ui/text';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { VStack, HStack } from '@/components/ui/stack';
 import { FiFileText, FiFilter, FiSearch } from 'react-icons/fi';
 
 interface CitationEmptyStateProps {
@@ -23,27 +32,18 @@ export const CitationEmptyState: React.FC<CitationEmptyStateProps> = ({
 
   if (noMatchesFound) {
     return (
-      <Box
-        textAlign="center"
-        py={10}
-        px={6}
-        minHeight="300px"
-        display="flex"
-        flexDirection="column"
-        justifyContent="center"
-        alignItems="center"
-      >
-        <VStack spacing={4} maxW="400px">
-          <Icon as={FiFileText} boxSize={12} color="text.tertiary" />
+      <Box className="text-center py-10 px-6 min-h-[300px] flex flex-col justify-center items-center">
+        <VStack spacing={4} className="max-w-[400px]">
+          <FiFileText className="h-12 w-12 text-muted-foreground" />
           <VStack spacing={2}>
-            <Text fontSize="lg" fontWeight="semibold" color="text.primary">
+            <Text size="lg" weight="semibold">
               No Citations Found
             </Text>
-            <Text fontSize="md" color="text.secondary">
+            <Text size="md" className="text-muted-foreground">
               No citation matches were found for the selected search and claim
               set version.
             </Text>
-            <Text fontSize="sm" color="text.tertiary">
+            <Text size="sm" className="text-muted-foreground">
               Try selecting a different search or check if citation extraction
               has completed for this search.
             </Text>
@@ -54,47 +54,38 @@ export const CitationEmptyState: React.FC<CitationEmptyStateProps> = ({
   }
 
   return (
-    <Box
-      textAlign="center"
-      py={10}
-      px={6}
-      minHeight="300px"
-      display="flex"
-      flexDirection="column"
-      justifyContent="center"
-      alignItems="center"
-    >
-      <VStack spacing={4} maxW="400px">
-        <Icon as={FiFilter} boxSize={12} color="text.tertiary" />
+    <Box className="text-center py-10 px-6 min-h-[300px] flex flex-col justify-center items-center">
+      <VStack spacing={4} className="max-w-[400px]">
+        <FiFilter className="h-12 w-12 text-muted-foreground" />
         <VStack spacing={2}>
-          <Text fontSize="lg" fontWeight="semibold" color="text.primary">
+          <Text size="lg" weight="semibold">
             Select a Search
           </Text>
-          <Text fontSize="md" color="text.secondary">
+          <Text size="md" className="text-muted-foreground">
             Choose a search from the dropdown to view its citation analysis.
           </Text>
         </VStack>
 
         {availableSearches.length > 0 && (
-          <VStack spacing={2} align="stretch" minW="250px">
+          <VStack spacing={2} align="stretch" className="min-w-[250px]">
             <HStack spacing={2} justify="center" align="center">
-              <Icon as={FiSearch} size={3} color="text.secondary" />
-              <Text fontSize="xs" color="text.tertiary">
+              <FiSearch className="h-3 w-3 text-muted-foreground" />
+              <Text size="xs" className="text-muted-foreground">
                 Recent searches available
               </Text>
             </HStack>
-            <Select
-              placeholder="Choose a search..."
-              value={selectedSearchId}
-              onChange={e => onSelectSearch(e.target.value)}
-              size="sm"
-            >
-              {availableSearches.map((search, index) => (
-                <option key={search.id} value={search.id}>
-                  {search.display}
-                  {index === 0 ? ' (Latest)' : ''}
-                </option>
-              ))}
+            <Select value={selectedSearchId} onValueChange={onSelectSearch}>
+              <SelectTrigger className="h-8">
+                <SelectValue placeholder="Choose a search..." />
+              </SelectTrigger>
+              <SelectContent>
+                {availableSearches.map((search, index) => (
+                  <SelectItem key={search.id} value={search.id}>
+                    {search.display}
+                    {index === 0 ? ' (Latest)' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </VStack>
         )}

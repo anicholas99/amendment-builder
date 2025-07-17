@@ -1,5 +1,13 @@
 import React from 'react';
-import { Box, Flex, FormLabel, Switch, Select, Text } from '@chakra-ui/react';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ProcessedSearchHistoryEntry } from '@/types/domain/searchHistory';
 
 interface SearchSelectionPanelProps {
@@ -22,42 +30,41 @@ export const SearchSelectionPanel: React.FC<SearchSelectionPanelProps> = ({
   searchHistory,
 }) => {
   return (
-    <Flex align="center" justify="space-between" mb={4} wrap="wrap" gap={2}>
-      <Flex align="center" gap={4}>
-        <FormLabel htmlFor="saved-toggle" mb="0" fontSize="sm" cursor="pointer">
+    <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <div className="flex items-center gap-4">
+        <Label htmlFor="saved-toggle" className="text-sm cursor-pointer">
           {showSavedPriorArt ? 'Saved Prior Art' : 'Search References'}
-        </FormLabel>
+        </Label>
         <Switch
           id="saved-toggle"
-          size="sm"
-          colorScheme="blue"
-          isChecked={showSavedPriorArt}
-          onChange={onToggleMode}
+          checked={showSavedPriorArt}
+          onCheckedChange={onToggleMode}
         />
 
         {!showSavedPriorArt && (
           <Select
             value={selectedSearchId || ''}
-            onChange={e => onSelectedSearchIdChange(e.target.value || null)}
-            size="sm"
-            width="auto"
-            minWidth="180px"
-            placeholder="Select a search"
+            onValueChange={value => onSelectedSearchIdChange(value || null)}
             disabled={searchHistory.length === 0}
           >
-            {Array.isArray(searchHistory) &&
-              searchHistory.map((entry, index) => {
-                const isLatest = index === 0;
-                return (
-                  <option key={entry.id} value={entry.id}>
-                    Search #{searchHistory.length - index}
-                    {isLatest ? ' (Latest)' : ''}
-                  </option>
-                );
-              })}
+            <SelectTrigger className="w-auto min-w-[180px]">
+              <SelectValue placeholder="Select a search" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.isArray(searchHistory) &&
+                searchHistory.map((entry, index) => {
+                  const isLatest = index === 0;
+                  return (
+                    <SelectItem key={entry.id} value={entry.id}>
+                      Search #{searchHistory.length - index}
+                      {isLatest ? ' (Latest)' : ''}
+                    </SelectItem>
+                  );
+                })}
+            </SelectContent>
           </Select>
         )}
-      </Flex>
-    </Flex>
+      </div>
+    </div>
   );
 };

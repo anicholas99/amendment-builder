@@ -3,7 +3,7 @@
  *
  * Provides business logic for search history operations.
  */
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ProcessedSearchHistoryEntry } from '@/types/domain/searchHistory';
 import { findSearchHistoryById } from '@/repositories/search/searchHistory.repository';
 

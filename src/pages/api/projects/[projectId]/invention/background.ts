@@ -1,9 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { inventionDataService } from '@/server/services/invention-data.server-service';
-import { logger } from '@/lib/monitoring/logger';
-import { AuthenticatedRequest } from '@/types/middleware';
+import { RequestWithServices } from '@/types/middleware';
+import { logger } from '@/server/logger';
 import { z } from 'zod';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Validation schema for updating the background
 const updateBackgroundSchema = z.object({
@@ -17,28 +17,37 @@ const updateBackgroundSchema = z.object({
   ]),
 });
 
-async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { inventionService } = (req as RequestWithServices).services;
   const { projectId } = req.query;
 
   if (!projectId || typeof projectId !== 'string') {
-    return res.status(400).json({ error: 'Invalid project ID' });
+    return apiResponse.badRequest(res, 'Invalid project ID');
   }
 
-  const { background } = req.body;
-
   try {
-    await inventionDataService.updateBackground(projectId, background);
-    return res
-      .status(200)
-      .json({ message: 'Background updated successfully.' });
+    switch (req.method) {
+      case 'GET':
+        const inventionData =
+          await inventionService.getInventionData(projectId);
+        return apiResponse.ok(res, {
+          background: inventionData?.background || {},
+        });
+
+      case 'PUT':
+        await inventionService.updateBackground(projectId, req.body.background);
+        return apiResponse.ok(res, { success: true });
+
+      default:
+        return apiResponse.methodNotAllowed(res, ['GET', 'PUT']);
+    }
   } catch (error) {
-    logger.error('[API] Error updating invention background', {
+    logger.error('Failed to handle background request', {
       projectId,
+      method: req.method,
       error,
     });
-    return res
-      .status(500)
-      .json({ error: 'Failed to update invention background' });
+    return apiResponse.serverError(res, error);
   }
 }
 

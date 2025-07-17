@@ -1,13 +1,5 @@
 import React from 'react';
-import {
-  HStack,
-  Button,
-  Icon,
-  useColorModeValue,
-  Box,
-  ButtonGroup,
-} from '@chakra-ui/react';
-import { FiFileText, FiImage, FiLayers } from 'react-icons/fi';
+import { Upload, FileText, Image, Layout } from 'lucide-react';
 
 interface TechnologyQuickActionsProps {
   onUploadClick: () => void;
@@ -16,61 +8,59 @@ interface TechnologyQuickActionsProps {
 export const TechnologyQuickActions: React.FC<TechnologyQuickActionsProps> = ({
   onUploadClick,
 }) => {
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
-  const hoverBg = useColorModeValue('gray.50', 'gray.700');
-  const iconColor = useColorModeValue('gray.600', 'gray.400');
-  const textColor = useColorModeValue('gray.700', 'gray.300');
-
-  const actionButton = {
-    size: 'sm',
-    variant: 'ghost',
-    color: textColor,
-    fontWeight: 'medium',
-    fontSize: 'sm',
-    px: 3,
-    _hover: {
-      bg: hoverBg,
-    },
-    transition: 'all 0.2s ease',
-  };
-
   return (
-    <Box
-      width="100%"
-      display={{ base: 'none', md: 'flex' }}
-      justifyContent="center"
-      py={1}
-    >
-      <ButtonGroup spacing={2} size="sm">
-        <Button
-          {...actionButton}
-          leftIcon={<Icon as={FiFileText} color={iconColor} boxSize={4} />}
+    <div className="w-full hidden md:block">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {/* Upload Documents Card */}
+        <div
+          className="p-3 border border-border rounded-lg cursor-pointer transition-all duration-150 hover:shadow-sm hover:border-blue-300 hover:-translate-y-0.5 bg-card"
           onClick={onUploadClick}
-        >
-          Upload Document
-        </Button>
-
-        <Button
-          {...actionButton}
-          leftIcon={<Icon as={FiImage} color={iconColor} boxSize={4} />}
-          onClick={onUploadClick}
-        >
-          Add Figures
-        </Button>
-
-        <Button
-          {...actionButton}
-          leftIcon={<Icon as={FiLayers} color={iconColor} boxSize={4} />}
-          isDisabled
-          opacity={0.5}
-          cursor="not-allowed"
-          _hover={{
-            bg: 'transparent',
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              onUploadClick();
+            }
           }}
         >
-          Use Template
-        </Button>
-      </ButtonGroup>
-    </Box>
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-blue-500" />
+            <span className="text-sm font-medium text-foreground">
+              Upload Documents
+            </span>
+          </div>
+        </div>
+
+        {/* Upload Figures Card */}
+        <div
+          className="p-3 border border-border rounded-lg cursor-pointer transition-all duration-150 hover:shadow-sm hover:border-purple-300 hover:-translate-y-0.5 bg-card"
+          onClick={onUploadClick}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              onUploadClick();
+            }
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Image className="h-4 w-4 text-purple-500" />
+            <span className="text-sm font-medium text-foreground">
+              Upload Figures
+            </span>
+          </div>
+        </div>
+
+        {/* Template Card - Coming Soon */}
+        <div className="p-3 border border-border rounded-lg bg-card opacity-60 cursor-not-allowed">
+          <div className="flex items-center gap-2">
+            <Layout className="h-4 w-4 text-gray-400" />
+            <span className="text-sm font-medium text-muted-foreground">
+              Template (coming soon)
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };

@@ -3,3 +3,49 @@ description:
 globs:
 alwaysApply: false
 ---
+---
+description: Multi-tenant cache security - preventing cross-tenant data contamination
+alwaysApply: true
+---
+
+# Tenant Cache Security
+
+- **React Query Cache Isolation**
+  - All query keys MUST be prefixed with the current tenant slug
+  - This ensures complete data isolation between tenants in the cache
+  - Query key structure: `[tenantSlug, domain, operation, ...params]`
+  - Example: `['development', 'projects', 'list']` vs `['testing', 'projects', 'list']`
+
+- **Implementation Pattern**
+  - Query key factories use `getCurrentTenant()` from `src/lib/queryKeys/tenant.ts`
+  - All key factories return functions (not static values) for lazy evaluation
+  - Example:
+    ```typescript
+    export const projectKeys = {
+      all: () => [getCurrentTenant(), 'projects'] as const,
+      lists: () => [...projectKeys.all(), 'list'] as const,
+      list: (params?: any) => [...projectKeys.lists(), params] as const,
+    };
+    ```
+
+- **Tenant Switching Behavior**
+  - When switching tenants, new queries are automatically made with new tenant prefix
+  - React Query treats different query keys as completely separate data
+  - Old tenant data is cleaned up after 5 seconds to prevent memory buildup
+  - No aggressive cache clearing needed - let React Query's natural behavior work
+
+- **Benefits**
+  - Complete data isolation between tenants
+  - No cross-tenant data leakage
+  - Smooth transitions without data loss
+  - Works with React Query's design, not against it
+
+- **Debugging**
+  - Use `window.debugQueryKeys()` in development console to inspect cache
+  - Verify all queries have tenant prefix as first element
+  - Check for any 'no-tenant' prefixed queries which indicate a problem
+
+- **References**
+  - Query key factories: `src/lib/queryKeys/*.ts`
+  - Tenant helper: `src/lib/queryKeys/tenant.ts`
+  - Debug utility: `src/utils/debugTenantKeys.ts`

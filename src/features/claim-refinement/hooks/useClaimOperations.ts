@@ -1,59 +1,78 @@
 /**
  * React Query hooks for claim operations shared across the application
  */
-import { useApiMutation } from '@/lib/api/queryClient';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { ClaimsClientService } from '@/client/services/claims.client-service';
+import { logger } from '@/utils/clientLogger';
+import { useProjectData } from '@/contexts/ProjectDataContext';
 
 /**
- * Hook for parsing claim elements
+ * Hook for parsing claim text into elements
+ * @returns Array of claim element strings
  */
-function useParseClaimMutation() {
-  return useApiMutation({
-    mutationFn: async ({
-      claimOneText,
-      projectId,
-    }: {
-      claimOneText: string;
-      projectId: string;
-    }) => {
+export const useParseClaim = () => {
+  const { activeProjectId } = useProjectData();
+
+  return useMutation({
+    mutationFn: async (claimText: string) => {
+      if (!activeProjectId) {
+        throw new Error('No active project selected');
+      }
+
+      logger.info('[Claim Refinement] Parsing claim text');
       const result = await ClaimsClientService.parseClaimElements(
-        claimOneText,
-        projectId
+        claimText,
+        activeProjectId
       );
-      return { parsedElements: result as string[] };
+
+      // Result is now always string[]
+      logger.info('[Claim Refinement] Parsing complete', {
+        elementCount: result.length,
+      });
+
+      return result;
     },
   });
-}
+};
 
 /**
- * Hook for generating search queries
+ * Hook for generating search queries from parsed elements
+ * @returns Array of search query strings
  */
-function useGenerateQueriesMutation() {
-  return useApiMutation({
-    mutationFn: async ({
-      parsedElements,
-      projectId,
-    }: {
-      parsedElements: string[];
-      projectId: string;
-    }) => {
+export const useGenerateSearchQueries = () => {
+  const { activeProjectId } = useProjectData();
+
+  return useMutation({
+    mutationFn: async (parsedElements: string[]) => {
+      if (!activeProjectId) {
+        throw new Error('No active project selected');
+      }
+
+      logger.info('[Claim Refinement] Generating search queries', {
+        elementCount: parsedElements.length,
+      });
+
       const queries = await ClaimsClientService.generateSearchQueries(
         parsedElements,
-        projectId
+        activeProjectId
       );
-      return { queries, searchQueries: queries };
+
+      logger.info('[Claim Refinement] Query generation complete', {
+        queryCount: queries.length,
+      });
+
+      return queries;
     },
   });
-}
+};
 
 /**
  * Consolidated hook for claim operations
  * Provides both mutations with their original names for backward compatibility
  */
 export function useClaimOperations() {
-  const parseClaim = useParseClaimMutation();
-  const generateQueries = useGenerateQueriesMutation();
+  const parseClaim = useParseClaim();
+  const generateQueries = useGenerateSearchQueries();
 
   return {
     parseClaim,

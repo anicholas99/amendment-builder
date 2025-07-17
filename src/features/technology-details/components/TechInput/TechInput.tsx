@@ -1,13 +1,8 @@
 import React, { useState } from 'react';
-import {
-  FormControl,
-  FormLabel,
-  Input,
-  Button,
-  Text,
-  VStack,
-  Box,
-} from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 /**
  * TechInput - Domain-specific component for technology input
@@ -44,29 +39,33 @@ export const TechInput: React.FC<TechInputProps> = ({
   const canSubmit = value.trim() && !error;
 
   return (
-    <Box p={4} borderWidth="1px" borderRadius="md" boxShadow="sm" bg="bg.card">
-      <VStack spacing={4}>
-        <Text fontSize="lg" fontWeight="bold">
+    <div className="p-4 border border-border rounded-md shadow-sm bg-card">
+      <div className="space-y-4">
+        <h3 className="text-lg font-bold text-foreground">
           Technology Description
-        </Text>
-        <FormControl>
-          <FormLabel>Describe your technology</FormLabel>
+        </h3>
+        <div className="space-y-2">
+          <Label htmlFor="tech-description">Describe your technology</Label>
           <Input
+            id="tech-description"
             value={value}
             onChange={e => setValue(e.target.value)}
             placeholder="Enter technology description..."
+            className={cn(error && 'border-red-500 focus:ring-red-500')}
           />
-        </FormControl>
+          {error && (
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          )}
+        </div>
         <Button
-          colorScheme="blue"
-          isLoading={loading}
           onClick={handleSubmit}
           disabled={!canSubmit || loading}
+          className="bg-blue-600 hover:bg-blue-700 text-white"
         >
-          Analyze Technology
+          {loading ? 'Analyzing...' : 'Analyze Technology'}
         </Button>
-      </VStack>
-    </Box>
+      </div>
+    </div>
   );
 };
 

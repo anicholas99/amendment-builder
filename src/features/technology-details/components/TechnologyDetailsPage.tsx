@@ -1,8 +1,7 @@
 import React from 'react';
-import { DashboardLayout } from '@/ui/templates/DashboardLayout';
-import { Text } from '@chakra-ui/react';
+import ViewLayout from '@/components/layouts/ViewLayout';
 import { TechInput } from './TechInput';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 /**
  * TechnologyDetails page - Complete page for technology management
@@ -25,19 +24,21 @@ export const TechnologyDetails: React.FC<TechnologyDetailsProps> = ({
   };
 
   return (
-    <DashboardLayout
+    <ViewLayout
       header={
-        <Text variant="label" fontSize="xl" fontWeight="bold">
+        <h1 className="text-xl font-bold text-foreground">
           Technology Details
-        </Text>
+        </h1>
       }
-      main={
+      mainContent={
         <TechInput
           initialValue={(technology as { description?: string })?.description}
           onSubmit={handleTechSubmit}
           loading={loading}
         />
       }
+      sidebarContent={null}
+      isResizable={false}
     />
   );
 };

@@ -3,3 +3,71 @@ description:
 globs:
 alwaysApply: false
 ---
+# Logging Guidelines
+
+- **Use Structured Logger Only:** Always use `@/lib/monitoring/logger` for all logging. Never use `console.log`, `console.warn`, or `console.error` directly.
+
+- **Log Levels and When to Use Them:**
+  - **`logger.error`**: For actual errors that need attention (failed API calls, unexpected exceptions)
+  - **`logger.warn`**: For concerning but recoverable situations (missing optional data, deprecated usage)
+  - **`logger.info`**: For important state changes (user actions, successful operations, data updates)
+  - **`logger.debug`**: For detailed debugging information (component renders, data flows, timing)
+
+- **Avoid Noise in Logs:**
+  - Use `logger.debug` instead of `logger.log` for verbose debugging output
+  - Don't log expected initialization states as warnings (e.g., "Editor not created yet")
+  - Don't log missing optional data as warnings during app startup
+  - Avoid logging successful operations unless they're significant user actions
+
+- **Context and Structure:**
+  - Always include relevant context in log messages
+  - Use structured data for complex information:
+    ```typescript
+    logger.info('User action completed', {
+      action: 'save',
+      userId: user.id,
+      duration: performance.now() - startTime
+    });
+    ```
+
+- **Performance Considerations:**
+  - Avoid logging in tight loops or frequent render cycles
+  - Use debug level for verbose component lifecycle logs
+  - Consider using log sampling for high-frequency events
+
+- **Frontend-Specific Guidelines:**
+  - Expected initialization states should use `debug` level
+  - CSRF token fetching during startup is normal - use `debug`
+  - Missing tenant in URL during app load is expected - use `debug`
+  - Resource preloading issues should be fixed, not logged
+
+- **Examples:**
+  ```typescript
+  // ✅ DO: Appropriate error logging
+  logger.error('Failed to save project', { 
+    error: error.message, 
+    projectId 
+  });
+  
+  // ✅ DO: Important user action
+  logger.info('Project saved successfully', { 
+    projectId,
+    saveTime: Date.now() 
+  });
+  
+  // ✅ DO: Debug-level for initialization
+  logger.debug('Component initializing', { 
+    componentName: 'Editor' 
+  });
+  
+  // ❌ DON'T: Warning for expected states
+  logger.warn('Editor not created yet'); // Use debug instead
+  
+  // ❌ DON'T: Direct console usage
+  console.log('Debug info'); // Use logger.debug instead
+  ```
+
+- **Log Output Control:**
+  - Production: Only `error`, `warn`, and `info` levels
+  - Development: All levels including `debug`
+  - Use environment variables to control log levels dynamically

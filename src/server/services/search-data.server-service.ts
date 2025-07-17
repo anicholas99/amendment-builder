@@ -1,7 +1,7 @@
 import { SearchApiService } from '@/client/services/search.client-service';
 import { ClaimsClientService } from '@/client/services/claims.client-service';
-import { logger } from '@/lib/monitoring/logger';
-import { safeJsonParse } from '@/utils/json-utils';
+import { logger } from '@/server/logger';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { findSearchHistoryById } from '@/repositories/search/searchHistory.repository';
 
 /**
@@ -79,22 +79,9 @@ export class SearchDataService {
       }
 
       // Ensure all elements are strings
-      return searchInputs
-        .map(element => {
-          if (typeof element === 'string') {
-            return element;
-          }
-          // Handle legacy format if needed
-          if (
-            typeof element === 'object' &&
-            element !== null &&
-            'text' in element
-          ) {
-            return (element as any).text || '';
-          }
-          return String(element);
-        })
-        .filter(text => text.length > 0);
+      return searchInputs.filter(
+        element => typeof element === 'string' && element.length > 0
+      );
     } catch (error) {
       logger.error('[SearchDataService] Error retrieving search inputs', {
         error,

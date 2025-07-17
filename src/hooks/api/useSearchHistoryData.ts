@@ -5,7 +5,7 @@
  * essential for displaying the state of references in the search UI.
  */
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import {
   SearchApiService,
   SearchHistoryDataResponse,

@@ -1,5 +1,4 @@
 import OpenAI from 'openai';
-import { logger } from '@/lib/monitoring/logger';
 import { env } from '@/config/env';
 import { environment } from '@/config/environment';
 import { ApplicationError, ErrorCode } from '../error';
@@ -9,11 +8,11 @@ import type { ChatCompletion } from 'openai/resources/chat/completions';
 
 // Determine AI provider and initialize OpenAI client
 const aiProvider = env.AI_PROVIDER;
-logger.log(`[DEBUG] AI_PROVIDER: ${aiProvider}`);
+// Debug logging removed for client compatibility
 let openai: OpenAI;
 
 if (aiProvider === 'azure') {
-  logger.info('Initializing OpenAI client for Azure');
+  // Info logging removed for client compatibility
   const azureEndpoint = env.AZURE_OPENAI_ENDPOINT;
   const azureApiKey = env.AZURE_OPENAI_API_KEY;
 
@@ -37,7 +36,7 @@ if (aiProvider === 'azure') {
     // REMOVED azureOpenAIApiDeploymentName and azureOpenAIApiVersion as they cause errors
   });
 } else {
-  logger.info('Initializing OpenAI client for standard OpenAI');
+  // Info logging removed for client compatibility
   const openaiApiKey = env.OPENAI_API_KEY;
   if (!openaiApiKey) {
     throw new ApplicationError(
@@ -57,9 +56,19 @@ const MODEL_PRICING: {
   // Ensure Azure deployment names map to pricing if different from standard names
   // Using the actual deployment names we plan to use
   'gpt-4.1': {
-    // Pricing for GPT-4.1 (same as GPT-4 Turbo)
-    input: 0.01, // $0.01 per 1K input tokens
-    output: 0.03, // $0.03 per 1K output tokens
+    // Pricing for GPT-4.1 (updated July 2025)
+    input: 0.002, // $2.00 per 1M input tokens
+    output: 0.008, // $8.00 per 1M output tokens
+  },
+  'gpt-4.1-mini': {
+    // Pricing for GPT-4.1 mini
+    input: 0.0004, // $0.40 per 1M input tokens
+    output: 0.0016, // $1.60 per 1M output tokens
+  },
+  'gpt-4.1-nano': {
+    // Pricing for GPT-4.1 nano
+    input: 0.0001, // $0.10 per 1M input tokens
+    output: 0.0004, // $0.40 per 1M output tokens
   },
   'gpt-35-turbo': {
     // Pricing for your fallback gpt-35-turbo deployment
@@ -119,16 +128,12 @@ function calculateCost(
   const defaultPricingModel = env.AZURE_OPENAI_DEPLOYMENT_NAME || 'gpt-4.1';
   const pricing = MODEL_PRICING[model] || MODEL_PRICING[defaultPricingModel];
   if (!pricing) {
-    logger.warn(
-      `Pricing not found for model: ${model}. Using default ${defaultPricingModel} pricing.`
-    );
+    // Warning logging removed for client compatibility
     const defaultPricing =
       MODEL_PRICING[defaultPricingModel] || MODEL_PRICING['gpt-4.1']; // Fallback pricing lookup
     // Handle case where even default pricing isn't found (optional, maybe throw error or use 0)
     if (!defaultPricing) {
-      logger.error(
-        `FATAL: Default pricing model ${defaultPricingModel} not found in MODEL_PRICING map.`
-      );
+      // Error logging removed for client compatibility
       return 0; // Or throw an error
     }
     return (
@@ -210,12 +215,7 @@ export async function processWithOpenAI(
     { role: 'system' as const, content: finalSystemMessage },
     { role: 'user' as const, content: finalPrompt },
   ];
-
-  logger.info(`Calling AI Service (${aiProvider}) with model: ${model}`, {
-    promptLength: finalPrompt.length,
-    model,
-    responseFormat,
-  });
+  // Info logging removed for client compatibility
 
   try {
     // Primary API call
@@ -225,10 +225,7 @@ export async function processWithOpenAI(
     if (aiProvider === 'azure') {
       // Construct the full URL manually for Azure
       const azureUrl = `${openai.baseURL}deployments/${model}/chat/completions?api-version=${apiVersion}`;
-      logger.debug('[processWithOpenAI] Azure Primary Call', {
-        url: azureUrl,
-        deployment: model,
-      });
+      // Debug logging removed for client compatibility
       const response = await fetch(azureUrl, {
         method: 'POST',
         headers: {
@@ -245,10 +242,7 @@ export async function processWithOpenAI(
       });
 
       if (!response.ok) {
-        logger.error('[processWithOpenAI] Azure Primary Call Failed', {
-          status: response.status,
-          statusText: response.statusText,
-        });
+        // Error logging removed for client compatibility
         throw new ApplicationError(
           ErrorCode.AI_INVALID_RESPONSE,
           `Invalid response from AI service: ${response.statusText} (${response.status})`,
@@ -258,9 +252,7 @@ export async function processWithOpenAI(
       completionResponse = await response.json();
     } else {
       // Standard OpenAI call using SDK
-      logger.debug('[processWithOpenAI] Standard OpenAI Primary Call', {
-        model,
-      });
+      // Debug logging removed for client compatibility
 
       // Create a base configuration object
       const completionConfig = {
@@ -281,10 +273,7 @@ export async function processWithOpenAI(
           await openai.chat.completions.create(completionConfig);
       }
     }
-
-    logger.info(
-      `Received response from AI Service (${aiProvider}) using model ${model}`
-    );
+    // Info logging removed for client compatibility
 
     const usage: TokenUsage = {
       prompt_tokens: completionResponse.usage?.prompt_tokens || 0,
@@ -305,19 +294,11 @@ export async function processWithOpenAI(
       usage,
     };
   } catch (apiError) {
-    logger.error(
-      `Error calling AI Service (${aiProvider}) with model ${model}`,
-      {
-        error: apiError,
-        model,
-      }
-    );
+    // Error logging removed for client compatibility
 
     // Check if a fallback model is configured
     if (!fallbackModel) {
-      logger.warn(
-        `Primary API call failed for model ${model} and no fallback model configured.`
-      );
+      // Warning logging removed for client compatibility
       // Re-throw the original error if no fallback is available
       if (apiError instanceof Error) {
         throw new ApplicationError(
@@ -333,9 +314,7 @@ export async function processWithOpenAI(
     }
 
     // Try with fallback model
-    logger.info(
-      `Attempting AI Service (${aiProvider}) call with fallback model ${fallbackModel}`
-    );
+    // Info logging removed for client compatibility
     try {
       let completionResponse: ChatCompletion;
       let usedFallback = false;
@@ -343,10 +322,7 @@ export async function processWithOpenAI(
       if (aiProvider === 'azure') {
         // Construct the full fallback URL manually for Azure
         const azureFallbackUrl = `${openai.baseURL}deployments/${fallbackModel}/chat/completions?api-version=${apiVersion}`;
-        logger.debug('[processWithOpenAI] Azure Fallback Call', {
-          url: azureFallbackUrl,
-          deployment: fallbackModel,
-        });
+        // Debug logging removed for client compatibility
         const response = await fetch(azureFallbackUrl, {
           method: 'POST',
           headers: {
@@ -363,10 +339,7 @@ export async function processWithOpenAI(
         });
 
         if (!response.ok) {
-          logger.error('[processWithOpenAI] Azure Fallback Call Failed', {
-            status: response.status,
-            statusText: response.statusText,
-          });
+          // Error logging removed for client compatibility
           throw new ApplicationError(
             ErrorCode.AI_INVALID_RESPONSE,
             `Invalid response from fallback AI service: ${response.statusText} (${response.status})`,
@@ -377,9 +350,7 @@ export async function processWithOpenAI(
         usedFallback = true;
       } else {
         // Standard OpenAI fallback call using SDK
-        logger.debug('[processWithOpenAI] Standard OpenAI Fallback Call', {
-          model: fallbackModel,
-        });
+        // Debug logging removed for client compatibility
 
         // Create a base configuration object
         const fallbackConfig = {
@@ -401,10 +372,7 @@ export async function processWithOpenAI(
         }
         usedFallback = true;
       }
-
-      logger.info(
-        `Successfully received fallback response from AI Service (${aiProvider}) using model ${fallbackModel}`
-      );
+      // Info logging removed for client compatibility
 
       const fallbackUsage: TokenUsage = {
         prompt_tokens: completionResponse.usage?.prompt_tokens || 0,
@@ -424,13 +392,7 @@ export async function processWithOpenAI(
         usage: fallbackUsage,
       };
     } catch (fallbackError) {
-      logger.error(
-        `Error with AI Service (${aiProvider}) fallback model ${fallbackModel}`,
-        {
-          error: fallbackError,
-          originalError: apiError,
-        }
-      );
+      // Error logging removed for client compatibility
 
       // Throw a comprehensive error that includes both primary and fallback errors
       throw new ApplicationError(

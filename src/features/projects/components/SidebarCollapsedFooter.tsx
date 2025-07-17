@@ -1,6 +1,13 @@
 import React from 'react';
-import { Box, IconButton, Icon, Tooltip } from '@chakra-ui/react';
 import { FiList } from 'react-icons/fi';
+import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 interface SidebarCollapsedFooterProps {
   navigateToProjects: () => void;
@@ -17,32 +24,28 @@ const SidebarCollapsedFooter: React.FC<SidebarCollapsedFooterProps> = ({
   isDarkMode = false,
 }) => {
   return (
-    <Box
-      p={2}
-      borderTopWidth="1px"
-      borderTopColor={isDarkMode ? 'gray.700' : 'gray.200'}
-      bg={isDarkMode ? 'gray.900' : 'white'}
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      position="relative"
-      zIndex={1}
-    >
-      <Tooltip label="View Dashboard" placement="right">
-        <IconButton
-          aria-label="View Dashboard"
-          icon={<Icon as={FiList} boxSize={4} />}
-          variant="ghost"
-          size="sm"
-          color={isDarkMode ? 'gray.400' : 'gray.500'}
-          _hover={{
-            bg: isDarkMode ? 'gray.700' : 'gray.100',
-            color: isDarkMode ? 'white' : 'gray.700',
-          }}
-          onClick={navigateToProjects}
-        />
-      </Tooltip>
-    </Box>
+    <div className="absolute bottom-0 left-0 right-0 p-2 bg-background border-t border-border flex items-center justify-center z-[1]">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="View Dashboard"
+              onClick={navigateToProjects}
+              className={cn(
+                'text-muted-foreground hover:bg-accent hover:text-foreground'
+              )}
+            >
+              <FiList className="w-4 h-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>View Dashboard</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
   );
 };
 

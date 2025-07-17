@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { CitationJob } from '@/types/citation';
 import { ReferenceJobStatus } from '../../search/components/CitationTabHeader';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { hasProperty } from '@/types/safe-type-helpers';
 
 // Pattern: Dynamic property access → define extended interface
@@ -70,6 +70,12 @@ export function useReferenceStatuses(
       let status = job.status.toLowerCase();
       if (status === 'queued' || status === 'created') status = 'processing';
 
+      // Ensure status is one of the expected values
+      const validStatuses = ['pending', 'processing', 'completed', 'failed'];
+      if (!validStatuses.includes(status)) {
+        status = 'pending'; // Default to pending for unknown statuses
+      }
+
       // Pattern: Safe property access → use type guard
       const isOptimistic =
         hasProperty(job, 'isOptimistic') &&
@@ -84,10 +90,7 @@ export function useReferenceStatuses(
 
       result.push({
         referenceNumber: job.referenceNumber,
-        status,
-        relevancyScore: avgScores.get(job.referenceNumber) || 0,
-        isOptimistic,
-        wasOptimistic,
+        status: status as 'pending' | 'processing' | 'completed' | 'failed',
         originalIndex: cursor++,
       });
       processed.add(job.referenceNumber);
@@ -107,9 +110,6 @@ export function useReferenceStatuses(
       result.push({
         referenceNumber,
         status: 'completed',
-        relevancyScore: avgScores.get(referenceNumber) || 0,
-        isOptimistic: false,
-        wasOptimistic: false,
         originalIndex: cursor++,
       });
       processed.add(referenceNumber);

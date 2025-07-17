@@ -1,14 +1,14 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { AuthenticatedRequest } from '@/types/middleware';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { z } from 'zod';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import {
   getClaimSyncData,
   saveClaimSyncData,
 } from '@/repositories/claimSyncRepository';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
-import { ApplicationError } from '@/lib/error';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
+import { ApplicationError, ErrorCode } from '@/lib/error';
 
 const apiLogger = createApiLogger('claim-sync');
 
@@ -55,18 +55,24 @@ async function handler(
             tenantId: userTenantId,
           });
           return res.status(200).json({
-            parsedElements: [],
-            searchQueries: [],
-            claimSyncedAt: null,
-            lastSyncedClaim: null,
+            success: true,
+            data: {
+              parsedElements: [],
+              searchQueries: [],
+              claimSyncedAt: null,
+              lastSyncedClaim: null,
+            },
           });
         }
 
         // Return V2 format
         return res.status(200).json({
-          parsedElements: syncData.parsedElements,
-          searchQueries: syncData.searchQueries,
-          lastSyncedClaim: syncData.lastSyncedClaim || null,
+          success: true,
+          data: {
+            parsedElements: syncData.parsedElements,
+            searchQueries: syncData.searchQueries,
+            lastSyncedClaim: syncData.lastSyncedClaim || null,
+          },
         });
 
       case 'POST':
@@ -105,7 +111,9 @@ async function handler(
 
         return res.status(200).json({
           success: true,
-          message: 'Claim sync data saved successfully',
+          data: {
+            message: 'Claim sync data saved successfully',
+          },
         });
 
       default:

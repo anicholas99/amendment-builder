@@ -1,6 +1,7 @@
 import React from 'react';
 import { InventionData } from '@/types';
 import { ProjectData as BaseProjectData } from '@/types/project';
+import { ToolInvocation } from './tool-invocation';
 
 // Re-export ProjectData with local modifications if needed in the future
 // For now, it's a direct re-export
@@ -13,7 +14,7 @@ export interface ChatMessage {
    * messages; historical messages from the database may omit it.
    */
   id?: string;
-  role: 'assistant' | 'user' | 'system';
+  role: 'assistant' | 'user' | 'system' | 'tool';
   content: string;
   /**
    * Back-end returns Date objects while optimistic updates sometimes use ISO
@@ -21,6 +22,14 @@ export interface ChatMessage {
    */
   timestamp: string | Date;
   inventionData?: InventionData;
+  /**
+   * Tool invocations for when the AI is calling functions/tools
+   */
+  toolInvocations?: ToolInvocation[];
+  /**
+   * Whether this message is currently streaming
+   */
+  isStreaming?: boolean;
 }
 
 export interface ChatHistoryMessage {
@@ -63,9 +72,14 @@ export interface MessagesContainerProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   markdownComponents: unknown;
-  renderDualContent: (content: string, isStreamingMsg: boolean, justCompleted?: boolean) => JSX.Element;
+  renderDualContent: (
+    content: string,
+    isStreamingMsg: boolean,
+    justCompleted?: boolean
+  ) => JSX.Element;
   assistantInfoColor: string;
   markdownTextColor: string;
+  lastAssistantRef?: React.RefObject<HTMLDivElement>;
 }
 
 // Markdown component types

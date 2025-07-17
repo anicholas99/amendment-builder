@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useRouter } from 'next/router';
-import { Box } from '@chakra-ui/react';
 import AppLayout from '../../../components/layouts/AppLayout';
-import SkeletonLoader from '../../../components/common/SkeletonLoader';
+import { LoadingState } from '../../../components/common/LoadingState';
 import { useProjectData } from '@/contexts/ProjectDataContext';
 
 export default function ProjectPage() {
@@ -21,7 +20,7 @@ export default function ProjectPage() {
       projectId !== activeProject && // Check if it's actually different
       !hasSetProjectRef.current
     ) {
-      logger.log(
+      logger.info(
         `ProjectPage: Detected change. Setting active project from URL: ${projectId} (current context: ${activeProject})`
       );
       hasSetProjectRef.current = true;
@@ -41,7 +40,7 @@ export default function ProjectPage() {
       // If the project ID matches but we haven't triggered the redirect yet,
       // mark it as set and perform the redirect.
       // This handles the case where the context loaded the correct project before this page ran its effect.
-      logger.log(
+      logger.info(
         `ProjectPage: Project ID ${projectId} already active in context. Ensuring redirect.`
       );
       hasSetProjectRef.current = true;
@@ -53,9 +52,9 @@ export default function ProjectPage() {
 
   return (
     <AppLayout>
-      <Box p={4} display="flex" justifyContent="center">
-        <SkeletonLoader type="project" />
-      </Box>
+      <div className="p-4 flex justify-center">
+        <LoadingState variant="spinner" message="Loading project..." />
+      </div>
     </AppLayout>
   );
 }

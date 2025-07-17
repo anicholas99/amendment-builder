@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { environment } from '@/config/environment';
+import { SecurePresets } from '@/server/api/securePresets';
 
 // Track request counts per IP
 const requestCounts = new Map<string, { count: number; resetTime: number }>();
@@ -8,7 +9,7 @@ const requestCounts = new Map<string, { count: number; resetTime: number }>();
  * Test endpoint to simulate rate limiting (429 errors)
  * Only available in development mode
  */
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Only allow in development
   if (!environment.isDevelopment) {
     return res.status(404).json({ error: 'Not found' });
@@ -67,9 +68,16 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   );
 
   return res.status(200).json({
-    message: 'Request successful',
-    requestCount: clientRecord.count,
-    limit,
-    remaining: limit - clientRecord.count,
+    success: true,
+    data: {
+      message: 'Request successful',
+      requestCount: clientRecord.count,
+      limit,
+      remaining: limit - clientRecord.count,
+    },
   });
 }
+
+// SECURITY: This is a public test endpoint only available in development
+// It simulates rate limiting for testing purposes
+export default SecurePresets.public(handler, { rateLimit: false }); // Disable real rate limiting since we're simulating it

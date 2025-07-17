@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createApiLogger } from '../../../lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import {
   findTenantsByUserId,
   createTenantForUser,
@@ -10,12 +10,9 @@ import { AuthenticatedRequest } from '@/types/middleware';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { throwUnauthorized } from '@/middleware/errorHandling';
 import { z } from 'zod';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { Prisma } from '@prisma/client';
-import {
-  SecurePresets,
-  TenantResolvers,
-} from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 const apiLogger = createApiLogger('tenants');
 

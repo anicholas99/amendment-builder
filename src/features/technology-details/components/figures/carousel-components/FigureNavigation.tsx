@@ -1,7 +1,8 @@
 import React, { useRef, useEffect } from 'react';
-import { Box, IconButton, Icon, useColorModeValue } from '@chakra-ui/react';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { FigureNavigationProps } from './types';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 /**
  * Component for figure dots navigation and arrow controls
@@ -12,17 +13,6 @@ const FigureNavigation: React.FC<FigureNavigationProps> = ({
   onNavigate,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Theme-aware colors for navigation buttons
-  const buttonBg = useColorModeValue(
-    'rgba(255, 255, 255, 0.9)',
-    'rgba(26, 32, 44, 0.9)'
-  );
-  const buttonHoverBg = useColorModeValue(
-    'rgba(255, 255, 255, 0.95)',
-    'rgba(45, 55, 72, 0.95)'
-  );
-  const iconColor = useColorModeValue('gray.700', 'gray.200');
 
   // Scroll the active dot into view when currentIndex changes
   useEffect(() => {
@@ -39,73 +29,45 @@ const FigureNavigation: React.FC<FigureNavigationProps> = ({
   // Don't render navigation for a single figure
   if (figureKeys.length <= 1) return null;
 
+  const canGoPrev = currentIndex > 0;
+  const canGoNext = currentIndex < figureKeys.length - 1;
+
   return (
-    <>
-      {/* Navigation Arrows */}
-      <Box
-        position="absolute"
-        left={0}
-        right={0}
-        top="0"
-        bottom="0"
-        className="pointer-events-none"
+    <div className="flex items-center justify-between px-2">
+      {/* Previous button */}
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label="Previous figure"
+        onClick={() => canGoPrev && onNavigate(currentIndex - 1)}
+        disabled={!canGoPrev}
+        className={cn(
+          'bg-white/90 dark:bg-gray-800/90 hover:bg-white/95 dark:hover:bg-gray-700/95',
+          'border-0 shadow-sm text-gray-700 dark:text-gray-200',
+          'disabled:opacity-50 disabled:cursor-not-allowed',
+          'w-8 h-8 p-0 pointer-events-auto'
+        )}
       >
-        <IconButton
-          icon={<Icon as={FiChevronLeft} />}
-          aria-label="Previous figure"
-          variant="ghost"
-          size="sm"
-          isDisabled={currentIndex === 0}
-          onClick={() => currentIndex > 0 && onNavigate(currentIndex - 1)}
-          position="absolute"
-          left="8px"
-          top="50%"
-          transform="translateY(-50%)"
-          zIndex={1}
-          bg={buttonBg}
-          color={iconColor}
-          borderRadius="full"
-          boxShadow="sm"
-          pointerEvents="auto"
-          _hover={{
-            bg: buttonHoverBg,
-            transform: 'translateY(-50%) scale(1.05)',
-          }}
-          _active={{
-            transform: 'translateY(-50%) scale(0.95)',
-          }}
-          transition="all 0.2s"
-        />
-        <IconButton
-          icon={<Icon as={FiChevronRight} />}
-          aria-label="Next figure"
-          variant="ghost"
-          size="sm"
-          isDisabled={currentIndex === figureKeys.length - 1}
-          onClick={() =>
-            currentIndex < figureKeys.length - 1 && onNavigate(currentIndex + 1)
-          }
-          position="absolute"
-          right="8px"
-          top="50%"
-          transform="translateY(-50%)"
-          zIndex={1}
-          bg={buttonBg}
-          color={iconColor}
-          borderRadius="full"
-          boxShadow="sm"
-          pointerEvents="auto"
-          _hover={{
-            bg: buttonHoverBg,
-            transform: 'translateY(-50%) scale(1.05)',
-          }}
-          _active={{
-            transform: 'translateY(-50%) scale(0.95)',
-          }}
-          transition="all 0.2s"
-        />
-      </Box>
-    </>
+        <FiChevronLeft className="w-4 h-4" />
+      </Button>
+
+      {/* Next button */}
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label="Next figure"
+        onClick={() => canGoNext && onNavigate(currentIndex + 1)}
+        disabled={!canGoNext}
+        className={cn(
+          'bg-white/90 dark:bg-gray-800/90 hover:bg-white/95 dark:hover:bg-gray-700/95',
+          'border-0 shadow-sm text-gray-700 dark:text-gray-200',
+          'disabled:opacity-50 disabled:cursor-not-allowed',
+          'w-8 h-8 p-0 pointer-events-auto'
+        )}
+      >
+        <FiChevronRight className="w-4 h-4" />
+      </Button>
+    </div>
   );
 };
 

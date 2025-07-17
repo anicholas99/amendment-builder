@@ -1,9 +1,9 @@
 import { NextApiResponse } from 'next';
 
 import { updateCitationMatchReasoningStatus } from '../../../repositories/citationRepository';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { z } from 'zod';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import {
   getCitationMatchForReasoning,
   getCitationMatchWithTenantInfo,
@@ -12,7 +12,7 @@ import { CustomApiRequest } from '@/types/api';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { AIAnalysisService } from '@/server/ai/reasoningService';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 /**
  * API Route to queue a reasoning job for a specific citation match
@@ -88,8 +88,10 @@ const handler = async (
   // Return success immediately
   return res.status(200).json({
     success: true,
-    message: 'Reasoning job queued successfully',
-    citationMatchId,
+    data: {
+      message: 'Reasoning job queued successfully',
+      citationMatchId,
+    },
   });
 };
 

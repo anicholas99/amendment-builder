@@ -1,20 +1,21 @@
 import React from 'react';
-import { Box, Text } from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
 import { useThemeContext } from '../../../../contexts/ThemeContext';
 
 export const EmptyProjectList: React.FC = () => {
   const { isDarkMode } = useThemeContext();
 
   return (
-    <Box
-      p="4"
-      className="text-center"
-      color={isDarkMode ? 'white' : 'gray.500'}
+    <div
+      className={cn(
+        'p-4 text-center',
+        isDarkMode ? 'text-white' : 'text-gray-500'
+      )}
     >
-      <Text>No projects found.</Text>
-      <Text fontSize="sm" className="mt-2">
+      <p>No projects found.</p>
+      <p className="text-sm mt-2">
         Create a new project using the + button above.
-      </Text>
-    </Box>
+      </p>
+    </div>
   );
 };

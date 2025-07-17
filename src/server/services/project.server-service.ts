@@ -6,7 +6,7 @@
  */
 
 import { Prisma } from '@prisma/client';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import * as projectRepo from '@/repositories/project';
 import {
@@ -14,12 +14,14 @@ import {
   ProjectBasicInfo,
 } from '@/repositories/project/types';
 import { ProjectStatus } from '@/types/project';
-import { inventionDataService } from './invention-data.server-service';
-import { safeJsonParse } from '@/utils/json-utils';
+import { InventionDataService } from './invention-data.server-service';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { OpenaiServerService } from './openai.server-service';
 import { analyzeInventionPrompt } from '@/server/prompts/prompts/analyzeInvention';
 import { InventionData } from '@/types/invention';
 import { Invention } from '@prisma/client';
+import { ProjectActivityService } from './project-activity.server-service';
+import { PatentPromptSanitizer } from '@/utils/ai/promptSanitizer';
 
 // DTOs for service layer
 export interface CreateProjectDTO {
@@ -55,7 +57,7 @@ export interface PaginatedProjectsResult {
 
 export class ProjectService {
   /**
-   * Get all projects for a user within a tenant
+   * Get all projects for a user within a tenant (owned and shared)
    */
   async getProjectsForUser(
     userId: string,
@@ -71,7 +73,8 @@ export class ProjectService {
       const orderBy = options?.orderBy || 'updatedAt';
       const order = options?.order || 'desc';
 
-      return await projectRepo.findProjectsByTenant(tenantId, userId, {
+      // Use the new function that includes shared projects
+      return await projectRepo.findAccessibleProjectsForUser(tenantId, userId, {
         orderBy: { [orderBy]: order },
       });
     } catch (error) {
@@ -91,7 +94,7 @@ export class ProjectService {
     tenantId: string,
     options: ProjectFilterOptions
   ): Promise<PaginatedProjectsResult> {
-    logger.info('Getting paginated projects for user', {
+    logger.debug('Getting paginated projects for user', {
       userId,
       tenantId,
       options,
@@ -112,7 +115,8 @@ export class ProjectService {
               : 'updatedAt';
 
       // Call the repository with proper pagination parameters
-      const result = await projectRepo.findProjectsByTenantPaginated(
+      // Use the new function that includes shared projects
+      const result = await projectRepo.findAccessibleProjectsForUserPaginated(
         tenantId,
         userId,
         {
@@ -123,6 +127,40 @@ export class ProjectService {
           orderBy: { [sortField]: sortOrder || 'desc' },
         }
       );
+
+      // Enhance projects with comprehensive activity timestamps
+      if (result.projects.length > 0) {
+        try {
+          const projectIds = result.projects.map(p => p.id);
+          const activityMap = await ProjectActivityService.getLastActivityBatch(
+            projectIds,
+            tenantId
+          );
+
+          // Update each project with its comprehensive last activity
+          result.projects.forEach(project => {
+            const lastActivity = activityMap.get(project.id);
+            if (lastActivity && lastActivity > project.updatedAt) {
+              // Update the updatedAt to reflect true last activity
+              project.updatedAt = lastActivity;
+            }
+          });
+
+          // Re-sort if we're sorting by modified/recent
+          if (sortBy === 'modified' || sortBy === 'recent') {
+            result.projects.sort((a, b) => {
+              const diff = b.updatedAt.getTime() - a.updatedAt.getTime();
+              return sortOrder === 'asc' ? -diff : diff;
+            });
+          }
+        } catch (error) {
+          // Log but don't fail - fall back to basic timestamps
+          logger.warn('Failed to enhance project activity timestamps', {
+            error,
+            projectCount: result.projects.length,
+          });
+        }
+      }
 
       return {
         projects: result.projects,
@@ -154,7 +192,7 @@ export class ProjectService {
     userId: string,
     tenantId: string
   ): Promise<ProjectWithDetails | null> {
-    logger.info('Getting project by ID', { projectId, userId, tenantId });
+    logger.debug('Getting project by ID', { projectId, userId, tenantId });
 
     try {
       // First verify the project belongs to this tenant
@@ -164,9 +202,15 @@ export class ProjectService {
         return null;
       }
 
-      // Verify user access (project owner)
-      if (project.userId !== userId) {
-        logger.warn('User attempted to access project they do not own', {
+      // Verify user access (project owner or collaborator)
+      const hasAccess = await projectRepo.checkUserProjectAccess(
+        projectId,
+        userId,
+        tenantId
+      );
+
+      if (!hasAccess) {
+        logger.warn('User attempted to access project without permission', {
           projectId,
           userId,
           projectOwnerId: project.userId,
@@ -261,8 +305,18 @@ export class ProjectService {
       tenantId,
     });
 
-    // Step 1: Analyze the invention text using AI
-    const prompt = analyzeInventionPrompt(textInput);
+    // Step 1: Sanitize the invention text using appropriate context for invention disclosures
+    const sanitizedTextInput =
+      PatentPromptSanitizer.sanitizeInventionDisclosure(textInput);
+
+    logger.debug('Invention text sanitization', {
+      originalLength: textInput.length,
+      sanitizedLength: sanitizedTextInput.length,
+      wasReduced: sanitizedTextInput.length < textInput.length,
+    });
+
+    // Step 2: Analyze the invention text using AI
+    const prompt = analyzeInventionPrompt(sanitizedTextInput);
     const aiResponse = await OpenaiServerService.getChatCompletion({
       messages: [
         {
@@ -278,7 +332,7 @@ export class ProjectService {
       response_format: { type: 'json_object' },
     });
 
-    // Step 2: Parse the response
+    // Step 3: Parse the response
     let inventionData: InventionData;
     try {
       let content = aiResponse.content.trim();
@@ -302,9 +356,10 @@ export class ProjectService {
       );
     }
 
-    // Step 3: Use the InventionDataService to create the full invention record
+    // Step 4: Use the InventionDataService to create the full invention record
     // This service should handle the transaction of creating the invention and its claims
-    await inventionDataService.updateMultipleFields(projectId, inventionData);
+    const inventionService = new InventionDataService();
+    await inventionService.updateMultipleFields(projectId, inventionData);
 
     const fullProject = await this.getProjectById(projectId, userId, tenantId);
     if (!fullProject?.invention) {
@@ -487,6 +542,3 @@ export class ProjectService {
     }
   }
 }
-
-// Export singleton instance
-export const projectService = new ProjectService();

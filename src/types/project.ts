@@ -8,9 +8,53 @@
 import { SavedPriorArt } from '../features/search/types';
 import { InventionData } from './invention';
 import { ProjectDataResponse } from './api/responses';
-import { ProjectBasicInfo } from '@/repositories/project/types';
-import { Invention } from '@prisma/client';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
+
+// Define types locally instead of importing from repository
+interface ProjectBasicInfo {
+  id: string;
+  name: string;
+  status: string;
+  userId: string;
+  tenantId: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  invention?: InventionData | Invention | null;
+  hasPatentContent?: boolean;
+  hasProcessedInvention?: boolean;
+  textInput?: string | null;
+  savedPriorArtItems?: SavedPriorArt[];
+}
+
+interface Invention {
+  id: string;
+  projectId: string;
+  title: string | null;
+  abstract: string | null;
+  technicalField: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  advantagesJson: string | null;
+  claimsJson: string | null;
+  priorArtJson: string | null;
+  noveltyStatement: string | null;
+  backgroundJson: string | null;
+  definitionsJson: string | null;
+  featuresJson: string | null;
+  futureDirectionsJson: string | null;
+  patentCategory: string | null;
+  processStepsJson: string | null;
+  summary: string | null;
+  technicalImplementationJson: string | null;
+  useCasesJson: string | null;
+  claimSyncedAt: Date | null;
+  lastSyncedClaim: string | null;
+  parsedClaimElementsJson: string | null;
+  searchQueriesJson: string | null;
+  applicationType: string | null;
+  parentApplicationsJson: string | null;
+  linkedFileIdsJson: string | null;
+}
 
 /**
  * Status of a project
@@ -46,6 +90,8 @@ export interface ProjectData {
   tenantId: string;
   status: ProjectStatus;
   textInput: string;
+  hasPatentContent: boolean;
+  hasProcessedInvention: boolean;
 
   // Database dates
   createdAt: Date | string;
@@ -118,6 +164,8 @@ export function isProjectData(obj: unknown): obj is ProjectData {
 /**
  * Raw project data from database/API
  */
+// Removed - was defined but never used
+/*
 interface RawProjectData {
   id?: string;
   name?: string;
@@ -137,6 +185,7 @@ interface RawProjectData {
   }>;
   savedPriorArtItems?: unknown[] | SavedPriorArt[];
 }
+*/
 
 /**
  * Transform database project to frontend ProjectData
@@ -163,7 +212,19 @@ export function transformProject(
     if (!invention) {
       return undefined;
     }
+
+    // Helper to safely parse JSON strings
+    const parseJsonField = <T>(field: string | null): T | undefined => {
+      if (!field) return undefined;
+      try {
+        return JSON.parse(field) as T;
+      } catch (e) {
+        return undefined;
+      }
+    };
+
     // Create a new object and explicitly map fields, converting null to undefined
+    // and parsing JSON fields
     return {
       id: invention.id,
       projectId: invention.projectId,
@@ -171,13 +232,44 @@ export function transformProject(
       summary: invention.summary ?? undefined,
       abstract: invention.abstract ?? undefined,
       patentCategory: invention.patentCategory ?? undefined,
+      patent_category: invention.patentCategory ?? undefined,
       technicalField: invention.technicalField ?? undefined,
+      technical_field: invention.technicalField ?? undefined,
+      features: parseJsonField<string[]>(invention.featuresJson),
+      advantages: parseJsonField<string[]>(invention.advantagesJson),
+      use_cases: parseJsonField<string[]>(invention.useCasesJson),
+      useCases: parseJsonField<string[]>(invention.useCasesJson),
+      process_steps: parseJsonField<string[]>(invention.processStepsJson),
+      processSteps: parseJsonField<string[]>(invention.processStepsJson),
+      future_directions: parseJsonField<string[]>(
+        invention.futureDirectionsJson
+      ),
+      futureDirections: parseJsonField<string[]>(
+        invention.futureDirectionsJson
+      ),
+      prior_art: parseJsonField<unknown[]>(invention.priorArtJson),
+      priorArt: parseJsonField<unknown[]>(invention.priorArtJson),
+      definitions: parseJsonField<Record<string, unknown>>(
+        invention.definitionsJson
+      ),
+      technical_implementation: parseJsonField<Record<string, unknown>>(
+        invention.technicalImplementationJson
+      ),
+      technicalImplementation: parseJsonField<Record<string, unknown>>(
+        invention.technicalImplementationJson
+      ),
+      background: parseJsonField<Record<string, unknown>>(
+        invention.backgroundJson
+      ),
+      noveltyStatement: invention.noveltyStatement ?? undefined,
+      claims: parseJsonField<Record<string, unknown>>(invention.claimsJson),
+
+      // Keep the raw JSON fields for backward compatibility if needed
       featuresJson: invention.featuresJson ?? undefined,
       advantagesJson: invention.advantagesJson ?? undefined,
       useCasesJson: invention.useCasesJson ?? undefined,
       processStepsJson: invention.processStepsJson ?? undefined,
       futureDirectionsJson: invention.futureDirectionsJson ?? undefined,
-      // Legacy figure/element fields removed - now using normalized tables
       priorArtJson: invention.priorArtJson ?? undefined,
       definitionsJson: invention.definitionsJson ?? undefined,
       technicalImplementationJson:
@@ -195,6 +287,8 @@ export function transformProject(
     tenantId: project.tenantId || '',
     status: (project.status as ProjectStatus) || 'draft',
     textInput: '', // Not included in ProjectBasicInfo, default to empty
+    hasPatentContent: project.hasPatentContent ?? false,
+    hasProcessedInvention: project.hasProcessedInvention ?? false,
 
     // Handle dates
     createdAt: createdAt,

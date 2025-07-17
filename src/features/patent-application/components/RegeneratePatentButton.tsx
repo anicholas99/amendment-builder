@@ -1,6 +1,7 @@
 import React from 'react';
-import { Box, Button, Icon } from '@chakra-ui/react';
-import { Progress } from '@chakra-ui/react';
+import { Box } from '@/components/ui/box';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { FiRefreshCw } from 'react-icons/fi';
 
 interface RegeneratePatentButtonProps {
@@ -15,25 +16,28 @@ const RegeneratePatentButton: React.FC<RegeneratePatentButtonProps> = ({
   generationProgress,
 }) => {
   return (
-    <Box mt={4} mb={4}>
+    <Box className="mt-4 mb-4">
       <Button
-        leftIcon={<Icon as={FiRefreshCw} />}
-        variant="primary"
-        size="md"
+        size="default"
         onClick={onRegenerate}
-        isLoading={isGenerating}
-        loadingText={`Generating... ${generationProgress}%`}
-        width="100%"
+        disabled={isGenerating}
+        className="w-full gap-2"
       >
-        Regenerate Patent Application
+        <FiRefreshCw
+          className={`h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`}
+        />
+        {isGenerating
+          ? `Generating... ${generationProgress}%`
+          : 'Regenerate Patent Application'}
       </Button>
       {isGenerating && (
         <Progress
           value={generationProgress}
-          size="sm"
+          size="md"
+          className="mt-3 rounded-md"
+          animated={true}
+          showShimmer={true}
           colorScheme="blue"
-          mt={2}
-          borderRadius="md"
         />
       )}
     </Box>

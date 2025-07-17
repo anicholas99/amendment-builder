@@ -1,5 +1,5 @@
 import { NextApiResponse, NextApiRequest } from 'next';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import {
   findApplicationVersionById,
@@ -15,14 +15,14 @@ import { AuthenticatedRequest } from '@/types/middleware';
 import { withCsrf } from '@/lib/security/csrf';
 import { z } from 'zod';
 import { versionQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { withAuth } from '@/middleware/auth';
 import { withTenantGuard } from '@/middleware/authorization';
 import { withErrorHandling } from '@/middleware/errorHandling';
 import { withRateLimit } from '@/middleware/rateLimiter';
 import { requireRole } from '@/middleware/role';
 import { withQueryValidation } from '@/middleware/queryValidation';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { methodMiddleware } from '@/middleware/compose/index';
 
 const apiLogger = createApiLogger('projects/versions/:versionId');

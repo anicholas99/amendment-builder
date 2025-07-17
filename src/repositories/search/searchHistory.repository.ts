@@ -15,9 +15,9 @@
  * - src/features/search/utils/searchHistory.ts for all transformations
  */
 
-import { Prisma, SearchHistory } from '@prisma/client/index.js';
+import { Prisma, SearchHistory } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { logger } from '../../lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import {
   processSearchHistoryEntry,
@@ -30,10 +30,16 @@ import { ProcessedSearchHistoryEntry } from '../../types/domain/searchHistory';
  * Finds multiple search history entries based on provided criteria.
  * @param options Prisma SearchHistoryFindManyArgs (where, orderBy, take, skip, etc.).
  * @returns A promise resolving to an array of ProcessedSearchHistoryEntry entries.
+ *
+ * PERFORMANCE NOTE: For projects with many search history entries, ensure these indexes exist:
+ * - idx_search_history_project_timestamp (projectId, timestamp DESC)
+ * - idx_search_history_user_timestamp (userId, timestamp DESC)
  */
 export async function findManySearchHistory(
   options: Prisma.SearchHistoryFindManyArgs
 ): Promise<ProcessedSearchHistoryEntry[]> {
+  const startTime = Date.now();
+
   logger.debug(
     '[SearchHistory] Repository: Finding search history with options:',
     options
@@ -41,13 +47,31 @@ export async function findManySearchHistory(
 
   const rawEntries = await prisma!.searchHistory.findMany(options);
 
+  const dbQueryTime = Date.now() - startTime;
+
+  logger.info('[SearchHistory] Repository: Raw entries from database', {
+    count: rawEntries.length,
+    dbQueryTime: `${dbQueryTime}ms`,
+    entries: rawEntries.map((e: SearchHistory) => ({
+      id: e.id,
+      projectId: e.projectId,
+      citationExtractionStatus: e.citationExtractionStatus,
+      timestamp: e.timestamp,
+    })),
+  });
+
   // Transform all entries to processed format (now async)
+  const processingStartTime = Date.now();
   const processedEntries = await processSearchHistoryEntries(rawEntries);
+  const processingTime = Date.now() - processingStartTime;
 
   logger.info('[SearchHistory] Repository: Found and processed entries', {
     total: rawEntries.length,
     processed: processedEntries.length,
     failed: rawEntries.length - processedEntries.length,
+    dbQueryTime: `${dbQueryTime}ms`,
+    processingTime: `${processingTime}ms`,
+    totalTime: `${Date.now() - startTime}ms`,
   });
 
   return processedEntries;
@@ -375,7 +399,7 @@ export async function validateSearchHistoryExists(
 
 /**
  * Get the most recent search history entry for a project with citation extraction results
- * @param projectId The project ID
+ * @param searchHistoryId The search history ID
  * @returns The most recent search history with citations or null
  */
 export async function getSearchHistoryWithTenant(searchHistoryId: string) {

@@ -6,8 +6,8 @@ import {
   useQuery,
   keepPreviousData,
 } from '@tanstack/react-query';
-import { useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import {
   ProjectApiService,
   ProjectsQueryParams,
@@ -17,6 +17,7 @@ import {
   UpdateProjectData,
   CreateProjectData,
   transformProject,
+  ProjectStatus,
 } from '@/types/project';
 import { projectKeys } from '@/lib/queryKeys';
 import { ProjectsListResponse } from '@/types/api/responses';
@@ -43,9 +44,7 @@ export const useProjects = (
       ...data,
       pages: data.pages.map(page => ({
         ...page,
-        projects: page.projects.map((project: any) =>
-          transformProject(project)
-        ),
+        projects: page.projects.map(project => transformProject(project)),
       })),
     }),
   });
@@ -53,7 +52,7 @@ export const useProjects = (
 
 export const useProject = (projectId: string | null) => {
   return useQuery<ProjectData, Error>({
-    queryKey: projectKeys.detail(projectId!),
+    queryKey: projectKeys.detail(projectId || ''),
     queryFn: () => {
       if (!projectId) {
         throw new Error('Project ID is required');
@@ -68,93 +67,105 @@ export const useProject = (projectId: string | null) => {
 };
 
 export const useCreateProject = (options?: {
-  onSuccess?: (data: any, variables: CreateProjectData) => void;
+  onSuccess?: (data: ProjectData, variables: CreateProjectData) => void;
   onError?: (error: Error, variables: CreateProjectData) => void;
 }) => {
   const queryClient = useQueryClient();
   const toast = useToast();
 
   return useMutation<
-    any, 
-    Error, 
-    CreateProjectData, 
-    { 
-      optimisticProject: any; 
-      previousQueries: { queryKey: readonly unknown[]; data: unknown }[] 
+    ProjectData,
+    Error,
+    CreateProjectData,
+    {
+      optimisticProject: ProjectData;
+      previousQueries: { queryKey: readonly unknown[]; data: unknown }[];
     }
   >({
-    mutationFn: (data: CreateProjectData) =>
-      ProjectApiService.createProject(data),
-    onMutate: async (newProjectData) => {
+    mutationFn: async (data: CreateProjectData) => {
+      const response = await ProjectApiService.createProject(data);
+      return transformProject(response);
+    },
+    onMutate: async newProjectData => {
       // Cancel any outgoing refetches to prevent race conditions
-      await queryClient.cancelQueries({ 
-        predicate: (query) => {
-          return Array.isArray(query.queryKey) && 
+      await queryClient.cancelQueries({
+        predicate: query => {
+          return (
+            Array.isArray(query.queryKey) &&
             query.queryKey.includes('projects') &&
-            query.queryKey.includes('list');
-        }
+            query.queryKey.includes('list')
+          );
+        },
       });
 
       // Create optimistic project data with all required fields
       const optimisticProject = {
         id: `temp-${Date.now()}`, // Temporary ID
         name: newProjectData.name,
-        status: 'draft',
+        status: 'draft' as ProjectStatus,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         lastModified: new Date().toISOString(),
         lastUpdated: Date.now(), // For sorting
-        invention: null,
+        invention: undefined,
         documents: [],
         // Add other required fields with defaults
         userId: '',
         tenantId: '',
         textInput: '',
-        savedPriorArtItems: []
+        savedPriorArtItems: [],
+        hasPatentContent: false,
+        hasProcessedInvention: false,
       };
 
       // Store previous data for rollback
-      const previousQueries: { queryKey: readonly unknown[]; data: unknown }[] = [];
-      
+      const previousQueries: { queryKey: readonly unknown[]; data: unknown }[] =
+        [];
+
       // Get all project list queries
       const queryCache = queryClient.getQueryCache();
       const projectQueries = queryCache.findAll({
-        predicate: (query) => {
-          return Array.isArray(query.queryKey) && 
+        predicate: query => {
+          return (
+            Array.isArray(query.queryKey) &&
             query.queryKey.includes('projects') &&
-            query.queryKey.includes('list');
+            query.queryKey.includes('list')
+          );
         },
         type: 'active',
       });
-      
+
       logger.debug('[useCreateProject] Found active project queries:', {
         count: projectQueries.length,
-        queryKeys: projectQueries.map(q => q.queryKey)
+        queryKeys: projectQueries.map(q => q.queryKey),
       });
 
       // Update all matching queries optimistically
       projectQueries.forEach(query => {
         const queryKey = query.queryKey;
         const oldData = queryClient.getQueryData(queryKey);
-        
+
         if (oldData) {
           previousQueries.push({ queryKey, data: oldData });
-          
-          queryClient.setQueryData(queryKey, (old: any) => {
-            if (!old || !old.pages) return old;
-            
+
+          queryClient.setQueryData(queryKey, (old: unknown) => {
+            const typedOld = old as
+              | { pages: ProjectsListResponse[] }
+              | undefined;
+            if (!typedOld || !typedOld.pages) return old;
+
             // Create new pages array with the optimistic project added to the first page
-            const newPages = [...old.pages];
+            const newPages = [...typedOld.pages];
             if (newPages[0]) {
               newPages[0] = {
                 ...newPages[0],
-                projects: [optimisticProject, ...newPages[0].projects]
+                projects: [optimisticProject, ...newPages[0].projects],
               };
             }
-            
+
             return {
-              ...old,
-              pages: newPages
+              ...typedOld,
+              pages: newPages,
             };
           });
         }
@@ -174,56 +185,64 @@ export const useCreateProject = (options?: {
       // First, let's see what queries we have
       const queryCache = queryClient.getQueryCache();
       const projectQueries = queryCache.findAll({
-        predicate: (query) => {
-          return Array.isArray(query.queryKey) && 
+        predicate: query => {
+          return (
+            Array.isArray(query.queryKey) &&
             query.queryKey.includes('projects') &&
-            query.queryKey.includes('list');
-        }
+            query.queryKey.includes('list')
+          );
+        },
       });
-      
+
       logger.debug('[useCreateProject] Updating queries with real data:', {
         count: projectQueries.length,
-        queryKeys: projectQueries.map(q => q.queryKey)
+        queryKeys: projectQueries.map(q => q.queryKey),
       });
 
       // Update the optimistic project with the real data
       let updatedCount = 0;
       queryClient.setQueriesData(
-        { 
-          predicate: (query) => {
+        {
+          predicate: query => {
             // Query key structure: [tenant, 'projects', 'list', filters]
-            return Array.isArray(query.queryKey) && 
+            return (
+              Array.isArray(query.queryKey) &&
               query.queryKey.includes('projects') &&
-              query.queryKey.includes('list');
-          }
+              query.queryKey.includes('list')
+            );
+          },
         },
-        (old: any) => {
-          if (!old) return old;
-          
+        (old: unknown) => {
+          const typedOld = old as { pages: ProjectsListResponse[] } | undefined;
+          if (!typedOld) return old;
+
           updatedCount++;
-          
+
           // Replace the temporary project with the real one
-          const newPages = old.pages.map((page: any) => ({
+          const newPages = typedOld.pages.map(page => ({
             ...page,
-            projects: page.projects.map((p: any) => {
+            projects: page.projects.map(p => {
               if (p.id === context?.optimisticProject.id) {
-                logger.debug('[useCreateProject] Replacing temp project with real data', {
-                  tempId: p.id,
-                  realId: newProject.id
-                });
-                return transformProject(newProject);
+                logger.debug(
+                  '[useCreateProject] Replacing temp project with real data',
+                  {
+                    tempId: p.id,
+                    realId: newProject.id,
+                  }
+                );
+                return newProject;
               }
               return p;
-            })
+            }),
           }));
-          
+
           return {
-            ...old,
-            pages: newPages
+            ...typedOld,
+            pages: newPages,
           };
         }
       );
-      
+
       logger.debug('[useCreateProject] Updated query count:', { updatedCount });
 
       // Invalidate with controlled refetch
@@ -234,17 +253,14 @@ export const useCreateProject = (options?: {
       });
 
       // Also mark the new project detail as fresh
-      queryClient.setQueryData(
-        projectKeys.detail(newProject.id),
-        transformProject(newProject)
-      );
-      
+      queryClient.setQueryData(projectKeys.detail(newProject.id), newProject);
+
       // Pre-populate invention query to avoid loading state on navigation
       queryClient.setQueryData(
         ['invention', newProject.id],
         null // New projects have no invention data yet
       );
-      
+
       // Pre-populate versions queries to avoid 404s
       queryClient.setQueryData(['versions', newProject.id, 'latest'], null);
       queryClient.setQueryData(['versions', newProject.id, 'list'], []);
@@ -264,12 +280,14 @@ export const useCreateProject = (options?: {
         isClosable: true,
       });
       logger.info('Project created successfully', { projectId: newProject.id });
-      
+
       // Still emit event for other components that might need it
-      window.dispatchEvent(new CustomEvent('project-created', {
-        detail: { projectId: newProject.id, project: newProject }
-      }));
-      
+      window.dispatchEvent(
+        new CustomEvent('project-created', {
+          detail: { projectId: newProject.id, project: newProject },
+        })
+      );
+
       options?.onSuccess?.(newProject, variables);
     },
     onError: (error, variables, context) => {
@@ -342,13 +360,16 @@ export const useDeleteProjectMutation = () => {
       });
 
       // Store previous data for all queries
-      const previousData: Map<string, any> = new Map();
+      const previousData: Map<string, unknown> = new Map();
 
       // Batch all cache updates to reduce re-renders
       queryClient.setQueriesData(
         { queryKey: projectKeys.lists(), exact: false },
-        (oldData: any) => {
-          if (!oldData) return oldData;
+        (oldData: unknown) => {
+          const typedOld = oldData as
+            | { pages?: ProjectsListResponse[] }
+            | undefined;
+          if (!typedOld) return oldData;
 
           // Store the original data for rollback
           const queryKey = projectListQueries.find(
@@ -360,11 +381,11 @@ export const useDeleteProjectMutation = () => {
           }
 
           return {
-            ...oldData,
-            pages: oldData.pages?.map((page: any) => ({
+            ...typedOld,
+            pages: typedOld.pages?.map(page => ({
               ...page,
               projects: page.projects?.filter(
-                (project: ProjectData) => project.id !== deletedProjectId
+                project => project.id !== deletedProjectId
               ),
             })),
           };
@@ -396,11 +417,11 @@ export const useDeleteProjectMutation = () => {
         queryKey: projectKeys.detail(deletedProjectId),
       });
     },
-    onError: (err, projectId, context: any) => {
+    onError: (err, projectId, context) => {
       // Restore all previous data on error
       if (context?.previousData) {
-        context.previousData.forEach((data: any, keyString: string) => {
-          const queryKey = JSON.parse(keyString);
+        context.previousData.forEach((data: unknown, keyString: string) => {
+          const queryKey = JSON.parse(keyString) as readonly unknown[];
           queryClient.setQueryData(queryKey, data);
         });
       }
@@ -421,33 +442,78 @@ export const useDeleteProjectMutation = () => {
   });
 };
 
+interface ProcessInventionResponse {
+  success: boolean;
+  inventionId?: string;
+  claims?: Array<{
+    id: string;
+    number: number;
+    text: string;
+    dependsOn: number | null;
+    projectId: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+}
+
 export const useProcessInventionMutation = (options?: {
   onSuccess?: (
-    data: any,
-    variables: { projectId: string; text: string }
+    data: ProcessInventionResponse,
+    variables: {
+      projectId: string;
+      text: string;
+      uploadedFigures?: Array<{
+        id: string;
+        assignedNumber: string;
+        url: string;
+        fileName: string;
+      }>;
+    }
   ) => void;
   onError?: (
     error: Error,
-    variables: { projectId: string; text: string }
+    variables: {
+      projectId: string;
+      text: string;
+      uploadedFigures?: Array<{
+        id: string;
+        assignedNumber: string;
+        url: string;
+        fileName: string;
+      }>;
+    }
   ) => void;
 }) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ projectId, text }: { projectId: string; text: string }) =>
-      ProjectApiService.processInvention(projectId, text),
+    mutationFn: ({
+      projectId,
+      text,
+      uploadedFigures,
+    }: {
+      projectId: string;
+      text: string;
+      uploadedFigures?: Array<{
+        id: string;
+        assignedNumber: string;
+        url: string;
+        fileName: string;
+      }>;
+    }) => ProjectApiService.processInvention(projectId, text, uploadedFigures),
     onSuccess: async (data, variables) => {
       // Pre-populate the claims cache if claims are returned
-      if (data.claims && Array.isArray(data.claims)) {
+      const dataWithClaims = data as { claims?: unknown[] };
+      if (dataWithClaims.claims && Array.isArray(dataWithClaims.claims)) {
         logger.info(
           '[useProcessInventionMutation] Pre-populating claims cache',
           {
             projectId: variables.projectId,
-            claimCount: data.claims.length,
+            claimCount: dataWithClaims.claims.length,
           }
         );
         queryClient.setQueryData(claimQueryKeys.list(variables.projectId), {
-          claims: data.claims,
+          claims: dataWithClaims.claims,
         });
       }
 
@@ -456,34 +522,116 @@ export const useProcessInventionMutation = (options?: {
         queryKey: claimQueryKeys.list(variables.projectId),
         refetchType: 'none', // Soft invalidation since we just set the data
       });
-      
-      // CRITICAL: Force update the specific project detail first
+
+      // CRITICAL: Optimistically update the project in cache FIRST
+      // This ensures the sidebar immediately shows the updated hasProcessedInvention flag
+      queryClient.setQueriesData(
+        {
+          predicate: query => {
+            // Update all project list queries
+            return (
+              Array.isArray(query.queryKey) &&
+              query.queryKey.includes('projects') &&
+              query.queryKey.includes('list')
+            );
+          },
+        },
+        (old: unknown) => {
+          const typedOld = old as { pages: ProjectsListResponse[] } | undefined;
+          if (!typedOld?.pages) return old;
+
+          // Update the specific project to set hasProcessedInvention: true
+          const newPages = typedOld.pages.map(page => ({
+            ...page,
+            projects: page.projects.map(project =>
+              project.id === variables.projectId
+                ? {
+                    ...project,
+                    hasProcessedInvention: true,
+                    // Add a minimal invention object to ensure views are enabled
+                    invention: project.invention || {
+                      id: `temp-${variables.projectId}`,
+                      title: 'Processing...',
+                      summary: '',
+                      abstract: '',
+                      description: variables.text || '',
+                    },
+                  }
+                : project
+            ),
+          }));
+
+          // Debug logging
+          logger.info(
+            '[useProcessInventionMutation] Optimistically updating project cache',
+            {
+              projectId: variables.projectId,
+              oldHasProcessedInvention: typedOld.pages
+                .flatMap(p => p.projects)
+                .find(p => p.id === variables.projectId)?.hasProcessedInvention,
+              newHasProcessedInvention: true,
+            }
+          );
+
+          return {
+            ...typedOld,
+            pages: newPages,
+          };
+        }
+      );
+
+      // Also update the project detail cache if it exists
+      queryClient.setQueryData(
+        projectKeys.detail(variables.projectId),
+        (old: unknown) => {
+          const typedOld = old as ProjectData | undefined;
+          if (!typedOld) return old;
+          return { ...typedOld, hasProcessedInvention: true };
+        }
+      );
+
+      // Now invalidate and refetch to ensure server data consistency
+      // But the UI will already show the updated state from optimistic updates above
+
+      // Invalidate project detail query with immediate refetch
       await queryClient.invalidateQueries({
         queryKey: projectKeys.detail(variables.projectId),
-        refetchType: 'active',
+        refetchType: 'active', // Force immediate refetch
       });
-      
-      // Then invalidate ALL project list queries with immediate refetch
-      // This ensures the sidebar gets the updated invention data
+
+      // Invalidate ALL project list queries with controlled refetch
       await queryClient.invalidateQueries({
         queryKey: projectKeys.lists(),
         exact: false, // Match all list queries regardless of filters
         refetchType: 'active', // Force immediate refetch
       });
-      
+
       // Also invalidate the base projects queries
       await queryClient.invalidateQueries({
         queryKey: projectKeys.all,
         refetchType: 'active',
       });
-      
-      // Add a small delay to ensure React Query has processed the updates
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
+
+      // Also invalidate the invention query to ensure it's refetched
+      await queryClient.invalidateQueries({
+        queryKey: ['invention', variables.projectId],
+        refetchType: 'active',
+      });
+
+      // Wait for queries to settle before emitting the event
+      // This ensures the UI has fresh data before components react to the event
+      await queryClient.refetchQueries({
+        queryKey: projectKeys.lists(),
+        exact: false,
+      });
+
       // Emit a custom event to notify other components
-      window.dispatchEvent(new CustomEvent('invention-processed', {
-        detail: { projectId: variables.projectId }
-      }));
+      // At this point the cache has been optimistically updated AND server data refetched
+      window.dispatchEvent(
+        new CustomEvent('invention-processed', {
+          detail: { projectId: variables.projectId },
+        })
+      );
 
       options?.onSuccess?.(data, variables);
     },
@@ -505,6 +653,75 @@ export const useUpdateProjectMutation = () => {
       projectId: string;
       data: UpdateProjectData;
     }) => ProjectApiService.updateProject(projectId, data),
+    onMutate: async ({ projectId, data }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: projectKeys.all });
+
+      // Snapshot previous data for rollback
+      const previousData: { queryKey: readonly unknown[]; data: unknown }[] =
+        [];
+
+      // Get current project detail
+      const currentProject = queryClient.getQueryData<ProjectData>(
+        projectKeys.detail(projectId)
+      );
+
+      if (currentProject) {
+        previousData.push({
+          queryKey: projectKeys.detail(projectId),
+          data: currentProject,
+        });
+
+        // Optimistically update project detail
+        queryClient.setQueryData(projectKeys.detail(projectId), {
+          ...currentProject,
+          ...data,
+          lastUpdated: Date.now(),
+        });
+      }
+
+      // Optimistically update all project lists
+      const queryCache = queryClient.getQueryCache();
+      const projectListQueries = queryCache.findAll({
+        queryKey: projectKeys.lists(),
+        exact: false,
+        type: 'active',
+      });
+
+      projectListQueries.forEach(query => {
+        const queryKey = query.queryKey;
+        const oldData = queryClient.getQueryData(queryKey);
+
+        if (oldData) {
+          previousData.push({ queryKey, data: oldData });
+
+          queryClient.setQueryData(queryKey, (old: unknown) => {
+            const typedOld = old as
+              | { pages?: ProjectsListResponse[] }
+              | undefined;
+            if (!typedOld || !typedOld.pages) return old;
+
+            return {
+              ...typedOld,
+              pages: typedOld.pages.map(page => ({
+                ...page,
+                projects: page.projects.map(project =>
+                  project.id === projectId
+                    ? {
+                        ...project,
+                        ...data,
+                        lastUpdated: Date.now(),
+                      }
+                    : project
+                ),
+              })),
+            };
+          });
+        }
+      });
+
+      return { previousData };
+    },
     onSuccess: async (updatedProject, variables) => {
       // Show success toast for name changes
       if (variables.data.name) {
@@ -530,14 +747,17 @@ export const useUpdateProjectMutation = () => {
         // Update all project lists with server data
         queryClient.setQueriesData(
           { queryKey: projectKeys.lists() },
-          (old: any) => {
-            if (!old) return old;
+          (old: unknown) => {
+            const typedOld = old as
+              | { pages?: ProjectsListResponse[] }
+              | undefined;
+            if (!typedOld) return old;
 
             return {
-              ...old,
-              pages: old.pages?.map((page: any) => ({
+              ...typedOld,
+              pages: typedOld.pages?.map(page => ({
                 ...page,
-                projects: page.projects?.map((project: ProjectData) =>
+                projects: page.projects?.map(project =>
                   project.id === variables.projectId ? transformed : project
                 ),
               })),
@@ -562,7 +782,17 @@ export const useUpdateProjectMutation = () => {
         refetchType: 'none',
       });
     },
-    onError: (err, { projectId }) => {
+    onError: (err, { projectId }, context) => {
+      // Rollback optimistic updates on error
+      const ctx = context as {
+        previousData?: Array<{ queryKey: readonly unknown[]; data: unknown }>;
+      };
+      if (ctx?.previousData) {
+        ctx.previousData.forEach(({ queryKey, data }) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+
       toast({
         title: 'Update Failed',
         description: 'Failed to update project. Please try again.',

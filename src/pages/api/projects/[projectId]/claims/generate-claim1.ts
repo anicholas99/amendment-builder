@@ -10,13 +10,11 @@
 
 import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
-import { claimGenerationService } from '@/server/services/claim-generation.server-service';
-import { inventionDataService } from '@/server/services/invention-data.server-service';
-import { AuthenticatedRequest } from '@/types/middleware';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { AuthenticatedRequest, RequestWithServices } from '@/types/middleware';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
 
 const apiLogger = createApiLogger('generate-claim1');
 
@@ -37,11 +35,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   const userId = (req as AuthenticatedRequest).user?.id;
   const { projectId } = req.query as { projectId: string };
 
+  // Get request-scoped services
+  const { inventionService, claimGenerationService } = (
+    req as RequestWithServices
+  ).services;
+
   try {
     // Step 1: Get the current invention data
     apiLogger.info('Fetching invention data', { userId, projectId });
-    const inventionData =
-      await inventionDataService.getInventionData(projectId);
+    const inventionData = await inventionService.getInventionData(projectId);
 
     if (!inventionData || Object.keys(inventionData).length === 0) {
       apiLogger.warn('No invention data found', { userId, projectId });
@@ -110,19 +112,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       metadata: result.metadata,
     });
 
-    // Step 4: Update the invention data with the new claim
-    const updatedClaims = {
-      ...(inventionData.claims || {}),
-      '1': generatedClaim, // Replace or add claim 1
-    };
-
-    await inventionDataService.updateMultipleFields(projectId, {
-      claims: updatedClaims,
-    });
-
-    apiLogger.info('Claim saved to invention data', { userId, projectId });
-
-    // Step 5: Return the result with the generated claim
+    // Step 4: Return the result with the generated claim
+    // Note: Claims are now managed through the claims table via frontend callback
     apiLogger.logResponse(200, {
       status: 'Success',
       hasMetadata: !!result.metadata,
@@ -130,9 +121,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     return res.status(200).json({
       success: true,
-      claim: generatedClaim,
-      claims: updatedClaims,
-      metadata: result.metadata,
+      data: {
+        claim: generatedClaim,
+        metadata: result.metadata,
+      },
     });
   } catch (error) {
     apiLogger.error('Claim generation failed', {

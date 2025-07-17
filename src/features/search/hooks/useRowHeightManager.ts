@@ -1,5 +1,5 @@
 import React, { useRef, useCallback, useEffect } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { VariableSizeList as List } from 'react-window';
 import { SearchHistoryEntry } from '../utils/searchHistoryUtils';
 

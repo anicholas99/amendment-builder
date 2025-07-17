@@ -1,14 +1,13 @@
 import React from 'react';
+import { cn } from '@/lib/utils';
 import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalBody,
-  ModalFooter,
-  Button,
-  Text,
-  Box,
-} from '@chakra-ui/react';
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { useThemeContext } from '../../../../contexts/ThemeContext';
 
 interface ProjectConfirmationModalProps {
@@ -35,67 +34,57 @@ export const ProjectConfirmationModal: React.FC<
   const { isDarkMode } = useThemeContext();
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      isCentered
-      closeOnOverlayClick={!isLoading}
-      closeOnEsc={!isLoading}
-      blockScrollOnMount={true}
-      motionPreset="scale"
+    <Dialog
+      open={isOpen}
+      onOpenChange={open => !open && !isLoading && onClose()}
     >
-      <ModalOverlay bg="blackAlpha.600" />
-      <ModalContent
-        bg={isDarkMode ? 'gray.800' : 'white'}
-        color={isDarkMode ? 'white' : 'gray.800'}
-        borderRadius="md"
-        boxShadow="lg"
-        pt={6}
-        pb={4}
-      >
-        <Box px={6}>
-          <Text fontSize="xl" fontWeight="semibold" mb={4}>
-            {title}
-          </Text>
-          <Text fontSize="md" mb={4}>
-            Are you sure you want to {actionText.toLowerCase()}{' '}
-            <Text
-              as="span"
-              fontWeight="semibold"
-              color={isDarkMode ? 'blue.200' : 'blue.600'}
-            >
-              {targetProject?.name || 'this project'}
-            </Text>
-            ?
-          </Text>
-          <Text fontSize="sm" color={isDarkMode ? 'gray.400' : 'gray.600'}>
-            Any unsaved changes in the current project will be saved
-            automatically.
-          </Text>
-        </Box>
-        <ModalFooter pt={6}>
+      <DialogContent className="sm:max-w-md">
+        <div className="space-y-4">
+          <DialogTitle className="text-xl font-semibold">{title}</DialogTitle>
+          <DialogDescription asChild>
+            <div className="space-y-4">
+              <p className="text-base">
+                Are you sure you want to {actionText.toLowerCase()}{' '}
+                <span
+                  className={cn(
+                    'font-semibold',
+                    isDarkMode ? 'text-blue-200' : 'text-blue-600'
+                  )}
+                >
+                  {targetProject?.name || 'this project'}
+                </span>
+                ?
+              </p>
+              <p
+                className={cn(
+                  'text-sm',
+                  isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                )}
+              >
+                Any unsaved changes in the current project will be saved
+                automatically.
+              </p>
+            </div>
+          </DialogDescription>
+        </div>
+        <DialogFooter className="pt-6">
           <Button
             variant="outline"
-            mr={3}
             onClick={onClose}
-            bg="transparent"
-            color={isDarkMode ? 'gray.300' : 'gray.600'}
-            borderColor={isDarkMode ? 'gray.600' : 'gray.200'}
-            _hover={{ bg: isDarkMode ? 'gray.700' : 'gray.50' }}
-            isDisabled={isLoading}
+            disabled={isLoading}
+            className="mr-3"
           >
             Cancel
           </Button>
           <Button
-            colorScheme="blue"
             onClick={onConfirm}
-            isLoading={isLoading}
-            loadingText={`${actionText}ing`}
+            disabled={isLoading}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
-            {actionText}
+            {isLoading ? `${actionText}ing...` : actionText}
           </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

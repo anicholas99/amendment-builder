@@ -1,43 +1,37 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import {
-  Center,
-  VStack,
-  Text,
-  Spinner,
-  Heading,
-  Button,
-  Box,
-} from '@chakra-ui/react';
-import { environment } from '@/config/environment';
 import { useAuth } from '@/hooks/useAuth';
 import { useTenant } from '@/contexts/TenantContext';
-import {
-  getLastSelectedTenant,
-  saveLastSelectedTenant,
-} from '@/utils/tenantPreferences';
+import { getLastSelectedTenant } from '@/utils/tenantPreferences';
+import { logger } from '@/utils/clientLogger';
 
 export default function Home() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
-  const { userTenants } = useTenant();
+  const { userTenants, isLoading: tenantsLoading } = useTenant();
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
     // Don't do anything while auth is loading
     if (authLoading) return;
 
-    // If not authenticated, redirect to login
+    // If not authenticated, redirect to login immediately
     if (!user) {
       router.push('/api/auth/login');
       return;
     }
 
+    // Don't process tenant logic while tenants are still loading
+    if (tenantsLoading) return;
+
+    // Prevent multiple redirects
+    if (isRedirecting) return;
+
     // Check for last selected tenant
     const lastSelectedTenant = getLastSelectedTenant();
 
     // If we have a last selected tenant and user still has access to it, go there
-    if (lastSelectedTenant && userTenants && !isRedirecting) {
+    if (lastSelectedTenant && userTenants && userTenants.length > 0) {
       const hasAccess = userTenants.some(t => t.slug === lastSelectedTenant);
       if (hasAccess) {
         setIsRedirecting(true);
@@ -47,75 +41,63 @@ export default function Home() {
     }
 
     // If user has only one tenant, auto-redirect to it
-    if (userTenants && userTenants.length === 1 && !isRedirecting) {
+    if (userTenants && userTenants.length === 1) {
       setIsRedirecting(true);
-      saveLastSelectedTenant(userTenants[0].slug);
+      // Remove deprecated call - just navigate directly
       router.push(`/${userTenants[0].slug}/projects`);
       return;
     }
 
     // If user has multiple tenants, go to tenant selector
-    if (userTenants && userTenants.length > 1 && !isRedirecting) {
+    if (userTenants && userTenants.length > 1) {
       setIsRedirecting(true);
       router.push('/select-tenant');
       return;
     }
 
-    // No automatic redirect anymore - proper tenant selection required
-  }, [user, authLoading, userTenants, router, isRedirecting]);
+    // If no tenants, stay on this page to show the message
+  }, [user, authLoading, tenantsLoading, userTenants, router, isRedirecting]);
 
-  // Loading state
-  if (authLoading || isRedirecting) {
-    return (
-      <Center height="100vh" width="100vw" position="fixed" top="0" left="0">
-        <VStack spacing={4}>
-          <Spinner size="xl" />
-          <Text>Loading...</Text>
-        </VStack>
-      </Center>
-    );
+  // No user - let AuthGuard handle this
+  if (!user && !authLoading) {
+    return null; // AuthGuard will redirect
   }
 
-  // Not authenticated
-  if (!user) {
+  // No tenants (edge case)
+  if (
+    !authLoading &&
+    !tenantsLoading &&
+    user &&
+    (!userTenants || userTenants.length === 0)
+  ) {
     return (
-      <Center height="100vh" width="100vw" position="fixed" top="0" left="0">
-        <VStack spacing={4}>
-          <Heading size="lg">Welcome to Patent Drafter AI</Heading>
-          <Text>Please log in to continue</Text>
-          <Button
-            colorScheme="blue"
-            onClick={() => router.push('/api/auth/login')}
-          >
-            Log In
-          </Button>
-        </VStack>
-      </Center>
-    );
-  }
-
-  // No tenants (edge case - should redirect to selector)
-  if (!userTenants || userTenants.length === 0) {
-    return (
-      <Center height="100vh" width="100vw" position="fixed" top="0" left="0">
-        <VStack spacing={4}>
-          <Heading size="lg">No Organization Access</Heading>
-          <Text>You don't have access to any organizations.</Text>
-          <Text fontSize="sm" color="gray.600">
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center space-y-4">
+          <h1 className="text-2xl font-semibold">No Organization Access</h1>
+          <p className="text-foreground">
+            You don't have access to any organizations.
+          </p>
+          <p className="text-sm text-muted-foreground">
             Please contact your administrator.
-          </Text>
-        </VStack>
-      </Center>
+          </p>
+        </div>
+      </div>
     );
   }
 
-  // Fallback - show loading (should not reach here in normal flow)
+  // Show minimal loading only for slow redirects - with higher z-index to appear above layout
+  if (isRedirecting) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background">
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Default case - minimal loading with higher z-index to appear above layout
   return (
-    <Center height="100vh" width="100vw" position="fixed" top="0" left="0">
-      <VStack spacing={4}>
-        <Spinner size="xl" />
-        <Text>Redirecting...</Text>
-      </VStack>
-    </Center>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background">
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
   );
 }

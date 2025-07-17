@@ -1,12 +1,16 @@
+/**
+ * Development tool for debugging React Query cache state
+ * This file provides utilities to inspect and debug the query cache
+ */
+
 import { QueryClient } from '@tanstack/react-query';
-import { logger } from '@/lib/monitoring/logger';
-import { environment } from '@/config/environment';
+import { logger } from '@/utils/clientLogger';
+import { isDevelopment } from '@/config/environment.client';
 
 // Extend the Window interface for debug utilities
 declare global {
   interface Window {
     debugQueryKeys?: () => void;
-    __REACT_QUERY_CLIENT__?: QueryClient;
   }
 }
 
@@ -57,10 +61,12 @@ export function debugQueryKeys(queryClient: QueryClient) {
 }
 
 // Expose to window in development for easy debugging
-if (typeof window !== 'undefined' && environment.isDevelopment) {
+if (typeof window !== 'undefined' && isDevelopment) {
   window.debugQueryKeys = () => {
-    const queryClient = window.__REACT_QUERY_CLIENT__;
-    if (queryClient) {
+    const queryClient = window.__REACT_QUERY_CLIENT__ as
+      | QueryClient
+      | undefined;
+    if (queryClient instanceof QueryClient) {
       debugQueryKeys(queryClient);
     } else {
       logger.error(

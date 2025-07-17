@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToast';
 import { useQueryClient } from '@tanstack/react-query';
 import { ProcessedCitationMatch } from '@/types/domain/citation';
 import {
@@ -8,7 +8,7 @@ import {
 } from '@/types/domain/priorArt';
 import { useTemporarySet } from '@/hooks/useTemporaryState';
 import { SAVING_FEEDBACK_DURATION } from '../constants/citationConstants';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 /**
  * Hook for managing citation saving functionality
@@ -45,12 +45,17 @@ export function useCitationSaving(
    * Generate a consistent citation key for both optimistic and actual saved state.
    * We normalise strings to avoid issues with minor formatting differences.
    */
-  const generateCitationKey = useCallback((match: ProcessedCitationMatch): string => {
-    const elementText = normalize(match.parsedElementText || '');
-    const citation = normalize(match.citation || '');
-    const referenceNumber = match.referenceNumber.replace(/-/g, '').toUpperCase();
-    return `${referenceNumber}_${elementText}_${citation}`;
-  }, []);
+  const generateCitationKey = useCallback(
+    (match: ProcessedCitationMatch): string => {
+      const elementText = normalize(match.parsedElementText || '');
+      const citation = normalize(match.citation || '');
+      const referenceNumber = match.referenceNumber
+        .replace(/-/g, '')
+        .toUpperCase();
+      return `${referenceNumber}_${elementText}_${citation}`;
+    },
+    []
+  );
 
   /**
    * Check if a citation is already saved
@@ -111,21 +116,28 @@ export function useCitationSaving(
       const matchElementNormalized = normalize(match.parsedElementText || '');
 
       logger.info('[isCitationSaved] Normalized match values:', {
-        matchCitationNormalized: matchCitationNormalized.substring(0, 50) + '...',
+        matchCitationNormalized:
+          matchCitationNormalized.substring(0, 50) + '...',
         matchElementNormalized,
       });
 
       return (
         parentReference.savedCitations?.some(
           (savedCitation: SavedCitationUI) => {
-            const savedCitationNormalized = normalize(savedCitation.citation || '');
-            const savedElementNormalized = normalize(savedCitation.elementText || '');
+            const savedCitationNormalized = normalize(
+              savedCitation.citation || ''
+            );
+            const savedElementNormalized = normalize(
+              savedCitation.elementText || ''
+            );
 
             logger.info('[isCitationSaved] Comparing with saved citation:', {
               savedElementText: savedCitation.elementText,
-              savedCitationText: savedCitation.citation?.substring(0, 50) + '...',
+              savedCitationText:
+                savedCitation.citation?.substring(0, 50) + '...',
               savedElementNormalized,
-              savedCitationNormalized: savedCitationNormalized.substring(0, 50) + '...',
+              savedCitationNormalized:
+                savedCitationNormalized.substring(0, 50) + '...',
               elementMatch: savedElementNormalized === matchElementNormalized,
             });
 
@@ -134,8 +146,10 @@ export function useCitationSaving(
               savedCitationNormalized.includes(matchCitationNormalized) ||
               matchCitationNormalized.includes(savedCitationNormalized);
 
-            const isMatch = savedElementNormalized === matchElementNormalized && citationMatch;
-            
+            const isMatch =
+              savedElementNormalized === matchElementNormalized &&
+              citationMatch;
+
             if (isMatch) {
               logger.info('[isCitationSaved] MATCH FOUND!', {
                 elementText: savedCitation.elementText,
@@ -144,8 +158,7 @@ export function useCitationSaving(
             }
 
             return (
-              savedElementNormalized === matchElementNormalized &&
-              citationMatch
+              savedElementNormalized === matchElementNormalized && citationMatch
             );
           }
         ) || false
@@ -180,13 +193,14 @@ export function useCitationSaving(
 
         // Clear optimistic state after successful save and let the real data take over
         // We do this after a short delay to ensure the cache update has time to propagate
-        setTimeout(() => {
+        // Using Promise.resolve().then() to defer to next tick instead of setTimeout
+        Promise.resolve().then(() => {
           setOptimisticallySaved(prev => {
             const newSet = new Set(prev);
             newSet.delete(citationId);
             return newSet;
           });
-        }, 100);
+        });
       } catch (error) {
         // Remove from optimistic state on error
         setOptimisticallySaved(prev => {
@@ -195,12 +209,8 @@ export function useCitationSaving(
           return newSet;
         });
 
-        toast({
-          title: 'Failed to save citation',
+        toast.error('Failed to save citation', {
           description: 'Please try again.',
-          status: 'error',
-          duration: 3000,
-          isClosable: true,
         });
       }
     },

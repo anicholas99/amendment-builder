@@ -1,87 +1,88 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { Box, Heading, Text, Button, Stack, Alert } from '@chakra-ui/react';
-import { VStack } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
-import { environment } from '@/config/environment';
+import React, { ReactNode, ErrorInfo } from 'react';
+import {
+  ErrorBoundary as ReactErrorBoundary,
+  FallbackProps,
+} from 'react-error-boundary';
+import { Box } from '@/components/ui/box';
+import { Heading } from '@/components/ui/heading';
+import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { VStack } from '@/components/ui/stack';
+import { logger } from '@/utils/clientLogger';
+import { isDevelopment } from '@/config/environment.client';
 
-interface Props {
+interface ErrorBoundaryProps {
   children: ReactNode;
 }
 
-interface State {
-  hasError: boolean;
-  error: Error | null;
-}
+/**
+ * Error Fallback Component
+ *
+ * Displays a user-friendly error message when the ErrorBoundary catches an error
+ */
+const ErrorFallback: React.FC<FallbackProps> = ({
+  error,
+  resetErrorBoundary,
+}) => {
+  return (
+    <Box className="min-h-screen flex items-center justify-center p-6">
+      <VStack spacing={6} className="max-w-md text-center">
+        <Heading size="xl" className="text-red-500">
+          Oops! Something went wrong
+        </Heading>
+        <Text size="lg" className="text-muted-foreground">
+          We apologize for the inconvenience. The application encountered an
+          unexpected error.
+        </Text>
+        {isDevelopment && error && (
+          <Alert variant="destructive" className="mt-4 rounded-md">
+            <AlertDescription>
+              <Text size="sm" className="font-mono text-red-600">
+                {error.toString()}
+              </Text>
+            </AlertDescription>
+          </Alert>
+        )}
+        <Button onClick={resetErrorBoundary} size="lg">
+          Return to Home
+        </Button>
+      </VStack>
+    </Box>
+  );
+};
 
 /**
- * Error Boundary Component
+ * Error Boundary Component (Function-based)
  *
  * Catches JavaScript errors anywhere in the child component tree,
  * logs those errors, and displays a fallback UI instead of crashing.
+ *
+ * This function-based implementation supports Fast Refresh, unlike class components.
  */
-class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false,
-    error: null,
-  };
-
-  public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
-  }
-
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+const ErrorBoundary: React.FC<ErrorBoundaryProps> = ({ children }) => {
+  const handleError = (error: Error, errorInfo: ErrorInfo) => {
     logger.error('Uncaught error in React component tree:', {
       error: error.toString(),
-      errorInfo: errorInfo.componentStack,
+      errorInfo: errorInfo.componentStack || 'No component stack available',
       timestamp: new Date().toISOString(),
     });
-  }
+  };
 
-  private handleReset = () => {
-    this.setState({ hasError: false, error: null });
+  const handleReset = () => {
+    // Navigate to home page on reset
     window.location.href = '/';
   };
 
-  public render() {
-    if (this.state.hasError) {
-      return (
-        <Box
-          minH="100vh"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          p={8}
-        >
-          <VStack spacing={6} maxW="md" textAlign="center">
-            <Heading size="xl" color="red.500">
-              Oops! Something went wrong
-            </Heading>
-            <Text fontSize="lg" color="gray.600">
-              We apologize for the inconvenience. The application encountered an
-              unexpected error.
-            </Text>
-            {environment.isDevelopment && this.state.error && (
-              <Alert
-                status="error"
-                variant="left-accent"
-                mt={4}
-                borderRadius="md"
-              >
-                <Text fontSize="sm" color="red.600" fontFamily="mono">
-                  {this.state.error.toString()}
-                </Text>
-              </Alert>
-            )}
-            <Button colorScheme="blue" onClick={this.handleReset} size="lg">
-              Return to Home
-            </Button>
-          </VStack>
-        </Box>
-      );
-    }
-
-    return this.props.children;
-  }
-}
+  return (
+    <ReactErrorBoundary
+      FallbackComponent={ErrorFallback}
+      onError={handleError}
+      onReset={handleReset}
+    >
+      {children}
+    </ReactErrorBoundary>
+  );
+};
 
 export default ErrorBoundary;

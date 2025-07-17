@@ -1,22 +1,17 @@
 import React, { useState } from 'react';
+import { cn } from '@/lib/utils';
 import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  ModalCloseButton,
-  Button,
-  VStack,
-  RadioGroup,
-  Radio,
-  Text,
-  Badge,
-  HStack,
-  Box,
-  useColorModeValue,
-} from '@chakra-ui/react';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { ClaimType } from '@/hooks/api/useClaimMirroring';
 import { FiCopy } from 'react-icons/fi';
 
@@ -28,7 +23,11 @@ interface MirrorClaimsModalProps {
   isLoading?: boolean;
 }
 
-const CLAIM_TYPE_OPTIONS: Array<{ value: ClaimType; label: string; description: string }> = [
+const CLAIM_TYPE_OPTIONS: Array<{
+  value: ClaimType;
+  label: string;
+  description: string;
+}> = [
   {
     value: 'system',
     label: 'System',
@@ -52,7 +51,8 @@ const CLAIM_TYPE_OPTIONS: Array<{ value: ClaimType; label: string; description: 
   {
     value: 'crm',
     label: 'Computer-Readable Medium',
-    description: 'A non-transitory computer-readable medium storing instructions...',
+    description:
+      'A non-transitory computer-readable medium storing instructions...',
   },
 ];
 
@@ -64,87 +64,89 @@ const MirrorClaimsModal: React.FC<MirrorClaimsModalProps> = ({
   isLoading = false,
 }) => {
   const [selectedType, setSelectedType] = useState<ClaimType>('method');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
-  const selectedBg = useColorModeValue('blue.50', 'blue.900');
 
   const handleConfirm = () => {
     onConfirm(selectedType);
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg" isCentered>
-      <ModalOverlay />
-      <ModalContent>
-        <ModalHeader>
-          <HStack>
-            <FiCopy />
-            <Text>Mirror Claims</Text>
-          </HStack>
-        </ModalHeader>
-        <ModalCloseButton />
-        
-        <ModalBody>
-          <VStack spacing={4} align="stretch">
-            <Box>
-              <Text mb={2}>
-                Select the target claim type to mirror your{' '}
-                <Badge colorScheme="blue">{claimCount}</Badge> claims:
-              </Text>
-            </Box>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FiCopy className="w-4 h-4" />
+            <span>Mirror Claims</span>
+          </DialogTitle>
+        </DialogHeader>
 
-            <RadioGroup value={selectedType} onChange={(value) => setSelectedType(value as ClaimType)}>
-              <VStack spacing={3} align="stretch">
-                {CLAIM_TYPE_OPTIONS.map((option) => (
-                  <Box
-                    key={option.value}
-                    p={3}
-                    borderWidth="1px"
-                    borderRadius="md"
-                    borderColor={selectedType === option.value ? 'blue.500' : borderColor}
-                    bg={selectedType === option.value ? selectedBg : 'transparent'}
-                    cursor="pointer"
-                    onClick={() => setSelectedType(option.value)}
-                    transition="all 0.2s"
-                    _hover={{ borderColor: 'blue.400' }}
+        <div className="space-y-4">
+          <div>
+            <p className="mb-2">
+              Select the target claim type to mirror your{' '}
+              <Badge
+                variant="secondary"
+                className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800"
+              >
+                {claimCount}
+              </Badge>{' '}
+              claims:
+            </p>
+          </div>
+
+          <RadioGroup
+            value={selectedType}
+            onValueChange={value => setSelectedType(value as ClaimType)}
+            className="space-y-3"
+          >
+            {CLAIM_TYPE_OPTIONS.map(option => (
+              <div
+                key={option.value}
+                className={cn(
+                  'p-4 border rounded-md cursor-pointer transition-[background-color,border-color] duration-150',
+                  'hover:border-blue-400',
+                  selectedType === option.value
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                    : 'border-border bg-transparent'
+                )}
+                onClick={() => setSelectedType(option.value)}
+              >
+                <div className="flex items-center space-x-3">
+                  <RadioGroupItem value={option.value} id={option.value} />
+                  <Label
+                    htmlFor={option.value}
+                    className="cursor-pointer flex-1"
                   >
-                    <Radio value={option.value} size="lg">
-                      <VStack align="start" spacing={1} ml={2}>
-                        <Text fontWeight="semibold">{option.label}</Text>
-                        <Text fontSize="sm" color="gray.600">
-                          {option.description}
-                        </Text>
-                      </VStack>
-                    </Radio>
-                  </Box>
-                ))}
-              </VStack>
-            </RadioGroup>
+                    <div className="space-y-1">
+                      <p className="font-semibold">{option.label}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {option.description}
+                      </p>
+                    </div>
+                  </Label>
+                </div>
+              </div>
+            ))}
+          </RadioGroup>
 
-            <Box mt={2}>
-              <Text fontSize="sm" color="gray.600">
-                The AI will transform your claims while preserving all technical elements
-                and maintaining proper claim dependencies.
-              </Text>
-            </Box>
-          </VStack>
-        </ModalBody>
+          <div className="mt-2">
+            <p className="text-sm text-muted-foreground">
+              The AI will transform your claims while preserving all technical
+              elements and maintaining proper claim dependencies.
+            </p>
+          </div>
+        </div>
 
-        <ModalFooter>
-          <Button variant="ghost" mr={3} onClick={onClose} isDisabled={isLoading}>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={isLoading}>
             Cancel
           </Button>
-          <Button
-            colorScheme="blue"
-            onClick={handleConfirm}
-            isLoading={isLoading}
-            loadingText="Mirroring Claims..."
-          >
-            Mirror Claims
+          <Button onClick={handleConfirm} disabled={isLoading}>
+            {isLoading ? 'Mirroring Claims...' : 'Mirror Claims'}
           </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 
-export default MirrorClaimsModal; 
+export default MirrorClaimsModal;

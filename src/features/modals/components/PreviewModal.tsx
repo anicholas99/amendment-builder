@@ -1,27 +1,17 @@
 import React from 'react';
+import { FileText } from 'lucide-react';
 import {
-  Box,
-  Text,
-  Button,
-  IconButton,
-  Flex,
-  VStack,
-  Badge,
-  useColorModeValue,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  ModalCloseButton,
-  Icon,
-} from '@chakra-ui/react';
-import { FiX, FiFileText } from 'react-icons/fi';
-import {
-  modalStyles,
-  modalButtonStyles,
-} from '@/components/common/ModalStyles';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface PreviewModalProps {
   isOpen: boolean;
@@ -34,46 +24,42 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   onClose,
   claims,
 }) => {
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const { isDarkMode } = useThemeContext();
 
   if (!isOpen) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="2xl" isCentered>
-      <ModalOverlay {...modalStyles.overlay} />
-      <ModalContent>
-        <ModalHeader {...modalStyles.header} borderColor={borderColor}>
-          <Flex align="center">
-            <Icon as={FiFileText} mr={2} />
+    <Dialog open={isOpen} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center">
+            <FileText className="h-5 w-5 mr-2" />
             Preview Content
-          </Flex>
-        </ModalHeader>
-        <ModalCloseButton />
-        <ModalBody {...modalStyles.body} maxH="70vh" overflowY="auto">
-          <VStack spacing={4} align="stretch">
-            {Object.entries(claims).map(([number, text], index) => (
-              <Box
-                key={index}
-                p={4}
-                borderWidth="1px"
-                borderRadius="md"
-                borderColor={borderColor}
-              >
-                <Flex justify="space-between" align="center" mb={2}>
-                  <Badge colorScheme="blue">Claim {number}</Badge>
-                </Flex>
-                <Text>{text}</Text>
-              </Box>
-            ))}
-          </VStack>
-        </ModalBody>
-        <ModalFooter {...modalStyles.footer} borderColor={borderColor}>
-          <Button onClick={onClose} {...modalButtonStyles.secondary}>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto space-y-4 py-4">
+          {Object.entries(claims).map(([number, text], index) => (
+            <div
+              key={index}
+              className={cn(
+                'p-4 border rounded-md',
+                isDarkMode ? 'border-gray-700' : 'border-gray-200'
+              )}
+            >
+              <div className="flex justify-between items-center mb-2">
+                <Badge>Claim {number}</Badge>
+              </div>
+              <p>{text}</p>
+            </div>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
             Close
           </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

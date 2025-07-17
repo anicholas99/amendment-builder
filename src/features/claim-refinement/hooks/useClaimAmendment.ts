@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import { useDisclosure } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useDisclosure } from '@/hooks/useDisclosure';
+import { logger } from '@/utils/clientLogger';
 
 interface PendingAmendment {
   originalText: string;
@@ -26,7 +26,7 @@ export const useClaimAmendment = ({
   // Function to update claim text when a suggestion is applied
   const updateClaimText = useCallback(
     (originalText: string, replacementText: string) => {
-      logger.log('[useClaimAmendment] Updating claim text', {
+      logger.info('[useClaimAmendment] Updating claim text', {
         originalText,
         replacementText,
       });
@@ -61,7 +61,7 @@ export const useClaimAmendment = ({
       }
 
       // Update claim 1 text - use the claim ID, not the claim number
-      logger.log('[useClaimAmendment] Updating claim 1', {
+      logger.info('[useClaimAmendment] Updating claim 1', {
         claimId: claim1.id,
       });
       handleClaimChange(claim1.id, replacementText);
@@ -72,7 +72,7 @@ export const useClaimAmendment = ({
   // Handle confirmed amendment
   const handleConfirmAmendment = useCallback(() => {
     if (pendingAmendment) {
-      logger.log('[useClaimAmendment] User confirmed claim amendment');
+      logger.info('[useClaimAmendment] User confirmed claim amendment');
       // Find claim 1 again to get its current ID
       const claim1 = claims?.find(claim => claim.number === 1);
       if (claim1) {
@@ -85,7 +85,7 @@ export const useClaimAmendment = ({
 
   // Handle cancelled amendment
   const handleCancelAmendment = useCallback(() => {
-    logger.log('[useClaimAmendment] User cancelled claim amendment');
+    logger.info('[useClaimAmendment] User cancelled claim amendment');
     setPendingAmendment(null);
     onClose();
   }, [onClose]);

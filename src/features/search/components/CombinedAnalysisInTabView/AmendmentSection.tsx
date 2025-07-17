@@ -2,36 +2,48 @@
  * Amendment Section Component for Combined Analysis
  *
  * Displays strategic recommendations with amendment application functionality.
- * Follows the pattern established in HolisticAnalysisSection for deep analysis.
+ * Professional, document-style design for attorneys.
  */
 
 import React, { useState } from 'react';
-import {
-  Box,
-  Text,
-  Heading,
-  VStack,
-  Button,
-  Icon,
-  Flex,
-  useToast,
-  Badge,
-  Collapse,
-  useDisclosure,
-} from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
 import {
   FiCheck,
-  FiEdit3,
   FiPlus,
   FiChevronDown,
   FiChevronUp,
+  FiLoader,
 } from 'react-icons/fi';
 import { diffWords } from 'diff';
-import { useColorModeValue } from '@/hooks/useColorModeValue';
+import { useThemeContext } from '@/contexts/ThemeContext';
+import { useToast } from '@/hooks/useToastWrapper';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { ValidationInfoBox } from '../DeepAnalysis/ValidationInfoBox';
 
 interface StrategicRecommendation {
   recommendation: string;
   suggestedAmendmentLanguage: string;
+  // Optional validation fields for multi-reference validation
+  validation?: {
+    isValidated: boolean;
+    isDisclosedInAny: boolean;
+    recommendation: 'remove' | 'modify' | 'keep';
+    validationScore: number;
+    disclosingReferences: string[];
+    validationSummary: string;
+    disclosureByReference: Record<string, {
+      isDisclosed: boolean;
+      evidence: string[];
+      score: number;
+    }>;
+  };
 }
 
 interface AmendmentSectionProps {
@@ -39,8 +51,21 @@ interface AmendmentSectionProps {
   claim1Text?: string;
   originalClaim?: string;
   revisedClaim?: string;
+  completeAmendmentRationale?: string;
+  alternativeAmendmentOptions?: string[] | null;
   onApplyAmendment?: (original: string, revised: string) => void;
   onAddDependent?: (dependentClaimText: string) => void;
+  // Optional validation summary for multi-reference validation
+  validationSummary?: {
+    totalSuggestions: number;
+    validatedSuggestions: number;
+    disclosedCount: number;
+    keepCount: number;
+    validationEnabled: boolean;
+    validationError?: string;
+    referenceCount?: number;
+    referenceNumbers?: string[];
+  };
 }
 
 export const AmendmentSection: React.FC<AmendmentSectionProps> = ({
@@ -48,37 +73,51 @@ export const AmendmentSection: React.FC<AmendmentSectionProps> = ({
   claim1Text,
   originalClaim,
   revisedClaim,
+  completeAmendmentRationale,
+  alternativeAmendmentOptions,
   onApplyAmendment,
   onAddDependent,
+  validationSummary,
 }) => {
   const toast = useToast();
-  const tertiaryBg = useColorModeValue('bg.secondary', 'bg.secondary');
-  const [expandedIndices, setExpandedIndices] = useState<Set<number>>(
-    new Set()
-  );
+  const { isDarkMode } = useThemeContext();
+  const [showAlternatives, setShowAlternatives] = useState(false);
+  const [applyingAmendment, setApplyingAmendment] = useState(false);
+  const [amendmentApplied, setAmendmentApplied] = useState(false);
+
+  // Check if validation was performed and get metrics
+  const hasValidation = validationSummary?.validationEnabled || false;
+  const hasValidationError = validationSummary?.validationError;
+  const validationMetrics = hasValidation ? {
+    totalSuggestions: validationSummary?.totalSuggestions || 0,
+    disclosedCount: validationSummary?.disclosedCount || 0,
+    keepCount: validationSummary?.keepCount || 0,
+    validationSummary: hasValidationError 
+      ? validationSummary?.validationError 
+      : (() => {
+          const refCount = validationSummary?.referenceCount || 0;
+          const keepCount = validationSummary?.keepCount || 0;
+          const totalCount = validationSummary?.totalSuggestions || 0;
+          
+          if (refCount > 1) {
+            return `Multi-Reference Validation Complete: All ${totalCount} amendment recommendations have been validated against ALL ${refCount} prior art references in this combination. ${keepCount} suggestions passed validation.`;
+          } else {
+            return `Validation complete: ${keepCount} of ${totalCount} suggestions validated against prior art reference.`;
+          }
+        })()
+  } : undefined;
 
   // Word-level diff rendering
   const renderWordDiff = (oldText: string, newText: string) => {
     const diff = diffWords(oldText, newText);
     return (
-      <Text
-        as="pre"
-        fontFamily="mono"
-        fontSize="sm"
-        whiteSpace="pre-wrap"
-        color="gray.700"
-        _dark={{ color: 'gray.300' }}
-      >
+      <pre className="font-mono text-sm whitespace-pre-wrap leading-relaxed">
         {diff.map((part, idx) => {
           if (part.added) {
             return (
               <span
                 key={idx}
-                style={{
-                  backgroundColor: '#d1fae5',
-                  color: '#065f46',
-                  fontWeight: 600,
-                }}
+                className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 px-1 rounded"
               >
                 {part.value}
               </span>
@@ -87,12 +126,7 @@ export const AmendmentSection: React.FC<AmendmentSectionProps> = ({
             return (
               <span
                 key={idx}
-                style={{
-                  backgroundColor: '#fee2e2',
-                  color: '#991b1b',
-                  textDecoration: 'line-through',
-                  opacity: 0.7,
-                }}
+                className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-1 rounded line-through"
               >
                 {part.value}
               </span>
@@ -101,61 +135,71 @@ export const AmendmentSection: React.FC<AmendmentSectionProps> = ({
             return <span key={idx}>{part.value}</span>;
           }
         })}
-      </Text>
+      </pre>
     );
   };
 
-  // Determine if recommendation is for a dependent claim
-  const isDependent = (amendmentLanguage: string): boolean => {
-    return (
-      amendmentLanguage.toLowerCase().includes('dependent claim') ||
-      amendmentLanguage.match(/^\d+\.\s+A\s+/) !== null ||
-      amendmentLanguage.match(/claim\s+\d+/i) !== null
-    );
+  // Clean the amendment language to remove claim numbering
+  const cleanAmendmentLanguage = (text: string): string => {
+    // Remove claim numbering like "1." or "2." at the beginning
+    return text.replace(/^\d+\.\s+/, '');
   };
 
-  // Extract claim number from dependent claim text
-  const extractClaimNumber = (text: string): string | null => {
-    const match = text.match(/^(\d+)\./);
-    return match ? match[1] : null;
-  };
+  // Determine if recommendation is for a dependent claim based on the recommendation text
+  const isDependent = (
+    recommendation: string,
+    amendmentLanguage: string
+  ): boolean => {
+    const cleanedLanguage = amendmentLanguage.toLowerCase();
+    const recLower = recommendation.toLowerCase();
 
-  // Apply amendment to claim 1
-  const handleApplyClaim1Amendment = (amendmentLanguage: string) => {
-    if (!claim1Text || !onApplyAmendment) {
-      toast({
-        title: 'Cannot apply amendment',
-        description: 'Claim 1 text or amendment handler not available',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
+    // Check if the recommendation explicitly mentions dependent claim
+    if (
+      recLower.includes('dependent claim') ||
+      recLower.includes('add dependent')
+    ) {
+      return true;
     }
 
-    // Strategic recommendations are partial amendments, not complete claims
-    // They typically suggest adding specific limitations to the existing claim
-    // For now, we'll show a message that manual integration is needed
-    toast({
-      title: 'Manual Integration Required',
-      description:
-        'Strategic recommendations are partial amendments. Please manually integrate the suggested language into your claim.',
-      status: 'info',
-      duration: 5000,
-      isClosable: true,
-    });
+    // Check if the amendment language looks like a dependent claim
+    if (
+      cleanedLanguage.includes('the system of claim 1') ||
+      cleanedLanguage.includes('the method of claim 1') ||
+      cleanedLanguage.includes('claim 1, wherein')
+    ) {
+      return true;
+    }
 
-    // Copy the amendment text to clipboard for easy integration
-    navigator.clipboard.writeText(amendmentLanguage).then(() => {
+    return false;
+  };
+
+  // Handle apply amendment with nice transitions
+  const handleApplyAmendment = async () => {
+    if (!onApplyAmendment || !originalClaim || !revisedClaim) return;
+
+    setApplyingAmendment(true);
+
+    try {
+      // Simulate a brief processing time for better UX
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      await onApplyAmendment(originalClaim, revisedClaim);
+
+      setApplyingAmendment(false);
+      setAmendmentApplied(true);
+
+      // Reset the applied state after 3 seconds
+      setTimeout(() => {
+        setAmendmentApplied(false);
+      }, 3000);
+    } catch (error) {
+      setApplyingAmendment(false);
       toast({
-        title: 'Copied to clipboard',
-        description:
-          'The suggested amendment has been copied to your clipboard.',
-        status: 'success',
-        duration: 2000,
-        isClosable: true,
+        title: 'Error applying amendment',
+        description: 'Please try again',
+        duration: 3000,
       });
-    });
+    }
   };
 
   // Add dependent claim
@@ -164,15 +208,12 @@ export const AmendmentSection: React.FC<AmendmentSectionProps> = ({
       toast({
         title: 'Cannot add dependent claim',
         description: 'Dependent claim handler not available',
-        status: 'error',
         duration: 3000,
-        isClosable: true,
       });
       return;
     }
 
     onAddDependent(amendmentLanguage);
-    // Note: Success toast is handled by the parent component's mutation callback
   };
 
   if (!recommendations || recommendations.length === 0) {
@@ -180,174 +221,194 @@ export const AmendmentSection: React.FC<AmendmentSectionProps> = ({
   }
 
   return (
-    <Box>
-      {/* Show complete revised claim if available */}
-      {originalClaim && revisedClaim && originalClaim !== revisedClaim && (
-        <Box mb={6}>
-          <Heading
-            size="sm"
-            mb={3}
-            color="text.primary"
-            className="flex-center"
-          >
-            <Icon as={FiEdit3} color="blue.500" className="mr-2" />
-            Suggested Complete Claim 1 Amendment
-          </Heading>
-
-          <Box
-            p={4}
-            bg="blue.50"
-            _dark={{ bg: 'blue.900' }}
-            borderRadius="md"
-            borderLeftWidth="4px"
-            borderLeftColor="blue.400"
-            mb={3}
-          >
-            <Text
-              fontSize="sm"
-              fontWeight="medium"
-              color="blue.700"
-              _dark={{ color: 'blue.300' }}
-              mb={3}
-            >
-              Complete Revised Claim 1 (Addresses All Rejections)
-            </Text>
-            {renderWordDiff(originalClaim, revisedClaim)}
-
-            <Button
-              mt={3}
-              size="sm"
-              colorScheme="blue"
-              leftIcon={<FiCheck />}
-              onClick={() => {
-                if (onApplyAmendment) {
-                  onApplyAmendment(originalClaim, revisedClaim);
-                }
-              }}
-              isDisabled={!onApplyAmendment}
-            >
-              Apply Complete Amendment to Claim 1
-            </Button>
-          </Box>
-        </Box>
+    <div className="space-y-6">
+      {/* Validation Info Box - Show prominently at top if validation was performed */}
+      {hasValidation && validationMetrics && (
+        <ValidationInfoBox 
+          variant="compact" 
+          className="mb-4" 
+          validationResults={validationMetrics}
+        />
       )}
 
-      <Flex justify="space-between" align="center" mb={3}>
-        <Heading size="sm" color="text.primary" className="flex-center">
-          <Icon as={FiEdit3} color="green.500" className="mr-2" />
-          Additional Strategic Recommendations
-        </Heading>
+      {/* Proposed Claim 1 Amendment */}
+      {originalClaim && revisedClaim && originalClaim !== revisedClaim && (
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">
+            A. Proposed Claim 1 Amendment
+          </h3>
 
-        {recommendations.length > 1 && (
-          <Flex gap={2}>
-            <Button
-              size="xs"
-              variant="ghost"
-              onClick={() => {
-                const allIndices = new Set(recommendations.map((_, i) => i));
-                setExpandedIndices(allIndices);
-              }}
-            >
-              Expand All
-            </Button>
-            <Button
-              size="xs"
-              variant="ghost"
-              onClick={() => setExpandedIndices(new Set())}
-            >
-              Collapse All
-            </Button>
-          </Flex>
-        )}
-      </Flex>
+          {/* Amendment Rationale */}
+          {completeAmendmentRationale && (
+            <div className="mb-4">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Rationale:
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                {completeAmendmentRationale}
+              </p>
+            </div>
+          )}
 
-      <VStack align="stretch" spacing={3}>
-        {recommendations.map((rec, index) => {
-          const isDependentClaim = isDependent(rec.suggestedAmendmentLanguage);
-          const isExpanded = expandedIndices.has(index);
+          {/* Amendment Markup */}
+          <div className="mb-4">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Proposed Amendment (Marked-Up):
+            </p>
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded border border-gray-200 dark:border-gray-700">
+              {renderWordDiff(originalClaim, revisedClaim)}
+            </div>
+          </div>
 
-          return (
-            <Box key={index} p={4} bg={tertiaryBg} borderRadius="md">
-              {/* Recommendation header */}
-              <Flex justify="space-between" align="flex-start" mb={2}>
-                <Box flex="1">
-                  <Text fontSize="sm" fontWeight="medium" color="text.primary">
-                    {rec.recommendation}
-                  </Text>
-                </Box>
-                <Badge
-                  colorScheme={isDependentClaim ? 'purple' : 'blue'}
-                  ml={2}
-                  flexShrink={0}
+          {/* Clean Version */}
+          <div className="mb-4">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Clean Version:
+            </p>
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded border border-gray-200 dark:border-gray-700">
+              <pre className="font-mono text-sm whitespace-pre-wrap leading-relaxed text-gray-800 dark:text-gray-200">
+                {revisedClaim}
+              </pre>
+            </div>
+          </div>
+
+          {/* Action Button with States */}
+          <Button
+            onClick={handleApplyAmendment}
+            disabled={
+              !onApplyAmendment || applyingAmendment || amendmentApplied
+            }
+            size="sm"
+            className={cn(
+              'flex items-center gap-2 transition-all duration-300',
+              amendmentApplied && 'bg-green-600 hover:bg-green-600'
+            )}
+          >
+            {applyingAmendment ? (
+              <>
+                <FiLoader className="w-4 h-4 animate-spin" />
+                Applying Amendment...
+              </>
+            ) : amendmentApplied ? (
+              <>
+                <FiCheck className="w-4 h-4" />
+                Amendment Applied!
+              </>
+            ) : (
+              <>
+                <FiCheck className="w-4 h-4" />
+                Apply Amendment to Claim 1
+              </>
+            )}
+          </Button>
+
+          {/* Alternative Amendment Options */}
+          {alternativeAmendmentOptions &&
+            alternativeAmendmentOptions.length > 0 && (
+              <div className="mt-4">
+                <Collapsible
+                  open={showAlternatives}
+                  onOpenChange={setShowAlternatives}
                 >
-                  {isDependentClaim ? 'Dependent' : 'Claim 1'}
-                </Badge>
-              </Flex>
-
-              {/* Amendment preview/details */}
-              <Box>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    const newExpanded = new Set(expandedIndices);
-                    if (isExpanded) {
-                      newExpanded.delete(index);
-                    } else {
-                      newExpanded.add(index);
-                    }
-                    setExpandedIndices(newExpanded);
-                  }}
-                  rightIcon={isExpanded ? <FiChevronUp /> : <FiChevronDown />}
-                  mb={2}
-                >
-                  {isExpanded ? 'Hide' : 'Show'} Amendment Details
-                </Button>
-
-                <Collapse in={isExpanded}>
-                  <Box
-                    p={3}
-                    bg="gray.50"
-                    _dark={{ bg: 'gray.800' }}
-                    borderRadius="md"
-                  >
-                    <Text fontSize="xs" color="text.secondary" mb={2}>
-                      Suggested Amendment:
-                    </Text>
-
-                    {/* Always show suggested amendment as plain text for strategic recommendations */}
-                    <Text
-                      fontSize="sm"
-                      fontFamily="monospace"
-                      color="text.primary"
-                      mb={3}
-                    >
-                      {rec.suggestedAmendmentLanguage}
-                    </Text>
-
-                    {/* Action buttons - only show for dependent claims */}
-                    {isDependentClaim && (
-                      <Flex gap={2}>
-                        <Button
-                          size="sm"
-                          colorScheme="purple"
-                          leftIcon={<FiPlus />}
-                          onClick={() =>
-                            handleAddDependent(rec.suggestedAmendmentLanguage)
-                          }
-                          isDisabled={!onAddDependent}
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="text-xs">
+                      {showAlternatives ? 'Hide' : 'View'} Alternative
+                      Approaches ({alternativeAmendmentOptions.length})
+                      {showAlternatives ? (
+                        <FiChevronUp className="w-3 h-3 ml-1" />
+                      ) : (
+                        <FiChevronDown className="w-3 h-3 ml-1" />
+                      )}
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="mt-3 space-y-2">
+                      {alternativeAmendmentOptions.map((option, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded text-sm text-gray-700 dark:text-gray-300"
                         >
-                          Add as Dependent Claim
-                        </Button>
-                      </Flex>
-                    )}
-                  </Box>
-                </Collapse>
-              </Box>
-            </Box>
-          );
-        })}
-      </VStack>
-    </Box>
+                          <span className="font-medium">
+                            Alternative {idx + 1}:
+                          </span>{' '}
+                          {option}
+                        </div>
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            )}
+        </div>
+      )}
+
+      {/* Additional Strategic Recommendations */}
+      {recommendations.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">
+            {originalClaim && revisedClaim && originalClaim !== revisedClaim
+              ? 'B. Additional'
+              : 'A.'}{' '}
+            Strategic Recommendations
+          </h3>
+
+          <div className="space-y-4">
+            {recommendations.map((rec, index) => {
+              const isDependentClaim = isDependent(
+                rec.recommendation,
+                rec.suggestedAmendmentLanguage
+              );
+              const cleanedAmendmentLanguage = cleanAmendmentLanguage(
+                rec.suggestedAmendmentLanguage
+              );
+
+              return (
+                <div
+                  key={index}
+                  className="border-l-2 border-gray-300 dark:border-gray-600 pl-4"
+                >
+                  {/* Recommendation */}
+                  <div className="flex items-start justify-between mb-2">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {index + 1}. {rec.recommendation}
+                    </p>
+                    <Badge variant="outline" className="text-xs ml-3">
+                      {isDependentClaim ? 'Dependent' : 'Amendment'}
+                    </Badge>
+                  </div>
+
+                  {/* Amendment Language */}
+                  <div className="mb-3">
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      Suggested Language:
+                    </p>
+                    <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded text-sm">
+                      <pre className="font-mono whitespace-pre-wrap text-gray-700 dark:text-gray-300">
+                        {cleanedAmendmentLanguage}
+                      </pre>
+                    </div>
+                  </div>
+
+                  {/* Action Button */}
+                  {isDependentClaim && onAddDependent && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        handleAddDependent(cleanedAmendmentLanguage)
+                      }
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      <FiPlus className="w-3 h-3" />
+                      Add as Dependent Claim
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 };

@@ -5,11 +5,11 @@
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { z } from 'zod';
 import { validateApiResponse } from '@/lib/validation/apiValidation';
 
-// Response schemas
+// Response schemas updated to match the new standardized API format
 const ProjectExclusionSchema = z.object({
   id: z.string(),
   projectId: z.string(),
@@ -19,18 +19,25 @@ const ProjectExclusionSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
+// Updated to match the new standardized response format with "data" wrapper
 const GetExclusionsResponseSchema = z.object({
-  exclusions: z.array(ProjectExclusionSchema),
-  projectId: z.string(),
-});
-
-const AddExclusionResponseSchema = z.object({
   success: z.boolean(),
-  added: z.number().optional(),
-  skipped: z.number().optional(),
+  data: z.object({
+    exclusions: z.array(ProjectExclusionSchema),
+    projectId: z.string(),
+  }),
 });
 
+// Updated to match the actual POST API response format
+const AddExclusionResponseSchema = z.object({
+  message: z.string(),
+  added: z.number(),
+  skipped: z.number(),
+});
+
+// Updated to match the actual DELETE API response format
 const RemoveExclusionResponseSchema = z.object({
+  message: z.string(),
   success: z.boolean(),
 });
 
@@ -66,7 +73,7 @@ export class PatentExclusionsService {
       const data = await response.json();
 
       const validated = validateApiResponse(data, GetExclusionsResponseSchema);
-      return validated.exclusions;
+      return validated.data.exclusions;
     } catch (error) {
       logger.error('Error fetching project exclusions', { error, projectId });
       throw error instanceof ApplicationError

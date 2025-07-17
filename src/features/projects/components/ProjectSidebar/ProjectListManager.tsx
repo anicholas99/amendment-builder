@@ -3,11 +3,11 @@
  * Focused component following the architectural blueprint
  */
 import React from 'react';
-import { Box, Fade } from '@chakra-ui/react';
-import CollapsedProjectView from '../CollapsedProjectView';
-import ProjectList from '../ProjectList';
+import CollapsedProjectViewShadcn from '../CollapsedProjectViewShadcn';
+import ProjectListShadcn from '../ProjectListShadcn';
 import { ProjectListManagerProps } from '../../types/projectSidebar';
 import { transformProjectsForSidebar } from '../../utils/projectSidebarUtils';
+import { cn } from '@/lib/utils';
 
 const ProjectListManager: React.FC<ProjectListManagerProps> = React.memo(
   ({
@@ -16,15 +16,15 @@ const ProjectListManager: React.FC<ProjectListManagerProps> = React.memo(
     activeDocument,
     expandedIndices,
     isSidebarCollapsed,
-    isLoading,    // Accept loading state
-    error,        // Accept error state
+    isLoading, // Accept loading state
+    error, // Accept error state
     onProjectClick,
     onDocumentSelect,
     onDocumentHover,
     onExpandedChange,
-    onLoadMore,    // Accept load more handler
-    hasNextPage,   // Accept pagination state
-    isFetchingNextPage,  // Accept fetching state
+    onLoadMore, // Accept load more handler
+    hasNextPage, // Accept pagination state
+    isFetchingNextPage, // Accept fetching state
     children,
   }) => {
     // Transform projects for CollapsedProjectView compatibility
@@ -33,6 +33,7 @@ const ProjectListManager: React.FC<ProjectListManagerProps> = React.memo(
       ...p,
       id: p.id,
       name: p.name,
+      hasProcessedInvention: p.hasProcessedInvention,
     }));
 
     // Transform activeDocument for CollapsedProjectView compatibility
@@ -43,17 +44,20 @@ const ProjectListManager: React.FC<ProjectListManagerProps> = React.memo(
       : null;
 
     return (
-      <Box
-        flex="1"
-        overflowY="auto"
-        overflowX="hidden"
-        p={isSidebarCollapsed ? 1 : 2}
-        mt={1}
-        maxWidth="100%"
+      <div
+        className={cn(
+          'flex-1 overflow-y-auto overflow-x-hidden mt-1 max-w-full',
+          isSidebarCollapsed ? 'p-1' : 'p-2'
+        )}
       >
-        <Box display={isSidebarCollapsed ? 'block' : 'none'}>
-          <CollapsedProjectView
-            key={projects.map(p => p.id + '-' + (p.invention ? 'has-invention' : 'no-invention')).join('-')}
+        <div className={cn(isSidebarCollapsed ? 'block' : 'hidden')}>
+          <CollapsedProjectViewShadcn
+            key={projects
+              .map(
+                p =>
+                  p.id + '-' + (p.invention ? 'has-invention' : 'no-invention')
+              )
+              .join('-')}
             projects={collapsedViewProjects}
             activeProject={activeProject}
             activeDocument={collapsedViewActiveDocument}
@@ -62,35 +66,33 @@ const ProjectListManager: React.FC<ProjectListManagerProps> = React.memo(
             onOpenModal={() => {}} // Handled by ModalManager
             onProjectClick={onProjectClick}
             onDocumentSelect={onDocumentSelect}
-            onLoadMore={onLoadMore}  // Pass load more handler
-            hasNextPage={hasNextPage}  // Pass pagination state
-            isFetchingNextPage={isFetchingNextPage}  // Pass fetching state
+            onLoadMore={onLoadMore} // Pass load more handler
+            hasNextPage={hasNextPage} // Pass pagination state
+            isFetchingNextPage={isFetchingNextPage} // Pass fetching state
           />
-        </Box>
-        <Box
-          display={!isSidebarCollapsed ? 'block' : 'none'}
-          height="100%"
-          overflowY="auto"
-          overflowX="hidden"
-          maxWidth="100%"
+        </div>
+        <div
+          className={cn(
+            'h-full overflow-y-auto overflow-x-hidden max-w-full',
+            !isSidebarCollapsed ? 'block' : 'hidden'
+          )}
         >
-          <ProjectList
-            projects={projects}  // Pass projects data
-            isLoading={isLoading}  // Pass loading state
-            error={error}  // Pass error state
+          <ProjectListShadcn
+            projects={projects} // Pass projects data
+            isLoading={isLoading} // Pass loading state
+            error={error} // Pass error state
             handleProjectClick={onProjectClick}
-            expandedIndices={expandedIndices}
             onDocumentSelect={onDocumentSelect}
             onExpandedChange={onExpandedChange || (() => {})}
-            onLoadMore={onLoadMore}  // Pass load more handler
-            hasNextPage={hasNextPage}  // Pass pagination state
-            isFetchingNextPage={isFetchingNextPage}  // Pass fetching state
+            onLoadMore={onLoadMore} // Pass load more handler
+            hasNextPage={hasNextPage} // Pass pagination state
+            isFetchingNextPage={isFetchingNextPage} // Pass fetching state
             // Add hover handler if provided
             {...(onDocumentHover && { handleDocumentHover: onDocumentHover })}
           />
-        </Box>
+        </div>
         {children}
-      </Box>
+      </div>
     );
   }
 );

@@ -5,14 +5,13 @@
  * This follows the same pattern as citation-extraction-inline for consistency.
  */
 
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import {
   findById as getCitationJobById,
   update as updateCitationJob,
 } from '@/repositories/citationJobRepository';
 import {
-  DeepAnalysisInput,
   parseCitationResults,
   getClaimElements,
   getClaimText,
@@ -20,13 +19,14 @@ import {
 } from '@/repositories/citationUtils';
 import { constructDeepAnalysisPrompt } from '@/server/prompts/deep-analysis.prompt';
 import { processWithOpenAI } from '@/server/ai/aiService';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import environment from '@/config/environment';
-import { createCitationMatchesFromDeepAnalysis } from '@/repositories/citationMatchRepository';
+import { createCitationMatchesFromDeepAnalysis } from '@/repositories/citation/citationMatchDeepAnalysisRepository';
+import { SuggestionValidationService } from './suggestion-validation.server-service';
 
 // Constants
 const PROCESSING_TIMEOUT_MS = environment.openai.deepAnalysisTimeout || 180000; // 3 minutes
-const MAX_RETRIES = 2;
+const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 5000;
 
 // Helper function for delays
@@ -44,8 +44,10 @@ function filterCitationData(
     const parsed = safeJsonParse(rawDataJsonString);
 
     // Helper function to truncate citation text if too long
-    const truncateCitation = (citation: Record<string, unknown>): Record<string, unknown> => {
-      const MAX_CITATION_LENGTH = 300; // Reduced from 500 to save tokens
+    const truncateCitation = (
+      citation: Record<string, unknown>
+    ): Record<string, unknown> => {
+      const MAX_CITATION_LENGTH = 500; // Increased from 200 to preserve more context
 
       if (citation && typeof citation === 'object') {
         const truncated = { ...citation };
@@ -60,12 +62,13 @@ function filterCitationData(
         }
 
         // Truncate paragraph text
+        const MAX_PARAGRAPH_LENGTH = 400; // Increased from 150
         if (
           typeof truncated.paragraph === 'string' &&
-          truncated.paragraph.length > MAX_CITATION_LENGTH
+          truncated.paragraph.length > MAX_PARAGRAPH_LENGTH
         ) {
           truncated.paragraph =
-            truncated.paragraph.substring(0, MAX_CITATION_LENGTH) + '...';
+            truncated.paragraph.substring(0, MAX_PARAGRAPH_LENGTH) + '...';
         }
 
         // Remove unnecessary fields to save tokens
@@ -88,18 +91,29 @@ function filterCitationData(
       parsed.length > 0 &&
       Array.isArray(parsed[0])
     ) {
-      const filtered = parsed.map((elementCitations: Record<string, unknown>[]) => {
-        // Sort by score/rankPercentage and take top N
-        const sorted = elementCitations
-          .filter((citation: unknown): citation is Record<string, unknown> => citation && typeof citation === 'object')
-          .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-            const scoreA = typeof (a.score ?? a.rankPercentage) === 'number' ? (a.score ?? a.rankPercentage) as number : 0;
-            const scoreB = typeof (b.score ?? b.rankPercentage) === 'number' ? (b.score ?? b.rankPercentage) as number : 0;
-            return scoreB - scoreA; // Higher scores first
-          });
+      const filtered = parsed.map(
+        (elementCitations: Record<string, unknown>[]) => {
+          // Sort by score/rankPercentage and take top N
+          const sorted = elementCitations
+            .filter(
+              (citation: unknown): citation is Record<string, unknown> =>
+                citation !== null && typeof citation === 'object'
+            )
+            .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+              const scoreA =
+                typeof (a.score ?? a.rankPercentage) === 'number'
+                  ? ((a.score ?? a.rankPercentage) as number)
+                  : 0;
+              const scoreB =
+                typeof (b.score ?? b.rankPercentage) === 'number'
+                  ? ((b.score ?? b.rankPercentage) as number)
+                  : 0;
+              return scoreB - scoreA; // Higher scores first
+            });
 
-        return sorted.slice(0, maxCitationsPerElement).map(truncateCitation);
-      });
+          return sorted.slice(0, maxCitationsPerElement).map(truncateCitation);
+        }
+      );
 
       return JSON.stringify(filtered);
     }
@@ -110,20 +124,32 @@ function filterCitationData(
       const grouped = new Map<string, any[]>();
 
       parsed.forEach((citation: Record<string, unknown>) => {
-        const element = typeof citation.parsedElementText === 'string' ? citation.parsedElementText : 'unknown';
+        const element =
+          typeof citation.parsedElementText === 'string'
+            ? citation.parsedElementText
+            : 'unknown';
         if (!grouped.has(element)) {
           grouped.set(element, []);
         }
-        grouped.get(element)!.push(citation);
+        const elementGroup = grouped.get(element);
+        if (elementGroup) {
+          elementGroup.push(citation);
+        }
       });
 
       // Filter each group
       const filtered: any[] = [];
-      grouped.forEach((citations, element) => {
+      grouped.forEach((citations, _element) => {
         const sorted = citations
           .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-            const scoreA = typeof (a.score ?? a.rankPercentage) === 'number' ? (a.score ?? a.rankPercentage) as number : 0;
-            const scoreB = typeof (b.score ?? b.rankPercentage) === 'number' ? (b.score ?? b.rankPercentage) as number : 0;
+            const scoreA =
+              typeof (a.score ?? a.rankPercentage) === 'number'
+                ? ((a.score ?? a.rankPercentage) as number)
+                : 0;
+            const scoreB =
+              typeof (b.score ?? b.rankPercentage) === 'number'
+                ? ((b.score ?? b.rankPercentage) as number)
+                : 0;
             return scoreB - scoreA;
           })
           .slice(0, maxCitationsPerElement)
@@ -300,15 +326,15 @@ export async function processDeepAnalysisInline(
           prompt,
           'You are an experienced USPTO patent examiner evaluating prior art.',
           {
-            temperature: 0.3,
-            maxTokens: 16000,
-            model:
-              environment.openai.deepAnalysisModel || 'gpt-4-turbo-preview',
+            model: environment.openai.deepAnalysisModel || environment.openai.model || 'gpt-4.1',
+            temperature: 0.2,
+            maxTokens: environment.openai.deepAnalysisMaxTokens || 16000,
+            response_format: { type: 'json_object' },
           }
         );
 
-        // Parse and validate the response
         let analysisResult = safeJsonParse(response.content);
+
         if (!analysisResult || typeof analysisResult !== 'object') {
           if (response.content && response.content.length > 10000) {
             logger.warn(
@@ -336,6 +362,89 @@ export async function processDeepAnalysisInline(
               ErrorCode.AI_INVALID_RESPONSE,
               'Invalid JSON response from OpenAI'
             );
+          }
+        }
+
+        // Check if we have potential amendments that need validation
+        if (analysisResult.potentialAmendments && Array.isArray(analysisResult.potentialAmendments)) {
+          // Check feature flag
+          const enableTwoPhaseValidation = environment.features.enableTwoPhaseValidation || false;
+          
+          if (enableTwoPhaseValidation) {
+            logger.info(`[DeepAnalysis] Found ${analysisResult.potentialAmendments.length} potential amendments - starting validation`);
+            
+            // Limit amendments to prevent token overload in validation extraction
+            const MAX_AMENDMENTS_FOR_VALIDATION = environment.openai.deepAnalysisMaxAmendmentsForValidation || 7;
+            
+            // Sort amendments by priority (high > medium > low) and take top 7
+            const priorityOrder: Record<string, number> = { 'high': 3, 'medium': 2, 'low': 1 };
+            const limitedAmendments = analysisResult.potentialAmendments
+              .sort((a: any, b: any) => {
+                const priorityA = priorityOrder[a.priority || 'low'] || 0;
+                const priorityB = priorityOrder[b.priority || 'low'] || 0;
+                return priorityB - priorityA;
+              })
+              .slice(0, MAX_AMENDMENTS_FOR_VALIDATION);
+            
+            logger.info(`[DeepAnalysis] Limiting validation to ${limitedAmendments.length} amendments (from ${analysisResult.potentialAmendments.length} total)`, {
+              originalCount: analysisResult.potentialAmendments.length,
+              limitedCount: limitedAmendments.length,
+              priorities: limitedAmendments.map((a: any) => a.priority || 'unknown'),
+            });
+            
+            // Run validation phase
+            const validationResults = await SuggestionValidationService.validateSuggestions(
+              limitedAmendments,
+              citationJob.referenceNumber || '',
+              claimText || ''
+            );
+
+            // Run phase 2 prompt with validation results
+            const phase2Prompt = constructDeepAnalysisPrompt(
+              filteredRawData,
+              claimElements,
+              claimText || 'Claim text not available',
+              citationJob.referenceNumber || '',
+              priorArtAbstract,
+              referenceTitle,
+              referenceApplicant,
+              referenceAssignee,
+              referencePublicationDate,
+              maxCitationsPerElement,
+              true, // isValidationPhase
+              validationResults
+            );
+
+            logger.info(`[DeepAnalysis] Running phase 2 with validation results for job ${jobId}`);
+
+            const phase2Response = await processWithOpenAI(
+              phase2Prompt,
+              'You are a USPTO patent examiner completing a two-phase analysis.',
+              {
+                model: environment.openai.deepAnalysisModel || environment.openai.model || 'gpt-4.1',
+                temperature: 0.2,
+                maxTokens: environment.openai.deepAnalysisMaxTokens || 16000,
+                response_format: { type: 'json_object' },
+              }
+            );
+
+            const phase2Result = safeJsonParse(phase2Response.content);
+            
+            if (phase2Result && typeof phase2Result === 'object') {
+              // Merge phase 2 results with original analysis
+              analysisResult = {
+                ...analysisResult,
+                ...phase2Result,
+                validationPerformed: true,
+                validationResults: validationResults,
+              };
+              
+              logger.info(`[DeepAnalysis] Successfully completed two-phase analysis for job ${jobId}`);
+            } else {
+              logger.warn(`[DeepAnalysis] Phase 2 failed, using phase 1 results without validation`);
+            }
+          } else {
+            logger.info(`[DeepAnalysis] Two-phase validation disabled, using phase 1 results only`);
           }
         }
 

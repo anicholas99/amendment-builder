@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 
 export interface SaveChatMessageParams {
@@ -153,6 +153,34 @@ export async function getInventionContextForChat(
           },
           take: 10, // Limit to most recent 10 to avoid huge context
         },
+        // Include figures with their reference numerals
+        figures: {
+          where: {
+            deletedAt: null,
+            figureKey: { not: null }, // Only include assigned figures
+          },
+          select: {
+            id: true,
+            figureKey: true,
+            title: true,
+            description: true,
+            status: true,
+            figureElements: {
+              select: {
+                element: {
+                  select: {
+                    elementKey: true,
+                    name: true,
+                  },
+                },
+                calloutDescription: true,
+              },
+            },
+          },
+          orderBy: {
+            displayOrder: 'asc',
+          },
+        },
       },
     });
 
@@ -232,6 +260,18 @@ export async function getInventionContextForChat(
         : null,
       claims: project.invention?.claims || [],
       savedPriorArt: project.savedPriorArtItems || [],
+      figures: project.figures.map(fig => ({
+        id: fig.id,
+        figureKey: fig.figureKey!,
+        title: fig.title || '',
+        description: fig.description || '',
+        status: (fig as any).status || 'ASSIGNED',
+        elements: fig.figureElements.map(fe => ({
+          elementKey: fe.element.elementKey,
+          elementName: fe.element.name,
+          calloutDescription: fe.calloutDescription || '',
+        })),
+      })),
     };
 
     // Add debug logging for claims
@@ -240,6 +280,7 @@ export async function getInventionContextForChat(
       {
         hasInvention: !!project.invention,
         claimsCount: context.claims.length,
+        figuresCount: context.figures.length,
         inventionId: project.invention?.id,
       }
     );
@@ -304,5 +345,17 @@ export interface InventionChatContext {
     summary: string | null;
     publicationDate: string | null;
     savedAt: Date;
+  }>;
+  figures: Array<{
+    id: string;
+    figureKey: string;
+    title: string;
+    description: string;
+    status: string;
+    elements: Array<{
+      elementKey: string;
+      elementName: string;
+      calloutDescription: string;
+    }>;
   }>;
 }

@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import {
   PriorArtManagerProps,
   PriorArtHandlers,
@@ -7,7 +7,6 @@ import {
 } from '../../types/claimRefinementView';
 import {
   handleSavePriorArt,
-  handleRemovePriorArt,
   handleAnalyzePriorArt,
   refreshInventionData,
 } from '../../utils/claimRefinementUtils';
@@ -31,14 +30,21 @@ export const PriorArtManager: React.FC<PriorArtManagerProps> = ({
 
   const deletePriorArtMutation = useDeletePriorArt();
 
-  // Analysis state
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('');
-  const [analysisData, setAnalysisData] = useState<{ results?: Array<{ referenceNumber: string; analysis: string }> } | null>(null);
+  // Analysis state - these are passed to handleAnalyzePriorArt but not used directly
+  const [, setIsAnalyzing] = useState(false);
+  const [, setLoadingMessage] = useState('');
+  const [, setAnalysisData] = useState<{
+    results?: Array<{ referenceNumber: string; analysis: string }>;
+  } | null>(null);
 
   // Prior art handlers
   const handleSavePriorArtFn = useCallback(
-    async (reference: { id: string; title?: string; abstract?: string; publicationNumber?: string }) => {
+    async (reference: {
+      id: string;
+      title?: string;
+      abstract?: string;
+      publicationNumber?: string;
+    }) => {
       await handleSavePriorArt(reference, projectId, toast);
     },
     [projectId, toast]
@@ -65,9 +71,14 @@ export const PriorArtManager: React.FC<PriorArtManagerProps> = ({
           duration: 2000,
         });
       } catch (error) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : (error as any)?.message || 'Unknown error';
+
         toast({
           title: 'Failed to remove prior art',
-          description: error?.message ?? 'Unknown error',
+          description: errorMessage,
           status: 'error',
           duration: 3000,
         });

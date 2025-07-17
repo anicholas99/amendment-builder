@@ -1,18 +1,21 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { Prisma } from '@prisma/client';
 import {
   processCitationJob,
   processCitationJobs,
-  CreateCitationJobSchema,
 } from '@/features/citation-extraction/utils/citationJob';
 import { EnhancedProcessedCitationJob } from '@/types/domain/citation';
 import * as CitationJobRepository from '@/repositories/citationJobRepository';
 import { CreateCitationJobBody } from '@/types/api/citations';
 import { queueCitationExtractionInline } from '@/server/services/citation-extraction-inline.server.service';
-import { queueService } from '@/server/services/queue.server.service';
+import { QueueServerService } from '@/server/services/queue.server.service';
 import { environment } from '@/config/environment';
 import { CITATION_THRESHOLDS } from '@/config/citationExtractionConfig';
+import {
+  generateClaimHash,
+  CURRENT_PARSER_VERSION,
+} from '@/utils/claimVersioning';
+import { prisma } from '@/lib/prisma';
 
 /**
  * Server-side service for managing citation jobs.
@@ -29,17 +32,164 @@ export class CitationsServerService {
     logger.debug('[CitationJobService] Creating new citation job', { data });
 
     try {
-      // Delegate to repository for data creation
-      const job = await CitationJobRepository.create({
+      // Get current claim 1 hash if available
+      let claim1Hash: string | null = null;
+      let parsedElementsUsed: string[] | null = null;
+
+      try {
+        // Get project ID from search history
+        const searchHistory = await prisma?.searchHistory.findUnique({
+          where: { id: data.searchHistoryId },
+          select: {
+            projectId: true,
+          },
+        });
+
+        if (searchHistory?.projectId && prisma) {
+          // Get invention and claim 1
+          const invention = await prisma.invention.findUnique({
+            where: { projectId: searchHistory.projectId },
+            select: {
+              id: true,
+              parsedClaimElementsJson: true,
+            },
+          });
+
+          if (invention) {
+            const claim1 = await prisma.claim.findFirst({
+              where: {
+                inventionId: invention.id,
+                number: 1,
+              },
+              select: { text: true },
+            });
+
+            if (claim1) {
+              claim1Hash = generateClaimHash(claim1.text);
+              logger.debug('[CitationJobService] Generated claim 1 hash', {
+                projectId: searchHistory.projectId,
+                hashLength: claim1Hash.length,
+              });
+            }
+
+            // Get parsed elements from invention if available
+            if (invention.parsedClaimElementsJson) {
+              try {
+                parsedElementsUsed = JSON.parse(
+                  invention.parsedClaimElementsJson
+                );
+              } catch (e) {
+                logger.warn('[CitationJobService] Failed to parse elements', {
+                  error: e,
+                });
+              }
+            }
+          }
+        }
+      } catch (error) {
+        logger.warn('[CitationJobService] Could not get claim hash', { error });
+        // Continue without hash - don't fail job creation
+      }
+
+      // Create job data with tracking fields
+      const jobData: any = {
         searchHistoryId: data.searchHistoryId,
         referenceNumber: data.filterReferenceNumber,
         status: 'PENDING',
-      });
+      };
+
+      // Add tracking fields if migration has been applied
+      if (claim1Hash && prisma) {
+        try {
+          const jobId = require('crypto').randomUUID();
+          await prisma.$executeRaw`
+            INSERT INTO citation_jobs (
+              id, searchHistoryId, referenceNumber, status, createdAt,
+              claim1Hash, parserVersionUsed, parsedElementsUsed
+            ) VALUES (
+              ${jobId},
+              ${data.searchHistoryId},
+              ${data.filterReferenceNumber || null},
+              'PENDING',
+              ${new Date()},
+              ${claim1Hash},
+              ${CURRENT_PARSER_VERSION},
+              ${JSON.stringify(parsedElementsUsed || [])}
+            )
+          `;
+
+          // Get the created job
+          const job = await prisma.citationJob.findUnique({
+            where: { id: jobId },
+          });
+
+          if (!job) {
+            throw new Error('Failed to create citation job');
+          }
+
+          logger.info(
+            `[CitationJobService] Created job ${job.id} with claim tracking`
+          );
+
+          // Continue with the rest of the method using the created job...
+          // Check feature flag for processing mode
+          if (environment.features.useCitationWorker) {
+            // Create service instance for server-side usage
+            const queueService = new QueueServerService();
+
+            // Use external worker via Azure queue
+            await queueService.sendMessage({
+              type: 'CITATION_EXTRACTION',
+              payload: {
+                jobId: job.id,
+                searchInputs: data.searchInputs,
+              },
+            });
+            logger.info('Citation job sent to external processing queue', {
+              jobId: job.id,
+            });
+          } else {
+            // Log the parameters being passed to inline processing
+            logger.debug('[CitationJobService] Passing to inline processing', {
+              jobId: job.id,
+              referenceNumber: data.filterReferenceNumber,
+              hasReferenceNumber: !!data.filterReferenceNumber,
+              threshold: data.threshold || CITATION_THRESHOLDS.default,
+              searchInputsCount: data.searchInputs?.length || 0,
+            });
+
+            // Process job inline without external workers
+            await queueCitationExtractionInline({
+              jobId: job.id,
+              searchInputs: data.searchInputs,
+              referenceNumber: data.filterReferenceNumber,
+              threshold: data.threshold || CITATION_THRESHOLDS.default,
+            });
+            logger.info('Citation job queued for inline processing', {
+              jobId: job.id,
+            });
+          }
+
+          return processCitationJob(job);
+        } catch (rawError) {
+          logger.warn(
+            '[CitationJobService] Could not create job with tracking fields',
+            { error: rawError }
+          );
+          // Fall back to regular creation
+        }
+      }
+
+      // Fallback: Delegate to repository for data creation without tracking
+      const job = await CitationJobRepository.create(jobData);
 
       logger.info(`[CitationJobService] Created job ${job.id}`);
 
       // Check feature flag for processing mode
       if (environment.features.useCitationWorker) {
+        // Create service instance for server-side usage
+        const queueService = new QueueServerService();
+
         // Use external worker via Azure queue
         await queueService.sendMessage({
           type: 'CITATION_EXTRACTION',
@@ -80,14 +230,15 @@ export class CitationsServerService {
         data,
       });
 
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
+      if (error instanceof Error && 'code' in error) {
+        const prismaError = error as any;
+        if (prismaError.code === 'P2002') {
           throw new ApplicationError(
             ErrorCode.DB_DUPLICATE_ENTRY,
             'A citation job with this external ID already exists'
           );
         }
-        if (error.code === 'P2003') {
+        if (prismaError.code === 'P2003') {
           throw new ApplicationError(
             ErrorCode.DB_CONSTRAINT_VIOLATION,
             'Invalid searchHistoryId reference'
@@ -111,7 +262,7 @@ export class CitationsServerService {
     );
 
     // Business logic: Build update data based on status
-    const updateData: Prisma.CitationJobUpdateInput = {
+    const updateData: any = {
       status,
       lastCheckedAt: new Date(),
     };
@@ -160,8 +311,9 @@ export class CitationsServerService {
       logger.error(`[CitationJobService] Error updating job ${jobId}`, {
         error,
       });
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2025') {
+      if (error instanceof Error && 'code' in error) {
+        const prismaError = error as any;
+        if (prismaError.code === 'P2025') {
           throw new ApplicationError(
             ErrorCode.DB_RECORD_NOT_FOUND,
             `Citation job ${jobId} not found`
@@ -331,7 +483,7 @@ export class CitationsServerService {
     searchHistoryId: string
   ): Promise<{
     id: string;
-    examinerAnalysisJson?: Record<string, unknown>;
+    examinerAnalysisJson?: string | null;
     status: string;
   } | null> {
     logger.debug(

@@ -1,33 +1,39 @@
 import React from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
+import { cn } from '@/lib/utils';
+import { FiBook, FiChevronDown } from 'react-icons/fi';
+import { Badge } from '@/components/ui/badge';
 import {
-  Accordion,
-  AccordionItem,
-  AccordionButton,
-  AccordionPanel,
-  AccordionIcon,
-  Box,
-  Text,
-  Badge,
-  VStack,
-  HStack,
-  Icon,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
   Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
   Tooltip,
-} from '@chakra-ui/react';
-import { FiBook } from 'react-icons/fi';
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { useThemeContext } from '@/contexts/ThemeContext';
 import { PriorArtReference } from '../../../types/claimTypes';
+import { getRelevanceBadgeClasses } from '../utils/searchHistoryUtils';
 
 interface PriorArtPanelProps {
   references: PriorArtReference[];
 }
 
 const PriorArtPanel: React.FC<PriorArtPanelProps> = ({ references }) => {
+  const { isDarkMode } = useThemeContext();
+  const [isOpen, setIsOpen] = React.useState(false);
+
   // Sort by composite score: relevancy * (1 + 0.2 * (searchAppearanceCount - 1))
   // This gives a 20% boost per additional appearance
   const sortedReferences = [...references].sort((a, b) => {
@@ -52,7 +58,7 @@ const PriorArtPanel: React.FC<PriorArtPanelProps> = ({ references }) => {
   });
 
   // Debug logging to verify sorting
-  logger.log('Sorted References:', {
+  logger.info('Sorted References:', {
     references: sortedReferences.map(ref => ({
       number: ref.number,
       relevance: ref.relevance,
@@ -65,80 +71,98 @@ const PriorArtPanel: React.FC<PriorArtPanelProps> = ({ references }) => {
   });
 
   return (
-    <Accordion allowToggle>
-      <AccordionItem>
-        <h2>
-          <AccordionButton>
-            <HStack flex="1">
-              <Icon as={FiBook} />
-              <Text>Prior Art References</Text>
-              <Badge colorScheme="blue">{sortedReferences.length}</Badge>
-            </HStack>
-            <AccordionIcon />
-          </AccordionButton>
-        </h2>
-        <AccordionPanel pb={4}>
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          className={cn(
+            'flex w-full items-center justify-between rounded-lg border p-4 transition-colors',
+            isDarkMode
+              ? 'border-gray-700 bg-gray-800 hover:bg-gray-750'
+              : 'border-gray-200 bg-white hover:bg-gray-50'
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <FiBook className="w-4 h-4" />
+            <span className="font-medium">Prior Art References</span>
+            <Badge
+              variant="secondary"
+              className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+            >
+              {sortedReferences.length}
+            </Badge>
+          </div>
+          <FiChevronDown
+            className={cn(
+              'w-4 h-4 transition-transform',
+              isOpen && 'rotate-180'
+            )}
+          />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2">
+        <div className="pb-4">
           {references.length > 0 ? (
-            <Table variant="simple">
-              <Thead>
-                <Tr>
-                  <Th>Reference</Th>
-                  <Th>Year</Th>
-                  <Th>Relevancy</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Year</TableHead>
+                  <TableHead>Relevancy</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {sortedReferences.map(ref => (
-                  <Tr key={ref.number}>
-                    <Td>
-                      <VStack align="start" spacing={1}>
-                        <HStack spacing={2}>
-                          <Text as="span" fontWeight="bold">
-                            {ref.number}
-                          </Text>
-                          <Text as="span">{ref.title}</Text>
-                        </HStack>
-                        <Tooltip label={ref.relevantText}>
-                          <Text
-                            fontSize="sm"
-                            color="gray.600"
-                            noOfLines={2}
-                            cursor="pointer"
-                            _hover={{ color: 'blue.500' }}
-                          >
-                            {ref.relevantText}
-                          </Text>
-                        </Tooltip>
-                      </VStack>
-                    </Td>
-                    <Td>{ref.year}</Td>
-                    <Td>
+                  <TableRow key={ref.number}>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold">{ref.number}</span>
+                          <span>{ref.title}</span>
+                        </div>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <p
+                                className={cn(
+                                  'text-sm line-clamp-2 cursor-pointer hover:text-blue-500 transition-colors',
+                                  isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                                )}
+                              >
+                                {ref.relevantText}
+                              </p>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="max-w-sm">{ref.relevantText}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                    </TableCell>
+                    <TableCell>{ref.year}</TableCell>
+                    <TableCell>
                       <Badge
-                        colorScheme={
-                          (ref.relevance ?? 0) > 0.8
-                            ? 'high'
-                            : (ref.relevance ?? 0) > 0.6
-                              ? 'medium'
-                              : (ref.relevance ?? 0) > 0.4
-                                ? 'low'
-                                : 'minimal'
-                        }
+                        className={getRelevanceBadgeClasses(ref.relevance ?? 0)}
                       >
                         {((ref.relevance ?? 0) * 100).toFixed(0)}%
                       </Badge>
-                    </Td>
-                  </Tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </Tbody>
+              </TableBody>
             </Table>
           ) : (
-            <Box textAlign="center" py={4}>
-              <Text color="gray.500">No prior art references found</Text>
-            </Box>
+            <div
+              className={cn(
+                'text-center py-4',
+                isDarkMode ? 'text-gray-400' : 'text-gray-600'
+              )}
+            >
+              <p>No prior art references found</p>
+            </div>
           )}
-        </AccordionPanel>
-      </AccordionItem>
-    </Accordion>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 };
 

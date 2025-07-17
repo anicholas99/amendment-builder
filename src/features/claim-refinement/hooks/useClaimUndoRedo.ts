@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useClaimHistoryQuery } from '@/hooks/api/useClaimHistory';
 import { useUpdateClaimMutation } from '@/hooks/api/useClaims';
-import { useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 
 interface UseClaimUndoRedoOptions {
   claimId: string;
@@ -10,200 +9,182 @@ interface UseClaimUndoRedoOptions {
   onTextChange?: (text: string) => void;
 }
 
+interface SessionHistoryEntry {
+  text: string;
+  timestamp: number;
+}
+
+// Storage key helper
+const getStorageKey = (claimId: string) => `claim-history-${claimId}`;
+
+// Max entries to store per claim
+const MAX_HISTORY_ENTRIES = 20;
+
 export const useClaimUndoRedo = ({
   claimId,
   currentText,
   onTextChange,
 }: UseClaimUndoRedoOptions) => {
-  // Don't fetch history for temporary claims
+  // Don't use undo/redo for temporary claims
   const isTemporaryId = claimId.startsWith('temp-');
 
-  const {
-    data: historyData,
-    refetch,
-    isLoading,
-  } = useClaimHistoryQuery(claimId);
   const { mutate: updateClaim } = useUpdateClaimMutation();
   const toast = useToast();
 
-  // Track where we are in the history (0 = current, 1 = one step back, etc.)
-  const [historyPosition, setHistoryPosition] = useState(0);
+  // Load initial history from sessionStorage
+  const loadHistoryFromStorage = useCallback(
+    (claimId: string): SessionHistoryEntry[] => {
+      if (isTemporaryId) return [{ text: currentText, timestamp: Date.now() }];
 
-  // Track the last text we saw to detect external changes
-  const lastTextRef = useRef(currentText);
+      try {
+        const stored = sessionStorage.getItem(getStorageKey(claimId));
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          // Validate the data structure
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (error) {
+        logger.debug('[useClaimUndoRedo] Failed to load history from storage', {
+          error,
+        });
+      }
+
+      // Return initial state if nothing in storage
+      return [{ text: currentText, timestamp: Date.now() }];
+    },
+    [currentText, isTemporaryId]
+  );
+
+  // Session-based history for immediate undo/redo
+  const [sessionHistory, setSessionHistory] = useState<SessionHistoryEntry[]>(
+    () => loadHistoryFromStorage(claimId)
+  );
+  const [sessionHistoryIndex, setSessionHistoryIndex] = useState(() => {
+    const history = loadHistoryFromStorage(claimId);
+    return history.length - 1;
+  });
 
   // Track if we're in an undo/redo operation
   const isUndoRedoOperationRef = useRef(false);
 
-  // Track the original text to enable undo even before first save
-  const [originalText, setOriginalText] = useState(currentText);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  // Debounce timer for adding to session history
+  const historyDebounceTimer = useRef<NodeJS.Timeout>();
 
-  const history = historyData?.history || [];
-
-  // Force fetch history on mount for non-temporary claims
+  // Save history to sessionStorage whenever it changes
   useEffect(() => {
-    if (!isTemporaryId && claimId) {
-      logger.debug('[useClaimUndoRedo] Prefetching history on mount', {
-        claimId,
+    if (isTemporaryId) return;
+
+    try {
+      sessionStorage.setItem(
+        getStorageKey(claimId),
+        JSON.stringify(sessionHistory)
+      );
+    } catch (error) {
+      // Handle quota exceeded error gracefully
+      logger.warn('[useClaimUndoRedo] Failed to save history to storage', {
+        error,
       });
-      refetch();
     }
-  }, [claimId, isTemporaryId, refetch]);
+  }, [sessionHistory, claimId, isTemporaryId]);
 
-  // Debug logging
+  // Reset session history when claim ID changes
   useEffect(() => {
-    logger.debug('[useClaimUndoRedo] History state', {
-      claimId,
-      historyLength: history.length,
-      historyPosition,
-      isLoading,
-      isTemporaryId,
-      hasHistory: history.length > 0,
-      hasUnsavedChanges,
-    });
-  }, [
-    claimId,
-    history.length,
-    historyPosition,
-    isLoading,
-    isTemporaryId,
-    hasUnsavedChanges,
-  ]);
+    const loadedHistory = loadHistoryFromStorage(claimId);
+    setSessionHistory(loadedHistory);
+    setSessionHistoryIndex(loadedHistory.length - 1);
+  }, [claimId, loadHistoryFromStorage]);
 
-  // Reset position when claim ID changes (not on text changes)
+  // Add current text to session history when it changes (with debouncing)
   useEffect(() => {
-    setHistoryPosition(0);
-    lastTextRef.current = currentText;
-    setOriginalText(currentText);
-    setHasUnsavedChanges(false);
-  }, [claimId]); // Only reset on claim ID change, not text change
+    // Skip if we're in an undo/redo operation or text hasn't changed
+    if (isUndoRedoOperationRef.current) return;
 
-  // Detect when text changes externally (not from undo/redo) and refetch history
-  useEffect(() => {
-    // Skip for temporary IDs or if we're in an undo/redo operation
-    if (isTemporaryId || isUndoRedoOperationRef.current) return;
+    const lastEntry = sessionHistory[sessionHistoryIndex];
+    if (lastEntry && lastEntry.text === currentText) return;
 
-    // If text changed and we're at the current position (not viewing history)
-    if (currentText !== lastTextRef.current && historyPosition === 0) {
-      lastTextRef.current = currentText;
+    // Clear existing timer
+    if (historyDebounceTimer.current) {
+      clearTimeout(historyDebounceTimer.current);
+    }
 
-      // Track if we have unsaved changes
-      if (currentText !== originalText) {
-        setHasUnsavedChanges(true);
-      }
+    // Debounce adding to history (500ms)
+    historyDebounceTimer.current = setTimeout(() => {
+      setSessionHistory(prev => {
+        // Remove any entries after current position (branching history)
+        const newHistory = prev.slice(0, sessionHistoryIndex + 1);
 
-      // No need to manually refetch - React Query will handle it via invalidation
-      logger.debug('[useClaimUndoRedo] Text changed externally', {
-        claimId,
+        // Add new entry
+        newHistory.push({ text: currentText, timestamp: Date.now() });
+
+        // Limit history size to MAX_HISTORY_ENTRIES
+        if (newHistory.length > MAX_HISTORY_ENTRIES) {
+          // Remove oldest entries
+          newHistory.splice(0, newHistory.length - MAX_HISTORY_ENTRIES);
+        }
+
+        return newHistory;
+      });
+
+      // Update index to point to new entry
+      setSessionHistoryIndex(prev => {
+        const newHistory = sessionHistory.slice(0, prev + 1);
+        newHistory.push({ text: currentText, timestamp: Date.now() });
+        return Math.min(newHistory.length - 1, MAX_HISTORY_ENTRIES - 1);
+      });
+
+      logger.debug('[useClaimUndoRedo] Added to session history', {
+        historyLength: sessionHistory.length + 1,
         textLength: currentText.length,
-        hasUnsavedChanges: currentText !== originalText,
       });
-    }
-  }, [currentText, historyPosition, claimId, isTemporaryId, originalText]);
+    }, 500);
 
-  // Reset unsaved changes when history is updated (indicating a save completed)
-  useEffect(() => {
-    if (history.length > 0 && hasUnsavedChanges) {
-      // Check if the most recent history entry matches our current text
-      const mostRecentEntry = history[0];
-      if (mostRecentEntry && mostRecentEntry.newText === currentText) {
-        logger.debug(
-          '[useClaimUndoRedo] Save completed, resetting unsaved changes',
-          {
-            claimId,
-            historyLength: history.length,
-          }
-        );
-        setHasUnsavedChanges(false);
-        setOriginalText(currentText);
+    return () => {
+      if (historyDebounceTimer.current) {
+        clearTimeout(historyDebounceTimer.current);
       }
-    }
-  }, [history, hasUnsavedChanges, currentText, claimId]);
+    };
+  }, [currentText, sessionHistoryIndex, sessionHistory]);
 
-  // Check if we can navigate (also check if not loading and not temporary)
-  // Allow undo if we have history OR if we have unsaved changes (can revert to original)
-  const canUndo =
-    !isLoading &&
-    !isTemporaryId &&
-    (historyPosition < history.length ||
-      (historyPosition === 0 && hasUnsavedChanges));
-  const canRedo = !isLoading && !isTemporaryId && historyPosition > 0;
+  // Check if we can navigate
+  const canUndo = !isTemporaryId && sessionHistoryIndex > 0;
+  const canRedo =
+    !isTemporaryId && sessionHistoryIndex < sessionHistory.length - 1;
 
   const undo = useCallback(() => {
     if (!canUndo || claimId.startsWith('temp-')) return;
 
     isUndoRedoOperationRef.current = true;
 
-    // Special case: if we're at position 0 with unsaved changes but no history,
-    // revert to the original text
-    if (historyPosition === 0 && hasUnsavedChanges && history.length === 0) {
-      logger.debug(
-        '[useClaimUndoRedo] Reverting to original text (no history yet)',
-        {
-          claimId,
-          originalTextLength: originalText.length,
-        }
-      );
+    const newIndex = sessionHistoryIndex - 1;
+    const targetEntry = sessionHistory[newIndex];
 
-      // Update the claim to original text
-      updateClaim(
-        { claimId, text: originalText },
-        {
-          onSuccess: () => {
-            setHasUnsavedChanges(false);
-            // Update local state if callback provided
-            onTextChange?.(originalText);
-
-            // Clear the operation flag after a delay
-            setTimeout(() => {
-              isUndoRedoOperationRef.current = false;
-            }, 500);
-          },
-          onError: error => {
-            isUndoRedoOperationRef.current = false;
-            logger.error('[useClaimUndoRedo] Failed to revert to original', {
-              error,
-            });
-            toast({
-              title: 'Failed to undo',
-              description: 'Could not revert to original text',
-              status: 'error',
-              duration: 3000,
-              isClosable: true,
-            });
-          },
-        }
-      );
+    if (!targetEntry) {
+      isUndoRedoOperationRef.current = false;
       return;
     }
 
-    // Normal history-based undo
-    const targetPosition = historyPosition + 1;
-    const targetEntry = history[historyPosition];
-
-    // Update to the previous text
-    const targetText = targetEntry.previousText;
-
     logger.debug('[useClaimUndoRedo] Undoing to previous version', {
       claimId,
-      position: targetPosition,
-      timestamp: targetEntry.timestamp,
+      fromIndex: sessionHistoryIndex,
+      toIndex: newIndex,
+      textPreview: targetEntry.text.substring(0, 50) + '...',
     });
 
     // Update the claim
     updateClaim(
-      { claimId, text: targetText },
+      { claimId, text: targetEntry.text },
       {
         onSuccess: () => {
-          setHistoryPosition(targetPosition);
+          setSessionHistoryIndex(newIndex);
           // Update local state if callback provided
-          onTextChange?.(targetText);
+          onTextChange?.(targetEntry.text);
 
           // Clear the operation flag after a delay
           setTimeout(() => {
             isUndoRedoOperationRef.current = false;
-          }, 500);
+          }, 100);
         },
         onError: error => {
           isUndoRedoOperationRef.current = false;
@@ -221,54 +202,46 @@ export const useClaimUndoRedo = ({
   }, [
     canUndo,
     claimId,
-    history,
-    historyPosition,
+    sessionHistory,
+    sessionHistoryIndex,
     updateClaim,
     onTextChange,
     toast,
-    hasUnsavedChanges,
-    originalText,
   ]);
 
   const redo = useCallback(() => {
     if (!canRedo || claimId.startsWith('temp-')) return;
 
     isUndoRedoOperationRef.current = true;
-    const targetPosition = historyPosition - 1;
 
-    // When redoing to position 0, we need the most recent history entry's newText
-    // For other positions, we use the entry at that position
-    let targetText: string;
-    if (targetPosition === 0 && history.length > 0) {
-      // Going back to current state - use the most recent change's new text
-      targetText = history[0].newText;
-    } else if (targetPosition > 0) {
-      // Going to an intermediate state - use that position's new text
-      targetText = history[targetPosition - 1].newText;
-    } else {
-      // Shouldn't happen, but fallback to current text
-      targetText = currentText;
+    const newIndex = sessionHistoryIndex + 1;
+    const targetEntry = sessionHistory[newIndex];
+
+    if (!targetEntry) {
+      isUndoRedoOperationRef.current = false;
+      return;
     }
 
     logger.debug('[useClaimUndoRedo] Redoing to newer version', {
       claimId,
-      position: targetPosition,
-      targetText: targetText.substring(0, 50) + '...',
+      fromIndex: sessionHistoryIndex,
+      toIndex: newIndex,
+      textPreview: targetEntry.text.substring(0, 50) + '...',
     });
 
     // Update the claim
     updateClaim(
-      { claimId, text: targetText },
+      { claimId, text: targetEntry.text },
       {
         onSuccess: () => {
-          setHistoryPosition(targetPosition);
+          setSessionHistoryIndex(newIndex);
           // Update local state if callback provided
-          onTextChange?.(targetText);
+          onTextChange?.(targetEntry.text);
 
           // Clear the operation flag after a delay
           setTimeout(() => {
             isUndoRedoOperationRef.current = false;
-          }, 500);
+          }, 100);
         },
         onError: error => {
           isUndoRedoOperationRef.current = false;
@@ -286,9 +259,8 @@ export const useClaimUndoRedo = ({
   }, [
     canRedo,
     claimId,
-    history,
-    historyPosition,
-    currentText,
+    sessionHistory,
+    sessionHistoryIndex,
     updateClaim,
     onTextChange,
     toast,
@@ -325,14 +297,36 @@ export const useClaimUndoRedo = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [undo, redo, claimId]);
 
+  // Clean up sessionStorage for old temporary claims on mount
+  useEffect(() => {
+    try {
+      const keys = Object.keys(sessionStorage);
+      const tempClaimKeys = keys.filter(
+        key =>
+          key.startsWith('claim-history-temp-') &&
+          key !== getStorageKey(claimId)
+      );
+
+      // Remove old temporary claim histories
+      tempClaimKeys.forEach(key => {
+        sessionStorage.removeItem(key);
+      });
+    } catch (error) {
+      logger.debug(
+        '[useClaimUndoRedo] Failed to clean up temp claim histories',
+        { error }
+      );
+    }
+  }, [claimId]);
+
   return {
     canUndo,
     canRedo,
     undo,
     redo,
-    historyLength: history.length,
-    historyPosition,
+    historyLength: sessionHistory.length,
+    historyPosition: sessionHistoryIndex,
     // Provide the current history entry for UI display
-    currentHistoryEntry: history[historyPosition - 1],
+    currentHistoryEntry: sessionHistory[sessionHistoryIndex],
   };
 };

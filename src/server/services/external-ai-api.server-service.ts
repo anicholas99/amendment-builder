@@ -5,9 +5,10 @@
  * with the external Cardinal AI API for citation processing. It encapsulates
  * API key management, request construction, and standardized error handling.
  */
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import environment from '@/config/environment';
 import { ApplicationError, ErrorCode } from '@/lib/error';
+import { serverFetch } from '@/lib/api/serverFetch';
 
 const AI_API_BASE_URL =
   'https://aiapi.qa.cardinal-holdings.com/semantic-search/citation/result/';
@@ -34,7 +35,7 @@ export class ExternalAiApiServerService {
     );
 
     try {
-      const response = await fetch(requestUrl, {
+      const response = await serverFetch(requestUrl, {
         headers: {
           ApiKey: AI_API_KEY,
         },

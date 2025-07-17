@@ -1,10 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { AuthenticatedRequest } from '@/types/middleware';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { figureRepository } from '@/repositories/figureRepository';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { figureRepository } from '@/repositories/figure';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { z } from 'zod';
+import { apiResponse } from '@/utils/api/responses';
 
 const apiLogger = createApiLogger('figure-metadata');
 
@@ -43,7 +44,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     case 'PATCH':
       return handlePatch(req, res, figureId);
     default:
-      return res.status(405).json({ error: 'Method not allowed' });
+      return apiResponse.methodNotAllowed(res, ['PATCH']);
   }
 }
 
@@ -64,7 +65,7 @@ async function handlePatch(
 
     apiLogger.info('Successfully updated figure metadata', { figureId });
 
-    return res.status(200).json({ figure: updatedFigure });
+    return apiResponse.ok(res, { figure: updatedFigure });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({

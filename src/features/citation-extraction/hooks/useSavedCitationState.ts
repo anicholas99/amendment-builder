@@ -1,10 +1,14 @@
-import { useMemo, useCallback, useRef, useEffect, useState } from 'react';
-import { SavedCitationUI } from '@/types/domain/priorArt';
-import { GroupedCitation, CitationMatch } from '@/features/search/hooks/useCitationMatches';
-import { logger } from '@/lib/monitoring/logger';
+import { useCallback, useRef, useEffect, useState } from 'react';
+import {
+  SavedCitationUI,
+  ProcessedSavedPriorArt,
+} from '@/types/domain/priorArt';
+import { GroupedCitation } from '@/features/search/hooks/useCitationMatches';
+import { ProcessedCitationMatch } from '@/types/domain/citation';
+import { logger } from '@/utils/clientLogger';
 
 interface UseSavedCitationStateProps {
-  savedPriorArtList: any[];
+  savedPriorArtList: ProcessedSavedPriorArt[];
   citationMatchesData?: { groupedResults?: GroupedCitation[] };
 }
 
@@ -14,148 +18,193 @@ export function useSavedCitationState({
 }: UseSavedCitationStateProps) {
   // Track the saved state as a state variable to trigger re-renders
   const [savedMap, setSavedMap] = useState<Map<string, boolean>>(new Map());
-  
+
   // Track optimistic updates separately
-  const optimisticUpdatesRef = useRef<Set<string>>(new Set());
-  
-  // Track the current reference to detect changes
-  const currentReferenceRef = useRef<string | null>(null);
+  const optimisticUpdatesRef = useRef<
+    Map<string, { timestamp: number; referenceNumber: string }>
+  >(new Map());
 
   // Helper to normalize text for comparison
-  const normalize = (text: string): string => 
+  const normalize = (text: string): string =>
     text.replace(/\s+/g, ' ').trim().toLowerCase();
 
-  // Clear optimistic updates when reference changes
+  // Clean up old optimistic updates when saved prior art changes
   useEffect(() => {
-    const currentReference = citationMatchesData?.groupedResults?.[0]?.matches?.[0]?.referenceNumber;
-    if (currentReference && currentReference !== currentReferenceRef.current) {
-      logger.info('[useSavedCitationState] Reference changed, clearing optimistic updates:', {
-        oldRef: currentReferenceRef.current,
-        newRef: currentReference,
-      });
-      optimisticUpdatesRef.current.clear();
-      currentReferenceRef.current = currentReference;
+    // When saved prior art updates, clean up matching optimistic updates
+    const now = Date.now();
+    const fiveSecondsAgo = now - 5000; // Shorter timeout since we clean up on data changes
+
+    let hasChanges = false;
+    optimisticUpdatesRef.current.forEach((value, key) => {
+      // Remove old optimistic updates
+      if (value.timestamp < fiveSecondsAgo) {
+        optimisticUpdatesRef.current.delete(key);
+        hasChanges = true;
+      }
+    });
+
+    if (hasChanges) {
+      // Trigger re-render by updating state
+      setSavedMap(prev => new Map(prev));
     }
-  }, [citationMatchesData]);
+  }, [savedPriorArtList]); // Clean up when saved prior art changes
 
-  // Update the map when savedPriorArtList changes
+  // Update the map when either data source changes
   useEffect(() => {
+    // Skip if we don't have the necessary data
+    if (!savedPriorArtList || !citationMatchesData?.groupedResults) {
+      return;
+    }
+
     const newMap = new Map<string, boolean>();
-    
-    if (savedPriorArtList && citationMatchesData?.groupedResults) {
-      logger.info('[useSavedCitationState] Building saved map from:', {
-        savedPriorArtCount: savedPriorArtList.length,
-        groupedResultsCount: citationMatchesData.groupedResults.length,
-      });
 
-      savedPriorArtList.forEach((priorArt: any) => {
-        if (priorArt.savedCitations && Array.isArray(priorArt.savedCitations)) {
-          logger.info('[useSavedCitationState] Processing prior art:', {
-            patentNumber: priorArt.patentNumber,
-            savedCitationsCount: priorArt.savedCitations.length,
-          });
+    // Build a quick lookup map for saved citations by reference
+    const savedByReference = new Map<string, SavedCitationUI[]>();
 
-          citationMatchesData.groupedResults?.forEach(group => {
-            group.matches.forEach(match => {
-              const matchRefNormalized = match.referenceNumber.replace(/-/g, '').toUpperCase();
-              const priorArtRefNormalized = priorArt.patentNumber.replace(/-/g, '').toUpperCase();
-              
-              if (matchRefNormalized === priorArtRefNormalized) {
-                logger.info('[useSavedCitationState] Checking match for reference:', {
-                  matchRef: match.referenceNumber,
-                  priorArtRef: priorArt.patentNumber,
-                  matchElement: match.parsedElementText?.substring(0, 50),
-                  savedCitationsCount: priorArt.savedCitations.length,
+    savedPriorArtList.forEach(priorArt => {
+      if (priorArt.savedCitations && Array.isArray(priorArt.savedCitations)) {
+        const refNormalized = priorArt.patentNumber
+          .replace(/-/g, '')
+          .toUpperCase();
+        savedByReference.set(refNormalized, priorArt.savedCitations);
+      }
+    });
+
+    // Check each match against saved citations
+    let savedCount = 0;
+    citationMatchesData.groupedResults.forEach(group => {
+      group.matches.forEach(match => {
+        // Type assertion to ProcessedCitationMatch for proper typing
+        const typedMatch = match as unknown as ProcessedCitationMatch;
+        const matchRefNormalized = typedMatch.referenceNumber
+          .replace(/-/g, '')
+          .toUpperCase();
+        const savedCitations = savedByReference.get(matchRefNormalized);
+
+        if (savedCitations) {
+          const matchElementNorm = normalize(
+            typedMatch.parsedElementText || ''
+          );
+          const matchCitationNorm = normalize(typedMatch.citation || '');
+
+          const isMatchSaved = savedCitations.some(
+            (savedCitation: SavedCitationUI) => {
+              const savedElementNorm = normalize(
+                savedCitation.elementText || ''
+              );
+              const savedCitationNorm = normalize(savedCitation.citation || '');
+
+              const isMatch =
+                savedElementNorm === matchElementNorm &&
+                savedCitationNorm === matchCitationNorm;
+
+              // Debug log for troubleshooting
+              if (!isMatch && savedElementNorm === matchElementNorm) {
+                logger.debug('[useSavedCitationState] Citation text mismatch', {
+                  matchId: typedMatch.id,
+                  reference: typedMatch.referenceNumber,
+                  saved: savedCitationNorm.substring(0, 50),
+                  current: matchCitationNorm.substring(0, 50),
                 });
-                
-                const isMatchSaved = priorArt.savedCitations.some(
-                  (savedCitation: SavedCitationUI) => {
-                    const savedElementNorm = normalize(savedCitation.elementText || '');
-                    const savedCitationNorm = normalize(savedCitation.citation || '');
-                    const matchElementNorm = normalize(match.parsedElementText || '');
-                    const matchCitationNorm = normalize(match.citation || '');
-                    
-                    const elementMatch = savedElementNorm === matchElementNorm;
-                    const citationMatch = 
-                      savedCitationNorm === matchCitationNorm ||
-                      savedCitationNorm.includes(matchCitationNorm) ||
-                      matchCitationNorm.includes(savedCitationNorm);
-                    
-                    // Log first comparison for debugging
-                    if (savedCitation === priorArt.savedCitations[0] && match === group.matches[0]) {
-                      logger.info('[useSavedCitationState] Detailed comparison:', {
-                        savedElement: savedElementNorm.substring(0, 50),
-                        matchElement: matchElementNorm.substring(0, 50),
-                        elementMatch,
-                        savedCitation: savedCitationNorm.substring(0, 50),
-                        matchCitation: matchCitationNorm.substring(0, 50),
-                        citationMatch,
-                      });
-                    }
-                    
-                    if (elementMatch && citationMatch) {
-                      logger.info('[useSavedCitationState] Found saved match:', {
-                        matchId: match.id,
-                        elementText: match.parsedElementText?.substring(0, 50),
-                      });
-                    }
-                    
-                    return elementMatch && citationMatch;
-                  }
-                );
-                if (isMatchSaved) {
-                  newMap.set(match.id, true);
-                }
               }
-            });
-          });
+
+              return isMatch;
+            }
+          );
+
+          if (isMatchSaved) {
+            newMap.set(typedMatch.id, true);
+            savedCount++;
+          }
         }
       });
-    }
+    });
 
-    // Preserve optimistic updates
-    optimisticUpdatesRef.current.forEach(id => {
+    // Add optimistic updates
+    optimisticUpdatesRef.current.forEach((_, id) => {
       newMap.set(id, true);
     });
 
-    setSavedMap(newMap);
-    
-    logger.info('[useSavedCitationState] Updated saved map:', {
-      totalSaved: newMap.size,
+    logger.debug('[useSavedCitationState] Saved citation map updated', {
+      savedCount,
       optimisticCount: optimisticUpdatesRef.current.size,
-      savedIds: Array.from(newMap.keys()),
+      totalSaved: newMap.size,
     });
+
+    setSavedMap(newMap);
   }, [savedPriorArtList, citationMatchesData]);
 
-  // Stable function to check if citation is saved
-  const isCitationSaved = useCallback((citationId: string): boolean => {
-    const isSaved = savedMap.has(citationId) || optimisticUpdatesRef.current.has(citationId);
-    return isSaved;
-  }, [savedMap]); // Include savedMap in dependencies so it updates when map changes
-
   // Add optimistic update
-  const addOptimisticUpdate = useCallback((citationId: string) => {
-    optimisticUpdatesRef.current.add(citationId);
-    // Also update the state map to trigger re-render
+  const addOptimisticUpdate = useCallback(
+    (citationId: string, referenceNumber?: string) => {
+      optimisticUpdatesRef.current.set(citationId, {
+        timestamp: Date.now(),
+        referenceNumber: referenceNumber || '',
+      });
+      setSavedMap(prev => {
+        const newMap = new Map(prev);
+        newMap.set(citationId, true);
+        return newMap;
+      });
+    },
+    []
+  );
+
+  // Remove a specific optimistic update
+  const removeOptimisticUpdate = useCallback((citationId: string) => {
+    optimisticUpdatesRef.current.delete(citationId);
     setSavedMap(prev => {
       const newMap = new Map(prev);
-      newMap.set(citationId, true);
+      newMap.delete(citationId);
       return newMap;
     });
-    
-    logger.info('[useSavedCitationState] Added optimistic update:', { citationId });
   }, []);
 
-  // Clear optimistic updates (called when real data arrives)
+  // Clear optimistic updates for a specific reference
+  const clearOptimisticUpdatesForReference = useCallback(
+    (referenceNumber: string) => {
+      const normalizedRef = referenceNumber.replace(/-/g, '').toUpperCase();
+      const toRemove: string[] = [];
+
+      optimisticUpdatesRef.current.forEach((value, key) => {
+        const valueRefNormalized = value.referenceNumber
+          .replace(/-/g, '')
+          .toUpperCase();
+        if (valueRefNormalized === normalizedRef) {
+          toRemove.push(key);
+        }
+      });
+
+      toRemove.forEach(key => optimisticUpdatesRef.current.delete(key));
+
+      if (toRemove.length > 0) {
+        setSavedMap(prev => {
+          const newMap = new Map(prev);
+          toRemove.forEach(key => newMap.delete(key));
+          return newMap;
+        });
+      }
+    },
+    []
+  );
+
+  // Clear all optimistic updates
   const clearOptimisticUpdates = useCallback(() => {
     optimisticUpdatesRef.current.clear();
-    logger.info('[useSavedCitationState] Cleared optimistic updates');
+    setSavedMap(prev => new Map(prev));
   }, []);
 
   return {
     savedCitationIds: savedMap,
     addOptimisticUpdate,
+    removeOptimisticUpdate,
     clearOptimisticUpdates,
-    savedCount: savedMap.size, // Export for debugging
+    clearOptimisticUpdatesForReference,
+    savedCount: savedMap.size,
   };
-} 
+}
+
+// Define explicit return type to improve type-safety when the hook is consumed elsewhere
+export type UseSavedCitationStateResult = ReturnType<
+  typeof useSavedCitationState
+>;

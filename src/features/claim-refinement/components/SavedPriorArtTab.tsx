@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useSearchHistoryColors } from '../../search/hooks/useSearchHistoryColors';
 import { PriorArtReference } from '../../../types/claimTypes';
 

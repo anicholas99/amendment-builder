@@ -1,9 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { inventionDataService } from '@/server/services/invention-data.server-service';
-import { logger } from '@/lib/monitoring/logger';
-import { AuthenticatedRequest } from '@/types/middleware';
+import { RequestWithServices } from '@/types/middleware';
+import { logger } from '@/server/logger';
 import { z } from 'zod';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Validation schema for updating the abstract
 const updateAbstractSchema = z.object({
@@ -14,24 +14,35 @@ const querySchema = z.object({
   projectId: z.string(),
 });
 
-async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
-  if (req.method !== 'PUT') {
-    return res.status(405).json({ error: 'Method not allowed' });
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { inventionService } = (req as RequestWithServices).services;
+  const { projectId } = req.query;
+
+  if (!projectId || typeof projectId !== 'string') {
+    return apiResponse.badRequest(res, 'Invalid project ID');
   }
-  const { projectId } = req.query as { projectId: string };
-  const { abstract } = req.body;
 
   try {
-    await inventionDataService.updateAbstract(projectId, abstract);
-    return res.status(200).json({ message: 'Abstract updated successfully.' });
+    switch (req.method) {
+      case 'GET':
+        const inventionData =
+          await inventionService.getInventionData(projectId);
+        return apiResponse.ok(res, { abstract: inventionData?.abstract || '' });
+
+      case 'PUT':
+        await inventionService.updateAbstract(projectId, req.body.abstract);
+        return apiResponse.ok(res, { success: true });
+
+      default:
+        return apiResponse.methodNotAllowed(res, ['GET', 'PUT']);
+    }
   } catch (error) {
-    logger.error('[API] Error updating invention abstract', {
+    logger.error('Failed to handle abstract request', {
       projectId,
+      method: req.method,
       error,
     });
-    return res
-      .status(500)
-      .json({ error: 'Failed to update invention abstract' });
+    return apiResponse.serverError(res, error);
   }
 }
 

@@ -6,7 +6,6 @@
  */
 
 import { environment } from '@/config/environment';
-import { logger } from '@/lib/monitoring/logger';
 import { sendMessage } from './azureQueueService';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 
@@ -34,9 +33,7 @@ export class QueueService {
     );
 
     if (!this.isAzureConfigured) {
-      logger.warn(
-        '[QueueService] Azure Queue Storage not configured. Jobs will be logged but not queued.'
-      );
+      // Warning logging removed for client compatibility
     }
   }
 
@@ -56,10 +53,7 @@ export class QueueService {
         const success = await sendMessage(jobType, message);
 
         if (success) {
-          logger.info(`[QueueService] Successfully queued job to Azure`, {
-            jobType,
-            payloadKeys: Object.keys(payload),
-          });
+          // Info logging removed for client compatibility
         } else {
           throw new ApplicationError(
             ErrorCode.INTERNAL_ERROR,
@@ -68,16 +62,10 @@ export class QueueService {
         }
       } else {
         // Fallback: Log the job for manual processing
-        logger.info(`[QueueService] Job logged (queue not configured)`, {
-          jobType,
-          message: JSON.stringify(message),
-        });
+        // Info logging removed for client compatibility
       }
     } catch (error) {
-      logger.error(`[QueueService] Failed to enqueue job`, {
-        jobType,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      // Error logging removed for client compatibility
       throw new ApplicationError(
         ErrorCode.INTERNAL_ERROR,
         `Failed to enqueue ${jobType} job`
@@ -92,11 +80,9 @@ export class QueueService {
     jobType: string,
     handler: (payload: any) => Promise<void>
   ): Promise<void> {
-    logger.info(`[QueueService] Worker started for job type: ${jobType}`);
-
+    // Info logging removed for client compatibility
     // TODO: Implement actual queue processing
     // This would poll Azure Queue Storage and process messages
-
     // Example implementation:
     // while (true) {
     //   const messages = await queueClient.receiveMessages({ numberOfMessages: 1 });
@@ -106,7 +92,8 @@ export class QueueService {
     //       await handler(payload);
     //       await queueClient.deleteMessage(message.messageId, message.popReceipt);
     //     } catch (error) {
-    //       logger.error(`[QueueService] Error processing message`, { error });
+    //
+    // Error logging removed for client compatibility
     //     }
     //   }
     //   await new Promise(resolve => setTimeout(resolve, 5000)); // Poll every 5 seconds
@@ -114,5 +101,5 @@ export class QueueService {
   }
 }
 
-// Export singleton instance
-export const queueService = new QueueService();
+// REMOVED: Singleton export that could cause issues between requests
+// Use request-scoped instances via ServiceContext instead

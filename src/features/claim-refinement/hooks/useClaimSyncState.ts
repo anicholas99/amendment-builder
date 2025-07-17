@@ -7,9 +7,9 @@ import {
   useParseClaimSmart,
   useGenerateQueriesSmart,
 } from '@/hooks/api/useClaimOperations';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useDebounce } from '@/hooks/useDebounce';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import { ProjectApiService } from '@/client/services/project.client-service';
 
 export type SyncStatus =
@@ -21,7 +21,7 @@ export type SyncStatus =
   | 'out-of-sync';
 
 export interface ClaimSyncState {
-  parsedElements: any[];
+  parsedElements: string[];
   searchQueries: string[];
   syncStatus: SyncStatus;
   error: string | null;
@@ -29,18 +29,19 @@ export interface ClaimSyncState {
   lastSyncTime: Date | null;
   hasManualEdits?: boolean;
   needsSync?: boolean;
+  isInitialLoading?: boolean; // Prevent flicker on mount
 }
 
 export interface UseClaimSyncStateReturn extends ClaimSyncState {
   resync: () => void;
   syncClaim: () => Promise<void>;
-  updateElements: (newElements: any[]) => Promise<void>;
-  updateElementsWithoutRegeneration: (newElements: any[]) => Promise<void>;
+  updateElements: (newElements: string[]) => Promise<void>;
+  updateElementsWithoutRegeneration: (newElements: string[]) => Promise<void>;
   updateQueries: (newQueries: string[]) => Promise<void>;
   isSynced: boolean;
   canSearch: boolean;
   resyncElementsOnly: () => Promise<void>;
-  resyncQueriesOnly: (elements?: any[]) => Promise<void>;
+  resyncQueriesOnly: (elements?: string[]) => Promise<void>;
 }
 
 interface UseClaimSyncStateProps {
@@ -69,6 +70,7 @@ export function useClaimSyncState({
     lastSyncTime: null,
     hasManualEdits: false,
     needsSync: false,
+    isInitialLoading: true, // Start loading to prevent flicker
   });
 
   const toast = useToast();
@@ -101,16 +103,26 @@ export function useClaimSyncState({
             lastSyncTime: null, // claimSyncedAt not available in sync data
             hasManualEdits: false,
             needsSync: false,
+            isInitialLoading: false, // Set to false after initial load
           });
 
           logger.info('[useClaimSyncState] Loaded sync data from database', {
             elementCount: syncData.parsedElements.length,
             queryCount: syncData.searchQueries.length,
           });
+        } else {
+          setState(prev => ({
+            ...prev,
+            isInitialLoading: false, // Set to false if no data
+          }));
         }
       } catch (error) {
         logger.error('[useClaimSyncState] Failed to load sync data', error);
         // Don't show error toast - this is expected on first load
+        setState(prev => ({
+          ...prev,
+          isInitialLoading: false, // Set to false on error
+        }));
       }
     };
 
@@ -389,7 +401,7 @@ export function useClaimSyncState({
   };
 
   // Resync queries only - regenerate from current or provided elements
-  const resyncQueriesOnly = async (elements?: any[]) => {
+  const resyncQueriesOnly = async (elements?: string[]) => {
     const elementsToUse = elements || state.parsedElements;
 
     if (elementsToUse.length === 0) {
@@ -523,7 +535,7 @@ export function useClaimSyncState({
 
   // Manual element update function (doesn't trigger regeneration)
   const updateElementsWithoutRegeneration = (
-    newElements: any[]
+    newElements: string[]
   ): Promise<void> => {
     logger.info(
       '[useClaimSyncState] Updating elements manually without regeneration',
@@ -577,7 +589,7 @@ export function useClaimSyncState({
   };
 
   // Manual element update function
-  const updateElements = async (newElements: any[]) => {
+  const updateElements = async (newElements: string[]) => {
     if (newElements.length === 0) {
       setState(prev => ({
         ...prev,

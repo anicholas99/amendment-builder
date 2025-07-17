@@ -1,6 +1,6 @@
 import React from 'react';
-import { logger } from '@/config/environment';
-import { environment } from '@/config/environment';
+import { logger } from '@/utils/clientLogger';
+import { isDevelopment } from '@/config/environment.client';
 
 /**
  * Type definitions for theme-aware components
@@ -40,7 +40,7 @@ export interface ThemeAwareColorProps {
 }
 
 /**
- * Utility type to enforce semantic tokens on Chakra UI components
+ * Utility type to enforce semantic tokens from the theme system
  */
 export type WithSemanticTokens<T> = Omit<T, keyof ThemeAwareColorProps> &
   ThemeAwareColorProps;
@@ -105,11 +105,11 @@ export const validateSemanticToken = (
   propName: string,
   value: string | undefined
 ): void => {
-  if (environment.isDevelopment && value) {
+  if (isDevelopment && value) {
     // Allow semantic tokens
     if (isSemanticColorToken(value)) return;
 
-    // Allow Chakra UI built-in semantic values
+    // Allow theme built-in semantic values
     if (
       value.includes('Alpha') ||
       value === 'transparent' ||
@@ -146,7 +146,7 @@ export function withDarkModeValidation<P extends ThemeAwareColorProps>(
   Component: React.ComponentType<P>
 ): React.ComponentType<P> {
   const WrappedComponent = (props: P) => {
-    if (environment.isDevelopment) {
+    if (isDevelopment) {
       validateSemanticToken('color', props.color);
       validateSemanticToken('bg', props.bg);
       validateSemanticToken('backgroundColor', props.backgroundColor);

@@ -50,4 +50,37 @@
   height: 100%;
   top: 0;
   left: 0;
-} 
+}
+
+/* Prevent ViewLayout flicker on route changes */
+.view-layout-wrapper > div {
+  /* Disable transitions on initial render */
+  transition: none !important;
+}
+
+/* Re-enable transitions after initial render for resize operations */
+.view-layout-wrapper.layout-ready > div {
+  transition: width 0.15s ease-out;
+}
+
+/* Ensure re-resizable doesn't cause flicker */
+.view-layout-wrapper [style*='position: relative'] {
+  /* Prevent layout recalculation flicker */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Disable all transitions during route changes */
+.route-changing * {
+  transition: none !important;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}

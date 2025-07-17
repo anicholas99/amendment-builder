@@ -17,18 +17,21 @@ import {
   getUserTenantRelationship,
   findTenantsByUserId,
 } from '../repositories/tenantRepository';
+import {
+  updateSessionActivity,
+  findActiveSessionByUserId,
+  deleteSession,
+} from '../repositories/sessionRepository';
 import { CSRF_CONFIG } from '../config/security';
-import { logger } from '@/lib/monitoring/logger';
-import { environment } from '@/config/environment';
+import { logger } from '@/server/logger';
 import {
   AuthenticatedRequest,
   ApiHandler,
   ComposedHandler,
 } from '@/types/middleware';
-import {
-  authenticateInternalService,
-  ServiceAccount,
-} from '@/lib/auth/internalServiceAuth';
+import { authenticateInternalService } from '@/lib/auth/internalServiceAuth';
+import { environment } from '@/config/environment';
+import { AuditService } from '@/server/services/audit.server-service';
 
 // Extend NextApiRequest to include user
 // declare module 'next' {
@@ -47,6 +50,12 @@ import {
 // function isPrismaClient(value: unknown): value is PrismaClient {
 //   return value !== null && value !== undefined && typeof value === 'object' && 'user' in value;
 // }
+
+// Session timeout configuration
+const SESSION_TIMEOUT_MS =
+  environment.security.sessionTimeoutMinutes * 60 * 1000; // Convert minutes to ms
+const SESSION_ABSOLUTE_TIMEOUT_MS =
+  environment.security.sessionAbsoluteTimeoutHours * 60 * 60 * 1000; // Convert hours to ms
 
 /**
  * Consolidated authentication middleware for API routes using Auth0
@@ -71,32 +80,32 @@ export function withAuth<T = unknown>(
     try {
       // Skip auth check if not required
       if (!requireAuth) {
-        return handler(req, res);
+        // Properly type the handler call
+        return (
+          handler as (
+            req: AuthenticatedRequest,
+            res: NextApiResponse
+          ) => void | Promise<void>
+        )(req as AuthenticatedRequest, res);
       }
 
-      // Check for internal service authentication (OAuth or legacy API key)
+      // Check for internal service authentication (OAuth only)
       const internalAuth = await authenticateInternalService(req);
-      if (internalAuth.isAuthenticated) {
+      if (internalAuth.isAuthenticated && internalAuth.serviceAccount) {
         // Handle OAuth service accounts
-        if (!internalAuth.isLegacy && internalAuth.serviceAccount) {
-          authReq.user = {
-            id: `service:${internalAuth.serviceAccount.clientId}`,
-            email: `${internalAuth.serviceAccount.clientId}@service.internal`,
-            role: 'INTERNAL_SERVICE',
-            tenantId: internalAuth.serviceAccount.tenantId,
-          };
+        authReq.user = {
+          id: `service:${internalAuth.serviceAccount.clientId}`,
+          email: `${internalAuth.serviceAccount.clientId}@service.internal`,
+          role: 'INTERNAL_SERVICE',
+          tenantId: internalAuth.serviceAccount.tenantId,
+        };
 
-          // Store service account info for permission checks
-          (authReq as any).serviceAccount = internalAuth.serviceAccount;
-        } else {
-          // Legacy API key authentication
-          authReq.user = {
-            id: 'internal-service',
-            email: 'internal@service',
-            role: 'INTERNAL_SERVICE',
-            tenantId: internalAuth.tenantId,
-          };
-        }
+        // Store service account info for permission checks
+        (
+          authReq as AuthenticatedRequest & {
+            serviceAccount?: typeof internalAuth.serviceAccount;
+          }
+        ).serviceAccount = internalAuth.serviceAccount;
 
         // For internal services, tenant context is required for data operations
         if (
@@ -113,7 +122,13 @@ export function withAuth<T = unknown>(
           });
         }
 
-        return handler(authReq, res);
+        // Properly type the handler call
+        return (
+          handler as (
+            req: AuthenticatedRequest,
+            res: NextApiResponse
+          ) => void | Promise<void>
+        )(authReq, res);
       }
 
       // Check for session (supports both cookies and future Authorization header)
@@ -129,6 +144,64 @@ export function withAuth<T = unknown>(
         return res.status(401).json({ error: 'Authentication required' });
       }
 
+      // Check session timeout (only for non-service accounts)
+      if (!internalAuth.isAuthenticated && session.user?.id) {
+        // For Auth0 sessions, we track by user ID since we don't have direct access to session tokens
+        const activeSession = await findActiveSessionByUserId(session.user.id);
+
+        if (activeSession) {
+          const now = new Date();
+          const lastActivity = new Date(activeSession.lastActivity);
+          const sessionCreated = new Date(activeSession.createdAt);
+
+          // Check inactivity timeout
+          const inactivityDuration = now.getTime() - lastActivity.getTime();
+          if (inactivityDuration > SESSION_TIMEOUT_MS) {
+            logger.warn('Session expired due to inactivity', {
+              userId: session.user.id,
+              sessionId: activeSession.id,
+              lastActivity: lastActivity.toISOString(),
+              inactivityMinutes: Math.floor(inactivityDuration / 60000),
+            });
+
+            // Clean up the expired session
+            await deleteSession(activeSession.id);
+
+            return res.status(401).json({
+              error: 'Session expired due to inactivity',
+              code: 'SESSION_TIMEOUT',
+            });
+          }
+
+          // Check absolute session timeout
+          const sessionAge = now.getTime() - sessionCreated.getTime();
+          if (sessionAge > SESSION_ABSOLUTE_TIMEOUT_MS) {
+            logger.warn('Session expired due to absolute timeout', {
+              userId: session.user.id,
+              sessionId: activeSession.id,
+              created: sessionCreated.toISOString(),
+              ageHours: Math.floor(sessionAge / 3600000),
+            });
+
+            // Clean up the expired session
+            await deleteSession(activeSession.id);
+
+            return res.status(401).json({
+              error: 'Session expired',
+              code: 'SESSION_ABSOLUTE_TIMEOUT',
+            });
+          }
+
+          // Update last activity for non-GET requests or every 5 minutes for GET
+          const shouldUpdateActivity =
+            req.method !== 'GET' || inactivityDuration > 5 * 60 * 1000; // 5 minutes
+
+          if (shouldUpdateActivity) {
+            await updateSessionActivity(activeSession.id);
+          }
+        }
+      }
+
       try {
         // First, check if the user exists using repository
         // Using user.id from normalized auth
@@ -138,7 +211,7 @@ export function withAuth<T = unknown>(
         if (existingUser) {
           // Only update existing user using repository
           userDbRecord = await updateUser(session.user.id, {
-            email: session.user.email!,
+            email: session.user.email || '',
             name: session.user.name || null,
             lastLogin: new Date(),
           });
@@ -149,7 +222,7 @@ export function withAuth<T = unknown>(
           // Create new user with unique tokens using repository
           userDbRecord = await createUser({
             id: session.user.id,
-            email: session.user.email!,
+            email: session.user.email || '',
             name: session.user.name || null,
             role: 'USER',
             lastLogin: new Date(),
@@ -158,14 +231,47 @@ export function withAuth<T = unknown>(
           });
           logger.info('Created new user:', { userId: userDbRecord.id });
 
-          // New users don't get automatic tenant access - must be granted by admin
-          logger.info(
-            'New user created without tenant access - admin assignment required',
-            {
-              userId: userDbRecord.id,
+          // Audit log the new user creation
+          await AuditService.logApiAction(req, {
+            action: 'user.create',
+            resourceType: 'user',
+            resourceId: userDbRecord.id,
+            metadata: {
               email: userDbRecord.email,
-            }
-          );
+              source: 'auth0',
+            },
+            success: true,
+          });
+
+          // For new users, try to assign them to a default tenant
+          let defaultTenant = await findTenantBySlug('default');
+
+          // If no default tenant found, try to find by a test/demo tenant
+          if (!defaultTenant) {
+            defaultTenant = await findTenantBySlug('test-tenant');
+          }
+
+          if (defaultTenant) {
+            // Assign the new user to the default tenant
+            await ensureUserTenantAccess(
+              userDbRecord.id,
+              defaultTenant.id,
+              'USER'
+            );
+            logger.info('Assigned new user to default tenant', {
+              userId: userDbRecord.id,
+              tenantId: defaultTenant.id,
+            });
+          } else {
+            // New users don't get automatic tenant access - must be granted by admin
+            logger.info(
+              'New user created without tenant access - admin assignment required',
+              {
+                userId: userDbRecord.id,
+                email: userDbRecord.email,
+              }
+            );
+          }
         }
 
         let userTenantId: string | undefined = undefined;
@@ -232,9 +338,6 @@ export function withAuth<T = unknown>(
           tenantId: userTenantId,
         };
 
-        // Also add userId for backward compatibility
-        authReq.userId = userDbRecord.id;
-
         // Check CSRF token for mutation requests if enabled
         if (
           csrfCheck &&
@@ -262,7 +365,13 @@ export function withAuth<T = unknown>(
           }
         }
 
-        return handler(authReq, res);
+        // Properly type the handler call
+        return (
+          handler as (
+            req: AuthenticatedRequest,
+            res: NextApiResponse
+          ) => void | Promise<void>
+        )(authReq, res);
       } catch (error) {
         logger.error('Auth middleware database error:', error);
         return res.status(500).json({ error: 'Internal server error' });

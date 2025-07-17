@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { logger } from '@/lib/monitoring/logger';
-import { environment } from '@/config/environment';
+import { logger } from '@/server/logger';
 import {
   AuthenticatedRequest,
   ApiHandler,
@@ -86,10 +85,11 @@ export function withTenantGuard(
       }
 
       // Basic role check (case-insensitive)
+      // ADMIN users can access any endpoint, others need exact role match
       const userRole = (authReq.user.role || 'USER').toUpperCase();
-      const roleAllowed = requiredRoles
-        .map(r => r.toUpperCase())
-        .includes(userRole);
+      const roleAllowed =
+        userRole === 'ADMIN' ||
+        requiredRoles.map(r => r.toUpperCase()).includes(userRole);
       if (!roleAllowed) {
         logger.warn('AuthZ failure: role insufficient', {
           userId: authReq.user.id,
@@ -100,7 +100,12 @@ export function withTenantGuard(
       }
 
       // All good – proceed to handler
-      return handler(authReq, res);
+      return (
+        handler as (
+          req: AuthenticatedRequest,
+          res: NextApiResponse
+        ) => void | Promise<void>
+      )(authReq, res);
     };
   };
 }
@@ -179,10 +184,11 @@ export function withTenantAccess(
       }
 
       // Basic role check
+      // ADMIN users can access any endpoint, others need exact role match
       const userRole = (authReq.user.role || 'USER').toUpperCase();
-      const roleAllowed = requiredRoles
-        .map(r => r.toUpperCase())
-        .includes(userRole);
+      const roleAllowed =
+        userRole === 'ADMIN' ||
+        requiredRoles.map(r => r.toUpperCase()).includes(userRole);
       if (!roleAllowed) {
         logger.warn('AuthZ failure: role insufficient', {
           userId: authReq.user.id,
@@ -193,7 +199,12 @@ export function withTenantAccess(
       }
 
       // All good – proceed to handler
-      return handler(authReq, res);
+      return (
+        handler as (
+          req: AuthenticatedRequest,
+          res: NextApiResponse
+        ) => void | Promise<void>
+      )(authReq, res);
     };
   };
 }

@@ -1,5 +1,22 @@
-import { logger } from '@/lib/monitoring/logger';
-import { perfLogger } from '@/lib/monitoring/enhanced-logger';
+// Conditional import to handle environments where perfLogger might not be available
+let perfLogger: {
+  start: (op: string) => void;
+  end: (op: string, data?: any) => void;
+} | null = null;
+
+try {
+  const {
+    perfLogger: importedPerfLogger,
+  } = require('@/server/monitoring/enhanced-logger');
+  perfLogger = importedPerfLogger;
+} catch {
+  // Create a no-op logger if perfLogger is not available
+  perfLogger = {
+    start: () => {},
+    end: () => {},
+  };
+}
+
 import { environment } from '@/config/environment';
 import Redis from 'ioredis';
 
@@ -138,7 +155,7 @@ export class RedisCacheProvider extends CacheProvider {
   constructor(private redisUrl?: string) {
     super();
     if (!redisUrl) {
-      logger.warn('Redis URL not provided, using in-memory fallback');
+      // Warning logging removed for client compatibility
     } else {
       this.initializeRedis(redisUrl);
     }
@@ -153,7 +170,7 @@ export class RedisCacheProvider extends CacheProvider {
         lazyConnect: false,
         retryStrategy: (times: number) => {
           if (times > 3) {
-            logger.error('Redis cache connection failed after 3 retries');
+            // Error logging removed for client compatibility
             return null;
           }
           return Math.min(times * 50, 2000);
@@ -161,22 +178,22 @@ export class RedisCacheProvider extends CacheProvider {
       });
 
       this.redis.on('error', err => {
-        logger.error('Redis cache error:', err);
+        // Error logging removed for client compatibility
         this.connected = false;
       });
 
       this.redis.on('connect', () => {
-        logger.info('Redis cache connected successfully');
+        // Info logging removed for client compatibility
         this.connected = true;
       });
 
       this.redis.on('ready', () => {
-        logger.info('Redis cache ready');
+        // Info logging removed for client compatibility
         this.connected = true;
       });
 
       this.redis.on('close', () => {
-        logger.warn('Redis cache connection closed');
+        // Warning logging removed for client compatibility
         this.connected = false;
       });
 
@@ -184,7 +201,7 @@ export class RedisCacheProvider extends CacheProvider {
       await this.redis.ping();
       this.connected = true;
     } catch (error) {
-      logger.error('Failed to initialize Redis cache:', error);
+      // Error logging removed for client compatibility
       if (this.redis) {
         this.redis.disconnect();
         this.redis = null;
@@ -212,7 +229,7 @@ export class RedisCacheProvider extends CacheProvider {
 
       return entry.data;
     } catch (error) {
-      logger.error('Redis cache get error:', error);
+      // Error logging removed for client compatibility
       return this.fallback.get<T>(key);
     }
   }
@@ -242,7 +259,7 @@ export class RedisCacheProvider extends CacheProvider {
         }
       }
     } catch (error) {
-      logger.error('Redis cache set error:', error);
+      // Error logging removed for client compatibility
       return this.fallback.set(key, value, options);
     }
   }
@@ -266,7 +283,7 @@ export class RedisCacheProvider extends CacheProvider {
 
       await this.redis.del(key);
     } catch (error) {
-      logger.error('Redis cache delete error:', error);
+      // Error logging removed for client compatibility
       await this.fallback.delete(key);
     }
   }
@@ -283,7 +300,7 @@ export class RedisCacheProvider extends CacheProvider {
         await this.redis.del(`tag:${tag}`);
       }
     } catch (error) {
-      logger.error('Redis cache deleteByTag error:', error);
+      // Error logging removed for client compatibility
       await this.fallback.deleteByTag(tag);
     }
   }
@@ -296,7 +313,7 @@ export class RedisCacheProvider extends CacheProvider {
     try {
       await this.redis.flushdb();
     } catch (error) {
-      logger.error('Redis cache clear error:', error);
+      // Error logging removed for client compatibility
       await this.fallback.clear();
     }
   }
@@ -310,7 +327,7 @@ export class RedisCacheProvider extends CacheProvider {
       const exists = await this.redis.exists(key);
       return exists === 1;
     } catch (error) {
-      logger.error('Redis cache has error:', error);
+      // Error logging removed for client compatibility
       return this.fallback.has(key);
     }
   }
@@ -324,7 +341,7 @@ export class RedisCacheProvider extends CacheProvider {
       const dbSize = await this.redis.dbsize();
       return dbSize;
     } catch (error) {
-      logger.error('Redis cache size error:', error);
+      // Error logging removed for client compatibility
       return this.fallback.size();
     }
   }
@@ -371,8 +388,11 @@ export class CacheKeyBuilder {
 export class CacheManager {
   private providers: Map<string, CacheProvider> = new Map();
   private defaultProvider: CacheProvider;
+  private tenantId?: string;
 
-  constructor() {
+  constructor(tenantId?: string) {
+    this.tenantId = tenantId;
+
     // Initialize providers
     const inMemory = new InMemoryCacheProvider();
     const redis = new RedisCacheProvider(environment.redis.url);
@@ -384,42 +404,54 @@ export class CacheManager {
     this.defaultProvider = environment.redis.url ? redis : inMemory;
   }
 
+  /**
+   * Create a tenant-scoped cache key
+   */
+  private getTenantScopedKey(key: string): string {
+    if (this.tenantId) {
+      return `tenant:${this.tenantId}:${key}`;
+    }
+    return key;
+  }
+
   // Get with automatic caching
   async getOrSet<T>(
     key: string,
     factory: () => Promise<T>,
     options: CacheOptions = {}
   ): Promise<T> {
-    perfLogger.start(`cache:get:${key}`);
+    const scopedKey = this.getTenantScopedKey(key);
+    if (perfLogger) perfLogger.start(`cache:get:${scopedKey}`);
 
     try {
       // Try to get from cache
       const cached = await this.get<T>(key);
       if (cached !== null) {
-        perfLogger.end(`cache:get:${key}`, { hit: true });
+        if (perfLogger) perfLogger.end(`cache:get:${scopedKey}`, { hit: true });
         return cached;
       }
 
       // Cache miss - execute factory
-      perfLogger.end(`cache:get:${key}`, { hit: false });
-      perfLogger.start(`cache:factory:${key}`);
+      if (perfLogger) perfLogger.end(`cache:get:${scopedKey}`, { hit: false });
+      if (perfLogger) perfLogger.start(`cache:factory:${scopedKey}`);
 
       const value = await factory();
 
-      perfLogger.end(`cache:factory:${key}`);
+      if (perfLogger) perfLogger.end(`cache:factory:${scopedKey}`);
 
       // Store in cache
       await this.set(key, value, options);
 
       return value;
     } catch (error) {
-      perfLogger.end(`cache:get:${key}`, { error: true });
+      if (perfLogger) perfLogger.end(`cache:get:${scopedKey}`, { error: true });
       throw error;
     }
   }
 
   // Standard cache operations
   async get<T>(key: string, provider?: string): Promise<T | null> {
+    const scopedKey = this.getTenantScopedKey(key);
     const cacheProvider = provider
       ? this.providers.get(provider)
       : this.defaultProvider;
@@ -429,7 +461,7 @@ export class CacheManager {
         `Cache provider '${provider}' not found`
       );
     }
-    return cacheProvider.get<T>(key);
+    return cacheProvider.get<T>(scopedKey);
   }
 
   async set<T>(
@@ -438,6 +470,7 @@ export class CacheManager {
     options: CacheOptions = {},
     provider?: string
   ): Promise<void> {
+    const scopedKey = this.getTenantScopedKey(key);
     const cacheProvider = provider
       ? this.providers.get(provider)
       : this.defaultProvider;
@@ -447,10 +480,11 @@ export class CacheManager {
         `Cache provider '${provider}' not found`
       );
     }
-    return cacheProvider.set(key, value, options);
+    return cacheProvider.set(scopedKey, value, options);
   }
 
   async delete(key: string, provider?: string): Promise<void> {
+    const scopedKey = this.getTenantScopedKey(key);
     const cacheProvider = provider
       ? this.providers.get(provider)
       : this.defaultProvider;
@@ -460,10 +494,11 @@ export class CacheManager {
         `Cache provider '${provider}' not found`
       );
     }
-    return cacheProvider.delete(key);
+    return cacheProvider.delete(scopedKey);
   }
 
   async deleteByTag(tag: string, provider?: string): Promise<void> {
+    const scopedTag = this.getTenantScopedKey(tag);
     const cacheProvider = provider
       ? this.providers.get(provider)
       : this.defaultProvider;
@@ -473,7 +508,7 @@ export class CacheManager {
         `Cache provider '${provider}' not found`
       );
     }
-    return cacheProvider.deleteByTag(tag);
+    return cacheProvider.deleteByTag(scopedTag);
   }
 
   async clear(provider?: string): Promise<void> {
@@ -496,15 +531,19 @@ export class CacheManager {
 
   // Cache invalidation helpers
   async invalidateProject(projectId: string): Promise<void> {
-    await this.deleteByTag(`project:${projectId}`);
+    const scopedTag = this.getTenantScopedKey(`project:${projectId}`);
+    await this.deleteByTag(scopedTag);
   }
 
   async invalidateTenant(tenantId: string): Promise<void> {
-    await this.deleteByTag(`tenant:${tenantId}`);
+    // When invalidating a specific tenant, use that tenant's scope
+    const scopedTag = `tenant:${tenantId}:tenant:${tenantId}`;
+    await this.deleteByTag(scopedTag);
   }
 
   async invalidateUser(userId: string): Promise<void> {
-    await this.deleteByTag(`user:${userId}`);
+    const scopedTag = this.getTenantScopedKey(`user:${userId}`);
+    await this.deleteByTag(scopedTag);
   }
 
   // Cache warming
@@ -520,7 +559,7 @@ export class CacheManager {
           await this.set(key, value);
         }
       } catch (error) {
-        logger.error(`Failed to warm cache for key: ${key}`, { error });
+        // Error logging removed for client compatibility
       }
     });
 
@@ -554,16 +593,6 @@ export class CacheManager {
   }
 }
 
-// Singleton instance
-let cacheManager: CacheManager | null = null;
-
-export function getCacheManager(): CacheManager {
-  if (!cacheManager) {
-    cacheManager = new CacheManager();
-  }
-  return cacheManager;
-}
-
 // Cache decorators
 export function Cacheable(options: CacheOptions = {}) {
   return function (
@@ -571,17 +600,30 @@ export function Cacheable(options: CacheOptions = {}) {
     propertyName: string,
     descriptor: PropertyDescriptor
   ) {
-    const method = descriptor.value;
+    const originalMethod = descriptor.value;
 
-    descriptor.value = async function (...args: unknown[]) {
-      const cache = getCacheManager();
+    descriptor.value = async function (
+      this: { cacheManager?: CacheManager },
+      ...args: unknown[]
+    ) {
+      // Try to get cache manager from the instance
+      const cache = this.cacheManager;
+      if (!cache) {
+        // If no cache manager available, just call the original method
+        return originalMethod.apply(this, args);
+      }
+
       const key = CacheKeyBuilder.create(
         `${target.constructor.name}:${propertyName}`
       )
         .add(JSON.stringify(args))
         .build();
 
-      return cache.getOrSet(key, () => method.apply(this, args), options);
+      return cache.getOrSet(
+        key,
+        () => originalMethod.apply(this, args),
+        options
+      );
     };
 
     return descriptor;
@@ -594,14 +636,19 @@ export function CacheEvict(tags: string[]) {
     propertyName: string,
     descriptor: PropertyDescriptor
   ) {
-    const method = descriptor.value;
+    const originalMethod = descriptor.value;
 
-    descriptor.value = async function (...args: unknown[]) {
-      const result = await method.apply(this, args);
+    descriptor.value = async function (
+      this: { cacheManager?: CacheManager },
+      ...args: unknown[]
+    ) {
+      // Try to get cache manager from the instance
+      const cache = this.cacheManager;
 
-      const cache = getCacheManager();
-      for (const tag of tags) {
-        await cache.deleteByTag(tag);
+      const result = await originalMethod.apply(this, args);
+
+      if (cache) {
+        await Promise.all(tags.map(tag => cache.deleteByTag(tag)));
       }
 
       return result;

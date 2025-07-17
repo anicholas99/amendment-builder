@@ -3,7 +3,7 @@
  * Handles patent family operations and deduplication
  */
 
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { authenticatePatbase, callPatbaseApi } from '../client';
 import {
   PatentSearchResult,

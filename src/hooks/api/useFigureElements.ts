@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { queryKeys } from '@/config/reactQueryConfig';
 
 interface FigureElement {
@@ -33,7 +33,10 @@ export function useFigureElements(
         throw new Error(errorText || 'Failed to fetch figure elements');
       }
 
-      const data = await response.json();
+      const result = await response.json();
+
+      // Handle standardized API response format
+      const data = result.data || result;
       return data.elements;
     },
     enabled: !!projectId && !!figureId,
@@ -74,15 +77,17 @@ export function useAddFigureElement(
       }
     },
     onSuccess: async () => {
-      // Invalidate and refetch the figure elements query
-      await queryClient.invalidateQueries({
+      // Invalidate queries in the background without waiting
+      queryClient.invalidateQueries({
         queryKey: ['projects', projectId, 'figures', figureId, 'elements'],
       });
 
-      // Also invalidate and refetch the general figures query using the correct key structure
-      await queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: queryKeys.projects.figures(projectId!),
-        refetchType: 'active', // Force active queries to refetch
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ['projects', projectId, 'elements', 'all'],
       });
     },
   });
@@ -122,15 +127,17 @@ export function useUpdateFigureElementCallout(
       }
     },
     onSuccess: async () => {
-      // Invalidate and refetch queries
-      await queryClient.invalidateQueries({
+      // Invalidate queries in the background without waiting
+      queryClient.invalidateQueries({
         queryKey: ['projects', projectId, 'figures', figureId, 'elements'],
       });
 
-      // Also invalidate and refetch the general figures query
-      await queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: queryKeys.projects.figures(projectId!),
-        refetchType: 'active', // Force active queries to refetch
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ['projects', projectId, 'elements', 'all'],
       });
     },
   });
@@ -162,15 +169,17 @@ export function useRemoveFigureElement(
       }
     },
     onSuccess: async () => {
-      // Invalidate and refetch queries
-      await queryClient.invalidateQueries({
+      // Invalidate queries in the background without waiting
+      queryClient.invalidateQueries({
         queryKey: ['projects', projectId, 'figures', figureId, 'elements'],
       });
 
-      // Also invalidate and refetch the general figures query
-      await queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: queryKeys.projects.figures(projectId!),
-        refetchType: 'active', // Force active queries to refetch
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ['projects', projectId, 'elements', 'all'],
       });
     },
   });

@@ -1,11 +1,11 @@
 import React from 'react';
-import { Box, Text, Button } from '@chakra-ui/react';
+import { Button } from '@/components/ui/button';
 import {
-  IconButton,
-  useColorModeValue,
   Tooltip,
-  HStack,
-} from '@chakra-ui/react';
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { FiPlus, FiEdit, FiX } from 'react-icons/fi';
 
 interface DependentClaimSuggestionCardProps {
@@ -22,68 +22,72 @@ interface DependentClaimSuggestionCardProps {
 const DependentClaimSuggestionCard: React.FC<
   DependentClaimSuggestionCardProps
 > = ({ suggestionText, onInsert, onEdit, onDismiss }) => {
-  const bgColor = useColorModeValue('white', 'gray.700');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
-
   // Parse out the claim number if present (for display purposes)
   const match = suggestionText.match(/^(\d+)\.\s*(.*)/);
   const displayNumber = match ? match[1] : '';
   const displayText = match ? match[2] : suggestionText;
 
   return (
-    <Box
-      borderWidth="1px"
-      borderRadius="md"
-      borderColor={borderColor}
-      p={3}
-      bg={bgColor}
-      boxShadow="sm"
-      position="relative"
-    >
-      <Text fontSize="sm" mb={2}>
-        {displayNumber && (
-          <Text as="span" fontWeight="bold" mr={1}>
-            {displayNumber}.
-          </Text>
-        )}
-        {displayText}
-      </Text>
+    <TooltipProvider>
+      <div className="border border-gray-200 rounded-md p-4 bg-white shadow-sm relative dark:border-gray-600 dark:bg-gray-700">
+        <p className="text-sm mb-2">
+          {displayNumber && (
+            <span className="font-bold mr-1">{displayNumber}.</span>
+          )}
+          {displayText}
+        </p>
 
-      <HStack spacing={2} justifyContent="flex-end" mt={2}>
-        <Tooltip label="Dismiss suggestion">
-          <IconButton
-            icon={<FiX />}
-            aria-label="Dismiss suggestion"
-            size="sm"
-            variant="ghost"
-            colorScheme="gray"
-            onClick={onDismiss}
-          />
-        </Tooltip>
+        <div className="flex justify-end items-center space-x-2 mt-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onDismiss}
+                className="w-8 h-8 p-0"
+              >
+                <FiX className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Dismiss suggestion</p>
+            </TooltipContent>
+          </Tooltip>
 
-        <Tooltip label="Edit before inserting">
-          <IconButton
-            icon={<FiEdit />}
-            aria-label="Edit suggestion"
-            size="sm"
-            variant="ghost"
-            colorScheme="blue"
-            onClick={() => onEdit(suggestionText)}
-          />
-        </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onEdit(suggestionText)}
+                className="w-8 h-8 p-0"
+              >
+                <FiEdit className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Edit before inserting</p>
+            </TooltipContent>
+          </Tooltip>
 
-        <Tooltip label="Insert directly">
-          <Button
-            leftIcon={<FiPlus />}
-            size="sm"
-            colorScheme="blue"
-            onClick={() => onInsert(suggestionText)}
-          >
-            Insert
-          </Button>
-        </Tooltip>
-      </HStack>
-    </Box>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                onClick={() => onInsert(suggestionText)}
+                className="gap-1"
+              >
+                <FiPlus className="h-4 w-4" />
+                Insert
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Insert directly</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+    </TooltipProvider>
   );
 };
 

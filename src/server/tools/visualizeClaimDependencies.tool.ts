@@ -1,5 +1,5 @@
 import { ClaimRepository } from '@/repositories/claimRepository';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { inventionRepository } from '@/repositories/inventionRepository';
 
@@ -15,7 +15,7 @@ export interface ClaimDependencyVisualization {
 
 /**
  * Generate a Mermaid diagram showing claim dependencies
- * 
+ *
  * SECURITY: Always validates tenant ownership before accessing data
  */
 export async function visualizeClaimDependencies(
@@ -38,10 +38,11 @@ export async function visualizeClaimDependencies(
 
     // Get all claims
     const claims = await ClaimRepository.findByInventionId(invention.id);
-    
+
     if (claims.length === 0) {
       return {
-        mermaidDiagram: 'graph TD\n  NoClaimsFound[No claims found in this project]',
+        mermaidDiagram:
+          'graph TD\n  NoClaimsFound[No claims found in this project]',
         summary: {
           totalClaims: 0,
           independentClaims: 0,
@@ -56,18 +57,20 @@ export async function visualizeClaimDependencies(
     const independentClaims: typeof claims = [];
     const dependentClaims: typeof claims = [];
     const dependencies = new Map<number, number[]>(); // claim number -> numbers it depends on
-    
+
     claims.forEach(claim => {
       // Parse claim text to find dependencies
-      const depMatch = claim.text.match(/\b(?:of|according to) claim[s]?\s+(\d+(?:\s*(?:,|and|or)\s*\d+)*)/i);
-      
+      const depMatch = claim.text.match(
+        /\b(?:of|according to) claim[s]?\s+(\d+(?:\s*(?:,|and|or)\s*\d+)*)/i
+      );
+
       if (depMatch) {
         // Extract all claim numbers this claim depends on
         const depNumbers = depMatch[1]
           .split(/\s*(?:,|and|or)\s*/)
           .map(n => parseInt(n.trim()))
           .filter(n => !isNaN(n) && n !== claim.number);
-        
+
         if (depNumbers.length > 0) {
           dependencies.set(claim.number, depNumbers);
           dependentClaims.push(claim);
@@ -81,24 +84,37 @@ export async function visualizeClaimDependencies(
 
     // Generate Mermaid diagram
     let mermaid = 'graph TD\n';
-    
+
     // Style definitions
-    mermaid += '  classDef independent fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#0d47a1\n';
-    mermaid += '  classDef dependent fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,color:#4a148c\n';
-    mermaid += '  classDef missing fill:#ffebee,stroke:#d32f2f,stroke-width:1px,color:#b71c1c\n\n';
-    
+    const colorStyles = [
+      { bg: 'blue.50', borderColor: 'blue.200' },
+      { bg: 'purple.50', borderColor: 'purple.200' },
+      { bg: 'red.50', borderColor: 'red.200' },
+    ];
+
+    // Note: Mermaid requires hex colors, not theme tokens
+    // eslint-disable-next-line local/no-hardcoded-colors
+    mermaid +=
+      '  classDef independent fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#0d47a1\n';
+    // eslint-disable-next-line local/no-hardcoded-colors
+    mermaid +=
+      '  classDef dependent fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,color:#4a148c\n';
+    // eslint-disable-next-line local/no-hardcoded-colors
+    mermaid +=
+      '  classDef inactive fill:#ffebee,stroke:#c62828,stroke-width:1px,color:#b71c1c,opacity:0.6\n';
+
     // Add nodes for all claims
     claims.forEach(claim => {
       const isIndependent = independentClaims.includes(claim);
       const claimType = extractClaimType(claim.text);
       const truncatedText = truncateClaimText(claim.text, 40);
-      
+
       mermaid += `  C${claim.number}["Claim ${claim.number}: ${claimType}<br/>${truncatedText}"]\n`;
       mermaid += `  class C${claim.number} ${isIndependent ? 'independent' : 'dependent'}\n`;
     });
-    
+
     mermaid += '\n';
-    
+
     // Add edges for dependencies
     dependencies.forEach((deps, claimNum) => {
       deps.forEach(depNum => {
@@ -112,10 +128,10 @@ export async function visualizeClaimDependencies(
         }
       });
     });
-    
+
     // Calculate max dependency depth
     const maxDepth = calculateMaxDepth(claims, dependencies);
-    
+
     return {
       mermaidDiagram: mermaid,
       summary: {
@@ -126,10 +142,13 @@ export async function visualizeClaimDependencies(
       },
     };
   } catch (error) {
-    logger.error('[VisualizeClaimDependenciesTool] Failed to generate visualization', {
-      projectId,
-      error,
-    });
+    logger.error(
+      '[VisualizeClaimDependenciesTool] Failed to generate visualization',
+      {
+        projectId,
+        error,
+      }
+    );
     throw error;
   }
 }
@@ -151,13 +170,13 @@ function extractClaimType(claimText: string): string {
     { pattern: /^The\s+process\s+of\s+claim/i, type: 'Process (dep)' },
     { pattern: /^The\s+device\s+of\s+claim/i, type: 'Device (dep)' },
   ];
-  
+
   for (const { pattern, type } of patterns) {
     if (pattern.test(claimText)) {
       return type;
     }
   }
-  
+
   return 'Unknown';
 }
 
@@ -166,12 +185,15 @@ function extractClaimType(claimText: string): string {
  */
 function truncateClaimText(text: string, maxLength: number): string {
   // Remove the preamble
-  const withoutPreamble = text.replace(/^(A|An|The)\s+(system|method|apparatus|process|device|computer[- ]readable\s+medium)\s+(of\s+claim\s+\d+\s*,?\s*)?(comprising|including|having|wherein|further\s+comprising)?\s*/i, '');
-  
+  const withoutPreamble = text.replace(
+    /^(A|An|The)\s+(system|method|apparatus|process|device|computer[- ]readable\s+medium)\s+(of\s+claim\s+\d+\s*,?\s*)?(comprising|including|having|wherein|further\s+comprising)?\s*/i,
+    ''
+  );
+
   if (withoutPreamble.length <= maxLength) {
     return withoutPreamble;
   }
-  
+
   return withoutPreamble.substring(0, maxLength - 3) + '...';
 }
 
@@ -183,21 +205,21 @@ function calculateMaxDepth(
   dependencies: Map<number, number[]>
 ): number {
   const depths = new Map<number, number>();
-  
+
   // Initialize all claims with depth 0
   claims.forEach(claim => depths.set(claim.number, 0));
-  
+
   // Calculate depths using DFS
   const calculateDepth = (claimNum: number, visited: Set<number>): number => {
     if (visited.has(claimNum)) return depths.get(claimNum) || 0;
     visited.add(claimNum);
-    
+
     const deps = dependencies.get(claimNum) || [];
     if (deps.length === 0) {
       depths.set(claimNum, 0);
       return 0;
     }
-    
+
     const maxParentDepth = Math.max(
       ...deps.map(dep => calculateDepth(dep, visited))
     );
@@ -205,8 +227,8 @@ function calculateMaxDepth(
     depths.set(claimNum, depth);
     return depth;
   };
-  
+
   claims.forEach(claim => calculateDepth(claim.number, new Set()));
-  
+
   return Math.max(...Array.from(depths.values()));
-} 
+}

@@ -1,6 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { showSuccessToast } from '@/utils/toast';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/utils/toast';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { useUpdateProjectMutation } from '@/hooks/api/useProjects';
 
@@ -22,11 +21,9 @@ export function useRenameProject(options?: any) {
       },
       {
         onSuccess: (_, vars) => {
-          showSuccessToast(
-            toast,
-            'Project renamed',
-            `Project renamed to "${variables.newName}"`
-          );
+          toast.success('Project renamed', {
+            description: `Project renamed to "${variables.newName}"`,
+          });
           queryClient.invalidateQueries({ queryKey: ['projects'] });
           queryClient.invalidateQueries({
             queryKey: ['project', variables.projectId],

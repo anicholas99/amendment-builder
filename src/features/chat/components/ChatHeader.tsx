@@ -1,15 +1,14 @@
 import React from 'react';
-import {
-  Box,
-  Flex,
-  HStack,
-  VStack,
-  Text,
-  Avatar,
-  IconButton,
-  Tooltip,
-} from '@chakra-ui/react';
 import { FiCpu, FiRefreshCw, FiTrash2 } from 'react-icons/fi';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { AssistantInfo } from '../types';
 
 interface ChatHeaderProps {
@@ -24,54 +23,69 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onClearChat,
 }) => {
   return (
-    <Box
-      bg="bg.secondary"
-      borderBottom="1px solid"
-      borderColor="border.primary"
-      boxShadow="sm"
-    >
-      <Flex justify="space-between" align="center" p={4}>
-        <HStack spacing={3}>
+    <div className="bg-card border-b border-border shadow-sm">
+      <div className="flex justify-between items-center p-4">
+        <div className="flex items-center space-x-3">
           <Avatar
-            size="sm"
-            bg={assistantInfo.color}
-            icon={<FiCpu />}
-            boxShadow="sm"
-          />
-          <VStack align="start" spacing={0}>
-            <Text fontSize="sm" fontWeight="600" color="text.primary">
+            className="w-8 h-8 shadow-sm"
+            style={{ backgroundColor: assistantInfo.color }}
+          >
+            <AvatarFallback className="bg-transparent text-white">
+              <FiCpu className="w-4 h-4" />
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex flex-col items-start space-y-0">
+            <span className="text-sm font-semibold text-foreground">
               {assistantInfo.title}
-            </Text>
-            <Text fontSize="xs" color="text.secondary">
+            </span>
+            <span className="text-xs text-muted-foreground">
               {assistantInfo.description}
-            </Text>
-          </VStack>
-        </HStack>
-        <HStack spacing={1}>
-          <Tooltip label="Refresh conversation" placement="top">
-            <IconButton
-              icon={<FiRefreshCw />}
-              aria-label="Refresh conversation"
-              size="xs"
-              variant="ghost"
-              color="text.secondary"
-              _hover={{ bg: 'bg.hover' }}
-              onClick={onRefresh}
-            />
-          </Tooltip>
-          <Tooltip label="Clear conversation" placement="top">
-            <IconButton
-              icon={<FiTrash2 />}
-              aria-label="Clear conversation"
-              size="xs"
-              variant="ghost"
-              color="red.500"
-              _hover={{ bg: 'red.50', _dark: { bg: 'red.900' } }}
-              onClick={onClearChat}
-            />
-          </Tooltip>
-        </HStack>
-      </Flex>
-    </Box>
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center space-x-1">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    'h-6 w-6 p-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  )}
+                  onClick={onRefresh}
+                  aria-label="Refresh conversation"
+                >
+                  <FiRefreshCw className="w-3 h-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Refresh conversation</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    'h-6 w-6 p-0 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20'
+                  )}
+                  onClick={onClearChat}
+                  aria-label="Clear conversation"
+                >
+                  <FiTrash2 className="w-3 h-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Clear conversation</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </div>
+    </div>
   );
 };

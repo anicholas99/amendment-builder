@@ -5,9 +5,9 @@
  * This service orchestrates AI calls, validation, and retry logic.
  */
 
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { processWithOpenAI } from '@/server/ai/aiService';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { renderPromptTemplate } from '@/server/prompts/prompts/utils';
 import {
   CLAIM_DRAFT_SYSTEM_MESSAGE_V1,
@@ -498,6 +498,3 @@ export class ClaimGenerationService {
     return null;
   }
 }
-
-// Export singleton instance
-export const claimGenerationService = new ClaimGenerationService();

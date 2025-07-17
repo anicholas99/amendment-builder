@@ -2,19 +2,13 @@
  * Internal Service Authentication
  *
  * Implements OAuth 2.0 Client Credentials flow for internal service authentication.
- * This replaces the static INTERNAL_API_KEY approach with short-lived JWT tokens.
- *
- * Migration path:
- * 1. Services can continue using INTERNAL_API_KEY during transition
- * 2. New services should use OAuth Client Credentials
- * 3. Once all services migrated, INTERNAL_API_KEY support will be removed
+ * Uses short-lived JWT tokens for secure service-to-service communication.
  */
 
 import { NextApiRequest } from 'next';
 import jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
-import { logger } from '@/lib/monitoring/logger';
-import { environment } from '@/config/environment';
+import { logger } from '@/server/logger';
 import { env } from '@/config/env';
 
 // Cache for JWKS client
@@ -130,7 +124,7 @@ export function extractBearerToken(req: NextApiRequest): string | null {
 
 /**
  * Check if request is from an authenticated internal service
- * Supports both legacy API key and new OAuth tokens
+ * Only supports OAuth bearer tokens - legacy API key support has been removed
  */
 export async function authenticateInternalService(
   req: NextApiRequest
@@ -140,7 +134,7 @@ export async function authenticateInternalService(
   serviceAccount?: ServiceAccount;
   tenantId?: string;
 }> {
-  // Check for new OAuth bearer token first
+  // Only check for OAuth bearer tokens
   const bearerToken = extractBearerToken(req);
   if (bearerToken) {
     const serviceAccount = await verifyServiceToken(bearerToken);
@@ -152,29 +146,6 @@ export async function authenticateInternalService(
         tenantId: serviceAccount.tenantId,
       };
     }
-  }
-
-  // Fall back to legacy API key for backward compatibility
-  const apiKey = req.headers['x-internal-api-key'] as string | undefined;
-  const expectedKey = environment.isProduction
-    ? env.INTERNAL_API_KEY || ''
-    : environment.api.internalApiKey;
-
-  if (apiKey && apiKey === expectedKey && expectedKey.length > 0) {
-    // Legacy authentication - require tenant slug header
-    const tenantSlug = req.headers['x-tenant-slug'] as string | undefined;
-
-    logger.warn('Legacy internal API key used - please migrate to OAuth', {
-      path: req.url,
-      method: req.method,
-      hasTenantSlug: !!tenantSlug,
-    });
-
-    return {
-      isAuthenticated: true,
-      isLegacy: true,
-      tenantId: tenantSlug,
-    };
   }
 
   return {

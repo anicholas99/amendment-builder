@@ -6,24 +6,11 @@
  */
 
 import React from 'react';
-import {
-  Box,
-  Text,
-  Heading,
-  SimpleGrid,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatHelpText,
-  List,
-  ListItem,
-  ListIcon,
-  Progress,
-  Badge,
-  Flex,
-  Icon,
-} from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
 import { FiAlertCircle, FiEdit3, FiBookOpen } from 'react-icons/fi';
+import { useThemeContext } from '@/contexts/ThemeContext';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import {
   ExaminerStructuredDeepAnalysis,
   RelevanceCalculation,
@@ -39,14 +26,21 @@ interface OverallRelevanceSectionProps {
 export const OverallRelevanceSection: React.FC<
   OverallRelevanceSectionProps
 > = ({ relevanceData, examinerData, isStructuredFormat }) => {
+  const { isDarkMode } = useThemeContext();
+
   // Handle null relevanceData
   if (!relevanceData) {
     return (
-      <Box mb={6}>
-        <Text color="text.tertiary" fontSize="sm">
+      <div className="mb-6">
+        <p
+          className={cn(
+            'text-sm',
+            isDarkMode ? 'text-gray-400' : 'text-gray-600'
+          )}
+        >
           No relevance data available
-        </Text>
-      </Box>
+        </p>
+      </div>
     );
   }
 
@@ -54,183 +48,207 @@ export const OverallRelevanceSection: React.FC<
 
   if (isStructuredFormat && examinerData) {
     return (
-      <Box mb={6}>
-        <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={5}>
-          <Box
-            bg="white"
-            _dark={{ bg: 'gray.800', borderColor: 'gray.600' }}
-            p={4}
-            borderRadius="lg"
-            borderWidth="1px"
-            borderColor="gray.200"
-            boxShadow="sm"
+      <div className="mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+          <div
+            className={cn(
+              'p-4 rounded-lg border shadow-sm',
+              isDarkMode
+                ? 'bg-gray-800 border-gray-600'
+                : 'bg-white border-gray-200'
+            )}
           >
-            <Text
-              fontSize="xs"
-              fontWeight="medium"
-              color="gray.500"
-              _dark={{ color: 'gray.400' }}
-              mb={1}
+            <p
+              className={cn(
+                'text-xs font-medium mb-1',
+                isDarkMode ? 'text-gray-400' : 'text-gray-600'
+              )}
             >
               REJECTION DETERMINATION
-            </Text>
-            <Text
-              fontSize="2xl"
-              fontWeight="bold"
-              color={getRejectionColor(
-                examinerData.overallAssessment.overallRejection ||
-                  'Not Rejected'
-              )}
-              mb={1}
+            </p>
+            <p
+              className="text-2xl font-bold mb-1"
+              style={{
+                color: getRejectionColor(
+                  examinerData.overallAssessment.overallRejection ||
+                    'Not Rejected'
+                ) as any,
+              }}
             >
               {examinerData.overallAssessment.overallRejection ||
                 'Not Rejected'}
-            </Text>
-            <Text fontSize="sm" color="gray.600" _dark={{ color: 'gray.400' }}>
+            </p>
+            <p
+              className={cn(
+                'text-sm',
+                isDarkMode ? 'text-gray-400' : 'text-gray-600'
+              )}
+            >
               Patentability:{' '}
               {Math.round(
                 examinerData.overallAssessment.patentabilityScore * 100
               )}
               %
-            </Text>
-          </Box>
+            </p>
+          </div>
 
-          <Box
-            bg="white"
-            _dark={{ bg: 'gray.800', borderColor: 'gray.600' }}
-            p={4}
-            borderRadius="lg"
-            borderWidth="1px"
-            borderColor="gray.200"
-            boxShadow="sm"
+          <div
+            className={cn(
+              'p-4 rounded-lg border shadow-sm',
+              isDarkMode
+                ? 'bg-gray-800 border-gray-600'
+                : 'bg-white border-gray-200'
+            )}
           >
-            <Text
-              fontSize="xs"
-              fontWeight="medium"
-              color="gray.500"
-              _dark={{ color: 'gray.400' }}
-              mb={3}
+            <p
+              className={cn(
+                'text-xs font-medium mb-3',
+                isDarkMode ? 'text-gray-400' : 'text-gray-600'
+              )}
             >
               REJECTION BASIS
-            </Text>
-            <List spacing={2} fontSize="sm">
+            </p>
+            <div className="space-y-2 text-sm">
               {examinerData.overallAssessment.keyConcerns.map((concern, i) => (
-                <ListItem
+                <div
                   key={i}
-                  color="gray.700"
-                  _dark={{ color: 'gray.300' }}
-                  display="flex"
-                  alignItems="flex-start"
+                  className={cn(
+                    'flex items-start',
+                    isDarkMode ? 'text-gray-300' : 'text-gray-900'
+                  )}
                 >
-                  <ListIcon as={FiAlertCircle} color="orange.500" mt="3px" />
-                  <Text lineHeight="tall">{concern}</Text>
-                </ListItem>
+                  <FiAlertCircle className="w-4 h-4 text-orange-500 mt-1 mr-2 flex-shrink-0" />
+                  <p className="leading-relaxed">{concern}</p>
+                </div>
               ))}
-            </List>
-          </Box>
+            </div>
+          </div>
 
-          <Box
-            bg="white"
-            _dark={{ bg: 'gray.800', borderColor: 'gray.600' }}
-            p={4}
-            borderRadius="lg"
-            borderWidth="1px"
-            borderColor="gray.200"
-            boxShadow="sm"
+          <div
+            className={cn(
+              'p-4 rounded-lg border shadow-sm',
+              isDarkMode
+                ? 'bg-gray-800 border-gray-600'
+                : 'bg-white border-gray-200'
+            )}
           >
-            <Text
-              fontSize="xs"
-              fontWeight="medium"
-              color="gray.500"
-              _dark={{ color: 'gray.400' }}
-              mb={3}
+            <p
+              className={cn(
+                'text-xs font-medium mb-3',
+                isDarkMode ? 'text-gray-400' : 'text-gray-600'
+              )}
             >
               STRATEGIC RECOMMENDATIONS
-            </Text>
-            <List spacing={2} fontSize="sm">
+            </p>
+            <div className="space-y-2 text-sm">
               {examinerData.overallAssessment.strategicRecommendations.map(
                 (suggestion, i) => (
-                  <ListItem
+                  <div
                     key={i}
-                    color="gray.700"
-                    _dark={{ color: 'gray.300' }}
-                    display="flex"
-                    alignItems="flex-start"
+                    className={cn(
+                      'flex items-start',
+                      isDarkMode ? 'text-gray-300' : 'text-gray-900'
+                    )}
                   >
-                    <ListIcon as={FiEdit3} color="blue.500" mt="3px" />
-                    <Text lineHeight="tall">{suggestion}</Text>
-                  </ListItem>
+                    <FiEdit3 className="w-4 h-4 text-blue-500 mt-1 mr-2 flex-shrink-0" />
+                    <p className="leading-relaxed">{suggestion}</p>
+                  </div>
                 )
               )}
-            </List>
-          </Box>
-        </SimpleGrid>
+            </div>
+          </div>
+        </div>
 
         {/* Office Action Style Rejection Summary */}
         {examinerData.overallAssessment.rejectionSummary && (
-          <Box
-            mt={4}
-            p={4}
-            bg="gray.50"
-            _dark={{ bg: 'gray.700' }}
-            borderRadius="lg"
-            borderLeftWidth="4px"
-            borderLeftColor="blue.400"
+          <div
+            className={cn(
+              'mt-4 p-4 rounded-lg border-l-4 border-blue-400',
+              isDarkMode ? 'bg-gray-700' : 'bg-gray-50'
+            )}
           >
-            <Flex alignItems="center" mb={2}>
-              <Icon as={FiBookOpen} mr={2} color="blue.500" />
-              <Text
-                fontSize="sm"
-                fontWeight="semibold"
-                color="gray.700"
-                _dark={{ color: 'gray.200' }}
+            <div className="flex items-center mb-2">
+              <FiBookOpen className="w-4 h-4 mr-2 text-blue-500" />
+              <p
+                className={cn(
+                  'text-sm font-semibold',
+                  isDarkMode ? 'text-gray-200' : 'text-gray-900'
+                )}
               >
                 USPTO Office Action Summary
-              </Text>
-            </Flex>
-            <Text
-              fontSize="sm"
-              color="gray.600"
-              _dark={{ color: 'gray.300' }}
-              lineHeight="tall"
+              </p>
+            </div>
+            <p
+              className={cn(
+                'text-sm leading-relaxed',
+                isDarkMode ? 'text-gray-300' : 'text-gray-600'
+              )}
             >
               {examinerData.overallAssessment.rejectionSummary}
-            </Text>
-          </Box>
+            </p>
+          </div>
         )}
-      </Box>
+      </div>
     );
   }
 
   // Legacy format display
+  const getBadgeColorClass = (level: string) => {
+    switch (level) {
+      case 'high':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+      case 'medium':
+        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300';
+      default:
+        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+    }
+  };
+
+  const getProgressColorClass = (level: string) => {
+    switch (level) {
+      case 'high':
+        return 'bg-red-500';
+      case 'medium':
+        return 'bg-orange-500';
+      default:
+        return 'bg-green-500';
+    }
+  };
+
   return (
-    <Box mb={6}>
-      <Heading size="xs" mb={3} color="text.primary">
+    <div className="mb-6">
+      <h3
+        className={cn(
+          'text-xs font-semibold mb-3',
+          isDarkMode ? 'text-gray-200' : 'text-gray-900'
+        )}
+      >
         Overall Reference Relevance
-      </Heading>
-      <Flex align="center" mb={3}>
-        <Box width="100%">
-          <Progress
-            value={score * 100}
-            colorScheme={
-              level === 'high' ? 'red' : level === 'medium' ? 'orange' : 'green'
-            }
-            height="8px"
-            borderRadius="full"
-          />
-        </Box>
-        <Box ml={4} minWidth="100px" textAlign="right">
+      </h3>
+      <div className="flex items-center mb-3">
+        <div className="w-full">
+          <div
+            className={cn(
+              'w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700'
+            )}
+          >
+            <div
+              className={cn(
+                'h-2 rounded-full transition-all duration-300',
+                getProgressColorClass(level)
+              )}
+              style={{ width: `${score * 100}%` }}
+            />
+          </div>
+        </div>
+        <div className="ml-4 min-w-[100px] text-right">
           <Badge
-            colorScheme={
-              level === 'high' ? 'red' : level === 'medium' ? 'orange' : 'green'
-            }
-            fontSize="md"
-            p={1}
+            className={cn('text-base px-2 py-1', getBadgeColorClass(level))}
           >
             {Math.round(score * 100)}% Match
           </Badge>
-        </Box>
-      </Flex>
-    </Box>
+        </div>
+      </div>
+    </div>
   );
 };

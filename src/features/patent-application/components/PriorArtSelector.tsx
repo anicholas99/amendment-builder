@@ -1,20 +1,21 @@
 import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Box,
-  Text,
-  Icon,
-  Button,
-  Badge,
-  useColorModeValue,
-  VStack,
-  HStack,
-  Checkbox,
   Tooltip,
-  IconButton,
-  Collapse,
-  Flex,
-} from '@chakra-ui/react';
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { useColorModeValue } from '@/hooks/useColorModeValue';
 import { FiChevronDown, FiChevronUp, FiExternalLink } from 'react-icons/fi';
+import { cn } from '@/lib/utils';
 
 type SavedPriorArt = {
   id: string;
@@ -22,7 +23,7 @@ type SavedPriorArt = {
   title?: string | null;
   abstract?: string | null;
   authors?: string | null;
-  year?: string | null;
+  publicationDate?: string | null;
   notes?: string | null;
   claim1?: string | null;
   summary?: string | null;
@@ -42,14 +43,40 @@ const PriorArtSelector: React.FC<PriorArtSelectorProps> = React.memo(
     const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
     // Use consistent color patterns from the app
-    const borderColor = useColorModeValue('gray.200', 'gray.700');
-    const textColor = useColorModeValue('gray.700', 'gray.200');
-    const mutedTextColor = useColorModeValue('gray.500', 'gray.400');
-    const hoverBg = useColorModeValue('gray.50', 'gray.700');
-    const tableBg = useColorModeValue('white', 'gray.800');
+    const borderColor = useColorModeValue(
+      'hsl(var(--border))',
+      'hsl(var(--border))'
+    );
+    const textColor = useColorModeValue(
+      'hsl(var(--foreground))',
+      'hsl(var(--foreground))'
+    );
+    const mutedTextColor = useColorModeValue(
+      'hsl(var(--muted-foreground))',
+      'hsl(var(--muted-foreground))'
+    );
+    const hoverBg = useColorModeValue(
+      'hsl(var(--accent))',
+      'hsl(var(--accent))'
+    );
+    const tableBg = useColorModeValue(
+      'hsl(var(--background))',
+      'hsl(var(--card))'
+    );
+    const selectedBg = useColorModeValue(
+      'hsl(var(--accent))',
+      'hsl(var(--accent))'
+    );
+    const selectedHoverBg = useColorModeValue(
+      'hsl(var(--accent))',
+      'hsl(var(--accent))'
+    );
 
     // Pre-calculate these outside the map to avoid hook-in-loop errors
-    const detailsBg = useColorModeValue('gray.50', 'gray.700');
+    const detailsBg = useColorModeValue(
+      'hsl(var(--muted))',
+      'hsl(var(--muted))'
+    );
 
     const toggle = (id: string) => {
       if (selectedIds.includes(id)) {
@@ -77,6 +104,39 @@ const PriorArtSelector: React.FC<PriorArtSelectorProps> = React.memo(
       onChange([]);
     };
 
+    // Helper functions to extract data from SavedPriorArt structure
+    const getTitle = (ref: SavedPriorArt): string => {
+      return ref.title || 'No title available';
+    };
+
+    const getAuthors = (ref: SavedPriorArt): string | null => {
+      return ref.authors || null;
+    };
+
+    const getYear = (ref: SavedPriorArt): string | null => {
+      return ref.publicationDate || null;
+    };
+
+    // Debug logging to see what data we actually have
+    React.useEffect(() => {
+      if (priorArtItems.length > 0) {
+        console.log(
+          '[PriorArtSelector] Received priorArtItems:',
+          priorArtItems.map(item => ({
+            id: item.id,
+            patentNumber: item.patentNumber,
+            title: item.title,
+            authors: item.authors,
+            publicationDate: item.publicationDate,
+            extractedTitle: getTitle(item),
+            extractedAuthors: getAuthors(item),
+            extractedYear: getYear(item),
+            availableFields: Object.keys(item),
+          }))
+        );
+      }
+    }, [priorArtItems]);
+
     // Clean HTML from text
     const cleanText = (text: string | null | undefined): string => {
       if (!text) return '';
@@ -95,34 +155,23 @@ const PriorArtSelector: React.FC<PriorArtSelectorProps> = React.memo(
       return text.substring(0, maxLength) + '...';
     };
 
-    // Format date from YYYYMMDD to readable format
+    // Extract and format year from publicationDate (consistent with SavedPriorArtTab)
     const formatDate = (dateStr: string | null | undefined): string => {
       if (!dateStr) return '';
 
-      // Check if it's in YYYYMMDD format (8 digits)
+      // If it's in YYYYMMDD format (8 digits), extract just the year
       if (dateStr.length === 8 && /^\d{8}$/.test(dateStr)) {
-        const year = dateStr.substring(0, 4);
-        const month = dateStr.substring(4, 6);
-        const day = dateStr.substring(6, 8);
-
-        // Create date object and format it
-        const date = new Date(
-          parseInt(year),
-          parseInt(month) - 1,
-          parseInt(day)
-        );
-
-        // Return formatted date (e.g., "Oct 10, 2019")
-        return date.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        });
+        return dateStr.substring(0, 4);
       }
 
       // If it's just a year (4 digits), return as is
       if (dateStr.length === 4 && /^\d{4}$/.test(dateStr)) {
         return dateStr;
+      }
+
+      // If it's a longer string (like ISO date), try to extract year from beginning
+      if (dateStr.length >= 4 && /^\d{4}/.test(dateStr)) {
+        return dateStr.substring(0, 4);
       }
 
       // Otherwise return the original string
@@ -131,295 +180,211 @@ const PriorArtSelector: React.FC<PriorArtSelectorProps> = React.memo(
 
     if (priorArtItems.length === 0) {
       return (
-        <Text fontSize="sm" color="gray.600" textAlign="center">
-          No saved prior art references yet. You can still generate, but
-          including prior art will improve quality.
-        </Text>
+        <div className="py-4 px-3">
+          <p className="text-sm text-text-secondary text-center">
+            No saved prior art references available.
+          </p>
+        </div>
       );
     }
 
     return (
-      <Box mt={4} mb={4}>
+      <div className="p-2">
         {/* Simple header with selection count */}
-        <HStack justify="space-between" mb={3}>
-          <Text fontSize="sm" color={mutedTextColor} fontWeight="medium">
+        <div className="flex justify-between mb-2 flex-wrap gap-2">
+          <p className="text-sm text-muted-foreground font-medium">
             {selectedIds.length} of {priorArtItems.length} references selected
-          </Text>
-          <HStack spacing={2}>
+          </p>
+          <div className="flex space-x-2">
             <Button
-              size="xs"
+              size="sm"
               variant="ghost"
               onClick={selectAll}
-              isDisabled={selectedIds.length === priorArtItems.length}
+              disabled={selectedIds.length === priorArtItems.length}
+              className="text-xs"
             >
               Select All
             </Button>
             <Button
-              size="xs"
+              size="sm"
               variant="ghost"
               onClick={selectNone}
-              isDisabled={selectedIds.length === 0}
+              disabled={selectedIds.length === 0}
+              className="text-xs"
             >
               Clear All
             </Button>
-          </HStack>
-        </HStack>
+          </div>
+        </div>
 
-        {/* Prior Art Items - using ReferenceCard style */}
-        <VStack
-          align="stretch"
-          spacing={2}
-          maxH="400px"
-          overflowY="auto"
-          pr={2}
-        >
+        {/* Prior Art Items - with flexible height */}
+        <div className="flex flex-col space-y-2 max-h-96 overflow-y-auto overflow-x-hidden pr-1">
           {priorArtItems.map(ref => {
             const isSelected = selectedIds.includes(ref.id);
             const isExpanded = expandedItems.has(ref.id);
+            const getAbstract = (ref: SavedPriorArt): string | null => {
+              return ref.abstract || null;
+            };
+
             const hasDetails =
-              ref.abstract || ref.summary || ref.claim1 || ref.notes;
+              getAbstract(ref) || ref.summary || ref.claim1 || ref.notes;
 
             return (
-              <Box
+              <div
                 key={ref.id}
-                borderWidth="1px"
-                borderRadius="md"
-                p={3}
-                bg={tableBg}
-                borderColor={isSelected ? 'blue.300' : borderColor}
-                _hover={{ bg: hoverBg }}
-                transition="background-color 0.15s ease-out, border-color 0.15s ease-out"
+                className="border border-border rounded-md p-2"
+                style={{
+                  backgroundColor: isSelected ? selectedBg : tableBg,
+                  borderColor: isSelected ? 'border-blue-400' : borderColor,
+                  transition: 'all 0.15s ease-out',
+                }}
               >
-                <VStack align="stretch" spacing={2}>
+                <div className="flex flex-col space-y-2">
                   {/* Main row with checkbox and info */}
-                  <Flex justify="space-between" align="start">
-                    <HStack spacing={3} flex={1} minWidth={0}>
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex space-x-2 flex-1 min-w-0 items-start">
                       <Checkbox
-                        isChecked={isSelected}
-                        onChange={() => toggle(ref.id)}
-                        colorScheme="blue"
+                        checked={isSelected}
+                        onCheckedChange={() => toggle(ref.id)}
                       />
 
-                      <VStack align="start" spacing={1} flex={1} minWidth={0}>
-                        <HStack spacing={2} align="center">
-                          <Text
-                            fontSize="sm"
-                            fontWeight="medium"
-                            color={textColor}
-                          >
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <div className="flex items-start gap-2">
+                          <span className="font-medium text-xs text-foreground text-left">
                             {ref.patentNumber?.replace(/-/g, '') ||
                               'Unknown Patent'}
-                          </Text>
-                          {ref.year && (
-                            <Badge
-                              colorScheme="gray"
-                              variant="subtle"
-                              size="sm"
-                            >
-                              {formatDate(ref.year)}
-                            </Badge>
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col gap-0 items-start">
+                          <p className="text-xs line-clamp-1 text-foreground text-left">
+                            {getTitle(ref)}
+                          </p>
+                          {getAuthors(ref) && (
+                            <p className="text-[10px] text-muted-foreground text-left">
+                              {getAuthors(ref)}{' '}
+                              {getYear(ref)
+                                ? `(${formatDate(getYear(ref))})`
+                                : ''}
+                            </p>
                           )}
-                        </HStack>
-
-                        <Box title={ref.title || undefined}>
-                          <Text
-                            fontSize="2xs"
-                            color={textColor}
-                            noOfLines={2}
-                            lineHeight="tight"
-                          >
-                            {ref.title || 'No title available'}
-                          </Text>
-                        </Box>
-
-                        {ref.authors && (
-                          <Box title={ref.authors}>
-                            <Text
-                              fontSize="2xs"
-                              color={mutedTextColor}
-                              noOfLines={1}
-                            >
-                              {truncateText(ref.authors, 40)}
-                            </Text>
-                          </Box>
-                        )}
-                      </VStack>
-                    </HStack>
+                        </div>
+                      </div>
+                    </div>
 
                     {/* Action buttons */}
-                    <HStack spacing={1}>
+                    <div className="flex space-x-1 shrink-0">
                       {ref.patentNumber && (
-                        <Tooltip label="View on Google Patents">
-                          <IconButton
-                            aria-label="View on Google Patents"
-                            icon={
-                              <Icon
-                                as={FiExternalLink}
-                                color="text.secondary"
-                              />
-                            }
-                            size="xs"
-                            variant="ghost"
-                            onClick={() => {
-                              window.open(
-                                `https://patents.google.com/patent/${ref.patentNumber?.replace(/-/g, '')}/en`,
-                                '_blank'
-                              );
-                            }}
-                            _hover={{
-                              color: 'text.primary',
-                              bg: 'bg.hover',
-                            }}
-                          />
-                        </Tooltip>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                aria-label="View on Google Patents"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  window.open(
+                                    `https://patents.google.com/patent/${ref.patentNumber?.replace(/-/g, '')}/en`,
+                                    '_blank'
+                                  );
+                                }}
+                                className="text-muted-foreground hover:text-foreground bg-background hover:bg-accent"
+                              >
+                                <FiExternalLink className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>View on Google Patents</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
 
                       {hasDetails && (
-                        <Tooltip
-                          label={isExpanded ? 'Hide details' : 'Show details'}
-                        >
-                          <IconButton
-                            aria-label={
-                              isExpanded ? 'Hide details' : 'Show details'
-                            }
-                            icon={
-                              <Icon
-                                as={isExpanded ? FiChevronUp : FiChevronDown}
-                                color="text.secondary"
-                              />
-                            }
-                            size="xs"
-                            variant="ghost"
-                            onClick={() => toggleExpanded(ref.id)}
-                            _hover={{
-                              color: 'text.primary',
-                              bg: 'bg.hover',
-                            }}
-                          />
-                        </Tooltip>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                aria-label={
+                                  isExpanded ? 'Hide details' : 'Show details'
+                                }
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => toggleExpanded(ref.id)}
+                                className="text-muted-foreground hover:text-foreground bg-background hover:bg-accent"
+                              >
+                                {isExpanded ? (
+                                  <FiChevronUp className="h-4 w-4" />
+                                ) : (
+                                  <FiChevronDown className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                {isExpanded ? 'Hide details' : 'Show details'}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
-                    </HStack>
-                  </Flex>
+                    </div>
+                  </div>
 
                   {/* Expanded details section */}
-                  {hasDetails && (
-                    <Collapse in={isExpanded} animateOpacity>
-                      <VStack
-                        align="stretch"
-                        spacing={2}
-                        pt={2}
-                        mt={2}
-                        borderTop="1px solid"
-                        borderTopColor={borderColor}
-                      >
-                        {ref.abstract && (
-                          <Box>
-                            <Text
-                              fontSize="2xs"
-                              fontWeight="semibold"
-                              color={textColor}
-                              mb={1}
-                            >
-                              Abstract
-                            </Text>
-                            <Box
-                              fontSize="xs"
-                              color={mutedTextColor}
-                              lineHeight="1.4"
-                              p={2}
-                              bg={detailsBg}
-                              borderRadius="sm"
-                              borderLeft="3px solid"
-                              borderLeftColor="blue.300"
-                            >
-                              {cleanText(ref.abstract)}
-                            </Box>
-                          </Box>
-                        )}
+                  {hasDetails && isExpanded && (
+                    <div className="flex flex-col space-y-3 pt-3 mt-3 border-t border-border">
+                      {getAbstract(ref) && (
+                        <div>
+                          <p className="text-sm font-semibold text-foreground mb-2">
+                            Abstract
+                          </p>
+                          <div className="text-xs text-muted-foreground p-3 bg-muted rounded-md border border-border leading-relaxed">
+                            {cleanText(getAbstract(ref)!)}
+                          </div>
+                        </div>
+                      )}
 
-                        {ref.summary && (
-                          <Box>
-                            <Text
-                              fontSize="2xs"
-                              fontWeight="semibold"
-                              color={textColor}
-                              mb={1}
-                            >
-                              Summary
-                            </Text>
-                            <Box
-                              fontSize="xs"
-                              color={mutedTextColor}
-                              lineHeight="1.4"
-                              p={2}
-                              bg={detailsBg}
-                              borderRadius="sm"
-                              borderLeft="3px solid"
-                              borderLeftColor="green.300"
-                            >
-                              {cleanText(ref.summary)}
-                            </Box>
-                          </Box>
-                        )}
+                      {ref.summary && (
+                        <div>
+                          <p className="text-sm font-semibold text-foreground mb-2">
+                            Summary
+                          </p>
+                          <div className="text-xs text-muted-foreground p-3 bg-muted rounded-md border border-border leading-relaxed">
+                            {cleanText(ref.summary)}
+                          </div>
+                        </div>
+                      )}
 
-                        {ref.claim1 && (
-                          <Box>
-                            <Text
-                              fontSize="2xs"
-                              fontWeight="semibold"
-                              color={textColor}
-                              mb={1}
-                            >
-                              Main Claim
-                            </Text>
-                            <Box
-                              fontSize="xs"
-                              color={mutedTextColor}
-                              lineHeight="1.4"
-                              p={2}
-                              bg={detailsBg}
-                              borderRadius="sm"
-                              borderLeft="3px solid"
-                              borderLeftColor="purple.300"
-                            >
-                              {cleanText(ref.claim1)}
-                            </Box>
-                          </Box>
-                        )}
+                      {ref.claim1 && (
+                        <div>
+                          <p className="text-sm font-semibold text-foreground mb-2">
+                            Main Claim
+                          </p>
+                          <div className="text-xs text-muted-foreground p-3 bg-muted rounded-md border border-border leading-relaxed">
+                            {cleanText(ref.claim1)}
+                          </div>
+                        </div>
+                      )}
 
-                        {ref.notes && (
-                          <Box>
-                            <Text
-                              fontSize="2xs"
-                              fontWeight="semibold"
-                              color={textColor}
-                              mb={1}
-                            >
-                              Notes
-                            </Text>
-                            <Box
-                              fontSize="xs"
-                              color={mutedTextColor}
-                              lineHeight="1.4"
-                              p={2}
-                              bg={detailsBg}
-                              borderRadius="sm"
-                              borderLeft="3px solid"
-                              borderLeftColor="orange.300"
-                            >
-                              {cleanText(ref.notes)}
-                            </Box>
-                          </Box>
-                        )}
-                      </VStack>
-                    </Collapse>
+                      {ref.notes && (
+                        <div>
+                          <p className="text-sm font-semibold text-foreground mb-2">
+                            Notes
+                          </p>
+                          <div className="text-xs text-muted-foreground p-3 bg-muted rounded-md border border-border leading-relaxed">
+                            {cleanText(ref.notes)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
-                </VStack>
-              </Box>
+                </div>
+              </div>
             );
           })}
-        </VStack>
-      </Box>
+        </div>
+      </div>
     );
   }
 );

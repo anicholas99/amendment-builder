@@ -1,9 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { inventionDataService } from '@/server/services/invention-data.server-service';
-import { logger } from '@/lib/monitoring/logger';
+import { RequestWithServices } from '@/types/middleware';
+import { logger } from '@/server/logger';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Validation schema for updating sections
 const updateSectionSchema = z.object({
@@ -11,7 +12,8 @@ const updateSectionSchema = z.object({
   data: z.any(), // Allow any data structure for flexibility
 });
 
-async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { inventionService } = (req as RequestWithServices).services;
   const { projectId } = req.query;
 
   if (!projectId || typeof projectId !== 'string') {
@@ -30,35 +32,35 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     // Update the specific section using dedicated methods
     switch (section) {
       case 'title':
-        await inventionDataService.updateTitle(projectId, data);
+        await inventionService.updateTitle(projectId, data);
         break;
       case 'summary':
-        await inventionDataService.updateSummary(projectId, data);
+        await inventionService.updateSummary(projectId, data);
         break;
       case 'technicalField':
-        await inventionDataService.updateTechnicalField(projectId, data);
+        await inventionService.updateTechnicalField(projectId, data);
         break;
       case 'features':
-        await inventionDataService.updateFeatures(projectId, data);
+        await inventionService.updateFeatures(projectId, data);
         break;
       case 'advantages':
-        await inventionDataService.updateAdvantages(projectId, data);
+        await inventionService.updateAdvantages(projectId, data);
         break;
       case 'abstract':
-        await inventionDataService.updateAbstract(projectId, data);
+        await inventionService.updateAbstract(projectId, data);
         break;
       case 'noveltyStatement':
       case 'novelty':
-        await inventionDataService.updateNoveltyStatement(projectId, data);
+        await inventionService.updateNoveltyStatement(projectId, data);
         break;
       case 'background':
-        await inventionDataService.updateBackground(projectId, data);
+        await inventionService.updateBackground(projectId, data);
         break;
       case 'useCases':
-        await inventionDataService.updateUseCases(projectId, data);
+        await inventionService.updateUseCases(projectId, data);
         break;
       case 'processSteps':
-        await inventionDataService.updateProcessSteps(projectId, data);
+        await inventionService.updateProcessSteps(projectId, data);
         break;
       default:
         // For sections without dedicated methods, we need to handle them differently
@@ -72,21 +74,21 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     // Return the updated data
-    const updatedData = await inventionDataService.getInventionData(projectId);
+    const updatedData = await inventionService.getInventionData(projectId);
 
     logger.info('[API] Section updated successfully', {
       projectId,
       section,
     });
 
-    return res.status(200).json(updatedData);
+    return apiResponse.ok(res, updatedData);
   } catch (error) {
     logger.error('[API] Error updating section', {
       projectId,
       section,
       error,
     });
-    return res.status(500).json({ error: 'Failed to update section' });
+    return apiResponse.serverError(res, { error: 'Failed to update section' });
   }
 }
 

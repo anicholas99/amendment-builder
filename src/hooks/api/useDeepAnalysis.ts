@@ -7,10 +7,10 @@ import {
   UseQueryOptions,
   UseMutationOptions,
 } from '@tanstack/react-query';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/utils/toast';
 import { DeepAnalysisApiService } from '@/client/services/deep-analysis.client-service';
 import { ApplicationError } from '@/lib/error';
-import { showSuccessToast, showErrorToast } from '@/utils/toast';
+
 import { STALE_TIME } from '@/constants/time';
 import { API_ROUTES } from '@/constants/apiRoutes';
 
@@ -61,22 +61,20 @@ export function useRunDeepAnalysis(
       DeepAnalysisApiService.runDeepAnalysis(jobId),
     onSuccess: (data, jobId) => {
       if (data.success) {
-        showSuccessToast(
-          toast,
-          'Deep analysis started!',
-          'This may take up to a minute to complete. The panel will update automatically when ready.'
-        );
+        toast.success('Deep analysis started!', {
+          description:
+            'This may take up to a minute to complete. The panel will update automatically when ready.',
+        });
         // Invalidate queries that depend on this, like the job details
         queryClient.invalidateQueries({ queryKey: ['citationJob', jobId] });
         queryClient.invalidateQueries({ queryKey: deepAnalysisQueryKeys.all });
       } else {
-        showErrorToast(toast, 'Failed to start deep analysis.');
+        toast.error('Failed to start deep analysis.');
       }
     },
     onError: error => {
-      showErrorToast(
-        toast,
-        error.message || 'An error occurred while starting deep analysis.'
+      toast.error(
+        error.message || 'Failed to start deep analysis. Please try again.'
       );
     },
     ...options,

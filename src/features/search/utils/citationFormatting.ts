@@ -1,4 +1,4 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { CitationLocation } from '@/types/domain/citation';
 import {
   CITATION_DEFAULTS,
@@ -141,7 +141,7 @@ export function formatReasoningScore(score: number | null | undefined): string {
 /**
  * Gets the color scheme for a score value
  * @param score - The score value
- * @returns Color scheme name for Chakra UI
+ * @returns Color scheme name for styling.
  */
 export function getScoreColor(score: number | null | undefined): string {
   if (score === null || score === undefined) return 'gray';
@@ -154,7 +154,7 @@ export function getScoreColor(score: number | null | undefined): string {
 /**
  * Gets the color scheme for a reasoning score
  * @param score - The reasoning score (0-1)
- * @returns Color scheme name for Chakra UI
+ * @returns Color scheme name for styling.
  */
 export function getReasoningScoreColor(
   score: number | null | undefined

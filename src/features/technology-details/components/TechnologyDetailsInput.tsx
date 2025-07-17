@@ -1,15 +1,4 @@
 import React from 'react';
-import {
-  Box,
-  Container,
-  Grid,
-  GridItem,
-  Card,
-  CardBody,
-  Divider,
-  VStack,
-  useColorModeValue,
-} from '@chakra-ui/react';
 import { useViewHeight } from '@/hooks/useViewHeight';
 import { TechnologyInputTextArea } from './TechnologyInputTextArea';
 import { UploadedFigure } from '../hooks/useTechnologyInputFileHandler';
@@ -21,7 +10,6 @@ import {
   TechnologyQuickActions,
   TechnologyFooterActions,
   TechnologyFilesSidebar,
-  TechnologyMobileFiles,
 } from './sections';
 
 export interface TechnologyDetailsInputProps {
@@ -30,10 +18,18 @@ export interface TechnologyDetailsInputProps {
   isProcessing: boolean;
   handleProceed: () => void;
   onFileUpload: (file: File) => Promise<void>;
-  uploadedFiles: string[];
+  uploadedFiles: Array<{
+    id: string;
+    name: string;
+    includeInProcessing: boolean;
+  }>;
   uploadedFigures?: UploadedFigure[];
-  onRemoveTextFile?: (fileName: string) => void;
+  onRemoveTextFile?: (fileName: string) => Promise<void>;
+  onToggleFileInProcessing?: (fileName: string) => void;
   onRemoveFigure?: (figureId: string) => void;
+  onResetFigureNumbers?: () => void;
+  onReorderFigures?: (fromIndex: number, toIndex: number) => void;
+  onUpdateFigureNumber?: (figureId: string, newNumber: string) => void;
   fileInputRef: React.RefObject<HTMLInputElement>;
 }
 
@@ -46,7 +42,11 @@ export const TechnologyDetailsInput: React.FC<TechnologyDetailsInputProps> = ({
   uploadedFiles,
   uploadedFigures = [],
   onRemoveTextFile,
+  onToggleFileInProcessing,
   onRemoveFigure,
+  onResetFigureNumbers,
+  onReorderFigures,
+  onUpdateFigureNumber,
   fileInputRef: externalFileInputRef,
 }) => {
   // Use the drag/drop handler hook
@@ -70,46 +70,15 @@ export const TechnologyDetailsInput: React.FC<TechnologyDetailsInputProps> = ({
     activeFileInputRef.current?.click();
   };
 
-  // Color mode values
-  const contentBg = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const insetShadow = useColorModeValue(
-    'inset 0 1px 2px rgba(0,0,0,0.05)',
-    'inset 0 1px 2px rgba(0,0,0,0.2)'
-  );
-  const focusBoxShadow = useColorModeValue(
-    `inset 0 1px 2px rgba(0,0,0,0.05), 0 0 0 3px rgba(66, 153, 225, 0.2)`,
-    `inset 0 1px 2px rgba(0,0,0,0.2), 0 0 0 3px rgba(66, 153, 225, 0.3)`
-  );
-
   // Get proper view height
   const viewHeight = useViewHeight(80);
 
   return (
-    <Box
-      height="100%"
-      display="flex"
-      flexDirection="column"
-      bg={contentBg}
-      overflow="hidden"
-    >
+    <div className="h-full flex flex-col bg-background overflow-hidden">
       {/* Main Content */}
-      <Box
-        flex="1"
-        pt={{ base: 4, md: 6 }}
-        px={{ base: 4, md: 6 }}
-        pb={{ base: 2, md: 3 }}
-        display="flex"
-        flexDirection="column"
-        overflow="auto"
-      >
-        <Container
-          maxW="7xl"
-          height="100%"
-          display="flex"
-          flexDirection="column"
-        >
-          <VStack spacing={{ base: 3, md: 4 }} height="100%" align="stretch">
+      <div className="flex-1 pt-4 md:pt-6 px-4 md:px-6 pb-2 md:pb-3 flex flex-col overflow-auto">
+        <div className="w-full h-full flex flex-col">
+          <div className="flex flex-col gap-3 md:gap-4 h-full">
             {/* Welcome Section */}
             <TechnologyWelcomeSection />
 
@@ -117,31 +86,11 @@ export const TechnologyDetailsInput: React.FC<TechnologyDetailsInputProps> = ({
             <TechnologyQuickActions onUploadClick={triggerFileInput} />
 
             {/* Main Input Area - Unified design */}
-            <Box width="100%" flex="1" minH="0" overflow="visible">
-              <Grid
-                templateColumns={{ base: '1fr', lg: '1.5fr 0.6fr' }}
-                gap={{ base: 4, md: 5 }}
-                height="100%"
-              >
+            <div className="w-full flex-1 min-h-0 overflow-visible">
+              <div className="grid grid-cols-1 lg:grid-cols-[2fr_0.75fr] gap-4 md:gap-5 h-full">
                 {/* Text Input */}
-                <GridItem height="100%">
-                  <Box
-                    height="100%"
-                    borderWidth="2px"
-                    borderColor={borderColor}
-                    borderRadius="lg"
-                    overflow="hidden"
-                    position="relative"
-                    transition="border-color 0.2s, box-shadow 0.2s"
-                    boxShadow={insetShadow}
-                    _hover={{
-                      borderColor: useColorModeValue('blue.400', 'blue.500'),
-                    }}
-                    _focusWithin={{
-                      borderColor: useColorModeValue('blue.400', 'blue.500'),
-                      boxShadow: focusBoxShadow,
-                    }}
-                  >
+                <div className="h-full">
+                  <div className="h-full border-2 border-border rounded-lg overflow-hidden relative transition-all duration-200 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] hover:border-blue-400 focus-within:border-blue-400 focus-within:shadow-[inset_0_1px_2px_rgba(0,0,0,0.05),_0_0_0_3px_rgba(66,153,225,0.2)]">
                     <TechnologyInputTextArea
                       value={value}
                       onChange={onChange}
@@ -153,45 +102,35 @@ export const TechnologyDetailsInput: React.FC<TechnologyDetailsInputProps> = ({
                       handleDragLeave={handleDragLeave}
                       placeholder="Start describing your invention here..."
                     />
-                  </Box>
-                </GridItem>
+                  </div>
+                </div>
 
                 {/* Files Sidebar - Desktop */}
-                <GridItem display={{ base: 'none', lg: 'block' }} height="100%">
+                <div className="hidden lg:block h-full">
                   <TechnologyFilesSidebar
                     uploadedFiles={uploadedFiles}
                     uploadedFigures={uploadedFigures}
                     uploadingFiles={uploadingFiles}
                     isDragging={isDragging}
                     onRemoveTextFile={onRemoveTextFile}
+                    onToggleFileInProcessing={onToggleFileInProcessing}
                     onRemoveFigure={onRemoveFigure}
+                    onReorderFigures={onReorderFigures}
+                    onUpdateFigureNumber={onUpdateFigureNumber}
                     onFileInputClick={triggerFileInput}
                     onDrop={handleDrop}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                   />
-                </GridItem>
-              </Grid>
-
-              {/* Mobile Files Section */}
-              <TechnologyMobileFiles
-                uploadedFiles={uploadedFiles}
-                uploadedFigures={uploadedFigures}
-                uploadingFiles={uploadingFiles}
-                isDragging={isDragging}
-                onRemoveTextFile={onRemoveTextFile}
-                onRemoveFigure={onRemoveFigure}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-              />
-            </Box>
-          </VStack>
-        </Container>
-      </Box>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Footer - Flush with content */}
-      <Box flexShrink={0}>
+      <div className="flex-shrink-0">
         <TechnologyFooterActions
           value={value}
           uploadedFilesCount={uploadedFiles.length}
@@ -200,7 +139,7 @@ export const TechnologyDetailsInput: React.FC<TechnologyDetailsInputProps> = ({
           isUploading={isUploading}
           onProceed={handleProceed}
         />
-      </Box>
+      </div>
 
       {/* Hidden file input */}
       <input
@@ -211,6 +150,6 @@ export const TechnologyDetailsInput: React.FC<TechnologyDetailsInputProps> = ({
         className="hidden"
         multiple
       />
-    </Box>
+    </div>
   );
 };

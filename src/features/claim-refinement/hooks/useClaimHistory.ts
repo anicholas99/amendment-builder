@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { InventionData } from '@/types';
 
 interface HistoryEntry {
@@ -59,7 +59,7 @@ export const useClaimHistory = (
 
       setCurrentIndex(prev => Math.min(prev + 1, maxHistorySize - 1));
 
-      logger.log('[ClaimHistory] Added history entry:', {
+      logger.info('[ClaimHistory] Added history entry:', {
         description,
         historyLength: history.length + 1,
         currentIndex: currentIndex + 1,
@@ -71,7 +71,7 @@ export const useClaimHistory = (
   // Undo the last change
   const undo = useCallback(() => {
     if (currentIndex <= 0 || !analyzedInvention) {
-      logger.log('[ClaimHistory] Cannot undo - no previous state');
+      logger.info('[ClaimHistory] Cannot undo - no previous state');
       return false;
     }
 
@@ -93,7 +93,7 @@ export const useClaimHistory = (
     setCurrentIndex(currentIndex - 1);
     isUndoRedoOperation.current = false;
 
-    logger.log('[ClaimHistory] Undo performed:', {
+    logger.info('[ClaimHistory] Undo performed:', {
       description: previousEntry.description,
       newIndex: currentIndex - 1,
     });
@@ -110,7 +110,7 @@ export const useClaimHistory = (
   // Redo the next change
   const redo = useCallback(() => {
     if (currentIndex >= history.length - 1 || !analyzedInvention) {
-      logger.log('[ClaimHistory] Cannot redo - no next state');
+      logger.info('[ClaimHistory] Cannot redo - no next state');
       return false;
     }
 
@@ -132,7 +132,7 @@ export const useClaimHistory = (
     setCurrentIndex(currentIndex + 1);
     isUndoRedoOperation.current = false;
 
-    logger.log('[ClaimHistory] Redo performed:', {
+    logger.info('[ClaimHistory] Redo performed:', {
       description: nextEntry.description,
       newIndex: currentIndex + 1,
     });
@@ -150,7 +150,7 @@ export const useClaimHistory = (
   const clearHistory = useCallback(() => {
     setHistory([]);
     setCurrentIndex(-1);
-    logger.log('[ClaimHistory] History cleared');
+    logger.info('[ClaimHistory] History cleared');
   }, []);
 
   // Get the current state info

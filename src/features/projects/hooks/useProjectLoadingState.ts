@@ -2,8 +2,8 @@
  * Custom hook for managing and debugging project loading states
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { useToast } from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
+import { useToast } from '@/hooks/useToastWrapper';
 import { useTimeout } from '@/hooks/useTimeout';
 
 export interface LoadingState {

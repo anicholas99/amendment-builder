@@ -6,8 +6,9 @@ import {
   getRecentMessages,
   deleteProjectHistory,
 } from '@/repositories/chatRepository';
-import { logger } from '@/lib/monitoring/logger';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { logger } from '@/server/logger';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 interface EmptyBody {}
 
@@ -27,18 +28,14 @@ async function baseHandler(
   switch (req.method) {
     case 'GET': {
       const messages = await getRecentMessages(projectId, 50);
-      res.status(200).json({ messages });
-      return;
+      return apiResponse.ok(res, { messages });
     }
     case 'DELETE': {
       await deleteProjectHistory(projectId);
-      res.status(200).json({ success: true });
-      return;
+      return apiResponse.ok(res, { success: true });
     }
     default:
-      res.setHeader('Allow', 'GET, DELETE');
-      res.status(405).end('Method Not Allowed');
-      return;
+      return apiResponse.methodNotAllowed(res, ['GET', 'DELETE']);
   }
 }
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Icon } from '@chakra-ui/react';
+import { Button } from '@/components/ui/button';
 import { FiArrowRight, FiSearch } from 'react-icons/fi';
 import { FooterButtonsProps } from './types';
 
@@ -27,11 +27,17 @@ const FooterButtons: React.FC<FooterButtonsProps> = ({
           </Button>
           <Button
             onClick={generateQueries}
-            colorScheme="blue"
-            isLoading={isGeneratingQueries}
-            rightIcon={<Icon as={FiArrowRight} />}
+            variant="default"
+            disabled={isGeneratingQueries}
           >
-            {isGeneratingQueries ? 'Generating queries...' : 'Generate Queries'}
+            {isGeneratingQueries ? (
+              'Generating queries...'
+            ) : (
+              <>
+                Generate Queries
+                <FiArrowRight className="ml-2 h-4 w-4" />
+              </>
+            )}
           </Button>
         </>
       );
@@ -43,12 +49,9 @@ const FooterButtons: React.FC<FooterButtonsProps> = ({
           <Button onClick={handleBack} variant="outline">
             Back
           </Button>
-          <Button
-            onClick={handleExecuteWithEdited}
-            colorScheme="green"
-            rightIcon={<Icon as={FiSearch} />}
-          >
+          <Button onClick={handleExecuteWithEdited} variant="default">
             Execute Search
+            <FiSearch className="ml-2 h-4 w-4" />
           </Button>
         </>
       );
@@ -56,7 +59,7 @@ const FooterButtons: React.FC<FooterButtonsProps> = ({
 
     if (currentStep === 2) {
       return (
-        <Button onClick={onClose} colorScheme="blue">
+        <Button onClick={onClose} variant="default">
           Close
         </Button>
       );
@@ -71,11 +74,17 @@ const FooterButtons: React.FC<FooterButtonsProps> = ({
           </Button>
           <Button
             onClick={generateQueries}
-            colorScheme="blue"
-            isLoading={isGeneratingQueries}
-            rightIcon={<Icon as={FiArrowRight} />}
+            variant="default"
+            disabled={isGeneratingQueries}
           >
-            {isGeneratingQueries ? 'Generating queries...' : 'Generate Queries'}
+            {isGeneratingQueries ? (
+              'Generating queries...'
+            ) : (
+              <>
+                Generate Queries
+                <FiArrowRight className="ml-2 h-4 w-4" />
+              </>
+            )}
           </Button>
         </>
       );
@@ -87,12 +96,9 @@ const FooterButtons: React.FC<FooterButtonsProps> = ({
           <Button onClick={handleBack} variant="outline">
             Back
           </Button>
-          <Button
-            onClick={handleExecuteWithEdited}
-            colorScheme="green"
-            rightIcon={<Icon as={FiSearch} />}
-          >
+          <Button onClick={handleExecuteWithEdited} variant="default">
             Execute Search
+            <FiSearch className="ml-2 h-4 w-4" />
           </Button>
         </>
       );
@@ -100,7 +106,7 @@ const FooterButtons: React.FC<FooterButtonsProps> = ({
 
     if (currentStep === 2) {
       return (
-        <Button onClick={onClose} colorScheme="blue">
+        <Button onClick={onClose} variant="default">
           Close
         </Button>
       );

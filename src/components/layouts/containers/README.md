@@ -26,7 +26,7 @@ const YourComponent = () => {
 
 ```tsx
 import { SidebarContainer } from '@/components/layouts/containers';
-import { Icon } from '@chakra-ui/react';
+import { Icon } from 'lucide-react';
 import { FiZap } from 'react-icons/fi';
 
 const YourComponent = () => {

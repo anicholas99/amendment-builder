@@ -1,7 +1,7 @@
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 export class DeepAnalysisApiService {
   static async findJobForDeepAnalysis(
@@ -27,7 +27,12 @@ export class DeepAnalysisApiService {
         );
       }
 
-      return await response.json();
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: jobInfo }
+      const unwrappedResult = result.data || result;
+
+      return unwrappedResult;
     } catch (error) {
       logger.error(
         '[DeepAnalysisApiService] Error finding job for deep analysis',
@@ -61,7 +66,12 @@ export class DeepAnalysisApiService {
         );
       }
 
-      return await response.json();
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: { success } }
+      const unwrappedResult = result.data || result;
+
+      return unwrappedResult;
     } catch (error) {
       logger.error('[DeepAnalysisApiService] Error running deep analysis', {
         jobId,

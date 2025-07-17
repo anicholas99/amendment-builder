@@ -27,7 +27,7 @@ Your tasks are:
 
 6. **Propose Rewritten Claim 1:** If any reference shows significant overlap with the claim (having a §102 or §103 risk type), rewrite the draft Claim 1 incorporating the most important aspects of your suggested refinement strategy to create a version that is as broad as possible while overcoming the specific reference(s) posing risk. Only return the original claim text (or with minor clarifications) if ALL references truly pose Low Risk. (Output this in \`finalClaimDraft\`).
 
-7. **Suggest NEW Dependent Claims:** Review the provided Claim 1, existing dependent claims, and the invention details context. Identify specific features, components, steps, alternative embodiments, or details described in the **invention details context** that are novel over the prior art AND **not already recited in Claim 1 or any existing dependent claim**. Suggest these as NEW candidates for dependent claims that further limit Claim 1 or another existing dependent claim. Ensure suggestions are distinct and add value. (Output this in \`dependentClaimSuggestions\`).
+7. **Suggest NEW Dependent Claims:** Review the provided Claim 1, existing dependent claims, and the invention details context. Identify specific features, components, steps, alternative embodiments, or details described in the **invention details context** that are novel over the prior art AND **not already recited in Claim 1 or any existing dependent claim**. Suggest these as NEW candidates for dependent claims that further limit Claim 1 or another existing dependent claim. Ensure suggestions are distinct and add value. **IMPORTANT: Do NOT include claim numbers (e.g., "2.", "3.") in your suggestions - just provide the claim text in the format "The [system/method] of claim 1, wherein..."** (Output this in \`dependentClaimSuggestions\`).
 
 8. **Provide Structuring Advice:** Give a brief (2–3 sentence) strategic overview on how to structure the *overall* claim set (independent + dependent) for optimal protection based on your analysis. (Output this in \`structuringAdvice\`).
 
@@ -73,8 +73,8 @@ Your tasks are:
   ],
   "structuringAdvice": "string (2–3 sentences on overall claim set strategy)",
   "dependentClaimSuggestions": [
-    "2. The system of claim 1, wherein...",
-    "3. The system of claim 1, further comprising..."
+    "The system of claim 1, wherein...",
+    "The system of claim 1, further comprising..."
   ],
   "finalClaimDraft": "string (The full text of the rewritten, broad Claim 1 based on holistic strategy)"
 }

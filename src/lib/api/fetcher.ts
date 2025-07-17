@@ -1,4 +1,4 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { apiFetch } from '@/lib/api/apiClient';
 
 interface FetcherOptions extends RequestInit {

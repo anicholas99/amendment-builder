@@ -6,10 +6,16 @@
  * 1. Queuing search jobs with Cardinal AI
  * 2. Polling for results with exponential backoff
  * 3. Post-processing results (deduplication, exclusion, enrichment)
+ *
+ * Security considerations:
+ * - API keys are never logged
+ * - SSL bypass is only allowed in development and is clearly marked
+ * - All errors are sanitized before logging
  */
-import axios from 'axios'; // Use real axios for server-side with SSL options
+import { serverFetch } from '@/lib/api/serverFetch';
 import https from 'https';
-
+import { isDevelopment } from '@/config/environment';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import {
   searchPatents,
   filterAndDeduplicateByFamily,
@@ -20,8 +26,7 @@ import {
 import { enrichPatentMetadata } from '@/lib/clients/patbase/patbaseClient';
 import { PriorArtReference } from '../../types/claimTypes';
 import { findProjectExclusions } from '../../repositories/project/exclusions.repository';
-import { isDevelopment } from '@/config/environment';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 // SEARCH_TYPE_MAP, // No longer needed directly here, used in API route
 // SearchType as ApiSearchType // No longer needed directly here
 // import { ExtendedSearchResponse } from '@/lib/api/semanticSearch'; // Import response type
@@ -65,7 +70,7 @@ interface CardinalAIRequestBody {
   FilterCPCs?: string[];
   FilterIPCRs?: string[];
   FilterReferenceNumbers?: string[];
-  Jurisdiction?: string;
+  Jurisdictions?: string[];
   Threshold?: number;
   PageSize?: number;
   PageIndex?: number;
@@ -86,20 +91,87 @@ export interface SemanticSearchServiceParams {
 
 // Constants for API interaction
 const API_BASE_URL = 'https://aiapi.qa.cardinal-holdings.com';
-const QUEUE_ENDPOINT = '/semantic-search/queue'; // Changed to relative URL
-const RESULT_ENDPOINT = '/semantic-search/result'; // Changed to relative URL
+const QUEUE_ENDPOINT = '/semantic-search/queue';
+const RESULT_ENDPOINT = '/semantic-search/result';
 const PARALLEL_SEARCH_TYPES = [0]; // Now only single type 0
 
-// Axios instance with SSL certificate bypass for development
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  httpsAgent: new https.Agent({
-    rejectUnauthorized: !isDevelopment, // Only bypass SSL check in development
-  }),
-});
+// Create a dedicated Cardinal AI client with proper configuration
+class CardinalAIClient {
+  private client: AxiosInstance;
+
+  constructor() {
+    this.client = axios.create({
+      baseURL: API_BASE_URL,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000, // 30 second timeout
+      // Only bypass SSL in development for QA API
+      httpsAgent: isDevelopment
+        ? new https.Agent({ rejectUnauthorized: false })
+        : undefined,
+    });
+
+    // Add response interceptor for consistent error handling
+    this.client.interceptors.response.use(
+      response => response,
+      this.handleError
+    );
+  }
+
+  private handleError = (error: AxiosError) => {
+    // Never log sensitive data like API keys or request bodies
+    const sanitizedError = {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      url: error.config?.url,
+      method: error.config?.method,
+    };
+
+    logger.error('[CardinalAI] Request failed', sanitizedError);
+
+    // Throw a sanitized error
+    if (error.response?.status === 400) {
+      throw new ApplicationError(
+        ErrorCode.INVALID_INPUT,
+        'Invalid request to Cardinal AI'
+      );
+    } else if (
+      error.response?.status === 401 ||
+      error.response?.status === 403
+    ) {
+      throw new ApplicationError(
+        ErrorCode.AUTH_UNAUTHORIZED,
+        'Cardinal AI authentication failed'
+      );
+    } else {
+      throw new ApplicationError(
+        ErrorCode.API_NETWORK_ERROR,
+        'Cardinal AI service unavailable'
+      );
+    }
+  };
+
+  async queueSearch(
+    requestBody: CardinalAIRequestBody,
+    apiKey: string
+  ): Promise<{ id: string; isSuccess: boolean }> {
+    const response = await this.client.post(QUEUE_ENDPOINT, requestBody, {
+      headers: { ApiKey: apiKey },
+    });
+    return response.data;
+  }
+
+  async getResults(
+    jobId: string,
+    apiKey: string
+  ): Promise<CardinalAIPollResponse> {
+    const response = await this.client.get(`${RESULT_ENDPOINT}/${jobId}`, {
+      headers: { ApiKey: apiKey },
+    });
+    return response.data;
+  }
+}
 
 // --- Helper Functions ---
 
@@ -107,11 +179,13 @@ const api = axios.create({
  * Function to poll for results with exponential backoff (moved from API route)
  * @param jobId The job ID to poll for
  * @param apiKey The API key for authentication
+ * @param client The CardinalAI client instance (request-scoped)
  * @returns The raw results data object from Cardinal AI
  */
 async function pollWithBackoff(
   jobId: string,
-  apiKey: string
+  apiKey: string,
+  client: CardinalAIClient
 ): Promise<CardinalAIPollResponse> {
   let attempt = 0;
   const maxAttempts = POLLING.MAX_ATTEMPTS;
@@ -133,16 +207,12 @@ async function pollWithBackoff(
     await new Promise(resolve => setTimeout(resolve, currentDelay));
 
     try {
-      const resultsResponse = await api.get(`${RESULT_ENDPOINT}/${jobId}`, {
-        headers: { ApiKey: apiKey },
-      });
-      const resultData = resultsResponse.data;
+      const resultData = await client.getResults(jobId, apiKey);
+
       // Added detailed log of the received status
       logger.debug(`[SemanticSearchService] Poll attempt ${attempt} success`, {
         jobId,
-        status: resultsResponse.status,
         apiStatus: resultData?.status,
-        resultKeys: resultData ? Object.keys(resultData) : 'N/A',
       });
 
       // If we have results (status 1) or API indicates no matches (status 0 with defined result), return them
@@ -187,6 +257,7 @@ async function pollWithBackoff(
         // Decide if we should continue or throw, for now continue
       }
     } catch (error) {
+      // Check if the result endpoint returned 404 (not ready yet)
       if (axios.isAxiosError(error) && error.response?.status === 404) {
         logger.debug(
           '[SemanticSearchService] Results not ready yet (404), continuing polling...',
@@ -198,22 +269,13 @@ async function pollWithBackoff(
         // Continue to the next attempt
       } else {
         // Log other errors but continue polling unless it's the last attempt
-        // Added more context to the error log
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';
-        const errorStatus = axios.isAxiosError(error)
-          ? error.response?.status
-          : undefined;
-        const errorData = axios.isAxiosError(error)
-          ? error.response?.data
-          : undefined;
         logger.error(
           `[SemanticSearchService] Poll attempt ${attempt} failed with unexpected error`,
           {
             jobId,
             error: errorMessage,
-            status: errorStatus,
-            data: errorData,
           }
         );
         if (attempt === maxAttempts) {
@@ -247,27 +309,31 @@ async function _fetchRawCardinalAIResults(
   requestBody: CardinalAIRequestBody,
   apiKey: string
 ): Promise<{ jobId: string; rawData: CardinalAIPollResponse }> {
+  // Create request-scoped client instance
+  const client = new CardinalAIClient();
+
   logger.info('[SemanticSearchService] Queueing semantic search job', {
     searchType: requestBody.SearchType,
   });
-  // Added log for the request body being sent
-  logger.debug('[SemanticSearchService] Queue request body', {
-    body: JSON.stringify(requestBody),
-  });
-  const queueResponse = await api.post(QUEUE_ENDPOINT, requestBody, {
-    headers: { ApiKey: apiKey }, // Only pass the API key since Content-Type is already set
+
+  // Security: Only log non-sensitive information
+  logger.debug('[SemanticSearchService] Request details', {
+    searchType: requestBody.SearchType,
+    jurisdictionsCount: requestBody.Jurisdictions?.length,
+    hasFilters: !!(
+      requestBody.FilterCPCs?.length || requestBody.FilterIPCRs?.length
+    ),
   });
 
-  const { id: jobId, isSuccess } = queueResponse.data;
-  // Added log for the raw queue response
-  logger.debug('[SemanticSearchService] Raw queue response received', {
-    data: queueResponse.data,
-  });
+  const queueData = await client.queueSearch(requestBody, apiKey);
+
+  const { id: jobId, isSuccess } = queueData;
+
   if (!isSuccess || !jobId) {
     logger.error(
       '[SemanticSearchService] Queue request failed or missing job ID',
       {
-        responseData: queueResponse.data,
+        responseData: queueData,
       }
     );
     throw new ApplicationError(
@@ -278,7 +344,7 @@ async function _fetchRawCardinalAIResults(
   logger.info('[SemanticSearchService] Job queued successfully', { jobId }); // Logged Job ID here
 
   logger.info('[SemanticSearchService] Polling for results', { jobId });
-  const rawResultsData = await pollWithBackoff(jobId, apiKey);
+  const rawResultsData = await pollWithBackoff(jobId, apiKey, client);
   logger.info('[SemanticSearchService] Raw results received', {
     jobId,
     status: rawResultsData?.status,
@@ -314,7 +380,7 @@ async function _processAndEnrichResults(
   const originalCount = rawData.result.length;
   const dbExclusions = projectId ? await findProjectExclusions(projectId) : [];
   const exclusionSet = new Set(
-    dbExclusions.map(ex =>
+    dbExclusions.map((ex: ProjectExclusion) =>
       ex.excludedPatentNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase()
     )
   );
@@ -424,7 +490,7 @@ async function _performParallelSearchesAndInitialDedupe(
     FilterCPCs: filterCPCs,
     FilterIPCRs: filterIPCRs,
     FilterReferenceNumbers: filterReferenceNumbers,
-    Jurisdiction: params.jurisdiction || 'US',
+    Jurisdictions: params.jurisdiction ? [params.jurisdiction] : ['US'],
     Threshold: THRESHOLDS.DEFAULT_RELEVANCE,
     PageSize: API_CONFIG.PARALLEL_SEARCH_PAGE_SIZE,
     PageIndex: 0, // Always get first page for parallel runs

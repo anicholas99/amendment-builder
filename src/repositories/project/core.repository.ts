@@ -1,6 +1,6 @@
 import { Prisma, Project } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import {
   basicProjectSelect,
@@ -81,6 +81,52 @@ export async function findProjectsByTenant(
 }
 
 /**
+ * Finds all accessible projects for a user (owned or shared) within a tenant.
+ * This includes projects the user owns and projects shared with them.
+ * @param tenantId The ID of the tenant.
+ * @param userId The ID of the user.
+ * @param options Optional Prisma findMany arguments (e.g., orderBy).
+ * @returns A promise resolving to an array of accessible projects.
+ */
+export async function findAccessibleProjectsForUser(
+  tenantId: string,
+  userId: string,
+  options?: Omit<Prisma.ProjectFindManyArgs, 'where' | 'select' | 'include'>
+): Promise<ProjectBasicInfo[]> {
+  if (!prisma) {
+    throw new ApplicationError(
+      ErrorCode.DB_CONNECTION_ERROR,
+      'Database client is not initialized.'
+    );
+  }
+
+  logger.info(
+    '[findAccessibleProjectsForUser] Querying owned and shared projects',
+    {
+      tenantId,
+      userId,
+    }
+  );
+
+  return prisma.project.findMany({
+    where: {
+      tenantId: tenantId,
+      deletedAt: null,
+      OR: [
+        { userId: userId }, // Projects user owns
+        {
+          collaborators: {
+            some: { userId: userId }, // Projects shared with user
+          },
+        },
+      ],
+    },
+    select: basicProjectSelect,
+    ...options,
+  });
+}
+
+/**
  * Finds projects for a user within a tenant with pagination, filtering, and sorting.
  * This method performs database-level operations for optimal performance.
  * @param tenantId The ID of the tenant.
@@ -145,7 +191,7 @@ export async function findProjectsByTenantPaginated(
     // or storing completion status as a computed field on the project.
   }
 
-  logger.info(
+  logger.debug(
     '[findProjectsByTenantPaginated] Querying projects with filters',
     {
       tenantId,
@@ -305,7 +351,7 @@ export async function createProjectWithDocuments(
           { type: 'SUMMARY', content: '' }, // From standard order
           { type: 'BRIEF_DESCRIPTION_OF_THE_DRAWINGS', content: '' }, // Added, From standard order (Underscores for type)
           { type: 'DETAILED_DESCRIPTION', content: '' }, // Added, From standard order (Underscores for type)
-          { type: 'CLAIM_SET', content: '' }, // Using CLAIM_SET assuming it maps to CLAIMS. From standard order.
+          { type: 'CLAIMS', content: '' }, // Claims section
           { type: 'ABSTRACT', content: '' }, // From standard order
           // Removed: { type: 'FIGURES', content: '' }
           // Removed: { type: 'DESCRIPTION', content: '' } (Replaced by DETAILED_DESCRIPTION)
@@ -566,4 +612,209 @@ export async function getProjectWorkspace(
     claims: project.invention?.claims || [],
     figures: figures,
   };
+}
+
+/**
+ * Finds accessible projects for a user within a tenant with pagination, filtering, and sorting.
+ * This includes projects the user owns and projects shared with them.
+ * @param tenantId The ID of the tenant.
+ * @param userId The ID of the user.
+ * @param options Pagination and filtering options.
+ * @returns A promise resolving to paginated accessible projects with total count.
+ */
+export async function findAccessibleProjectsForUserPaginated(
+  tenantId: string,
+  userId: string,
+  options: {
+    skip: number;
+    take: number;
+    search?: string;
+    filterBy?: 'all' | 'recent' | 'complete' | 'in-progress' | 'draft';
+    orderBy?: Prisma.ProjectOrderByWithRelationInput;
+  }
+): Promise<{ projects: ProjectBasicInfo[]; total: number }> {
+  if (!prisma) {
+    throw new ApplicationError(
+      ErrorCode.DB_CONNECTION_ERROR,
+      'Database client is not initialized.'
+    );
+  }
+
+  const { skip, take, search, filterBy, orderBy } = options;
+
+  // Build the where clause for accessible projects
+  const where: Prisma.ProjectWhereInput = {
+    tenantId: tenantId,
+    deletedAt: null,
+    OR: [
+      { userId: userId }, // Projects user owns
+      {
+        collaborators: {
+          some: { userId: userId }, // Projects shared with user
+        },
+      },
+    ],
+  };
+
+  // Add search filter
+  if (search && search.trim()) {
+    where.name = {
+      contains: search.trim(),
+    };
+  }
+
+  // Add status filter
+  if (filterBy && filterBy !== 'all') {
+    if (filterBy === 'recent') {
+      const twoDaysAgo = new Date();
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+      where.updatedAt = {
+        gte: twoDaysAgo,
+      };
+    }
+    // TODO: Implement complete/in-progress/draft filters based on document analysis
+  }
+
+  logger.debug(
+    '[findAccessibleProjectsForUserPaginated] Querying accessible projects with filters',
+    {
+      tenantId,
+      userId,
+      skip,
+      take,
+      search,
+      filterBy,
+    }
+  );
+
+  // Execute both queries in parallel for better performance
+  const [projects, total] = await Promise.all([
+    prisma.project.findMany({
+      where,
+      select: basicProjectSelect,
+      skip,
+      take,
+      orderBy: orderBy || { updatedAt: 'desc' },
+    }),
+    prisma.project.count({ where }),
+  ]);
+
+  return { projects, total };
+}
+
+/**
+ * Completely reset all patent application content for a project
+ * This includes draft documents, versions, and related flags
+ * @param projectId The project ID
+ * @param userId The user ID for verification
+ * @param tenantId The tenant ID for verification
+ * @returns Reset summary with counts of deleted items
+ */
+export async function resetPatentApplicationContent(
+  projectId: string,
+  userId: string,
+  tenantId: string
+): Promise<{
+  draftDocumentsDeleted: number;
+  versionsDeleted: number;
+  success: boolean;
+}> {
+  if (!prisma) {
+    throw new ApplicationError(
+      ErrorCode.DB_CONNECTION_ERROR,
+      'Database client is not initialized.'
+    );
+  }
+
+  try {
+    logger.info('[ProjectRepository] Starting comprehensive patent application reset', {
+      projectId,
+      userId,
+      tenantId,
+    });
+
+    return await prisma.$transaction(async (tx) => {
+      // 1. Verify the project exists and belongs to the user/tenant
+      const project = await tx.project.findFirst({
+        where: {
+          id: projectId,
+          userId: userId,
+          tenantId: tenantId,
+          deletedAt: null,
+        },
+        select: { id: true, hasPatentContent: true, hasProcessedInvention: true },
+      });
+
+      if (!project) {
+        logger.warn('[ProjectRepository] Project not found or access denied', {
+          projectId,
+          userId,
+          tenantId,
+        });
+        throw new ApplicationError(
+          ErrorCode.DB_RECORD_NOT_FOUND,
+          'Project not found or access denied'
+        );
+      }
+
+      // 2. Delete all draft documents
+      const draftDeleteResult = await tx.draftDocument.deleteMany({
+        where: { projectId },
+      });
+
+      logger.info('[ProjectRepository] Deleted draft documents', {
+        projectId,
+        count: draftDeleteResult.count,
+      });
+
+      // 3. Delete all application versions (cascade will delete documents)
+      const versionsDeleteResult = await tx.applicationVersion.deleteMany({
+        where: { projectId },
+      });
+
+      logger.info('[ProjectRepository] Deleted application versions', {
+        projectId,
+        count: versionsDeleteResult.count,
+      });
+
+      // 4. Reset project flags related to patent content
+      await tx.project.update({
+        where: { id: projectId },
+        data: {
+          hasPatentContent: false,
+          hasProcessedInvention: false,
+          updatedAt: new Date(),
+        },
+      });
+
+      logger.info('[ProjectRepository] Reset project patent content flags', {
+        projectId,
+        hasPatentContent: false,
+        hasProcessedInvention: false,
+      });
+
+      return {
+        draftDocumentsDeleted: draftDeleteResult.count,
+        versionsDeleted: versionsDeleteResult.count,
+        success: true,
+      };
+    });
+  } catch (error) {
+    // If it's already an ApplicationError, re-throw it
+    if (error instanceof ApplicationError) {
+      throw error;
+    }
+
+    logger.error('[ProjectRepository] Failed to reset patent application content', {
+      error,
+      projectId,
+      userId,
+      tenantId,
+    });
+
+    throw new ApplicationError(
+      ErrorCode.DB_QUERY_ERROR,
+      `Failed to reset patent application content: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 }

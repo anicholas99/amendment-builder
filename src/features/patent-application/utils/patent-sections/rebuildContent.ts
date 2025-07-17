@@ -1,5 +1,5 @@
 import { STANDARD_SECTION_ORDER } from './constants';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 /**
  * Rebuild complete patent content from individual sections
@@ -13,8 +13,8 @@ export const rebuildContent = (sections: { [key: string]: string }): string => {
   }
 
   // Debug all available sections
-  // logger.log('[rebuildContent] Received sections object:', sections);
-  logger.log('Available sections for rebuilding:', {
+  // logger.info('[rebuildContent] Received sections object:', sections);
+  logger.info('Available sections for rebuilding:', {
     sectionKeys: Object.keys(sections),
   });
 
@@ -22,14 +22,14 @@ export const rebuildContent = (sections: { [key: string]: string }): string => {
   const orderedSections = getOrderedSections(sections);
 
   // Debug the ordered sections
-  logger.log('🔄 Ordered sections:', {
+  logger.info('🔄 Ordered sections:', {
     titles: orderedSections.map(([title]) => title),
   });
 
   // Join sections with proper formatting (three newlines between sections)
   const content = orderedSections
     .map(([title, sectionContent]) => {
-      logger.log(`📄 Adding section: ${title}`);
+      logger.info(`📄 Adding section: ${title}`);
       // Special handling for Title - just show the content without a header
       if (title.toUpperCase() === 'TITLE') {
         return sectionContent || '';
@@ -40,11 +40,11 @@ export const rebuildContent = (sections: { [key: string]: string }): string => {
     .join('\n\n\n');
 
   // Log the reconstructed section count for debugging
-  logger.log(
+  logger.info(
     `📃 Rebuilt content from sections. Section count: ${orderedSections.length}`
   );
   // Log the first 50 characters to check if title is present
-  logger.log(
+  logger.info(
     `📃 First 50 chars of rebuilt content: ${content.substring(0, 50)}`
   );
 
@@ -64,14 +64,14 @@ export const rebuildHtmlContent = (sections: {
     return '';
   }
 
-  logger.log('Available sections for HTML rebuilding:', {
+  logger.info('Available sections for HTML rebuilding:', {
     sectionKeys: Object.keys(sections),
   });
 
   // Get the sections ordered according to the standard list
   const orderedSections = getOrderedSections(sections);
 
-  logger.log('🔄 Ordered HTML sections:', {
+  logger.info('🔄 Ordered HTML sections:', {
     titles: orderedSections.map(([title]) => title),
   });
 
@@ -79,7 +79,7 @@ export const rebuildHtmlContent = (sections: {
   let htmlContent = '';
 
   orderedSections.forEach(([title, sectionContent], index) => {
-    logger.log(`📄 Adding HTML section: ${title}`);
+    logger.info(`📄 Adding HTML section: ${title}`);
 
     // Clean the section content - remove any stray plain text headers
     let cleanContent = sectionContent || '';
@@ -117,7 +117,7 @@ export const rebuildHtmlContent = (sections: {
 
       // Log for debugging
       if (title.toUpperCase() === 'FIELD') {
-        logger.log(`📄 FIELD section debug:`, {
+        logger.info(`📄 FIELD section debug:`, {
           contentAlreadyHasHeader,
           firstChars: cleanContent.substring(0, 100),
           matchedHeader: cleanContent.match(headerRegex)?.[0] || 'no match',
@@ -135,27 +135,32 @@ export const rebuildHtmlContent = (sections: {
           // Content already has the header, just add it as-is
           htmlContent += cleanContent;
         } else if (!cleanContent.includes('<')) {
-          // If content doesn't have HTML tags, split into paragraphs by blank lines
-          const paragraphs = cleanContent.split(/\n{2,}/).map(p => p.trim());
-          paragraphs.forEach((para, idx) => {
-            if (para) {
-              htmlContent += `<p>${para}</p>`;
-            } else if (idx !== paragraphs.length - 1) {
-              htmlContent += '<p>&nbsp;</p>'; // preserve blank line
+          // If content doesn't have HTML tags, convert to proper paragraphs
+          // Split by ANY line break and create a paragraph for each non-empty line
+          // This ensures TipTap preserves the formatting when editing begins
+          // TipTap expects each paragraph to be in its own <p> tag
+          const lines = cleanContent.split('\n');
+          lines.forEach(line => {
+            const trimmedLine = line.trim();
+            if (trimmedLine) {
+              htmlContent += `<p>${trimmedLine}</p>`;
             }
           });
         } else {
           // Already HTML without header, add as-is
           htmlContent += cleanContent;
         }
+      } else {
+        // No content for this section - add an empty paragraph to make it editable
+        htmlContent += '<p></p>';
       }
     }
   });
 
-  logger.log(
+  logger.info(
     `📃 Rebuilt HTML content from sections. Section count: ${orderedSections.length}`
   );
-  logger.log(
+  logger.info(
     `📃 First 100 chars of rebuilt HTML: ${htmlContent.substring(0, 100)}`
   );
 
@@ -184,7 +189,7 @@ function getOrderedSections(sections: {
     if (normalizedKey === 'claims set' || normalizedKey === 'claim set') {
       normalizedKey = 'claims';
     }
-    
+
     // Handle "brief description" which might not have "of the drawings"
     if (normalizedKey === 'brief description') {
       normalizedKey = 'brief description of the drawings';
@@ -207,7 +212,9 @@ function getOrderedSections(sections: {
       // Mark this section as processed
       delete normalizedSections[normalizedStandard];
     } else {
-      logger.warn(
+      // Only log at debug level for missing sections to reduce noise
+      // This is expected behavior for new projects or incomplete drafts
+      logger.debug(
         `Section "${standardSection}" not found in provided sections. Looking for normalized: "${normalizedStandard}"`
       );
     }
@@ -216,7 +223,8 @@ function getOrderedSections(sections: {
   // Add any remaining sections that weren't in the standard order to the end
   Object.entries(normalizedSections).forEach(
     ([normalizedKey, { originalKey, content }]) => {
-      logger.warn(
+      // This is actually helpful information for custom sections, keep as debug
+      logger.debug(
         `Section "${originalKey}" (normalized: "${normalizedKey}") not in STANDARD_SECTION_ORDER, adding to end.`
       );
       orderedSections.push([originalKey, content]);

@@ -1,4 +1,4 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { callPatbaseApi, authenticatePatbase } from '@/lib/api/patbase';
 import { delay } from '@/utils/delay';
 import { UnifiedPriorArt } from '@/types/domain/priorArt.unified';

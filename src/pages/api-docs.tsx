@@ -1,148 +1,172 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
-import {
-  Box,
-  Heading,
-  Text,
-  VStack,
-  HStack,
-  Badge,
-  Link,
-  useTheme,
-  useColorModeValue,
-} from '@chakra-ui/react';
+import { Badge } from '@/components/ui/badge';
+import { ExternalLink } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/contexts/ThemeContext';
 import 'swagger-ui-react/swagger-ui.css';
 
 // Dynamic import to avoid SSR issues with swagger-ui-react
 const SwaggerUI = dynamic(() => import('swagger-ui-react'), {
   ssr: false,
   loading: () => (
-    <Box p={8} textAlign="center">
-      <Text>Loading API documentation...</Text>
-    </Box>
+    <div className="p-6 text-center">
+      <p className="text-muted-foreground">Loading API documentation...</p>
+    </div>
   ),
 });
 
 export default function ApiDocsPage() {
-  const theme = useTheme();
-  const bgSecondary = useColorModeValue('gray.50', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const textSecondary = useColorModeValue('gray.600', 'gray.400');
-  const primaryColor = useColorModeValue('blue.600', 'blue.400');
-  const primaryHover = useColorModeValue('blue.700', 'blue.300');
+  const { isDarkMode } = useThemeContext();
 
   return (
-    <Box>
+    <div>
       {/* Header */}
-      <Box
-        bg={bgSecondary}
-        borderBottom="1px solid"
-        borderColor={borderColor}
-        px={8}
-        py={6}
+      <div
+        className={cn(
+          'border-b px-8 py-6',
+          isDarkMode
+            ? 'bg-gray-800 border-gray-700'
+            : 'bg-gray-50 border-gray-200'
+        )}
       >
-        <VStack align="start" spacing={4} maxW="1200px" mx="auto">
-          <HStack spacing={4} align="center">
-            <Heading size="lg">API Documentation</Heading>
-            <Badge colorScheme="green">v1.0.0</Badge>
-          </HStack>
-          <Text color={textSecondary}>
+        <div className="max-w-[1200px] mx-auto space-y-4">
+          <div className="flex items-center space-x-4">
+            <h1 className="text-2xl font-semibold">API Documentation</h1>
+            <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+              v1.0.0
+            </Badge>
+          </div>
+          <p className={cn(isDarkMode ? 'text-gray-400' : 'text-gray-600')}>
             Enterprise REST API for Patent Drafter AI. All endpoints require
             authentication and tenant context.
-          </Text>
-          <HStack spacing={4} fontSize="sm">
-            <Link href="/api/swagger" isExternal color="blue.500">
-              OpenAPI Spec (JSON)
-            </Link>
-            <Text color={textSecondary}>•</Text>
-            <Link
-              href="https://github.com/your-org/patent-drafter-ai"
-              isExternal
-              color="blue.500"
+          </p>
+          <div className="flex items-center space-x-4 text-sm">
+            <a
+              href="/api/swagger"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-600 flex items-center space-x-1"
             >
-              GitHub Repository
-            </Link>
-            <Text color={textSecondary}>•</Text>
-            <Link href="/docs/api" color="blue.500">
+              <span>OpenAPI Spec (JSON)</span>
+              <ExternalLink className="h-3 w-3" />
+            </a>
+            <span
+              className={cn(isDarkMode ? 'text-gray-400' : 'text-gray-600')}
+            >
+              •
+            </span>
+            <a
+              href="https://github.com/your-org/patent-drafter-ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-600 flex items-center space-x-1"
+            >
+              <span>GitHub Repository</span>
+              <ExternalLink className="h-3 w-3" />
+            </a>
+            <span
+              className={cn(isDarkMode ? 'text-gray-400' : 'text-gray-600')}
+            >
+              •
+            </span>
+            <a href="/docs/api" className="text-blue-500 hover:text-blue-600">
               Developer Guide
-            </Link>
-          </HStack>
-        </VStack>
-      </Box>
+            </a>
+          </div>
+        </div>
+      </div>
 
       {/* Swagger UI */}
-      <Box
-        sx={{
-          '& .swagger-ui': {
-            fontFamily: 'Inter, system-ui, sans-serif',
-          },
-          '& .swagger-ui .topbar': {
-            display: 'none',
-          },
-          '& .swagger-ui .info': {
-            marginBottom: '2rem',
-          },
-          '& .swagger-ui .scheme-container': {
-            backgroundColor: bgSecondary,
-            padding: '1rem',
-            borderRadius: '8px',
-            marginBottom: '2rem',
-          },
-          '& .swagger-ui .btn': {
-            borderRadius: '6px',
-          },
-          '& .swagger-ui .btn.authorize': {
-            backgroundColor: primaryColor,
-            color: 'white',
-            border: 'none',
-          },
-          '& .swagger-ui .btn.authorize:hover': {
-            backgroundColor: primaryHover,
-          },
-          '& .swagger-ui .opblock.opblock-post': {
-            borderColor: '#49cc90',
-            backgroundColor: '#49cc9010',
-          },
-          '& .swagger-ui .opblock.opblock-get': {
-            borderColor: '#61affe',
-            backgroundColor: '#61affe10',
-          },
-          '& .swagger-ui .opblock.opblock-put': {
-            borderColor: '#fca130',
-            backgroundColor: '#fca13010',
-          },
-          '& .swagger-ui .opblock.opblock-delete': {
-            borderColor: '#f93e3e',
-            backgroundColor: '#f93e3e10',
-          },
-          '& .swagger-ui .opblock-summary': {
-            borderRadius: '6px',
-          },
-          '& .swagger-ui .parameter__name': {
-            fontWeight: '600',
-          },
-          '& .swagger-ui .parameter__type': {
-            fontFamily: 'Consolas, Monaco, monospace',
-            fontSize: '0.875rem',
-          },
-          '& .swagger-ui table tbody tr td': {
-            padding: '0.75rem',
-          },
-          '& .swagger-ui .response-col_status': {
-            fontWeight: '600',
-          },
-          '& .swagger-ui .model-box': {
-            borderRadius: '6px',
-            border: `1px solid ${borderColor}`,
-          },
-          '& .swagger-ui .model': {
-            fontFamily: 'Consolas, Monaco, monospace',
-            fontSize: '0.875rem',
-          },
-        }}
+      <div
+        className="swagger-container"
+        style={
+          {
+            '--swagger-bg-secondary': isDarkMode
+              ? 'hsl(var(--secondary))'
+              : 'hsl(var(--secondary))',
+            '--swagger-border-color': isDarkMode
+              ? 'hsl(var(--border))'
+              : 'hsl(var(--border))',
+            '--swagger-primary-color': isDarkMode
+              ? 'hsl(var(--primary))'
+              : 'hsl(var(--primary))',
+            '--swagger-primary-hover': isDarkMode
+              ? 'hsl(var(--primary))'
+              : 'hsl(var(--primary))',
+          } as React.CSSProperties
+        }
       >
+        <style>{`
+          .swagger-container .swagger-ui {
+            font-family: Inter, system-ui, sans-serif;
+          }
+          .swagger-container .swagger-ui .topbar {
+            display: none;
+          }
+          .swagger-container .swagger-ui .info {
+            margin-bottom: 2rem;
+          }
+          .swagger-container .swagger-ui .scheme-container {
+            background-color: var(--swagger-bg-secondary);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+          }
+          .swagger-container .swagger-ui .btn {
+            border-radius: 6px;
+          }
+          .swagger-container .swagger-ui .btn.authorize {
+            background-color: var(--swagger-primary-color);
+            color: white;
+            border: none;
+          }
+          .swagger-container .swagger-ui .btn.authorize:hover {
+            background-color: var(--swagger-primary-hover);
+          }
+          .swagger-container .swagger-ui .opblock.opblock-post {
+            border-color: var(--swagger-primary-color);
+            background-color: var(--swagger-bg-secondary);
+          }
+          .swagger-container .swagger-ui .opblock.opblock-get {
+            border-color: #60a5fa;
+            background-color: #dbeafe;
+          }
+          .swagger-container .swagger-ui .opblock.opblock-put {
+            border-color: #fb923c;
+            background-color: #fed7aa;
+          }
+          .swagger-container .swagger-ui .opblock.opblock-delete {
+            border-color: #ef4444;
+            background-color: #fee2e2;
+          }
+          .swagger-container .swagger-ui .opblock-summary {
+            border-radius: 6px;
+          }
+          .swagger-container .swagger-ui .parameter__name {
+            font-weight: 600;
+          }
+          .swagger-container .swagger-ui .parameter__type {
+            font-family: Consolas, Monaco, monospace;
+            font-size: 0.875rem;
+          }
+          .swagger-container .swagger-ui table tbody tr td {
+            padding: 0.75rem;
+          }
+          .swagger-container .swagger-ui .response-col_status {
+            font-weight: 600;
+          }
+          .swagger-container .swagger-ui .model-box {
+            border-radius: 6px;
+            border: 1px solid var(--swagger-border-color);
+          }
+          .swagger-container .swagger-ui .model {
+            font-family: Consolas, Monaco, monospace;
+            font-size: 0.875rem;
+          }
+        `}</style>
         <SwaggerUI url="/api/swagger" />
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }

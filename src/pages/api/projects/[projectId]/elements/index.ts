@@ -1,8 +1,8 @@
 import type { NextApiResponse } from 'next';
 import { AuthenticatedRequest } from '@/types/middleware';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
-import { figureRepository } from '@/repositories/figureRepository';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
+import { figureRepository } from '@/repositories/figure';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { z } from 'zod';
 
 const apiLogger = createApiLogger('get-project-elements');
@@ -30,12 +30,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       elementCount: elements.length,
     });
 
-    return res.status(200).json({ 
+    return res.status(200).json({
       elements: elements.map(elem => ({
         elementKey: elem.elementKey,
         elementName: elem.name,
         id: elem.id,
-      }))
+      })),
     });
   } catch (error) {
     apiLogger.error('Failed to fetch project elements', { error, projectId });
@@ -54,4 +54,4 @@ export default SecurePresets.tenantProtected(
     },
     rateLimit: 'api',
   }
-); 
+);

@@ -1,7 +1,7 @@
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 export interface DocumentUpdate {
   documentId: string;
@@ -44,4 +44,7 @@ class DocumentClientService {
   }
 }
 
-export const documentClientService = new DocumentClientService();
+// Export the class for context-based instantiation
+export { DocumentClientService };
+
+// REMOVED: Singleton export that could cause session isolation issues

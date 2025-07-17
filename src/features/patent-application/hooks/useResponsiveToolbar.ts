@@ -1,5 +1,5 @@
 import { useState, useEffect, RefObject } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 interface ResponsiveToolbarButtons {
   showReset: boolean;
@@ -62,48 +62,47 @@ export const useResponsiveToolbar = (
     if (width === 0 || width > 1000) {
       return {
         showReset: true,
-        showZoom: true,
-        showExportDOCX: true,
-        showVersionHistory: true,
-        showSaveVersion: true,
-        collapsedButtons: [],
-      };
-    } else if (width > 800) {
-      return {
-        showReset: false,
-        showZoom: true,
-        showExportDOCX: true,
-        showVersionHistory: true,
-        showSaveVersion: true,
-        collapsedButtons: ['reset'],
-      };
-    } else if (width > 700) {
-      return {
-        showReset: false,
         showZoom: false,
         showExportDOCX: true,
         showVersionHistory: true,
         showSaveVersion: true,
-        collapsedButtons: ['reset', 'zoom'],
+        collapsedButtons: ['zoom'],
+      };
+    } else if (width > 800) {
+      return {
+        showReset: true, // Changed from false to true
+        showZoom: false,
+        showExportDOCX: true,
+        showVersionHistory: true,
+        showSaveVersion: true,
+        collapsedButtons: ['zoom'],
+      };
+    } else if (width > 700) {
+      return {
+        showReset: true, // Changed from false to true
+        showZoom: false,
+        showExportDOCX: true,
+        showVersionHistory: true,
+        showSaveVersion: true,
+        collapsedButtons: ['zoom'],
       };
     } else if (width > 600) {
       return {
-        showReset: false,
+        showReset: true, // Changed from false to true
         showZoom: false,
         showExportDOCX: true,
         showVersionHistory: false,
         showSaveVersion: true,
-        collapsedButtons: ['reset', 'zoom', 'versionHistory'],
+        collapsedButtons: ['zoom', 'versionHistory'],
       };
     } else {
       return {
-        showReset: false,
+        showReset: true, // Changed from false to true - reset is critical functionality
         showZoom: false,
         showExportDOCX: false,
         showVersionHistory: false,
         showSaveVersion: false,
         collapsedButtons: [
-          'reset',
           'zoom',
           'exportDOCX',
           'versionHistory',

@@ -1,7 +1,7 @@
 import { NextApiResponse } from 'next';
 import axios, { AxiosError } from 'axios';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
-import { safeStringify } from '@/lib/monitoring/logger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
+import { safeStringify } from '@/server/logger';
 import https from 'https';
 import {
   updateCitationMatchLocationJob,
@@ -20,8 +20,9 @@ import { withErrorHandling } from '@/middleware/errorHandling';
 import { withRateLimit } from '@/middleware/rateLimiter';
 import { requireRole } from '@/middleware/role';
 import { withMethod } from '@/middleware/method';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
+import { apiResponse } from '@/utils/api/responses';
 
 // Initialize apiLogger
 const apiLogger = createApiLogger('citation-location/queue');
@@ -62,9 +63,8 @@ const handler = async (
 
   if (req.method !== 'POST') {
     apiLogger.warn('Method not allowed', { method: req.method });
-    res.setHeader('Allow', ['POST']);
     apiLogger.logResponse(405, { error: 'Method Not Allowed' });
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return apiResponse.methodNotAllowed(res, ['POST']);
   }
 
   const { citationMatchId, searchText, filterReferenceNumber } = req.body;
@@ -191,7 +191,7 @@ const handler = async (
             locationJobId: externalLocationJobId,
           };
           apiLogger.logResponse(202, responseBody);
-          return res.status(202).json(responseBody);
+          return apiResponse.ok(res, responseBody);
         } catch (dbError: unknown) {
           const dbErr =
             dbError instanceof Error ? dbError : new Error(String(dbError));
@@ -216,7 +216,10 @@ const handler = async (
               locationJobId: externalLocationJobId, // Include the external job ID for reference
             };
             apiLogger.logResponse(404, responseBody);
-            return res.status(404).json(responseBody);
+            return apiResponse.notFound(
+              res,
+              'The record may have been deleted since the request was initiated'
+            );
           }
 
           // For other types of errors
@@ -388,7 +391,10 @@ const handler = async (
   // Fallback: Should theoretically not be reached
   apiLogger.error('Reached end of handler unexpectedly.', { citationMatchId });
   apiLogger.logResponse(500, { error: 'Unexpected internal server error' });
-  return res.status(500).json({ error: 'Unexpected internal server error' });
+  return apiResponse.serverError(
+    res,
+    new Error('Unexpected internal server error')
+  );
 };
 
 // Resolve tenantId using citationMatchId -> searchHistory -> project

@@ -45,6 +45,10 @@ yarn-error.log*
 .env.development
 .env.test
 .env.production
+# Add specific patterns for staging and backup files
+.env.staging
+.env.*.backup*
+*.env.backup
 # But allow example env file
 !.env.example
 

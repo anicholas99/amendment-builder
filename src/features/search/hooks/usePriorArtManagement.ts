@@ -1,13 +1,28 @@
+/**
+ * @deprecated This hook has been replaced with cleaner implementations.
+ *
+ * DO NOT USE THIS HOOK - It causes navigation blocking issues.
+ *
+ * Instead, use:
+ * - useSaveCitation() for saving citations
+ * - useProjectPriorArt() for fetching prior art
+ * - useDeletePriorArt() for deleting prior art
+ * - useAddProjectExclusion() for excluding references
+ *
+ * This file is kept temporarily for reference during migration.
+ * It will be removed in the next cleanup phase.
+ */
+
 import { useMemo, useCallback } from 'react';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import {
   useProjectPriorArt,
   useProjectExclusions,
   useSavePriorArt,
-  useAddProjectExclusion,
 } from '@/hooks/api/usePriorArt';
+import { useAddPatentExclusion } from '@/hooks/api/usePatentExclusions';
 import { ProcessedCitationMatch } from '@/types/domain/citation';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { formatLocationData } from '../utils/citationFormatting';
 import { SavedCitationUI } from '@/types/domain/priorArt';
 import { processSavedPriorArtArray } from '@/features/search/utils/priorArt';
@@ -39,7 +54,7 @@ export function usePriorArtManagement({
     useProjectPriorArt(projectId);
   const { data: exclusions } = useProjectExclusions(projectId);
   const { mutateAsync: saveArt } = useSavePriorArt();
-  const { mutateAsync: excludeArt } = useAddProjectExclusion();
+  const { mutateAsync: excludeArt } = useAddPatentExclusion();
 
   const savedArtNumbers = useMemo(() => {
     if (propSavedArtNumbers && propSavedArtNumbers instanceof Set)
@@ -77,38 +92,15 @@ export function usePriorArtManagement({
    * reliably access the `savedCitations` property for duplicate checks.
    */
   const savedPriorArtList = useMemo(() => {
-    logger.info('[usePriorArtManagement] Processing savedPriorArtList:', {
-      hasPropSavedPriorArtList: !!propSavedPriorArtList,
-      propLength: propSavedPriorArtList?.length,
-      hasSavedArt: !!savedArt,
-      savedArtLength: savedArt?.length,
-      savedArtSample: savedArt?.[0] ? {
-        patentNumber: savedArt[0].patentNumber,
-        hasSavedCitationsData: !!savedArt[0].savedCitationsData,
-        savedCitationsDataLength: savedArt[0].savedCitationsData?.length,
-      } : null,
-    });
-
     if (propSavedPriorArtList) {
-      logger.info('[usePriorArtManagement] Using propSavedPriorArtList');
       return propSavedPriorArtList;
     }
 
     if (savedArt && Array.isArray(savedArt)) {
-      const processed = processSavedPriorArtArray(savedArt);
-      logger.info('[usePriorArtManagement] Processed savedArt:', {
-        processedLength: processed.length,
-        processedSample: processed[0] ? {
-          patentNumber: processed[0].patentNumber,
-          hasSavedCitations: !!processed[0].savedCitations,
-          savedCitationsCount: processed[0].savedCitations?.length || 0,
-          firstCitation: processed[0].savedCitations?.[0],
-        } : null,
-      });
-      return processed;
+      // The data from useProjectPriorArt is already processed, so we can use it directly
+      return savedArt;
     }
 
-    logger.info('[usePriorArtManagement] Returning empty array');
     return [];
   }, [propSavedPriorArtList, savedArt]);
 
@@ -187,12 +179,12 @@ export function usePriorArtManagement({
               saved.citation === newCitation.citation
           );
 
-          if (!isDuplicate) {
-            savedCitations = [...existingArt.savedCitations, newCitation];
-          } else {
+          if (isDuplicate) {
             // Citation already saved, just show success
             toast({ title: 'Citation already saved', status: 'info' });
             return;
+          } else {
+            savedCitations = [...existingArt.savedCitations, newCitation];
           }
         } else {
           savedCitations = [newCitation];
@@ -230,16 +222,14 @@ export function usePriorArtManagement({
         });
         toast({ title: 'Reference excluded', status: 'success' });
 
-        // Refresh saved art data if callback provided
-        if (refreshSavedArtData) {
-          await refreshSavedArtData(projectId);
-        }
+        // Note: No need to refresh data here - the useAddProjectExclusion hook
+        // already handles React Query cache invalidation and optimistic updates
       } catch (error) {
         logger.error('Error excluding reference', { error });
         toast({ title: 'Failed to exclude reference', status: 'error' });
       }
     },
-    [excludeArt, toast, refreshSavedArtData, projectId]
+    [excludeArt, toast, projectId]
   );
 
   return {

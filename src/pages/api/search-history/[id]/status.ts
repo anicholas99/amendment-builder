@@ -1,5 +1,5 @@
 import type { NextApiResponse, NextApiRequest } from 'next';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import {
   findSearchHistoryById,
   getSearchHistoryWithTenant,
@@ -10,7 +10,7 @@ import { hasProperty } from '@/types/safe-type-helpers';
 import { idQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
 import { z } from 'zod';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
 
 const apiLogger = createApiLogger('search-history-status');
 
@@ -64,7 +64,10 @@ const handler = async (
     status: status || 'unknown', // Return 'unknown' if null/undefined
   };
   apiLogger.logResponse(200, response);
-  return res.status(200).json(response);
+  return res.status(200).json({
+    success: true,
+    data: response,
+  });
 };
 
 // Custom tenant resolver for the [id] route

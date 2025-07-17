@@ -1,33 +1,23 @@
 import React from 'react';
-import { chakra } from '@chakra-ui/react';
 import { stemmer } from 'stemmer';
 import { CITATION_STOP_WORDS } from '../constants/citationConstants';
+import { getStemmedKeywords } from './citationHighlighting';
+import { cn } from '@/lib/utils';
 
 /**
  * Styled span component for highlighting words
  */
-export const HighlightedWord = chakra('span', {
-  baseStyle: {
-    fontWeight: 'bold',
-    px: '1',
-    mx: '0.5px',
-    borderRadius: 'sm',
-  },
-});
-
-/**
- * Extracts stemmed keywords from text, filtering out stop words
- * @param text - The text to extract keywords from
- * @returns Array of stemmed keywords
- */
-export function getStemmedKeywords(text: string | null | undefined): string[] {
-  if (!text) return [];
-  return text
-    .toLowerCase()
-    .split(/[^a-zA-Z0-9]+/)
-    .filter(word => word.length > 2 && !CITATION_STOP_WORDS.has(word))
-    .map(word => stemmer(word));
-}
+export const HighlightedWord = React.forwardRef<
+  HTMLSpanElement,
+  React.HTMLAttributes<HTMLSpanElement>
+>(({ className, ...props }, ref) => (
+  <span
+    ref={ref}
+    className={cn('font-bold px-1 mx-px rounded-sm', className)}
+    {...props}
+  />
+));
+HighlightedWord.displayName = 'HighlightedWord';
 
 /**
  * Renders text with highlighted keywords

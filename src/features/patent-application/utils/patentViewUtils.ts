@@ -1,9 +1,8 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { saveAs } from 'file-saver';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import { InventionData } from '../../../types';
 import { extractSections } from './patent-sections';
-import { Editor, Node } from 'slate';
 import { extractTextFromHTML } from '@/utils/htmlSanitizer';
 
 /**
@@ -15,7 +14,7 @@ export const processContentForDocx = async (
 ): Promise<any[]> => {
   // Lazy load docx library
   const { Paragraph, HeadingLevel, AlignmentType } = await import('docx');
-  
+
   if (!content) return [];
 
   const paragraphs: any[] = [];
@@ -137,8 +136,9 @@ export const exportToDocx = async (
   toast: ReturnType<typeof useToast>
 ): Promise<void> => {
   // Lazy load docx library
-  const { Document, Packer, Paragraph, HeadingLevel, AlignmentType } = await import('docx');
-  
+  const { Document, Packer, Paragraph, HeadingLevel, AlignmentType } =
+    await import('docx');
+
   if (!analyzedInvention) {
     toast({
       title: 'Export Failed',
@@ -391,30 +391,6 @@ export const getContentForPath = (
   }
 
   return contentMap[path[0]] || { title: 'Unknown Section', text: '' };
-};
-
-export const getInitialEditorState = (
-  analyzedInvention: InventionData
-): Node[] => {
-  const sections = [
-    { title: 'Title of the Invention', content: analyzedInvention.title },
-    { title: 'Abstract', content: analyzedInvention.abstract },
-    { title: 'Background', content: analyzedInvention.background as string },
-    { title: 'Summary', content: analyzedInvention.summary },
-    {
-      title: 'Brief Description of the Drawings',
-      content: analyzedInvention.briefDescription,
-    },
-    {
-      title: 'Detailed Description',
-      content: analyzedInvention.detailedDescription,
-    },
-    // Claims and Elements will be handled dynamically
-  ];
-  return sections.map(section => ({
-    type: 'paragraph',
-    children: [{ text: section.title }],
-  }));
 };
 
 /**

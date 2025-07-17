@@ -9,7 +9,7 @@
  */
 import { callPatbaseApi, authenticatePatbase } from '@/lib/api/patbase';
 import { enrichPatentMetadata } from '@/lib/clients/patbase/patbaseClient';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import {
   formatPatbaseDate,
@@ -19,7 +19,7 @@ import { PriorArtReference } from '@/types/claimTypes';
 import {
   mapToUnifiedPriorArt,
   mapToPriorArtReference,
-} from '@/utils/type-mappers';
+} from '@/utils/typeMappers';
 import { ProjectService } from './project.server-service';
 import { PatBaseGetMemberResult } from '@/types/patbaseTypes';
 

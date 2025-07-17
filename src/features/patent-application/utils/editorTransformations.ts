@@ -1,4 +1,4 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 /**
  * Utility functions for transforming between plain text and HTML in the patent editor
  */
@@ -39,7 +39,7 @@ export function transformPlainTextToHtml(content: string): string {
       lines[titleLineIndex] = lines[titleLineIndex] + nextLine;
       // Remove the fragment line
       lines.splice(titleLineIndex + 1, 1);
-      logger.log('Detected and fixed title fragment', { fragment: nextLine });
+      logger.info('Detected and fixed title fragment', { fragment: nextLine });
     }
   }
 
@@ -72,13 +72,13 @@ export function transformPlainTextToHtml(content: string): string {
 
       // Skip duplicate sections (except for the title)
       if (processedSections.has(sectionName) && lastSectionEnd !== -1) {
-        logger.log(`Skipping duplicate section: ${sectionName}`);
+        logger.info(`Skipping duplicate section: ${sectionName}`);
         continue;
       }
 
       // Check for single-character line immediately after this section header (typically "T")
       if (i + 1 < lines.length && lines[i + 1].trim().length === 1) {
-        logger.log(
+        logger.info(
           `Found single character fragment "${lines[i + 1].trim()}" after section ${sectionName}, removing it`
         );
         // Skip this fragment by advancing the counter (we'll jump over it)
@@ -119,7 +119,7 @@ export function transformPlainTextToHtml(content: string): string {
 
       // Skip duplicate sections
       if (processedSections.has(sectionName)) {
-        logger.log(`Skipping duplicate section: ${sectionName}`);
+        logger.info(`Skipping duplicate section: ${sectionName}`);
         continue;
       }
 
@@ -242,7 +242,7 @@ export function transformHtmlToPlainText(html: string): string {
         index === lastHeaderIndex + 1
       ) {
         // This is likely a fragment of the title, skip it
-        logger.log('Detected title fragment, skipping', { text });
+        logger.info('Detected title fragment, skipping', { text });
         previousWasHeader = false;
         return;
       }

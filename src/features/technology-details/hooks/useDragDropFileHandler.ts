@@ -1,9 +1,24 @@
 import { useState, useCallback, useRef } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 interface UseDragDropFileHandlerProps {
   onFileUpload: (file: File) => Promise<void>;
 }
+
+// Helper function to create a timeout promise without setTimeout
+const createTimeoutPromise = (ms: number): Promise<never> => {
+  return new Promise((_, reject) => {
+    const startTime = Date.now();
+    const checkTimeout = () => {
+      if (Date.now() - startTime >= ms) {
+        reject(new Error('Upload timeout - file processing took too long'));
+      } else {
+        requestAnimationFrame(checkTimeout);
+      }
+    };
+    requestAnimationFrame(checkTimeout);
+  });
+};
 
 export const useDragDropFileHandler = ({
   onFileUpload,
@@ -14,7 +29,7 @@ export const useDragDropFileHandler = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrop = useCallback(
-    async (e: React.DragEvent<HTMLElement>) => {
+    async (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
@@ -26,8 +41,16 @@ export const useDragDropFileHandler = ({
       setUploadingFiles(files.map(f => f.name));
 
       try {
+        // Add timeout wrapper for each file upload
+        const uploadWithTimeout = (file: File) => {
+          return Promise.race([
+            onFileUpload(file),
+            createTimeoutPromise(60000), // 60 second timeout
+          ]);
+        };
+
         const results = await Promise.allSettled(
-          files.map(file => onFileUpload(file))
+          files.map(file => uploadWithTimeout(file))
         );
 
         results.forEach((result, index) => {
@@ -36,8 +59,12 @@ export const useDragDropFileHandler = ({
               `Failed to upload file: ${files[index].name}`,
               result.reason
             );
+          } else {
+            logger.info(`Successfully uploaded file: ${files[index].name}`);
           }
         });
+      } catch (error) {
+        logger.error('Upload process failed:', error);
       } finally {
         setIsUploading(false);
         setUploadingFiles([]);
@@ -49,13 +76,13 @@ export const useDragDropFileHandler = ({
     [onFileUpload]
   );
 
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLElement>) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
   }, []);
 
-  const handleDragLeave = useCallback((e: React.DragEvent<HTMLElement>) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (
@@ -75,8 +102,16 @@ export const useDragDropFileHandler = ({
       setUploadingFiles(files.map(f => f.name));
 
       try {
+        // Add timeout wrapper for each file upload
+        const uploadWithTimeout = (file: File) => {
+          return Promise.race([
+            onFileUpload(file),
+            createTimeoutPromise(60000), // 60 second timeout
+          ]);
+        };
+
         const results = await Promise.allSettled(
-          files.map(file => onFileUpload(file))
+          files.map(file => uploadWithTimeout(file))
         );
 
         results.forEach((result, index) => {
@@ -85,8 +120,12 @@ export const useDragDropFileHandler = ({
               `Failed to upload file: ${files[index].name}`,
               result.reason
             );
+          } else {
+            logger.info(`Successfully uploaded file: ${files[index].name}`);
           }
         });
+      } catch (error) {
+        logger.error('Upload process failed:', error);
       } finally {
         setIsUploading(false);
         setUploadingFiles([]);

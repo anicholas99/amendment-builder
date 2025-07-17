@@ -1,230 +1,421 @@
 import React from 'react';
 import {
-  Box,
-  Card,
-  CardBody,
-  VStack,
-  HStack,
-  Text,
-  Badge,
-  Icon,
-  useColorModeValue,
-  Fade,
-} from '@chakra-ui/react';
-import { FiUpload, FiUploadCloud, FiFile } from 'react-icons/fi';
-import { TechnologyUploadedFilesList } from '../TechnologyUploadedFilesList';
+  Upload,
+  File,
+  X,
+  Check,
+  BookOpen,
+  GripVertical,
+  Edit2,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { UploadedFigure } from '../../hooks/useTechnologyInputFileHandler';
 
 interface TechnologyFilesSidebarProps {
-  uploadedFiles: string[];
-  uploadedFigures: UploadedFigure[];
+  uploadedFiles: Array<{
+    id: string;
+    name: string;
+    includeInProcessing: boolean;
+  }>;
+  uploadedFigures?: UploadedFigure[];
   uploadingFiles: string[];
   isDragging: boolean;
-  onRemoveTextFile?: (fileName: string) => void;
+  onRemoveTextFile?: (fileName: string) => Promise<void>;
+  onToggleFileInProcessing?: (fileName: string) => void;
   onRemoveFigure?: (figureId: string) => void;
+  onReorderFigures?: (fromIndex: number, toIndex: number) => void;
+  onUpdateFigureNumber?: (figureId: string, newNumber: string) => void;
   onFileInputClick: () => void;
-  onDrop: (e: React.DragEvent<HTMLElement>) => void;
-  onDragOver: (e: React.DragEvent<HTMLElement>) => void;
-  onDragLeave: (e: React.DragEvent<HTMLElement>) => void;
+  onDrop: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: (e: React.DragEvent) => void;
 }
 
 export const TechnologyFilesSidebar: React.FC<TechnologyFilesSidebarProps> = ({
   uploadedFiles,
-  uploadedFigures,
+  uploadedFigures = [],
   uploadingFiles,
   isDragging,
   onRemoveTextFile,
+  onToggleFileInProcessing,
   onRemoveFigure,
+  onReorderFigures,
+  onUpdateFigureNumber,
   onFileInputClick,
   onDrop,
   onDragOver,
   onDragLeave,
 }) => {
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const contentBg = useColorModeValue('white', 'gray.800');
-  const mutedTextColor = useColorModeValue('gray.500', 'gray.400');
-  const iconColor = useColorModeValue('blue.500', 'blue.300');
-  const dashedBorderColor = useColorModeValue('gray.300', 'gray.600');
-  const hoverBg = useColorModeValue('gray.50', 'gray.700');
-  const dropzoneBg = useColorModeValue('gray.50', 'gray.900');
-  const insetShadow = useColorModeValue(
-    'inset 0 1px 2px rgba(0,0,0,0.05)',
-    'inset 0 1px 2px rgba(0,0,0,0.2)'
-  );
-
   const totalFiles = uploadedFiles.length + uploadedFigures.length;
-  const hasFiles = totalFiles > 0 || uploadingFiles.length > 0;
+  const hasUploading = uploadingFiles.length > 0;
+  const hasDocuments = uploadedFiles.length > 0;
+
+  // Drag state for figure reordering
+  const [draggedIndex, setDraggedIndex] = React.useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = React.useState<number | null>(null);
+
+  // Edit state for figure numbers
+  const [editingFigureId, setEditingFigureId] = React.useState<string | null>(
+    null
+  );
+  const [editingValue, setEditingValue] = React.useState<string>('');
+
+  const handleFigureDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    // Add a class to the dragged element for styling
+    e.currentTarget.classList.add('opacity-50');
+  };
+
+  const handleFigureDragEnd = (e: React.DragEvent) => {
+    e.currentTarget.classList.remove('opacity-50');
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleFigureDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
+  };
+
+  const handleFigureDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (
+      draggedIndex !== null &&
+      draggedIndex !== dropIndex &&
+      onReorderFigures
+    ) {
+      const sortedFigures = [...uploadedFigures].sort((a, b) => {
+        // Extract numeric part for primary sorting
+        const aNum = parseInt(a.assignedNumber.match(/^\d+/)?.[0] || '0');
+        const bNum = parseInt(b.assignedNumber.match(/^\d+/)?.[0] || '0');
+        if (aNum !== bNum) return aNum - bNum;
+        // If numeric parts are equal, use locale compare for alphanumeric sorting
+        return a.assignedNumber.localeCompare(b.assignedNumber);
+      });
+      const fromIndex = draggedIndex;
+      const toIndex = dropIndex;
+      onReorderFigures(fromIndex, toIndex);
+    }
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Figure number editing handlers
+  const handleEditFigureNumber = (figure: UploadedFigure) => {
+    setEditingFigureId(figure.id);
+    setEditingValue(figure.assignedNumber.toString());
+  };
+
+  const handleSaveFigureNumber = () => {
+    if (editingFigureId && onUpdateFigureNumber) {
+      const trimmedValue = editingValue.trim().toUpperCase();
+      // Validate format: should be number optionally followed by letters (1, 1A, 2B, etc.)
+      const isValid =
+        /^\d+[A-Z]*$/.test(trimmedValue) && trimmedValue.length <= 4;
+
+      if (isValid) {
+        // Pass the full alphanumeric value
+        onUpdateFigureNumber(editingFigureId, trimmedValue);
+      }
+    }
+    setEditingFigureId(null);
+    setEditingValue('');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingFigureId(null);
+    setEditingValue('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveFigureNumber();
+    } else if (e.key === 'Escape') {
+      handleCancelEdit();
+    }
+  };
 
   return (
-    <Box
-      height="100%"
-      borderWidth="2px"
-      borderColor={borderColor}
-      bg={contentBg}
-      borderRadius="lg"
-      overflow="hidden"
-      transition="border-color 0.2s, box-shadow 0.2s"
-      boxShadow={insetShadow}
-      _hover={{
-        borderColor: useColorModeValue('blue.400', 'blue.500'),
-      }}
+    <div
+      className={`h-full border-2 rounded-lg transition-all duration-200 bg-card/50 ${
+        isDragging
+          ? 'border-blue-400 bg-blue-50/50 dark:bg-blue-950/20'
+          : 'border-dashed border-muted-foreground/30'
+      }`}
+      onDrop={onDrop}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
     >
-      <Box p={4} height="100%" display="flex" flexDirection="column">
-        <VStack spacing={3} align="stretch" height="100%">
-          {/* Header */}
-          <HStack justify="space-between" pb={1}>
-            <HStack spacing={2}>
-              <Icon as={FiFile} color={iconColor} boxSize={4} />
-              <Text fontWeight="medium" color="text.primary" fontSize="sm">
-                Uploaded Files
-              </Text>
-            </HStack>
-            {totalFiles > 0 && (
-              <Badge
-                colorScheme="blue"
-                fontSize="xs"
-                px={2}
-                borderRadius="full"
-              >
-                {totalFiles}
-              </Badge>
+      <div className="h-full flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b border-border">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-foreground">
+              Files ({totalFiles})
+            </h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onFileInputClick}
+              className="h-8 px-3"
+            >
+              <Upload className="h-3 w-3 mr-1" />
+              Add
+            </Button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 p-4 flex flex-col overflow-hidden min-h-0">
+          <div className="flex flex-col space-y-3 h-full min-h-0">
+            {/* Uploading Files */}
+            {hasUploading && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Uploading
+                </h4>
+                {uploadingFiles.map((fileName, index) => (
+                  <div
+                    key={`uploading-${index}`}
+                    className="flex items-center gap-2 p-2 rounded border border-border bg-muted/30"
+                  >
+                    <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-xs text-muted-foreground truncate flex-1">
+                      {fileName}
+                    </span>
+                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  </div>
+                ))}
+              </div>
             )}
-          </HStack>
 
-          {/* Files Area */}
-          <Box
-            flex="1"
-            position="relative"
-            borderRadius="md"
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            overflow="hidden"
-          >
-            {!hasFiles ? (
-              <Box
-                height="100%"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                borderWidth="2px"
-                className="border-dashed"
-                borderColor={isDragging ? iconColor : dashedBorderColor}
-                borderRadius="md"
-                bg={dropzoneBg}
-                p={4}
-                transition="all 0.2s"
-                cursor="pointer"
-                onClick={onFileInputClick}
-                _hover={{
-                  borderColor: iconColor,
-                  bg: hoverBg,
-                }}
-              >
-                <VStack spacing={2}>
-                  <Icon as={FiUpload} boxSize={6} color={iconColor} />
-                  <VStack spacing={0}>
-                    <Text
-                      fontSize="sm"
-                      color="text.primary"
-                      fontWeight="medium"
-                    >
-                      Drop files here
-                    </Text>
-                    <Text fontSize="xs" color={mutedTextColor}>
-                      or click to browse
-                    </Text>
-                  </VStack>
-                </VStack>
-              </Box>
-            ) : (
-              <Box height="100%" overflowY="auto" className="thin-scrollbar">
-                <TechnologyUploadedFilesList
-                  uploadedTextFiles={uploadedFiles}
-                  uploadedFigures={uploadedFigures}
-                  onRemoveTextFile={onRemoveTextFile}
-                  onRemoveFigure={onRemoveFigure}
-                  uploadingFiles={uploadingFiles}
-                />
-
-                {/* Add more files button */}
-                <Box
-                  mt={3}
-                  p={2}
-                  borderWidth="1px"
-                  className="border-dashed"
-                  borderColor={dashedBorderColor}
-                  borderRadius="md"
-                  cursor="pointer"
-                  onClick={onFileInputClick}
-                  transition="all 0.2s"
-                  _hover={{
-                    borderColor: iconColor,
-                    bg: hoverBg,
-                  }}
-                >
-                  <HStack justify="center" spacing={2}>
-                    <Icon as={FiUpload} color={iconColor} boxSize={3} />
-                    <Text fontSize="xs" color={iconColor} fontWeight="medium">
-                      Add more files
-                    </Text>
-                  </HStack>
-                </Box>
-
-                {/* Drag overlay when files exist */}
-                <Fade in={isDragging}>
-                  {isDragging && (
-                    <Box
-                      position="absolute"
-                      top={0}
-                      left={0}
-                      right={0}
-                      bottom={0}
-                      bg="blackAlpha.700"
-                      borderRadius="md"
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="center"
-                      zIndex={10}
-                    >
-                      <VStack spacing={3}>
-                        <Box
-                          bg={useColorModeValue('white', 'gray.700')}
-                          p={3}
-                          borderRadius="full"
-                          boxShadow="md"
-                        >
-                          <Icon
-                            as={FiUploadCloud}
-                            boxSize={10}
-                            color={iconColor}
-                          />
-                        </Box>
-                        <VStack spacing={0}>
-                          <Text
-                            fontWeight="semibold"
-                            color={useColorModeValue('blue.700', 'blue.100')}
-                            fontSize="md"
-                          >
-                            Drop to add more files
-                          </Text>
-                          <Text
-                            fontSize="sm"
-                            color={useColorModeValue('blue.600', 'blue.200')}
-                            opacity={0.8}
-                          >
-                            Release to upload
-                          </Text>
-                        </VStack>
-                      </VStack>
-                    </Box>
+            {/* Uploaded Text Files */}
+            {uploadedFiles.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Documents
+                  </h4>
+                  {hasDocuments && (
+                    <div className="flex items-center gap-1">
+                      <Check className="h-3 w-3 text-green-600" />
+                      <span className="text-xs text-muted-foreground">
+                        Include in AI
+                      </span>
+                      <span className="text-xs text-muted-foreground mx-1">
+                        •
+                      </span>
+                      <BookOpen className="h-3 w-3 text-blue-600" />
+                      <span className="text-xs text-muted-foreground">
+                        Reference only
+                      </span>
+                    </div>
                   )}
-                </Fade>
-              </Box>
+                </div>
+                {uploadedFiles.map((file, index) => (
+                  <div
+                    key={`text-${file.id}`}
+                    className="flex items-center gap-2 p-2 rounded border border-border bg-background hover:bg-muted/50 transition-colors"
+                  >
+                    <File className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                    <span className="text-xs text-foreground truncate flex-1">
+                      {file.name}
+                    </span>
+
+                    {/* Status indicator */}
+                    {!file.includeInProcessing && (
+                      <span className="text-xs text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">
+                        Reference
+                      </span>
+                    )}
+
+                    {/* Toggle for include in processing */}
+                    {onToggleFileInProcessing && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onToggleFileInProcessing(file.name)}
+                        className={`h-6 w-6 p-0 transition-colors ${
+                          file.includeInProcessing
+                            ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                            : 'hover:bg-muted'
+                        }`}
+                        title={
+                          file.includeInProcessing
+                            ? 'Included in AI processing - click to make reference-only'
+                            : 'Reference-only document - click to include in AI processing'
+                        }
+                      >
+                        {file.includeInProcessing ? (
+                          <Check className="h-3 w-3" />
+                        ) : (
+                          <BookOpen className="h-3 w-3" />
+                        )}
+                      </Button>
+                    )}
+
+                    {onRemoveTextFile && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRemoveTextFile?.(file.name)}
+                        className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+
+                {/* Explanatory text */}
+                {hasDocuments && (
+                  <div className="px-2 py-1 bg-muted/20 rounded-sm">
+                    <p className="text-xs text-muted-foreground">
+                      <Check className="h-3 w-3 inline mr-1" />
+                      Files are sent to AI for analysis •{' '}
+                      <BookOpen className="h-3 w-3 inline mr-1" />
+                      Files are saved as project references only
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
-          </Box>
-        </VStack>
-      </Box>
-    </Box>
+
+            {/* Uploaded Figures */}
+            {uploadedFigures.length > 0 && (
+              <div className="flex flex-col flex-1 space-y-2 overflow-hidden min-h-0">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Figures ({uploadedFigures.length})
+                  </h4>
+                </div>
+                {/* Scrollable figures container */}
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
+                  {uploadedFigures
+                    .sort((a, b) => {
+                      // Extract numeric part for sorting
+                      const aNum = parseInt(
+                        a.assignedNumber.match(/^\d+/)?.[0] || '0'
+                      );
+                      const bNum = parseInt(
+                        b.assignedNumber.match(/^\d+/)?.[0] || '0'
+                      );
+
+                      // If numeric parts are the same, sort by the full string
+                      if (aNum === bNum) {
+                        return a.assignedNumber.localeCompare(b.assignedNumber);
+                      }
+                      return aNum - bNum;
+                    })
+                    .map((figure, index) => (
+                      <div
+                        key={`figure-${figure.id}`}
+                        className={`flex items-center gap-2 p-2 rounded border bg-background transition-all cursor-move
+                        ${dragOverIndex === index ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/20' : 'border-border hover:bg-muted/50'}
+                        ${draggedIndex === index ? 'opacity-50' : ''}
+                      `}
+                        draggable={!!onReorderFigures}
+                        onDragStart={e => handleFigureDragStart(e, index)}
+                        onDragEnd={handleFigureDragEnd}
+                        onDragOver={e => handleFigureDragOver(e, index)}
+                        onDrop={e => handleFigureDrop(e, index)}
+                      >
+                        {/* Drag handle */}
+                        {onReorderFigures && (
+                          <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        )}
+
+                        {/* Figure number badge */}
+                        {editingFigureId === figure.id ? (
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <Input
+                              value={editingValue}
+                              onChange={e => setEditingValue(e.target.value)}
+                              onKeyDown={handleKeyDown}
+                              onBlur={handleSaveFigureNumber}
+                              className="h-8 w-12 text-xs text-center p-1 border-0 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold"
+                              type="text"
+                              placeholder="1A"
+                              autoFocus
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            className="flex items-center justify-center h-8 w-8 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs font-semibold flex-shrink-0 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-800/40 transition-colors group"
+                            onClick={() =>
+                              onUpdateFigureNumber &&
+                              handleEditFigureNumber(figure)
+                            }
+                            title="Click to edit figure number"
+                          >
+                            {figure.assignedNumber}
+                            {onUpdateFigureNumber && (
+                              <Edit2 className="h-2.5 w-2.5 ml-1 opacity-0 group-hover:opacity-60 transition-opacity" />
+                            )}
+                          </div>
+                        )}
+
+                        {/* Small thumbnail preview */}
+                        <div className="relative h-10 w-10 bg-muted/20 rounded flex-shrink-0">
+                          <img
+                            src={figure.url}
+                            alt={figure.fileName}
+                            className="h-full w-full object-contain rounded"
+                          />
+                        </div>
+
+                        {/* Figure info */}
+                        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                          <span className="text-xs font-medium text-foreground">
+                            Figure {figure.assignedNumber}
+                          </span>
+                          <span className="text-xs text-muted-foreground truncate">
+                            {figure.fileName}
+                            {figure.detectedNumber !== null &&
+                              figure.detectedNumber !==
+                                figure.assignedNumber && (
+                                <span className="ml-1 text-amber-600 dark:text-amber-400">
+                                  (detected: {figure.detectedNumber})
+                                </span>
+                              )}
+                          </span>
+                        </div>
+
+                        {/* Remove button */}
+                        {onRemoveFigure && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onRemoveFigure(figure.id)}
+                            className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive flex-shrink-0"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {totalFiles === 0 && !hasUploading && (
+              <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-center">
+                <Upload className="h-8 w-8 text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground mb-2">
+                  Drop files here
+                </p>
+                <p className="text-xs text-muted-foreground/70">
+                  PDF, DOCX, TXT, Images
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };

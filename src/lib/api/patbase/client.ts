@@ -3,8 +3,8 @@
  * Low-level client for PatBase REST API authentication and requests
  */
 
-import { logger } from '@/lib/monitoring/logger';
-import { safeJsonParse } from '@/utils/json-utils';
+import { logger } from '@/server/logger';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { environment } from '@/config/environment';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { PatbaseSession, PatbaseApiOptions } from './types';

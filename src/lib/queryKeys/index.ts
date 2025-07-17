@@ -21,6 +21,7 @@ export { systemKeys } from './systemKeys';
 export { tenantQueryKeys } from './tenantKeys';
 export { userKeys } from './userKeys';
 export { versionKeys } from './versionKeys';
+export { aiAuditKeys } from './aiAuditKeys';
 
 // Import all key factories for use in helper functions
 import { projectKeys } from './projectKeys';
@@ -66,4 +67,12 @@ export const invalidateProjectData = (
       return queryKey.includes(projectId);
     },
   });
+};
+
+// Simple key for patent generation progress
+export const patentGenerationKeys = {
+  progress: (projectId: string) =>
+    ['patent-generation-progress', projectId] as const,
+  active: (projectId: string) =>
+    ['patent-generation-active', projectId] as const,
 };

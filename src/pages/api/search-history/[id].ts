@@ -5,7 +5,7 @@
  */
 import { NextApiRequest, NextApiResponse } from 'next';
 
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import {
   deleteSearchHistoryById,
   getSearchHistoryWithTenant,
@@ -17,20 +17,32 @@ import { AuthenticatedRequest } from '@/types/middleware';
 import { idQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { SearchDataService } from '@/server/services/search-data.server-service';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 // Initialize apiLogger
 const apiLogger = createApiLogger('search-history/:id');
+
+// Define schema for parsed elements
+const ParsedElementSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  type: z
+    .enum(['claim', 'feature', 'advantage', 'use_case', 'problem', 'solution'])
+    .optional(),
+  order: z.number().optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+// PATCH request body schema
+const patchSchema = z.object({
+  status: z.enum(['pending', 'processing', 'completed', 'failed']).optional(),
+  parsedElements: z.array(ParsedElementSchema).optional(), // Properly typed
+});
 
 // Define request body type for PATCH requests
 interface UpdateSearchHistoryBody {
   parsedElements?: ParsedElement[];
 }
-
-// Input validation schema for PATCH
-const patchSchema = z.object({
-  parsedElements: z.any().optional(),
-});
 
 /**
  * Search History Item API handler

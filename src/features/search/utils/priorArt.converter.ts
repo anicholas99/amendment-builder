@@ -8,10 +8,12 @@ import {
   PriorArtReference,
   SavedPriorArt,
   ProcessedSavedPriorArt,
+  SavedCitationUI,
 } from '@/types/domain/priorArt';
 import { UnifiedPriorArt } from '@/types/domain/priorArt.unified';
 import { v4 as uuidv4 } from 'uuid';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
+import { logger } from '@/utils/clientLogger';
 
 /**
  * Converts a raw PriorArtReference (from a search API) to the canonical UnifiedPriorArt type.
@@ -51,7 +53,35 @@ export function fromPriorArtReference(ref: PriorArtReference): UnifiedPriorArt {
 /**
  * Converts a SavedPriorArt record (from the database) to the canonical UnifiedPriorArt type.
  */
-export function fromSavedPriorArt(saved: SavedPriorArt): UnifiedPriorArt {
+export function fromSavedPriorArt(saved: any): UnifiedPriorArt {
+  // Process savedCitations - handle both relation data and legacy JSON data
+  let savedCitations: SavedCitationUI[] = [];
+
+  if (Array.isArray(saved.savedCitations) && saved.savedCitations.length > 0) {
+    // Use the relation data (new format)
+    savedCitations = saved.savedCitations.map((citation: any) => ({
+      elementText: citation.elementText || '',
+      citation: citation.citationText || '', // Note: relation uses citationText, UI uses citation
+      location: citation.location || null,
+      reasoning: citation.reasoning || null,
+    }));
+  } else if (saved.savedCitationsData) {
+    // Fallback to legacy JSON data
+    try {
+      const parsedCitations = JSON.parse(saved.savedCitationsData);
+      if (Array.isArray(parsedCitations)) {
+        savedCitations = parsedCitations.map((citation: any) => ({
+          elementText: citation.elementText || '',
+          citation: citation.citation || '',
+          location: citation.location || null,
+          reasoning: citation.reasoning || null,
+        }));
+      }
+    } catch (error) {
+      logger.error('Failed to parse savedCitationsData:', error);
+    }
+  }
+
   return {
     id: saved.id,
     patentNumber: saved.patentNumber,
@@ -67,9 +97,7 @@ export function fromSavedPriorArt(saved: SavedPriorArt): UnifiedPriorArt {
     relevance: 1.0, // Saved art is considered highly relevant
     notes: saved.notes,
     savedAt: saved.savedAt,
-    savedCitations: saved.savedCitationsData
-      ? JSON.parse(saved.savedCitationsData)
-      : [],
+    savedCitations,
     claim1: saved.claim1,
     summary: saved.summary,
   };
@@ -101,19 +129,50 @@ export function toProcessedSavedPriorArt(
   if (!Array.isArray(savedArt)) {
     return [];
   }
-  return savedArt.map(art => ({
-    ...art,
-    priorArtData: {
-      number: art.patentNumber,
-      patentNumber: art.patentNumber,
-      title: art.title || 'No title available',
-      abstract: art.abstract || '',
-      source: 'PatBase', // Assume PatBase for saved art, can be changed
-      relevance: 1, // Assume high relevance for saved art
-      url: art.url || '',
-      publicationDate: art.publicationDate || undefined,
-      authors: art.authors ? art.authors.split(', ') : [],
-    },
-    savedCitations: safeJsonParse(art.savedCitationsData || '[]') || [],
-  }));
+  return savedArt.map((art: any) => {
+    // Process savedCitations - handle both relation data and legacy JSON data
+    let savedCitations: SavedCitationUI[] = [];
+
+    if (Array.isArray(art.savedCitations) && art.savedCitations.length > 0) {
+      // Use the relation data (new format)
+      savedCitations = art.savedCitations.map((citation: any) => ({
+        elementText: citation.elementText || '',
+        citation: citation.citationText || '', // Note: relation uses citationText, UI uses citation
+        location: citation.location || null,
+        reasoning: citation.reasoning || null,
+      }));
+    } else if (art.savedCitationsData) {
+      // Fallback to legacy JSON data
+      try {
+        const parsedCitations = JSON.parse(art.savedCitationsData);
+        if (Array.isArray(parsedCitations)) {
+          savedCitations = parsedCitations.map((citation: any) => ({
+            elementText: citation.elementText || '',
+            citation: citation.citation || '',
+            location: citation.location || null,
+            reasoning: citation.reasoning || null,
+          }));
+        }
+      } catch (error) {
+        logger.error('Failed to parse savedCitationsData:', error);
+      }
+    }
+
+    return {
+      ...art,
+      priorArtData: {
+        number: art.patentNumber,
+        patentNumber: art.patentNumber,
+        title: art.title || 'No title available',
+        abstract: art.abstract || '',
+        source: 'PatBase', // Assume PatBase for saved art, can be changed
+        relevance: 1, // Assume high relevance for saved art
+        url: art.url || '',
+        publicationDate: art.publicationDate || undefined,
+        authors: art.authors ? art.authors.split(', ') : [],
+      },
+      // Use the processed savedCitations array
+      savedCitations,
+    };
+  });
 }

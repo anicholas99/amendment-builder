@@ -1,13 +1,15 @@
 import React from 'react';
 import {
   AlertDialog,
-  AlertDialogBody,
+  AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
+  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogOverlay,
-  Button,
-} from '@chakra-ui/react';
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface ClearAllConfirmationDialogProps {
   isOpen: boolean;
@@ -26,40 +28,29 @@ const ClearAllConfirmationDialog: React.FC<ClearAllConfirmationDialogProps> = ({
   cancelRef,
 }) => {
   return (
-    <AlertDialog
-      isOpen={isOpen}
-      leastDestructiveRef={cancelRef}
-      onClose={onClose}
-      isCentered
-      motionPreset="slideInBottom"
-    >
-      <AlertDialogOverlay>
-        <AlertDialogContent mx={4} position="relative" zIndex="modal">
-          <AlertDialogHeader
-            fontSize="lg"
-            fontWeight="bold"
-            borderBottomWidth="1px"
-            pb={3}
-            as="h3"
-          >
+    <AlertDialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <AlertDialogContent className="mx-4">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-lg font-bold border-b pb-3">
             Clear Search History
-          </AlertDialogHeader>
+          </AlertDialogTitle>
+        </AlertDialogHeader>
 
-          <AlertDialogBody pt={4}>
-            Are you sure you want to clear all search history? This action
-            cannot be undone.
-          </AlertDialogBody>
+        <AlertDialogDescription className="pt-4">
+          Are you sure you want to clear all search history? This action cannot
+          be undone.
+        </AlertDialogDescription>
 
-          <AlertDialogFooter gap={2}>
-            <Button ref={cancelRef} onClick={onClose}>
-              Cancel
-            </Button>
-            <Button colorScheme="red" onClick={onConfirm}>
-              Clear All
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialogOverlay>
+        <AlertDialogFooter className="gap-2">
+          <AlertDialogCancel ref={cancelRef}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onConfirm}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            Clear All
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
     </AlertDialog>
   );
 };

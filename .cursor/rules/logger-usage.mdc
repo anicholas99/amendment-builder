@@ -65,6 +65,37 @@ alwaysApply: true
 - **Performance Considerations**
   - For large objects, consider truncating: `{ data: JSON.stringify(obj).substring(0, 500) + '...' }`
   - Use appropriate log levels: `debug` for development, `info` for important events, `warn` for issues, `error` for failures
+  - **Avoid logging in render functions** - This causes excessive logs on every re-render
+  - **Avoid logging in tight loops** - Use conditional logging for performance
+
+- **Log Deduplication (NEW)**
+  - The logger automatically deduplicates identical messages within a time window
+  - Deduplication windows: 1s (dev), 3s (QA), 5s (production)
+  - **Error messages are never deduplicated** to ensure critical issues are visible
+  - Design log messages to be consistent - avoid including timestamps or counters that change
+
+- **Object Truncation (NEW)**
+  - Large objects are automatically truncated to prevent console spam:
+    - Max depth: 3 levels (2 in production)
+    - Max array items: 5 (3 in production)
+    - Max string length: 500 chars (200 in production)
+  - Circular references are handled automatically
+
+- **Runtime Configuration (NEW)**
+  - Control logging verbosity without redeploying using browser console:
+    ```javascript
+    // Enable all logs temporarily
+    enableVerboseLogging()
+    
+    // Return to default settings
+    disableVerboseLogging()
+    
+    // Check current configuration
+    loggerConfig()
+    
+    // Fine-tune specific categories
+    __LOGGER_CONFIG__.logCategories.debug = false
+    ```
 
 - **Examples by File Type**
   - **API Routes**: `logger.log('API request:', { method: req.method, path: req.url })`
@@ -85,6 +116,8 @@ alwaysApply: true
   - [ ] Appropriate log levels used
   - [ ] Sensitive data is not logged
   - [ ] Large objects are truncated if necessary
+  - [ ] No logging in render functions or tight loops
+  - [ ] Log messages are consistent for deduplication
 
 - **Requirement: Always import the logger explicitly.**
   - Use the named import: `import { logger, safeStringify } from '@/lib/monitoring/logger';`
@@ -154,4 +187,5 @@ alwaysApply: true
 
 - **References:**
   - Logger Implementation: `[logger.ts](mdc:src/lib/monitoring/logger.ts)`
+  - Logging Guide: `[LOGGING_GUIDE.md](mdc:docs/LOGGING_GUIDE.md)`
 

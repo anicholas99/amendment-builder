@@ -1,88 +1,64 @@
 /**
- * ESLint rule to prevent direct process.env access outside the config module
- *
- * This rule enforces centralized configuration management by ensuring
- * all environment variables are accessed through the config module.
- * This improves type safety, provides defaults, and makes the app's
- * configuration dependencies explicit.
+ * ESLint rule to prevent direct process.env access
+ * @fileoverview Enforce using configuration modules instead of direct process.env access
  */
 
 module.exports = {
   meta: {
     type: 'problem',
     docs: {
-      description: 'Disallow direct process.env access outside config files',
+      description: 'Enforce using configuration modules instead of direct process.env access',
       category: 'Best Practices',
+      recommended: true,
     },
     messages: {
-      noDirectEnv:
-        'Direct process.env access is not allowed. Import from @/config/env instead.',
-      useConfigImport:
-        'Use env.{{envVar}} from @/config/env instead of process.env.{{envVar}}',
+      useConfigModule: 'Use @/config/env or @/config/environment instead of direct process.env access',
+      useConfigModuleServer: 'Use @/config/environment for server-side configuration instead of process.env',
+      useConfigModuleClient: 'Use @/config/env for validated environment variables instead of process.env',
     },
-    fixable: 'code',
+    fixable: null,
     schema: [],
   },
 
   create(context) {
-    const filename = context.getFilename();
-    const normalizedPath = filename.replace(/\\/g, '/');
-
-    // Allow process.env in config files and test files
-    const allowedPaths = [
-      'src/lib/config/',
-      'src/config/',
-      '__tests__',
-      '.test.',
-      '.spec.',
-      'jest.config',
-      'next.config',
-      '.eslintrc',
-      'scripts/', // Allow in scripts directory
-    ];
-
-    const isAllowedPath = allowedPaths.some(path =>
-      normalizedPath.includes(path)
-    );
-
-    if (isAllowedPath) {
-      return {};
-    }
-
     return {
       MemberExpression(node) {
-        // Check for process.env access
+        // Check if accessing process.env
         if (
           node.object.type === 'Identifier' &&
           node.object.name === 'process' &&
           node.property.type === 'Identifier' &&
           node.property.name === 'env'
         ) {
-          // Get the specific env var being accessed if possible
-          const parent = node.parent;
-          let envVar = null;
+          const filename = context.getFilename();
           
-          if (
-            parent.type === 'MemberExpression' &&
-            parent.property.type === 'Identifier'
-          ) {
-            envVar = parent.property.name;
+          // Allow in config files themselves
+          if (filename.includes('/config/env') || filename.includes('/config/environment')) {
+            return;
           }
-
-          if (envVar) {
-            context.report({
-              node: parent || node,
-              messageId: 'useConfigImport',
-              data: {
-                envVar: envVar,
-              },
-            });
-          } else {
-            context.report({
-              node,
-              messageId: 'noDirectEnv',
-            });
+          
+          // Allow in Next.js config files
+          if (filename.endsWith('next.config.js') || filename.endsWith('.config.js')) {
+            return;
           }
+          
+          // Allow in test setup files
+          if (filename.includes('test') || filename.includes('spec')) {
+            return;
+          }
+          
+          // Determine appropriate message based on file location
+          let messageId = 'useConfigModule';
+          if (filename.includes('/server/') || filename.includes('/pages/api/')) {
+            messageId = 'useConfigModuleServer';
+          } else if (filename.includes('/components/') || filename.includes('/hooks/')) {
+            messageId = 'useConfigModuleClient';
+          }
+          
+          context.report({
+            node,
+            messageId,
+          });
         }
       },
     };

@@ -16,7 +16,7 @@ const MUTATING_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 const API_DIR = path.join(process.cwd(), 'src', 'pages', 'api');
 
 // Patterns to look for
-const CSRF_PATTERNS = [/withCsrf\s*\(/, /composeApiMiddleware\s*\(/];
+const CSRF_PATTERNS = [/withCsrf\s*\(/, /composeApiMiddleware\s*\(/, /SecurePresets\./];
 
 const METHOD_PATTERNS = {
   POST: /req\.method\s*===?\s*['"]POST['"]/,
@@ -73,9 +73,10 @@ function checkFile(filePath: string): AuditResult | null {
     // Check for CSRF protection
     const hasWithCsrf = /withCsrf\s*\(/.test(content);
     const hasComposeApiMiddleware = /composeApiMiddleware\s*\(/.test(content);
+    const hasSecurePresets = /SecurePresets\.\w+\s*\(/.test(content);
 
-    // Only consider it protected if it has withCsrf
-    const hasCsrf = hasWithCsrf;
+    // Consider it protected if it has withCsrf OR uses SecurePresets
+    const hasCsrf = hasWithCsrf || hasSecurePresets;
 
     return {
       file: filePath,

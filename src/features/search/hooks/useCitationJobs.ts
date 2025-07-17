@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { CitationClientService } from '@/client/services/citation.client-service';
 import { initializeReferencesWithCitations } from './useCitationMatches';
+import type { CitationJob } from '@prisma/client';
 
 // Re-export CitationJob type for other modules
-export type { CitationJob } from '@prisma/client';
+export type { CitationJob };
 
 interface UseCitationJobsProps {
   entryId: string;
@@ -30,7 +31,7 @@ export const useCitationJobs = ({
     const loadCitationJobs = async () => {
       setIsLoadingJobs(true);
       try {
-        logger.log(
+        logger.info(
           `[SearchHistoryRow] Fetching citation jobs for entry ID: ${entryId}`
         );
         // TODO: This hook needs a full refactor. The original method it called was a placeholder.
@@ -39,7 +40,7 @@ export const useCitationJobs = ({
           await CitationClientService.getCitationJobsBySearchHistoryId(entryId);
         const references = jobs.map(job => job.referenceNumber).filter(Boolean);
 
-        logger.log(
+        logger.info(
           `[SearchHistoryRow] Fetched references with jobs for ${entryId}:`,
           { references }
         );
@@ -48,7 +49,7 @@ export const useCitationJobs = ({
             .filter((ref): ref is string => ref !== null)
             .map(ref => ref.replace(/-/g, '').toUpperCase())
         );
-        logger.log(
+        logger.info(
           `[SearchHistoryRow] Normalized job numbers set for ${entryId}:`,
           { normalizedRefs: Array.from(normalizedRefs) }
         );
@@ -108,13 +109,13 @@ export const useCitationJobs = ({
       let attempts = 0;
       const maxAttempts = 15;
 
-      logger.log(
+      logger.info(
         `[SearchHistoryRow POLLING_START] Starting polling for citation job completion for: ${referenceNumber}`
       );
 
       const checkJobStatus = async () => {
         try {
-          logger.log(
+          logger.info(
             `[SearchHistoryRow POLLING_CHECK] Checking job status for ${referenceNumber}. Current extractingRef: ${extractingReferenceNumber}`
           );
           // TODO: This hook needs a full refactor. The original method it called was a placeholder.
@@ -137,7 +138,7 @@ export const useCitationJobs = ({
           );
 
           if (normalizedJobs.has(normalizedRefNumber)) {
-            logger.log(
+            logger.info(
               `[SearchHistoryRow POLLING_SUCCESS] Job found for ${referenceNumber} via polling.`
             );
 
@@ -171,7 +172,7 @@ export const useCitationJobs = ({
 
       checkJobStatus().then(jobFound => {
         if (jobFound) {
-          logger.log(
+          logger.info(
             `[SearchHistoryRow] Job already found on immediate check for ${referenceNumber}`
           );
           return;
@@ -184,7 +185,7 @@ export const useCitationJobs = ({
           const jobFound = await checkJobStatus();
 
           if (!jobFound && attempts >= maxAttempts) {
-            logger.log(
+            logger.info(
               `[SearchHistoryRow] Max polling attempts (${maxAttempts}) reached for ${referenceNumber}. Stopping spinner.`
             );
 

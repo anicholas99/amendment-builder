@@ -8,3 +8,4 @@ fi
 
 # Run lint-staged for formatting and linting
 npx lint-staged
+echo "Husky is working" 

@@ -6,9 +6,9 @@
  */
 
 import { prisma as prismaClient } from '../lib/prisma';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { Prisma } from '@prisma/client';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { CitationResults } from '../types/searchTypes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 

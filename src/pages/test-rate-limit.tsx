@@ -1,30 +1,25 @@
 import React, { useState } from 'react';
-import {
-  Box,
-  Button,
-  VStack,
-  Text,
-  Code,
-  Heading,
-  Alert,
-  AlertIcon,
-} from '@chakra-ui/react';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle } from 'lucide-react';
 import { apiFetch } from '@/lib/api/apiClient';
-import { environment } from '@/config/environment';
+import { isDevelopment } from '@/config/environment.client';
+import { logger } from '@/utils/clientLogger';
+import { useToast } from '@/hooks/useToastWrapper';
 
 export default function TestRateLimit() {
   const [results, setResults] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const toast = useToast();
 
   // Only show in development
-  if (!environment.isDevelopment) {
+  if (!isDevelopment) {
     return (
-      <Box p={8}>
-        <Alert status="warning">
-          <AlertIcon />
+      <div className="flex h-screen items-center justify-center">
+        <p className="text-muted-foreground">
           This page is only available in development mode.
-        </Alert>
-      </Box>
+        </p>
+      </div>
     );
   }
 
@@ -61,7 +56,14 @@ export default function TestRateLimit() {
         'All requests completed. Check the console for retry behavior!'
       );
     } catch (error) {
-      console.error('Test error:', error);
+      logger.error('Test error:', error);
+      toast({
+        title: 'Request failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -87,92 +89,81 @@ export default function TestRateLimit() {
   };
 
   return (
-    <Box p={8} maxW="1200px" mx="auto">
-      <VStack spacing={6} align="stretch">
-        <Heading>Rate Limit Testing Page</Heading>
+    <div className="mx-auto max-w-6xl p-6">
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">Rate Limit Testing Page</h1>
 
-        <Alert status="info">
-          <AlertIcon />
-          <Box>
-            <Text fontWeight="bold">How this works:</Text>
-            <Text>
-              The test endpoint allows 5 requests per minute. After that, it
-              returns 429 errors.
-            </Text>
-            <Text>
-              Our apiFetch will automatically retry with exponential backoff
-              (1s, 2s, 4s...).
-            </Text>
-            <Text>Open DevTools Console to see detailed retry logs!</Text>
-          </Box>
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-1">
+              <p className="font-semibold">How this works:</p>
+              <p>
+                The test endpoint allows 5 requests per minute. After that, it
+                returns 429 errors.
+              </p>
+              <p>
+                Our apiFetch will automatically retry with exponential backoff
+                (1s, 2s, 4s...).
+              </p>
+              <p>Open DevTools Console to see detailed retry logs!</p>
+            </div>
+          </AlertDescription>
         </Alert>
 
-        <VStack spacing={4} align="stretch">
+        <div className="space-y-4">
           <Button
             onClick={testSingleRequest}
-            isLoading={isLoading}
-            colorScheme="blue"
+            disabled={isLoading}
+            variant="default"
           >
             Make Single Request
           </Button>
 
           <Button
             onClick={testRateLimit}
-            isLoading={isLoading}
-            colorScheme="red"
+            disabled={isLoading}
+            variant="destructive"
           >
             Trigger Rate Limit (10 rapid requests)
           </Button>
-        </VStack>
+        </div>
 
-        <Box>
-          <Heading size="md" mb={2}>
-            Results:
-          </Heading>
-          <Box
-            borderWidth={1}
-            borderRadius="md"
-            p={4}
-            bg="gray.50"
-            maxH="400px"
-            overflowY="auto"
-          >
+        <div>
+          <h2 className="mb-2 text-xl font-semibold">Results:</h2>
+          <div className="max-h-96 overflow-y-auto rounded-md border bg-muted/50 p-4">
             {results.length === 0 ? (
-              <Text color="gray.500">
+              <p className="text-muted-foreground">
                 No results yet. Click a button above to test.
-              </Text>
+              </p>
             ) : (
               results.map((result, i) => (
-                <Code key={i} display="block" mb={1} fontSize="sm">
+                <code key={i} className="mb-1 block text-sm">
                   {result}
-                </Code>
+                </code>
               ))
             )}
-          </Box>
-        </Box>
+          </div>
+        </div>
 
-        <Box>
-          <Heading size="md" mb={2}>
-            Testing Instructions:
-          </Heading>
-          <VStack align="start" spacing={2}>
-            <Text>1. Open browser DevTools Console (F12)</Text>
-            <Text>
-              2. Click "Make Single Request" a few times to see normal behavior
-            </Text>
-            <Text>
-              3. Click "Trigger Rate Limit" to see 429 errors and retry behavior
-            </Text>
-            <Text>
-              4. Watch the console for "[apiFetch] Rate limited..." messages
+        <div>
+          <h2 className="mb-2 text-xl font-semibold">Testing Instructions:</h2>
+          <ol className="list-decimal space-y-2 pl-5">
+            <li>Open browser DevTools Console (F12)</li>
+            <li>
+              Click "Make Single Request" a few times to see normal behavior
+            </li>
+            <li>
+              Click "Trigger Rate Limit" to see 429 errors and retry behavior
+            </li>
+            <li>
+              Watch the console for "[apiFetch] Rate limited..." messages
               showing retry delays
-            </Text>
-            <Text>
-              5. Notice how requests eventually succeed after backing off
-            </Text>
-          </VStack>
-        </Box>
-      </VStack>
-    </Box>
+            </li>
+            <li>Notice how requests eventually succeed after backing off</li>
+          </ol>
+        </div>
+      </div>
+    </div>
   );
 }

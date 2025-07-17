@@ -8,7 +8,7 @@
  */
 
 import { InventionData } from '@/types/invention';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 export type FieldType = 'text' | 'array' | 'object';
 export type SaveBehavior = 'on-blur' | 'debounced' | 'immediate';
@@ -192,10 +192,10 @@ export const FIELD_MAPPINGS: Record<string, FieldConfig> = {
 export function getDbFieldName(uiField: string): keyof InventionData {
   const config = FIELD_MAPPINGS[uiField];
   if (!config) {
-    logger.error(
-      '[CRITICAL] Unknown field in FIELD_MAPPINGS',
-      { uiField, availableFields: Object.keys(FIELD_MAPPINGS) }
-    );
+    logger.error('[CRITICAL] Unknown field in FIELD_MAPPINGS', {
+      uiField,
+      availableFields: Object.keys(FIELD_MAPPINGS),
+    });
     // Return as-is and hope for the best (but log it)
     return uiField as keyof InventionData;
   }

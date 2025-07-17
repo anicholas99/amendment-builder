@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text } from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
 import EditableList from '../../../../../components/common/EditableList';
 import ContentEditableList from '../../../../../components/common/ContentEditableList';
 import { TechSectionProps } from '../types';
@@ -18,10 +18,13 @@ export const TechPriorArtSection: React.FC<TechPriorArtSectionProps> = ({
   onUpdatePriorArt,
 }) => {
   return (
-    <Box mb={4}>
-      <Text fontSize={getFontSize('lg')} fontWeight="semibold" mb={2}>
+    <div className="mb-4">
+      <h3
+        className="font-semibold mb-2"
+        style={{ fontSize: getFontSize('lg') }}
+      >
         Prior Art
-      </Text>
+      </h3>
       <ContentEditableList
         items={(analyzedInvention?.priorArt || []).map((art: any) => {
           // Ensure art is treated as PriorArtReference with required title property
@@ -62,7 +65,7 @@ export const TechPriorArtSection: React.FC<TechPriorArtSectionProps> = ({
         fontSize={getFontSize('md')}
         lineHeight={1.8}
       />
-    </Box>
+    </div>
   );
 };
 

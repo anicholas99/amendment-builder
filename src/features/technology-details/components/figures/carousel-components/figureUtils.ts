@@ -1,5 +1,5 @@
 import { Figure, Figures } from './types';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 /**
  * Natural sort for figure keys that handles FIG. 1, FIG. 1A, FIG. 2, etc.

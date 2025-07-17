@@ -7,6 +7,7 @@
 
 // Auth Components
 export { AuthGuard } from './AuthGuard';
+export { TenantGuard } from './common/TenantGuard';
 export { NavigationButton } from './common/NavigationButton';
 export { NavigationLink } from './common/NavigationLink';
 
@@ -24,3 +25,7 @@ export { default as AppLayout } from './layouts/AppLayout';
 export * from './common/ErrorBoundary';
 export { FiguresTab } from './common/FiguresTab';
 
+// Loading components
+export * from './common/LoadingState';
+export { default as SkeletonLoader } from './common/SkeletonLoader';
+export { LoadingOverlay } from './common/LoadingOverlay';

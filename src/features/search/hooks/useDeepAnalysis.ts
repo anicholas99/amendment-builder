@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useCitationJobDetails } from './useCitationJobDetails';
 import { parseDeepAnalysis } from '../utils/deepAnalysisUtils';
 import { CitationJob } from '@/types/citation';
@@ -10,8 +10,7 @@ import {
   StructuredDeepAnalysis,
   ParsedDeepAnalysis,
 } from '../types/deepAnalysis';
-import { useToast } from '@chakra-ui/react';
-import { showSuccessToast, showErrorToast } from '@/utils/toast';
+import { useToast } from '@/utils/toast';
 
 /**
  * Interface for the useDeepAnalysis hook parameters
@@ -138,11 +137,9 @@ export function useDeepAnalysis({
       logger.info('[useDeepAnalysis] Deep analysis completed');
       setIsProcessingAnalysis(false);
       setShowDeepAnalysis(true);
-      showSuccessToast(
-        toast,
-        'Deep analysis completed!',
-        'You can now view the detailed analysis results.'
-      );
+      toast.success('Deep analysis completed!', {
+        description: 'You can now view the detailed analysis results.',
+      });
 
       // Clear timeout if analysis completed
       if (timeoutRef.current) {
@@ -227,21 +224,19 @@ export function useDeepAnalysis({
     // Set a timeout to stop processing after 90 seconds
     timeoutRef.current = setTimeout(() => {
       setIsProcessingAnalysis(false);
-      showErrorToast(
-        toast,
-        'Deep analysis timeout',
-        'The analysis is taking longer than expected. Please try again later.'
-      );
+      toast.error('Deep analysis timeout', {
+        description:
+          'The analysis is taking longer than expected. Please try again later.',
+      });
     }, 90000); // 90 seconds
 
     runDeepAnalysisMutation(selectedJobId, {
       onError: () => {
         setIsProcessingAnalysis(false);
-        showErrorToast(
-          toast,
-          'Failed to start deep analysis',
-          'Please try again or contact support if the issue persists.'
-        );
+        toast.error('Failed to start deep analysis', {
+          description:
+            'Please try again or contact support if the issue persists.',
+        });
 
         // Clear timeout on error
         if (timeoutRef.current) {

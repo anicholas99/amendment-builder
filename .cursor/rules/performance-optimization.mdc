@@ -3,3 +3,105 @@ description:
 globs:
 alwaysApply: false
 ---
+# React Performance Optimization Patterns
+
+- **Avoid CSS `transition: all` Property**
+  - Always specify exact properties to transition
+  - Use shorter durations (0.15s instead of 0.2s-0.3s) for snappier UI
+  - Example:
+    ```typescript
+    // ❌ DON'T
+    transition="all 0.3s ease"
+    
+    // ✅ DO
+    transition="background-color 0.15s ease-out, color 0.15s ease-out"
+    ```
+
+- **Memoize Components That Re-render Frequently**
+  - Use `React.memo` for list items and child components
+  - Provide custom comparison functions when needed
+  - Example:
+    ```typescript
+    export const MyComponent = React.memo(({ props }) => {
+      // Component logic
+    }, (prevProps, nextProps) => {
+      // Return true if props are equal (skip re-render)
+      return prevProps.id === nextProps.id &&
+             prevProps.isActive === nextProps.isActive;
+    });
+    ```
+
+- **Use Specific React Hooks Effectively**
+  - `useCallback` for event handlers passed to memoized children
+  - `useMemo` for expensive computations
+  - Avoid creating new objects/arrays in render
+
+- **Optimize State Updates**
+  - Batch related state updates together
+  - Avoid unnecessary state in parent components
+  - Use local state when possible
+
+- **Animation Performance**
+  - Prefer `transform` and `opacity` for animations (GPU accelerated)
+  - Avoid animating properties that trigger layout (width, height, top, left)
+  - Use `will-change` sparingly for critical animations
+  - Reduce animation duration for interactive elements (150ms max)
+
+- **List Rendering Optimization**
+  - Use stable keys (not array indices)
+  - Implement virtualization for long lists (>100 items)
+  - Avoid inline function definitions in list items
+
+- **Accordion/Collapsible Components**
+  - Use `reduceMotion` prop when available
+  - Minimize the number of elements with transitions
+  - Consider CSS-only solutions for simple expand/collapse
+
+## Example: Optimized Interactive Component
+
+```typescript
+// ✅ GOOD: Optimized component
+const ListItem = React.memo(({ item, onClick, isActive }) => {
+  const handleClick = useCallback(() => {
+    onClick(item.id);
+  }, [onClick, item.id]);
+
+  return (
+    <div
+      onClick={handleClick}
+      className={`transition-colors duration-150 ease-out hover:bg-gray-100 ${
+        isActive ? 'bg-blue-50' : 'bg-transparent'
+      }`}
+    >
+      {item.name}
+    </div>
+  );
+});
+
+// ❌ BAD: Unoptimized component
+const ListItem = ({ item, onClick, isActive }) => {
+  return (
+    <div
+      onClick={() => onClick(item.id)} // New function every render
+      className={`transition-all duration-300 ease hover:bg-gray-100 ${
+        isActive ? 'bg-blue-50' : 'bg-transparent'
+      }`} // Transitions everything
+    >
+      {item.name}
+    </div>
+  );
+};
+```
+
+## Performance Monitoring
+
+- Use React DevTools Profiler to identify slow components
+- Monitor re-renders with "Highlight Updates"
+- Check for unnecessary effects with strict mode
+- Use performance marks for critical user interactions
+
+## References
+
+- React optimization docs: https://react.dev/learn/render-and-commit
+- Web Vitals: https://web.dev/vitals/
+- Tailwind CSS performance: https://tailwindcss.com/docs/optimizing-for-production

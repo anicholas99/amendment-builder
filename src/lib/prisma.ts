@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { env } from '@/config/env';
 import { environment } from '@/config/environment';
 import { softDeleteMiddleware } from '@/lib/db/soft-delete-middleware';

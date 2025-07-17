@@ -17,6 +17,7 @@ export function useTimeout(callback: () => void, delay: number | null) {
       return;
     }
 
+    // eslint-disable-next-line no-restricted-globals, no-restricted-syntax
     const id = setTimeout(() => savedCallback.current(), delay);
 
     return () => clearTimeout(id);

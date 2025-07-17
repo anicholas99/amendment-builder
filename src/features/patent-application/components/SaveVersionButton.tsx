@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, useDisclosure } from '@chakra-ui/react';
+import { Button } from '@/components/ui/button';
 import { FiSave } from 'react-icons/fi';
 import SaveVersionModal from '../../version/components/SaveVersionModal';
 
@@ -15,7 +15,10 @@ const SaveVersionButton: React.FC<SaveVersionButtonProps> = ({
   size = 'sm',
 }) => {
   const [versionDescription, setVersionDescription] = useState('');
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [isOpen, setIsOpen] = useState(false);
+
+  const onOpen = () => setIsOpen(true);
+  const onClose = () => setIsOpen(false);
 
   const handleSave = async () => {
     await onSave(versionDescription);
@@ -26,12 +29,12 @@ const SaveVersionButton: React.FC<SaveVersionButtonProps> = ({
   return (
     <>
       <Button
-        size={size}
-        leftIcon={<FiSave />}
+        size={size === 'md' ? 'default' : size}
         onClick={onOpen}
-        colorScheme="green"
         disabled={disabled}
+        className="h-8 px-2 bg-green-600 hover:bg-green-700 text-white"
       >
+        <FiSave className="mr-2 h-4 w-4" />
         Save Version
       </Button>
 

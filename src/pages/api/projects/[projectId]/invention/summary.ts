@@ -1,35 +1,44 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { inventionDataService } from '@/server/services/invention-data.server-service';
-import { logger } from '@/lib/monitoring/logger';
-import { AuthenticatedRequest } from '@/types/middleware';
+import { RequestWithServices } from '@/types/middleware';
+import { logger } from '@/server/logger';
 import { z } from 'zod';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Validation schema for updating the summary
 const updateSummarySchema = z.object({
   summary: z.string().min(1, 'Summary cannot be empty.'),
 });
 
-async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { inventionService } = (req as RequestWithServices).services;
   const { projectId } = req.query;
 
   if (!projectId || typeof projectId !== 'string') {
-    return res.status(400).json({ error: 'Invalid project ID' });
+    return apiResponse.badRequest(res, 'Invalid project ID');
   }
 
-  const { summary } = req.body;
-
   try {
-    await inventionDataService.updateSummary(projectId, summary);
-    return res.status(200).json({ message: 'Summary updated successfully.' });
+    switch (req.method) {
+      case 'GET':
+        const inventionData =
+          await inventionService.getInventionData(projectId);
+        return apiResponse.ok(res, { summary: inventionData?.summary || '' });
+
+      case 'PUT':
+        await inventionService.updateSummary(projectId, req.body.summary);
+        return apiResponse.ok(res, { success: true });
+
+      default:
+        return apiResponse.methodNotAllowed(res, ['GET', 'PUT']);
+    }
   } catch (error) {
-    logger.error('[API] Error updating invention summary', {
+    logger.error('Failed to handle summary request', {
       projectId,
+      method: req.method,
       error,
     });
-    return res
-      .status(500)
-      .json({ error: 'Failed to update invention summary' });
+    return apiResponse.serverError(res, error);
   }
 }
 

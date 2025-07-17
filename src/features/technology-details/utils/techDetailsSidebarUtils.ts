@@ -1,5 +1,5 @@
-import { logger } from '@/lib/monitoring/logger';
-import { useToast } from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
+import { useToast } from '@/hooks/useToastWrapper';
 import { ProjectApiService } from '@/client/services/project.client-service';
 import { isFigureData } from '@/types/ui-types';
 import { Figures } from '../components/figures/carousel-components/types';

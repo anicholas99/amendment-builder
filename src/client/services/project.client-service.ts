@@ -12,9 +12,19 @@ import {
   ProjectResponseSchema,
   ProjectVersionsResponseSchema,
   ProjectVersionsResponse,
+  ProjectDataResponse,
+  AddSavedPriorArtResponse,
+  PriorArtAnalysisResponse,
 } from '@/types/api/responses';
 import { validateApiResponse } from '@/lib/validation/apiValidation';
 import { ClaimSyncData } from '@/types/api/claim-elements';
+import { PriorArtDataToSave } from '@/types/domain/priorArt';
+import { ClaimData } from '@/types/claimTypes';
+
+// Extended request options for cache control
+interface ExtendedRequestInit extends RequestInit {
+  skipCache?: boolean;
+}
 
 const PROJECTS_PAGE_SIZE = 20;
 
@@ -58,7 +68,7 @@ export const ProjectApiService = {
     return transformProject(validated);
   },
 
-  async createProject(data: CreateProjectData) {
+  async createProject(data: CreateProjectData): Promise<ProjectDataResponse> {
     const response = await apiFetch(API_ROUTES.PROJECTS.CREATE, {
       method: 'POST',
       headers: {
@@ -66,20 +76,25 @@ export const ProjectApiService = {
       },
       body: JSON.stringify(data),
     });
-    return response.json();
+    const json = (await response.json()) as unknown;
+    return validateApiResponse(json, ProjectResponseSchema);
   },
 
-  async deleteProject(projectId: string) {
+  async deleteProject(projectId: string): Promise<null | { success: boolean }> {
     const response = await apiFetch(API_ROUTES.PROJECTS.DELETE(projectId), {
       method: 'DELETE',
     });
     if (response.status === 204) {
       return null;
     }
-    return response.json();
+    const json = (await response.json()) as { success: boolean };
+    return json;
   },
 
-  async updateProject(projectId: string, data: UpdateProjectData) {
+  async updateProject(
+    projectId: string,
+    data: UpdateProjectData
+  ): Promise<ProjectDataResponse> {
     const response = await apiFetch(API_ROUTES.PROJECTS.UPDATE(projectId), {
       method: 'PUT',
       headers: {
@@ -87,29 +102,37 @@ export const ProjectApiService = {
       },
       body: JSON.stringify(data),
     });
-    return response.json();
+    const json = (await response.json()) as unknown;
+    return validateApiResponse(json, ProjectResponseSchema);
   },
 
-  async setActiveProject(projectId: string) {
+  async setActiveProject(
+    projectId: string
+  ): Promise<{ success: boolean; activeProjectId: string }> {
     const response = await apiFetch(API_ROUTES.PROJECTS.ACTIVE, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ activeProjectId: projectId }),
     });
-    return response.json();
+    const json = (await response.json()) as {
+      success: boolean;
+      activeProjectId: string;
+    };
+    return json;
   },
 
-  async clearActiveProject() {
+  async clearActiveProject(): Promise<{ success: boolean }> {
     const response = await apiFetch(API_ROUTES.PROJECTS.ACTIVE, {
       method: 'DELETE',
     });
-    return response.json();
+    const json = (await response.json()) as { success: boolean };
+    return json;
   },
 
   async saveFullContent(
     projectId: string,
     payload: { content: string; type?: string }
-  ) {
+  ): Promise<{ success: boolean; documentId?: string }> {
     const response = await apiFetch(
       API_ROUTES.PROJECTS.FULL_CONTENT(projectId),
       {
@@ -118,26 +141,46 @@ export const ProjectApiService = {
         body: JSON.stringify(payload),
       }
     );
-    return response.json();
+    const json = (await response.json()) as {
+      success: boolean;
+      documentId?: string;
+    };
+    return json;
   },
 
-  async processInvention(projectId: string, text: string) {
+  async processInvention(
+    projectId: string,
+    text: string,
+    uploadedFigures?: Array<{
+      id: string;
+      assignedNumber: string;
+      url: string;
+      fileName: string;
+    }>
+  ): Promise<{ success: boolean; inventionId?: string }> {
     const response = await apiFetch(
       API_ROUTES.PROJECTS.PROCESS_INVENTION(projectId),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ textInput: text }),
+        body: JSON.stringify({
+          textInput: text,
+          uploadedFigures,
+        }),
       }
     );
-    return response.json();
+    const json = (await response.json()) as {
+      success: boolean;
+      inventionId?: string;
+    };
+    return json;
   },
 
   async generatePatent(
     projectId: string,
     versionName?: string,
     selectedRefs?: string[]
-  ) {
+  ): Promise<{ success: boolean; versionId?: string; documentId?: string }> {
     const response = await apiFetch(
       API_ROUTES.PROJECTS.VERSIONS.GENERATE_PATENT(projectId),
       {
@@ -146,13 +189,24 @@ export const ProjectApiService = {
         body: JSON.stringify({ versionName, selectedRefs }),
       }
     );
-    return response.json();
+    const json = (await response.json()) as {
+      success: boolean;
+      versionId?: string;
+      documentId?: string;
+    };
+    return json;
   },
 
   async createVersion(
     projectId: string,
     payload: { name: string; sections?: Record<string, string> }
-  ) {
+  ): Promise<{
+    id: string;
+    name: string;
+    createdAt: string;
+    projectId: string;
+    userId: string;
+  }> {
     const response = await apiFetch(
       API_ROUTES.PROJECTS.VERSIONS.CREATE(projectId),
       {
@@ -161,14 +215,21 @@ export const ProjectApiService = {
         body: JSON.stringify(payload),
       }
     );
-    return response.json();
+    const json = (await response.json()) as {
+      id: string;
+      name: string;
+      createdAt: string;
+      projectId: string;
+      userId: string;
+    };
+    return json;
   },
 
   async updateDocument(
     projectId: string,
     versionId: string,
     payload: { documentId: string; content: string; type: string }
-  ) {
+  ): Promise<{ success: boolean; documentId: string }> {
     const response = await apiFetch(
       API_ROUTES.PROJECTS.VERSIONS.DOCUMENT(projectId, versionId),
       {
@@ -177,7 +238,11 @@ export const ProjectApiService = {
         body: JSON.stringify(payload),
       }
     );
-    return response.json();
+    const json = (await response.json()) as {
+      success: boolean;
+      documentId: string;
+    };
+    return json;
   },
 
   async updatePatentSection(
@@ -185,7 +250,7 @@ export const ProjectApiService = {
     versionId: string,
     sectionType: string,
     content: string
-  ) {
+  ): Promise<{ success: boolean; documentId: string }> {
     const response = await apiFetch(
       API_ROUTES.PROJECTS.VERSIONS.DOCUMENTS(projectId, versionId),
       {
@@ -197,24 +262,63 @@ export const ProjectApiService = {
         }),
       }
     );
-    return response.json();
+    const json = (await response.json()) as {
+      success: boolean;
+      documentId: string;
+    };
+    return json;
   },
 
-  async getLatestVersion(projectId: string) {
+  async getLatestVersion(projectId: string): Promise<{
+    id: string;
+    name: string | null;
+    createdAt: string;
+    projectId: string;
+    userId: string;
+  } | null> {
     const response = await apiFetch(
       API_ROUTES.PROJECTS.VERSIONS.LATEST(projectId)
     );
-    return response.json();
+    if (!response.ok && response.status === 404) {
+      return null;
+    }
+    const json = (await response.json()) as {
+      id: string;
+      name: string | null;
+      createdAt: string;
+      projectId: string;
+      userId: string;
+    };
+    return json;
   },
 
-  async getVersion(projectId: string, versionId: string) {
+  async getVersion(
+    projectId: string,
+    versionId: string
+  ): Promise<{
+    id: string;
+    name: string | null;
+    createdAt: string;
+    projectId: string;
+    userId: string;
+  }> {
     const response = await apiFetch(
       API_ROUTES.PROJECTS.VERSIONS.BY_ID(projectId, versionId)
     );
-    return response.json();
+    const json = (await response.json()) as {
+      id: string;
+      name: string | null;
+      createdAt: string;
+      projectId: string;
+      userId: string;
+    };
+    return json;
   },
 
-  async deleteVersion(projectId: string, versionId: string) {
+  async deleteVersion(
+    projectId: string,
+    versionId: string
+  ): Promise<{ success: boolean }> {
     const response = await apiFetch(
       API_ROUTES.PROJECTS.VERSIONS.BY_ID(projectId, versionId),
       {
@@ -224,17 +328,24 @@ export const ProjectApiService = {
     if (response.status === 204) {
       return { success: true };
     }
-    return response.json();
+    const json = (await response.json()) as { success: boolean };
+    return json;
   },
 
-  async resetApplicationVersions(projectId: string) {
+  async resetApplicationVersions(
+    projectId: string
+  ): Promise<{ success: boolean; message: string }> {
     const response = await apiFetch(
       API_ROUTES.PROJECTS.VERSIONS.RESET(projectId),
       {
         method: 'POST',
       }
     );
-    return response.json();
+    const json = (await response.json()) as {
+      success: boolean;
+      message: string;
+    };
+    return json;
   },
 
   async getProjectVersions(
@@ -251,31 +362,59 @@ export const ProjectApiService = {
     projectId: string,
     versionId: string,
     type: 'patent'
-  ) {
+  ): Promise<{ content: string; type: string } | null> {
     const url = buildApiUrl(
       API_ROUTES.PROJECTS.VERSIONS.DOCUMENT(projectId, versionId),
       { type }
     );
     const response = await apiFetch(url);
     if (!response.ok) return null;
-    return response.json();
+    const json = (await response.json()) as { content: string; type: string };
+    return json;
   },
 
   // Claim-related methods
-  async getClaims(projectId: string) {
+  async getClaims(projectId: string): Promise<ClaimData[]> {
     if (!projectId) {
       throw new Error('Project ID is required');
     }
+
+    // Add cache-busting timestamp to ensure fresh data
+    const cacheBuster = Date.now();
+    const url = `${API_ROUTES.PROJECTS.CLAIMS.LIST(projectId)}?_t=${cacheBuster}`;
+
     // Bypass RequestManager cache to ensure we always fetch the latest claim data
-    const response = await apiFetch(
-      API_ROUTES.PROJECTS.CLAIMS.LIST(projectId),
-      { skipCache: true } as any // `skipCache` is a RequestManager extension to RequestInit
-    );
+    const response = await apiFetch(url, {
+      skipCache: true,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0',
+      },
+    } as ExtendedRequestInit);
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch claims: ${response.status} ${response.statusText}`
+      );
+    }
+
     const json = await response.json();
-    return json.claims || [];
+
+    // Handle standardized API response format
+    if (json.success && json.data) {
+      return json.data.claims || [];
+    }
+
+    // Fallback for non-standardized response (backward compatibility)
+    if (json.claims && Array.isArray(json.claims)) {
+      return json.claims;
+    }
+
+    return [];
   },
 
-  async patchClaim(claimId: string, text: string) {
+  async patchClaim(claimId: string, text: string): Promise<ClaimData> {
     if (!claimId) {
       throw new Error('Claim ID is required');
     }
@@ -287,13 +426,14 @@ export const ProjectApiService = {
       },
       body: JSON.stringify({ text }),
     });
-    return response.json();
+    const json = (await response.json()) as ClaimData;
+    return json;
   },
 
   async addClaim(
     projectId: string,
     newClaim: { number: number; text: string }
-  ) {
+  ): Promise<{ claims: ClaimData[] }> {
     if (!projectId) {
       throw new Error('Project ID is required');
     }
@@ -308,7 +448,19 @@ export const ProjectApiService = {
         body: JSON.stringify({ claims: [newClaim] }),
       }
     );
-    return response.json();
+    const json = await response.json();
+
+    // Handle standardized API response format
+    if (json.success && json.data) {
+      return { claims: json.data.claims || [] };
+    }
+
+    // Fallback for non-standardized response (backward compatibility)
+    if (json.claims && Array.isArray(json.claims)) {
+      return { claims: json.claims };
+    }
+
+    return { claims: [] };
   },
 
   // Claim sync methods
@@ -325,59 +477,52 @@ export const ProjectApiService = {
       throw new Error(`Failed to get claim sync data: ${text}`);
     }
 
-    return response.json();
+    const json = await response.json();
+
+    // Handle standardized API response format
+    if (json.success && json.data) {
+      return json.data;
+    }
+
+    // Fallback for non-standardized response (backward compatibility)
+    return json;
   },
 
   /**
    * Save claim sync data to the backend.
-   * Automatically transforms parsedElements from V1 format (objects with text property)
-   * to V2 format (string array) as required by the API.
    *
    * @param projectId - The project ID
-   * @param data - The sync data containing parsedElements (either format), searchQueries, and lastSyncedClaim
+   * @param data - The sync data containing parsedElements (string array), searchQueries, and lastSyncedClaim
    * @returns Promise with the API response
    */
   async saveClaimSync(
     projectId: string,
     data: {
-      parsedElements: (string | { text: string })[]; // V1 format (objects) or V2 format (strings)
+      parsedElements: string[]; // V2 format (strings only)
       searchQueries: string[];
       lastSyncedClaim: string;
     }
-  ) {
+  ): Promise<{ success: boolean }> {
     if (!projectId) {
       throw new Error('Project ID is required');
     }
-
-    // Transform parsedElements to V2 format (array of strings)
-    const transformedData = {
-      ...data,
-      parsedElements: data.parsedElements.map(element => {
-        // If element is already a string, use it directly
-        if (typeof element === 'string') {
-          return element;
-        }
-        // If element is an object with a text property, extract the text
-        if (element && typeof element === 'object' && 'text' in element) {
-          return element.text;
-        }
-        // Fallback: convert to string
-        return String(element);
-      }),
-    };
 
     const response = await apiFetch(API_ROUTES.PROJECTS.CLAIM_SYNC(projectId), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(transformedData),
+      body: JSON.stringify(data),
     });
-    return response.json();
+    const json = (await response.json()) as { success: boolean };
+    return json;
   },
 
   // Prior art methods
-  async savePriorArt(projectId: string, reference: any) {
+  async savePriorArt(
+    projectId: string,
+    reference: PriorArtDataToSave
+  ): Promise<AddSavedPriorArtResponse> {
     if (!projectId) {
       throw new Error('Project ID is required');
     }
@@ -391,10 +536,14 @@ export const ProjectApiService = {
         body: JSON.stringify(reference),
       }
     );
-    return response.json();
+    const json = (await response.json()) as AddSavedPriorArtResponse;
+    return json;
   },
 
-  async removePriorArt(projectId: string, priorArtId: string) {
+  async removePriorArt(
+    projectId: string,
+    priorArtId: string
+  ): Promise<{ success: boolean }> {
     if (!projectId || !priorArtId) {
       throw new Error('Project ID and Prior Art ID are required');
     }
@@ -407,7 +556,8 @@ export const ProjectApiService = {
     if (response.status === 204) {
       return { success: true };
     }
-    return response.json();
+    const json = (await response.json()) as { success: boolean };
+    return json;
   },
 
   async analyzePriorArt(
@@ -416,7 +566,7 @@ export const ProjectApiService = {
     selectedReferenceNumbers: string[],
     forceRefresh: boolean,
     claim1Text: string
-  ) {
+  ): Promise<PriorArtAnalysisResponse> {
     if (!projectId) {
       throw new Error('Project ID is required');
     }
@@ -433,6 +583,7 @@ export const ProjectApiService = {
         claim1Text,
       }),
     });
-    return response.json();
+    const json = (await response.json()) as PriorArtAnalysisResponse;
+    return json;
   },
 };

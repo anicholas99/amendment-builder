@@ -1,28 +1,18 @@
 import React from 'react';
+import { cn } from '@/lib/utils';
 import {
-  Button,
-  Text,
-  Icon,
-  Box,
-  Textarea,
-  FormControl,
-  FormLabel,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalFooter,
-  ModalBody,
-  ModalCloseButton,
-} from '@chakra-ui/react';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { FiInfo, FiPlus } from 'react-icons/fi';
-import {
-  modalStyles,
-  modalButtonStyles,
-} from '@/components/common/ModalStyles';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface AddDetailsModalProps {
   isOpen: boolean;
@@ -46,63 +36,80 @@ export const AddDetailsModal: React.FC<AddDetailsModalProps> = ({
   isProcessing,
   processingProgress,
 }) => {
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const mutedTextColor = useColorModeValue('gray.600', 'gray.400');
-  const infoBg = useColorModeValue('blue.50', 'blue.900');
-  const infoColor = useColorModeValue('blue.600', 'blue.200');
+  const { isDarkMode } = useThemeContext();
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="xl">
-      <ModalOverlay {...modalStyles.overlay} />
-      <ModalContent>
-        <ModalHeader {...modalStyles.header} borderColor={borderColor}>
-          Add Additional Technology Details
-        </ModalHeader>
-        <ModalCloseButton />
-        <ModalBody {...modalStyles.body}>
-          <Text mb={4} color={mutedTextColor}>
+    <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-semibold">
+            Add Additional Technology Details
+          </DialogTitle>
+          <DialogDescription
+            className={cn(
+              'text-base',
+              isDarkMode ? 'text-gray-400' : 'text-gray-600'
+            )}
+          >
             Describe any additional details about your invention. Our AI will
             automatically integrate this information into the appropriate
             sections.
-          </Text>
-          <FormControl isRequired>
-            <FormLabel>Details</FormLabel>
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="additional-details" className="text-sm font-medium">
+              Details <span className="text-red-500">*</span>
+            </Label>
             <Textarea
+              id="additional-details"
               value={additionalDetails}
               onChange={e => setAdditionalDetails(e.target.value)}
               placeholder="Describe additional technical details, use cases, advantages, or any other aspects of your invention..."
-              size="md"
-              minH="200px"
-              resize="vertical"
+              className="min-h-[200px] resize-y"
             />
-          </FormControl>
-          <Box mt={4} p={3} bg={infoBg} borderRadius="md">
-            <Text fontSize="sm" fontWeight="normal" color={infoColor}>
-              <Icon as={FiInfo} mr={2} />
-              Details will be automatically categorized and merged with your
-              existing information.
-            </Text>
-          </Box>
-        </ModalBody>
+          </div>
 
-        <ModalFooter {...modalStyles.footer} borderColor={borderColor}>
+          <div
+            className={cn(
+              'p-4 rounded-md border',
+              isDarkMode
+                ? 'bg-blue-900/50 border-blue-800 text-blue-200'
+                : 'bg-blue-50 border-blue-200 text-blue-600'
+            )}
+          >
+            <div className="flex items-start space-x-2 text-sm">
+              <FiInfo
+                className={cn(
+                  'h-4 w-4 mt-0.5 flex-shrink-0',
+                  isDarkMode ? 'text-blue-400' : 'text-blue-500'
+                )}
+              />
+              <span>
+                Details will be automatically categorized and merged with your
+                existing information.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
           <Button
-            {...modalButtonStyles.primary}
-            mr={3}
             onClick={handleAddDetails}
-            isLoading={isProcessing}
-            isDisabled={!additionalDetails.trim()}
+            disabled={isProcessing || !additionalDetails.trim()}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             {isProcessing
               ? `Processing... ${processingProgress}%`
               : 'Process Details'}
           </Button>
-          <Button onClick={onClose} {...modalButtonStyles.secondary}>
+          <Button onClick={onClose} variant="outline">
             Cancel
           </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

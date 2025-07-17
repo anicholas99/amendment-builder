@@ -1,28 +1,17 @@
 import React from 'react';
+import { cn } from '@/lib/utils';
 import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
-  ModalFooter,
-  Button,
-  Text,
-  Box,
-  Icon,
-  VStack,
-  Flex,
-  HStack,
-  Divider,
-  Badge,
-  useColorModeValue,
-} from '@chakra-ui/react';
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { FiZap, FiEdit2 } from 'react-icons/fi';
-import {
-  modalStyles,
-  modalButtonStyles,
-} from '@/components/common/ModalStyles';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 // Define the UpdatedSection type locally since it was removed from useUpdateDetails
 export type UpdatedSection = {
@@ -47,105 +36,106 @@ export const ChangeSummaryModal: React.FC<ChangeSummaryModalProps> = ({
   updatedSections = [], // Provide default empty array
   getFontSize,
 }) => {
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const modalBg = useColorModeValue('bg.secondary', 'bg.secondary');
-  const cardBg = useColorModeValue('bg.card', 'bg.card');
-  const badgeBg = useColorModeValue('blue.50', 'blue.900');
-  const summaryBadgeBg = useColorModeValue('green.100', 'green.700');
-  const mutedTextColor = useColorModeValue('gray.600', 'gray.400');
-  const emptyTextColor = useColorModeValue('gray.500', 'gray.400');
-  const badgeTextColor = useColorModeValue('blue.600', 'blue.200');
-  const summaryBadgeTextColor = useColorModeValue('green.700', 'green.200');
+  const { isDarkMode } = useThemeContext();
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="2xl" scrollBehavior="inside">
-      <ModalOverlay {...modalStyles.overlay} />
-      <ModalContent>
-        <ModalHeader {...modalStyles.header} borderColor={borderColor}>
-          <Flex align="center">
-            <Icon as={FiZap} mr={2} color="green.500" />
-            <Text>Review Updated Sections</Text>
-          </Flex>
-        </ModalHeader>
-        <ModalCloseButton />
-        <ModalBody {...modalStyles.body}>
-          <Text mb={4} color={mutedTextColor}>
+    <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <DialogContent className="sm:max-w-3xl max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center text-xl font-semibold">
+            <FiZap className="mr-2 h-5 w-5 text-green-500" />
+            Review Updated Sections
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <p
+            className={cn(
+              'text-base',
+              isDarkMode ? 'text-gray-400' : 'text-gray-600'
+            )}
+          >
             The following sections have been updated based on the details you
             provided. Please review the changes.
-          </Text>
+          </p>
 
-          <Box
-            borderWidth={1}
-            borderRadius="md"
-            bg={modalBg}
-            borderColor={borderColor}
-            maxHeight="350px"
-            overflowY="auto"
+          <div
+            className={cn(
+              'border rounded-md max-h-[350px] overflow-y-auto',
+              isDarkMode
+                ? 'border-gray-700 bg-gray-800/50'
+                : 'border-gray-200 bg-gray-50'
+            )}
           >
             {updatedSections.length > 0 ? (
-              <VStack
-                align="stretch"
-                spacing={0}
-                divider={<Divider borderColor={borderColor} />}
-              >
+              <div className="divide-y divide-gray-200 dark:divide-gray-700">
                 {updatedSections.map((section, idx) => (
-                  <Flex
+                  <div
                     key={idx}
-                    p={3}
-                    bg={cardBg}
-                    alignItems="center"
-                    justifyContent="space-between"
+                    className={cn(
+                      'p-4 flex items-center justify-between',
+                      isDarkMode ? 'bg-gray-800' : 'bg-white'
+                    )}
                   >
-                    <HStack>
-                      <Icon as={FiEdit2} color="blue.500" boxSize="18px" />
-                      <Text fontWeight="normal" fontSize={getFontSize('sm')}>
+                    <div className="flex items-center space-x-3">
+                      <FiEdit2 className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                      <span className={cn('font-normal', getFontSize('sm'))}>
                         {section.section}
-                      </Text>
-                    </HStack>
+                      </span>
+                    </div>
                     {section.count !== undefined && section.count > 0 && (
                       <Badge
-                        bg={badgeBg}
-                        color={badgeTextColor}
-                        fontSize={getFontSize('xs')}
-                        px={2}
-                        py={1}
-                        borderRadius="sm"
+                        variant="secondary"
+                        className={cn(
+                          'text-xs px-2 py-1',
+                          isDarkMode
+                            ? 'bg-blue-900/50 text-blue-200 border-blue-800'
+                            : 'bg-blue-50 text-blue-600 border-blue-200'
+                        )}
                       >
                         +{section.count}{' '}
                         {section.count === 1 ? 'ITEM' : 'ITEMS'}
                       </Badge>
                     )}
-                  </Flex>
+                  </div>
                 ))}
-              </VStack>
+              </div>
             ) : (
-              <Box p={4} textAlign="center">
-                <Text color={emptyTextColor}>No sections were updated</Text>
-              </Box>
+              <div className="p-4 text-center">
+                <p
+                  className={cn(isDarkMode ? 'text-gray-400' : 'text-gray-500')}
+                >
+                  No sections were updated
+                </p>
+              </div>
             )}
-          </Box>
+          </div>
 
-          <Box mt={5} pt={2} display="flex" justifyContent="center">
+          <div className="mt-5 pt-2 flex justify-center">
             <Badge
-              py={1}
-              px={3}
-              borderRadius="full"
-              bg={summaryBadgeBg}
-              color={summaryBadgeTextColor}
-              fontSize={getFontSize('sm')}
+              variant="secondary"
+              className={cn(
+                'py-1 px-4 rounded-full text-sm font-medium',
+                isDarkMode
+                  ? 'bg-green-700/50 text-green-200 border-green-600'
+                  : 'bg-green-100 text-green-700 border-green-200'
+              )}
             >
               {updatedSections.length} SECTIONS UPDATED
             </Badge>
-          </Box>
-        </ModalBody>
+          </div>
+        </div>
 
-        <ModalFooter {...modalStyles.footer} borderColor={borderColor}>
-          <Button {...modalButtonStyles.primary} onClick={onClose}>
+        <DialogFooter>
+          <Button
+            onClick={onClose}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
             Accept Changes
           </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

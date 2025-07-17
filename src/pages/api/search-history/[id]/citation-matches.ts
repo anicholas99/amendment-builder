@@ -4,7 +4,7 @@
  * Retrieves all CitationMatch records associated with a specific SearchHistory ID.
  */
 import type { NextApiResponse, NextApiRequest } from 'next';
-import { createApiLogger } from '@/lib/monitoring/apiLogger'; // Use alias
+import { createApiLogger } from '@/server/monitoring/apiLogger'; // Use alias
 import {
   findCitationMatchesBySearchHistoryWithAuth,
   getSearchHistoryWithTenant,
@@ -14,7 +14,7 @@ import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
 import { idQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
 import { serializeCitationMatch } from '@/features/citation-extraction/utils/citation';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
 
 const apiLogger = createApiLogger('search-history-citation-matches');
 

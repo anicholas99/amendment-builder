@@ -1,15 +1,14 @@
 import React from 'react';
 import {
   AlertDialog,
-  AlertDialogBody,
+  AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
+  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogOverlay,
-  Button,
-  Text,
-} from '@chakra-ui/react';
-import { useThemeContext } from '@/contexts/ThemeContext';
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface DeleteProjectDialogProps {
   isOpen: boolean;
@@ -32,86 +31,36 @@ export const DeleteProjectDialog: React.FC<DeleteProjectDialogProps> = ({
   cancelRef,
   isDeleting = false,
 }) => {
-  const { isDarkMode } = useThemeContext();
-
   return (
-    <AlertDialog
-      isOpen={isOpen}
-      leastDestructiveRef={cancelRef}
-      onClose={onClose}
-      isCentered
-      motionPreset="slideInBottom"
-    >
-      <AlertDialogOverlay bg="blackAlpha.600">
-        <AlertDialogContent
-          bg={isDarkMode ? 'gray.800' : 'white'}
-          color={isDarkMode ? 'white' : 'gray.800'}
-          borderColor={isDarkMode ? 'gray.700' : 'gray.200'}
-          mx={4}
-          position="relative"
-          zIndex="modal"
-        >
-          <AlertDialogHeader
-            fontSize="lg"
-            fontWeight="bold"
-            borderBottomWidth="1px"
-            borderColor={isDarkMode ? 'gray.700' : 'gray.200'}
-            pb={3}
-            as="h3"
-          >
-            Delete Project
-          </AlertDialogHeader>
+    <AlertDialog open={isOpen} onOpenChange={onClose}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Project</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete <strong>"{projectName}"</strong>?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
 
-          <AlertDialogBody pt={4}>
-            <Text>
-              Are you sure you want to delete{' '}
-              <Text
-                as="span"
-                fontWeight="semibold"
-                color={isDarkMode ? 'blue.200' : 'blue.600'}
-              >
-                "{projectName}"
-              </Text>
-              ?
-            </Text>
-            <Text
-              mt={3}
-              fontSize="sm"
-              color={isDarkMode ? 'gray.400' : 'gray.600'}
-            >
-              This action cannot be undone. All project data including
-              technology details, claims, and patent drafts will be permanently
-              deleted.
-            </Text>
-          </AlertDialogBody>
+        <div className="py-3">
+          <p className="text-sm text-muted-foreground">
+            This action cannot be undone. All project data including technology
+            details, claims, and patent drafts will be permanently deleted.
+          </p>
+        </div>
 
-          <AlertDialogFooter
-            borderTopWidth="1px"
-            borderColor={isDarkMode ? 'gray.700' : 'gray.200'}
-            pt={3}
-            gap={2}
+        <AlertDialogFooter>
+          <AlertDialogCancel ref={cancelRef} disabled={isDeleting}>
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
           >
-            <Button
-              ref={cancelRef}
-              onClick={onClose}
-              variant="outline"
-              borderColor={isDarkMode ? 'gray.600' : 'gray.200'}
-              _hover={{ bg: isDarkMode ? 'gray.700' : 'gray.50' }}
-              isDisabled={isDeleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              colorScheme="red"
-              onClick={onConfirm}
-              isLoading={isDeleting}
-              loadingText="Deleting"
-            >
-              Delete
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialogOverlay>
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
     </AlertDialog>
   );
 };

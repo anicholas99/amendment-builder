@@ -4,7 +4,7 @@
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { SavedPriorArt } from '@/types/domain/priorArt';
 import { ProcessedSearchHistoryEntry } from '@/types/domain/searchHistory';
 
@@ -104,6 +104,14 @@ export class SearchApiService {
         API_ROUTES.PROJECTS.EXCLUSIONS(projectId)
       );
       const data = await response.json();
+
+      // Handle the standardized response format
+      // apiResponse.ok() wraps data in { data: ... }
+      if (data.data && data.data.exclusions) {
+        return data.data.exclusions;
+      }
+
+      // Fallback for legacy format
       return data.exclusions || [];
     } catch (error) {
       logger.error('Error fetching project exclusions', { error });
@@ -123,7 +131,7 @@ export class SearchApiService {
     projectId: string,
     patentNumbers: string[],
     metadata?: Record<string, unknown>
-  ): Promise<{ success: boolean }> {
+  ): Promise<{ success: boolean; added?: number; skipped?: number }> {
     if (!projectId || !patentNumbers || patentNumbers.length === 0) {
       throw new ApplicationError(
         ErrorCode.VALIDATION_REQUIRED_FIELD,
@@ -141,7 +149,19 @@ export class SearchApiService {
         }
       );
 
-      return await response.json();
+      const data = await response.json();
+
+      // Handle the new response format with "added" and "skipped" fields
+      if (data.added !== undefined) {
+        return {
+          success: true,
+          added: data.added,
+          skipped: data.skipped,
+        };
+      }
+
+      // Fallback for legacy format
+      return data;
     } catch (error) {
       logger.error('Error adding project exclusion', { error });
       throw error instanceof ApplicationError
@@ -159,7 +179,7 @@ export class SearchApiService {
   static async removeProjectExclusion(
     projectId: string,
     patentNumber: string
-  ): Promise<{ success: boolean }> {
+  ): Promise<{ success: boolean; message?: string }> {
     if (!projectId || !patentNumber) {
       throw new ApplicationError(
         ErrorCode.VALIDATION_REQUIRED_FIELD,
@@ -177,7 +197,18 @@ export class SearchApiService {
         }
       );
 
-      return await response.json();
+      const data = await response.json();
+
+      // Handle the new response format with "message" field
+      if (data.message) {
+        return {
+          success: data.success,
+          message: data.message,
+        };
+      }
+
+      // Fallback for legacy format
+      return data;
     } catch (error) {
       logger.error('Error removing project exclusion', { error });
       throw error instanceof ApplicationError
@@ -190,11 +221,12 @@ export class SearchApiService {
   }
 
   /**
-   * Start an asynchronous search (returns immediately with search ID)
+   * Start an asynchronous search (returns immediately with search ID and entry)
    */
-  static async startAsyncSearch(
-    request: StartAsyncSearchParams
-  ): Promise<{ searchId: string }> {
+  static async startAsyncSearch(request: StartAsyncSearchParams): Promise<{
+    searchId: string;
+    searchHistory?: ProcessedSearchHistoryEntry;
+  }> {
     const response = await apiFetch(API_ROUTES.SEARCH_HISTORY.ASYNC_SEARCH, {
       method: 'POST',
       headers: {
@@ -275,10 +307,21 @@ export class SearchApiService {
       const priorArtJson = await priorArtRes.json();
       const searchHistoryJson = await searchHistoryRes.json();
 
+      // Handle the standardized response format
+      // All endpoints should use apiResponse.ok() which wraps data in { data: ... }
+      const exclusions =
+        exclusionsJson.data?.exclusions ?? exclusionsJson.exclusions ?? [];
+      const priorArt =
+        priorArtJson.data?.priorArt ?? priorArtJson.priorArt ?? [];
+      const searchHistory =
+        searchHistoryJson.data?.searchHistory ??
+        searchHistoryJson.searchHistory ??
+        [];
+
       return {
-        searchHistory: searchHistoryJson.searchHistory || [],
-        exclusions: exclusionsJson.exclusions ?? [],
-        savedPriorArt: priorArtJson.priorArt ?? [],
+        searchHistory,
+        exclusions,
+        savedPriorArt: priorArt,
       } as SearchHistoryDataResponse;
     } catch (error) {
       logger.error('Error fetching search history composite data', { error });
@@ -311,7 +354,8 @@ export class SearchApiService {
       request.background ?? true
     );
 
-    return { parsedElements: result as string[] };
+    // Result is already string[]
+    return { parsedElements: result };
   }
 
   /**
@@ -351,7 +395,13 @@ export class SearchApiService {
       const response = await apiFetch(
         API_ROUTES.CITATION_LOCATION.RESULT(jobId)
       );
-      return await response.json();
+
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: locationResult }
+      const unwrappedResult = result.data || result;
+
+      return unwrappedResult;
     } catch (error) {
       logger.error('Error fetching citation location result', { error });
       throw error instanceof ApplicationError

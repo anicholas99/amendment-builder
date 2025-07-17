@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { useDisclosure, useToast } from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
+import { useDisclosure } from '@/hooks/useDisclosure';
+import { useToast } from '@/hooks/useToastWrapper';
 
 // Helper function to extract H2 headers (can be moved to utils if preferred)
 const extractHeaders = (html: string): Set<string> => {
@@ -77,7 +78,7 @@ export const useSectionHeaderProtection = ({
 
   const handleAlertCancel = useCallback(() => {
     // Prevent deletion: Do not call onContentUpdate with pendingHtmlRef.current
-    // Editor content should ideally remain unchanged or reverted by Quill's history
+    // Editor content should ideally remain unchanged or reverted by Tiptap's history
     onAlertClose();
     setDeletedHeaderName(null);
     pendingHtmlRef.current = null;
@@ -107,7 +108,7 @@ export const useSectionHeaderProtection = ({
       });
 
       if (headerWasDeleted && deletedHeader) {
-        logger.log(`Header deleted: "${deletedHeader}". Opening alert.`);
+        logger.info(`Header deleted: "${deletedHeader}". Opening alert.`);
         setDeletedHeaderName(deletedHeader);
         pendingHtmlRef.current = newHtml; // Store the content that caused the deletion attempt
         onAlertOpen();

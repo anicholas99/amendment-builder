@@ -4,7 +4,7 @@ import {
   FigureUpdatePayload,
 } from '@/services/api/figureApiService';
 import { inventionQueryKeys } from '@/lib/queryKeys/inventionKeys';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { queryKeys } from '@/config/reactQueryConfig';
 import { Figures } from '@/features/technology-details/components/figures/carousel-components/types';
 import { UnassignedFigure } from './useUnassignedFigures';
@@ -70,19 +70,44 @@ export function useUpdateFigure() {
         if (previousFigures) {
           const newFigures: Figures = structuredClone(previousFigures);
           let figureKeyToUpdate: string | null = null;
+          let figureBeingUnassigned: any = null;
+
           for (const [key, figure] of Object.entries(newFigures)) {
             if (figure.image?.includes(figureId)) {
               figureKeyToUpdate = key;
+              figureBeingUnassigned = figure;
               break;
             }
           }
-          if (figureKeyToUpdate) {
+
+          if (figureKeyToUpdate && figureBeingUnassigned) {
+            // Remove image from assigned figure
             newFigures[figureKeyToUpdate] = {
               ...newFigures[figureKeyToUpdate],
               image: undefined,
               // DO NOT change type, content, description, or any other fields
             };
             queryClient.setQueryData(figuresQueryKey, newFigures);
+
+            // Optimistically add to unassigned list
+            const newUnassignedFigure: UnassignedFigure = {
+              id: figureId,
+              figureKey: null,
+              fileName: `Figure ${figureKeyToUpdate}`,
+              originalName: `Figure ${figureKeyToUpdate}`,
+              description: figureBeingUnassigned.description || '',
+              url: `/api/projects/${projectId}/figures/${figureId}/download`,
+              uploadedAt: new Date().toISOString(),
+              sizeBytes: 0, // We don't have this info in the cache
+              mimeType: 'image/png', // Default assumption
+            };
+
+            // Prepend to unassigned list (most recent first)
+            const newUnassigned = [
+              newUnassignedFigure,
+              ...(previousUnassigned || []),
+            ];
+            queryClient.setQueryData(unassignedQueryKey, newUnassigned);
           }
         }
       }

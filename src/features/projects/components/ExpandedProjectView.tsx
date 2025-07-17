@@ -1,32 +1,49 @@
-import React, { useState } from 'react';
-import { Box, Heading, VStack, Divider } from '@chakra-ui/react';
-import ProjectList from './ProjectList';
+import React from 'react';
+import { useProjectData } from '@/contexts/ProjectDataContext';
+import { useProjects } from '@/hooks/api/useProjects';
+import { transformProjectsForSidebar } from '../utils/projectSidebarUtils';
+import ProjectListShadcn from './ProjectListShadcn';
 
 interface ExpandedProjectViewProps {
-  projectName: string;
-  projectDescription: string;
-  onDocumentSelect: (projectId: string, documentType: string) => void;
+  // Add any necessary props here
 }
 
-const ExpandedProjectView: React.FC<ExpandedProjectViewProps> = ({
-  projectName,
-  projectDescription,
-  onDocumentSelect,
-}) => {
-  const [expandedIndices, setExpandedIndices] = useState<number[]>([]);
+const ExpandedProjectView: React.FC<ExpandedProjectViewProps> = () => {
+  const { activeProjectId } = useProjectData();
+  const {
+    data: projectsData,
+    isLoading,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useProjects({
+    filterBy: 'all',
+    sortBy: 'modified',
+    sortOrder: 'desc',
+  });
+
+  // Transform the paginated projects data for the sidebar
+  const projects = React.useMemo(() => {
+    if (!projectsData?.pages) return [];
+    const allProjects = projectsData.pages.flatMap(page => page.projects);
+    return transformProjectsForSidebar(allProjects);
+  }, [projectsData]);
 
   return (
-    <Box>
-      <VStack align="stretch" spacing={4} p={4}>
-        <Heading size="md">Projects</Heading>
-        <Divider />
-        <ProjectList
-          expandedIndices={expandedIndices}
-          onExpandedChange={setExpandedIndices}
-          onDocumentSelect={onDocumentSelect}
-        />
-      </VStack>
-    </Box>
+    <div className="p-4">
+      <ProjectListShadcn
+        projects={projects}
+        isLoading={isLoading}
+        error={error}
+        handleProjectClick={() => {}}
+        onDocumentSelect={() => {}}
+        onExpandedChange={() => {}}
+        onLoadMore={() => fetchNextPage()}
+        hasNextPage={hasNextPage || false}
+        isFetchingNextPage={isFetchingNextPage}
+      />
+    </div>
   );
 };
 

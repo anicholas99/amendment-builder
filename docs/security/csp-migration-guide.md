@@ -55,7 +55,7 @@ grep "CSP Violation Report" logs/application.log
 
 **After:**
 ```tsx
-// Use Chakra UI styling
+// Use theme styling
 <Box color="red">Text</Box>
 
 // Or use CSS files

@@ -66,7 +66,7 @@ export * from './errorHandling';
 
 // Re-export commonly used middleware combinations
 export { withAuth } from './auth';
-export { withTenantValidation } from './tenant';
+export { withTenant, withTenantValidation } from './tenant';
 export { withTenantGuard } from './authorization';
 export { withCsrf } from '../lib/security/csrf';
 export { withValidation } from '../lib/security/validate';

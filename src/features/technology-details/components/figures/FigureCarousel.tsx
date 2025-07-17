@@ -5,19 +5,8 @@ import React, {
   useMemo,
   useRef,
 } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { environment } from '@/config/environment';
-import {
-  useDisclosure,
-  Box,
-  Flex,
-  Input,
-  Circle,
-  HStack,
-  Text as ChakraText,
-  useToast,
-  useColorModeValue,
-} from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
+import { useToast } from '@/hooks/useToastWrapper';
 import {
   Figure,
   FigureCarouselProps,
@@ -28,8 +17,9 @@ import FigureControls from './carousel-components/FigureControls';
 import FigureNavigation from './carousel-components/FigureNavigation';
 import FigureMetadata from './carousel-components/FigureMetadata';
 import ModalView from './carousel-components/ModalView';
-import DeleteConfirmationDialog from './carousel-components/DeleteConfirmationDialog';
+import DeleteConfirmationDialog from '@/components/common/DeleteConfirmationDialogV2';
 import AddFigureDialog from './carousel-components/AddFigureDialog';
+import { FigureManagementModal } from './FigureManagementModal';
 import { sortFigureKeys } from './carousel-components/figureUtils';
 import { useFigureFileHandlers } from './hooks/useFigureFileHandlers';
 import { useFigureDescription } from './hooks/useFigureDescription';
@@ -40,11 +30,18 @@ import {
 import { useUpdateFigure } from '@/hooks/api/useUpdateFigure';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/config/reactQueryConfig';
+import { FigureApiService } from '@/services/api/figureApiService';
+import type { FigureWithId, FiguresWithIds } from '@/hooks/api/useFigures';
+import { cn } from '@/lib/utils';
 
 interface ExtendedFigureCarouselProps extends Partial<UsePatentSidebarProps> {
   onFigureChange?: (figureKey: string) => void; // Optional callback for external state sync
   projectId?: string;
-  inventionData?: { id: string; title?: string; figures?: Array<{ id: string; url: string; caption?: string }> } | null;
+  inventionData?: {
+    id: string;
+    title?: string;
+    figures?: Array<{ id: string; url: string; caption?: string }>;
+  } | null;
   currentFigure?: string;
   setCurrentFigure?: (figureKey: string) => void;
 }
@@ -76,35 +73,41 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
       []
     );
 
+    // Provide a default function if setCurrentFigure is not provided
+    const effectiveSetCurrentFigure = setCurrentFigure || (() => {});
+
     // Modal and dialog hooks
-    const {
-      isOpen: isModalOpen,
-      onOpen: openModal,
-      onClose: closeModal,
-    } = useDisclosure();
-    const {
-      isOpen: isDeleteAlertOpen,
-      onOpen: openDeleteAlert,
-      onClose: closeDeleteAlert,
-    } = useDisclosure();
-    const {
-      isOpen: isAddFigureDialogOpen,
-      onOpen: openAddFigureDialog,
-      onClose: closeAddFigureDialog,
-    } = useDisclosure();
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const openModal = () => setIsModalOpen(true);
+    const closeModal = () => setIsModalOpen(false);
+
+    const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
+    const openDeleteAlert = () => setIsDeleteAlertOpen(true);
+    const closeDeleteAlert = () => setIsDeleteAlertOpen(false);
+
+    const [isAddFigureDialogOpen, setIsAddFigureDialogOpen] = useState(false);
+    const openAddFigureDialog = () => setIsAddFigureDialogOpen(true);
+    const closeAddFigureDialog = () => setIsAddFigureDialogOpen(false);
+
+    const [isManagementModalOpen, setIsManagementModalOpen] = useState(false);
+    const openManagementModal = () => setIsManagementModalOpen(true);
+    const closeManagementModal = () => setIsManagementModalOpen(false);
 
     // Hook for API calls
     const updateFigureMutation = useUpdateFigure();
     const queryClient = useQueryClient();
     const toast = useToast();
 
-    // Get the figures data using the hook
-    const { figures, onUpdate, onFigureChange, isUpdating } = usePatentFigures({
+    // Memoize props to prevent infinite re-renders
+    const figuresProps = React.useMemo(() => ({
       projectId: projectId || '',
       inventionData: inventionData || null,
       currentFigure: currentFigure || '',
-      setCurrentFigure: setCurrentFigure || (() => {}),
-    });
+      setCurrentFigure: effectiveSetCurrentFigure,
+    }), [projectId, inventionData, currentFigure, effectiveSetCurrentFigure]);
+
+    // Get the figures data using the hook
+    const { figures, onUpdate, isLoading } = usePatentFigures(figuresProps);
 
     // Get array of figure keys (FIG. 1, FIG. 2, etc.)
     const figureKeys = sortFigureKeys(figures || {});
@@ -114,6 +117,100 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
 
     // Track previous figure keys to detect renames
     const prevFigureKeysRef = useRef<string[]>([]);
+
+    // Auto-create FIG. 1 when no figures exist in the database
+    const hasCreatedInitialFigure = useRef(false);
+    const isCreatingFigure = useRef(false);
+    useEffect(() => {
+      // Only run if we have a projectId and figures data has loaded
+      if (!projectId || !figures || isLoading) return;
+
+      // Check if no actual figures exist in the database
+      const actualFigureKeys = Object.keys(figures);
+      const hasNoFigures = actualFigureKeys.length === 0;
+
+      // Auto-create FIG. 1 if no figures exist and we haven't already tried
+      if (
+        hasNoFigures &&
+        !hasCreatedInitialFigure.current &&
+        !isCreatingFigure.current
+      ) {
+        hasCreatedInitialFigure.current = true;
+        isCreatingFigure.current = true;
+
+        logger.info('[FigureCarousel] No figures exist, auto-creating FIG. 1', {
+          projectId,
+        });
+
+        // Create pending FIG. 1
+        FigureApiService.createPendingFigure(
+          projectId,
+          'FIG. 1',
+          '', // empty description
+          'Figure FIG. 1'
+        )
+          .then(async createdFigure => {
+            logger.info(
+              '[FigureCarousel] Successfully created initial FIG. 1',
+              {
+                projectId,
+                figureId: createdFigure.id,
+                figureKey: createdFigure.figureKey,
+              }
+            );
+
+            // Convert the API response to the format expected by the cache
+            const newFigure: FigureWithId = {
+              description:
+                createdFigure.title || createdFigure.description || '',
+              elements: createdFigure.elements.reduce(
+                (acc, element) => {
+                  acc[element.elementKey] =
+                    element.elementName || element.calloutDescription || '';
+                  return acc;
+                },
+                {} as Record<string, string>
+              ),
+              type: 'image',
+              content: '',
+              image: '', // No image for PENDING figures
+              _id: createdFigure.id,
+            };
+
+            // Update the cache with the new figure
+            queryClient.setQueryData<FiguresWithIds>(
+              queryKeys.projects.figures(projectId),
+              (oldData = {}) => ({
+                ...oldData,
+                'FIG. 1': newFigure,
+              })
+            );
+
+            logger.info('[FigureCarousel] Cache updated with new figure', {
+              projectId,
+              figureId: createdFigure.id,
+            });
+
+            // Set current figure to FIG. 1
+            if (effectiveSetCurrentFigure) {
+              effectiveSetCurrentFigure('FIG. 1');
+            }
+
+            // Reset creating flag
+            isCreatingFigure.current = false;
+          })
+          .catch(error => {
+            logger.error('[FigureCarousel] Failed to create initial FIG. 1', {
+              projectId,
+              error,
+            });
+
+            // Reset the flags so we can try again if the user refreshes
+            hasCreatedInitialFigure.current = false;
+            isCreatingFigure.current = false;
+          });
+      }
+    }, [projectId, figures, queryClient, effectiveSetCurrentFigure, isLoading]);
 
     // Ensure currentFigure is always valid - auto-correct if it doesn't exist
     useEffect(() => {
@@ -138,14 +235,14 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
 
         // For renames, the onFigureChange callback should have already updated the figure
         // This is just a fallback for other cases (like deletion)
-        if (!isLikelyRename && setCurrentFigure) {
-          setCurrentFigure(figureKeys[0]);
+        if (!isLikelyRename && effectiveSetCurrentFigure) {
+          effectiveSetCurrentFigure(figureKeys[0]);
         }
       }
 
       // Update the ref for next comparison
       prevFigureKeysRef.current = [...figureKeys];
-    }, [currentFigure, figureKeys, setCurrentFigure]);
+    }, [currentFigure, figureKeys, effectiveSetCurrentFigure]);
 
     // DERIVE the current index from props instead of using local state.
     const currentIndex = useMemo(() => {
@@ -157,7 +254,6 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
     const figureNum = figureKeys[currentIndex] || 'FIG. 1';
     const figure = (figureKeys.length > 0 && figures && figures[figureNum]) || {
       description: '',
-      elements: {},
       type: 'image',
     };
 
@@ -166,16 +262,21 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
       const figureNum = figureKeys[currentIndex];
       const figure = figures[figureNum];
 
-      if (!projectId || !figure.image) return;
+      if (!projectId || !figure) return;
 
-      // Extract figure ID from the image URL
-      // URL format: /api/projects/{projectId}/figures/{figureId}/download
-      const match = figure.image.match(/figures\/([a-zA-Z0-9-]+)\/download/);
-      const figureId = match?.[1];
+      const figureId = figure._id;
 
       if (!figureId) {
-        logger.error('[FigureCarousel] Could not extract figure ID from URL', {
-          imageUrl: figure.image,
+        logger.error('[FigureCarousel] Could not find figure ID', {
+          figureKey: figureNum,
+          figure,
+        });
+        toast({
+          title: 'Cannot unassign figure',
+          description: 'Figure ID not found. Please refresh and try again.',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
         });
         return;
       }
@@ -264,8 +365,8 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
           newFigureKey,
           currentFigure,
         });
-        if (setCurrentFigure) {
-          setCurrentFigure(newFigureKey);
+        if (effectiveSetCurrentFigure) {
+          effectiveSetCurrentFigure(newFigureKey);
         }
         // Also call the external callback if provided
         if (externalOnFigureChange) {
@@ -275,8 +376,8 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
       currentIndex: currentIndex, // Pass derived index
       figureKeys,
       setCurrentIndex: (index: number) => {
-        if (setCurrentFigure && figureKeys[index]) {
-          setCurrentFigure(figureKeys[index]);
+        if (effectiveSetCurrentFigure && figureKeys[index]) {
+          effectiveSetCurrentFigure(figureKeys[index]);
         }
       },
       closeModal,
@@ -295,8 +396,8 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
 
     // Handle navigation between figures - now just calls the prop callback.
     const handleNavigate = (index: number) => {
-      if (setCurrentFigure && figureKeys[index]) {
-        setCurrentFigure(figureKeys[index]);
+      if (effectiveSetCurrentFigure && figureKeys[index]) {
+        effectiveSetCurrentFigure(figureKeys[index]);
       }
     };
 
@@ -305,22 +406,17 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
       await fileHandlers.createNewFigure(figureNumber);
     };
 
-    // Theme-aware colors for navigation dots
-    const activeDotColor = useColorModeValue('blue.500', 'blue.400');
-    const inactiveDotColor = useColorModeValue('gray.300', 'gray.600');
-
     // Show loading state if data is still loading
-    if (!projectId) {
+    if (!projectId || isLoading) {
       return (
-        <Box
-          width="100%"
-          height={{ base: "240px", md: "260px", lg: "280px", xl: "300px" }}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-        >
-          <ChakraText>Loading figures...</ChakraText>
-        </Box>
+        <div className="w-full relative">
+          <div className="h-[180px] md:h-[200px] lg:h-[220px] xl:h-[240px] flex-shrink-0 border border-border rounded-md p-2 bg-card relative overflow-hidden">
+            <div className="h-full flex flex-col items-center justify-center space-y-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <span className="text-sm text-gray-500">Loading figures...</span>
+            </div>
+          </div>
+        </div>
       );
     }
 
@@ -333,9 +429,44 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
       onUpdate: handleUpdateFigure,
       onDropUpload: fileHandlers.handleDroppedFile,
       projectId,
+      inventionData,
       onFigureAssigned: async (figureId: string, figureKey: string) => {
-        // Refresh the figures data after assignment
-        logger.info('[FigureCarousel] Figure assigned from unassigned pool', {
+        // Just navigate to the assigned figure - cache is already handled by the modal
+        logger.info('[FigureCarousel] onFigureAssigned callback called', {
+          figureId,
+          figureKey,
+          projectId,
+        });
+
+        // Ensure the cache is fresh by invalidating figures query
+        // This provides a backup in case the modal's cache invalidation hasn't propagated yet
+        const figuresQueryKey = queryKeys.projects.figures(projectId);
+        await queryClient.invalidateQueries({
+          queryKey: figuresQueryKey,
+          exact: true,
+          refetchType: 'active',
+        });
+
+        // Force a refetch to ensure we get the latest data
+        await queryClient.refetchQueries({
+          queryKey: figuresQueryKey,
+          exact: true,
+        });
+
+        // Small delay to ensure cache propagation
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Navigate to the assigned figure
+        logger.info('[FigureCarousel] Navigating to assigned figure', {
+          figureKey,
+          hasSetCurrentFigure: !!effectiveSetCurrentFigure,
+        });
+
+        if (effectiveSetCurrentFigure) {
+          effectiveSetCurrentFigure(figureKey);
+        }
+
+        logger.info('[FigureCarousel] onFigureAssigned callback completed', {
           figureId,
           figureKey,
         });
@@ -361,21 +492,11 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
         />
 
         {/* Figure carousel container */}
-        <Box width="100%" position="relative" height="100%">
+        <div className="w-full relative h-full">
           {/* Main content */}
-          <Flex direction="column" height="100%" gap={2}>
+          <div className="flex flex-col h-full gap-2">
             {/* Figure content area */}
-            <Box
-              height={{ base: "240px", md: "260px", lg: "280px", xl: "300px" }}
-              flexShrink={0}
-              borderWidth="1px"
-              borderRadius="md"
-              p={2}
-              bg="bg.card"
-              borderColor="border.primary"
-              position="relative"
-              overflow="hidden"
-            >
+            <div className="h-[180px] md:h-[200px] lg:h-[220px] xl:h-[240px] flex-shrink-0 border border-border rounded-md p-2 bg-card relative overflow-hidden">
               <FigureContent {...figureContentProps} />
 
               {/* Figure controls (delete, fullscreen, etc.) inside the image area */}
@@ -389,49 +510,39 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
 
               {/* Figure navigation arrows inside the image area */}
               {figureKeys.length > 1 && (
-                <Box
-                  position="absolute"
-                  top="50%"
-                  left={0}
-                  right={0}
-                  transform="translateY(-50%)"
-                >
+                <div className="absolute top-1/2 left-0 right-0 transform -translate-y-1/2 pointer-events-none">
                   <FigureNavigation
                     figureKeys={figureKeys}
                     currentIndex={currentIndex} // Use derived index
                     onNavigate={handleNavigate}
                   />
-                </Box>
+                </div>
               )}
-            </Box>
+            </div>
 
             {/* Navigation dots below the figure */}
             {figureKeys.length > 1 && (
-              <Box display="flex" justifyContent="center" width="100%" mb={1}>
-                <HStack spacing={1}>
+              <div className="flex justify-center w-full mb-1">
+                <div className="flex items-center space-x-1">
                   {figureKeys.map((key, index) => (
-                    <Circle
+                    <div
                       key={key}
-                      size={index === currentIndex ? '8px' : '6px'}
-                      bg={
+                      className={cn(
+                        'w-1.5 h-1.5 rounded-full cursor-pointer transition-all duration-200 ease-out mx-px',
+                        'shadow-sm border',
                         index === currentIndex
-                          ? activeDotColor
-                          : inactiveDotColor
-                      }
-                      className="cursor-pointer transition-bg mx-px"
-                      style={{
-                        transition:
-                          'background-color 0.15s ease-out, width 0.15s ease-out, height 0.15s ease-out',
-                      }}
+                          ? 'bg-blue-600 dark:bg-blue-500 border-blue-700 dark:border-blue-400 shadow-blue-500/50'
+                          : 'bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 hover:bg-gray-300 dark:hover:bg-gray-600'
+                      )}
                       onClick={() => handleNavigate(index)}
                     />
                   ))}
-                </HStack>
-              </Box>
+                </div>
+              </div>
             )}
 
             {/* Figure metadata */}
-            <Box width="100%">
+            <div className="w-full">
               <FigureMetadata
                 figure={figure}
                 figureNum={figureNum}
@@ -439,10 +550,11 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
                 onUpload={() => fileHandlers.fileInputRef.current?.click()}
                 onAddNewFigure={fileHandlers.handleAddNewFigure}
                 onRenameFigure={fileHandlers.handleRenameFigure}
+                onManageAllFigures={openManagementModal}
               />
-            </Box>
-          </Flex>
-        </Box>
+            </div>
+          </div>
+        </div>
 
         {/* Modal for full-screen figure view */}
         <ModalView
@@ -479,6 +591,63 @@ const FigureCarousel: React.FC<ExtendedFigureCarouselProps> = React.memo(
           onClose={closeAddFigureDialog}
           options={addFigureOptions}
           onAddFigure={handleAddFigureFromDialog}
+        />
+
+        {/* Figure Management Modal */}
+        <FigureManagementModal
+          isOpen={isManagementModalOpen}
+          onClose={closeManagementModal}
+          projectId={projectId}
+          inventionData={inventionData}
+          currentFigure={currentFigure}
+          onFigureAssigned={async (figureId, figureKey) => {
+            logger.info(
+              '[FigureCarousel] Figure assigned via management modal',
+              {
+                figureId,
+                figureKey,
+              }
+            );
+
+            // Use the same logic as figureContentProps.onFigureAssigned
+            // Ensure the cache is fresh by invalidating figures query
+            const figuresQueryKey = queryKeys.projects.figures(projectId);
+            await queryClient.invalidateQueries({
+              queryKey: figuresQueryKey,
+              exact: true,
+              refetchType: 'active',
+            });
+
+            // Force a refetch to ensure we get the latest data
+            await queryClient.refetchQueries({
+              queryKey: figuresQueryKey,
+              exact: true,
+            });
+
+            // Small delay to ensure cache propagation
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Navigate to the assigned figure
+            logger.info(
+              '[FigureCarousel] Navigating to assigned figure from modal',
+              {
+                figureKey,
+                hasSetCurrentFigure: !!effectiveSetCurrentFigure,
+              }
+            );
+
+            if (effectiveSetCurrentFigure) {
+              effectiveSetCurrentFigure(figureKey);
+            }
+
+            logger.info(
+              '[FigureCarousel] Management modal onFigureAssigned completed',
+              {
+                figureId,
+                figureKey,
+              }
+            );
+          }}
         />
       </>
     );

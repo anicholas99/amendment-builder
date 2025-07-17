@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { swaggerSpec } from '@/config/swagger';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 async function handler(
   req: NextApiRequest,
@@ -8,13 +9,11 @@ async function handler(
 ): Promise<void> {
   // Only allow GET requests
   if (req.method !== 'GET') {
-    res.setHeader('Allow', ['GET']);
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
+    return apiResponse.methodNotAllowed(res, ['GET']);
   }
 
   res.setHeader('Content-Type', 'application/json');
-  res.status(200).json(swaggerSpec);
+  return apiResponse.ok(res, swaggerSpec);
 }
 
 // Use SecurePresets for a public documentation endpoint

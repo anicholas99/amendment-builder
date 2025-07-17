@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useFigures } from '@/hooks/api/useFigures';
 
 export const useReferenceNumerals = (

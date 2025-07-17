@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { CustomApiRequest } from '@/types/api';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import {
   findSearchHistoryById,
   updateSearchHistory,
@@ -11,10 +11,10 @@ import { addProjectExclusions } from '@/repositories/project/exclusions.reposito
 import { ProjectExclusionMetadata } from '@/repositories/project/types';
 import { z } from 'zod';
 import { hasExcludedReferences, isRecord } from '@/types/safe-type-helpers';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { idQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
+import { SecurePresets } from '@/server/api/securePresets';
 
 const apiLogger = createApiLogger('exclude-reference');
 

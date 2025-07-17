@@ -5,6 +5,6 @@
  * that make up the SearchHistoryRow functionality.
  */
 
-export { SearchHistoryRowHeader } from './SearchHistoryRowHeader';
+export { SearchHistoryRowHeaderShadcn as SearchHistoryRowHeader } from './SearchHistoryRowHeaderShadcn';
 export { SearchHistoryRowResults } from './SearchHistoryRowResults';
 export { ReferenceCardActions } from './ReferenceCardActions';

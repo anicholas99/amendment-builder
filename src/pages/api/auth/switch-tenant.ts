@@ -1,14 +1,14 @@
 import type { NextApiResponse } from 'next';
 // TODO: Delete this route after IPD Identity is live - tenant switching will be handled differently
 import { getSession } from '@/lib/auth/getSession';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { z } from 'zod';
 import {
   findTenantById,
   setUserActiveTenant,
 } from '@/repositories/tenantRepository';
 import { CustomApiRequest } from '@/types/api';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { AuthenticatedRequest } from '@/types/middleware';
 
 const bodySchema = z.object({

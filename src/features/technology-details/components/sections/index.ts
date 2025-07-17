@@ -3,4 +3,3 @@ export { TechnologyWelcomeSection } from './TechnologyWelcomeSection';
 export { TechnologyQuickActions } from './TechnologyQuickActions';
 export { TechnologyFooterActions } from './TechnologyFooterActions';
 export { TechnologyFilesSidebar } from './TechnologyFilesSidebar';
-export { TechnologyMobileFiles } from './TechnologyMobileFiles';

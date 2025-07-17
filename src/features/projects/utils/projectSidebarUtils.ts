@@ -3,22 +3,49 @@
  * Extracted complex logic following the architectural blueprint
  */
 import React from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
+import { ProjectData } from '@/types/project';
+import { ProjectDataResponse } from '@/types/api/responses';
 import {
   ProjectSidebarProject,
   DocumentType,
   NavigationTarget,
 } from '../types/projectSidebar';
 
+// Type guard for invention data with JSON fields
+interface InventionWithJsonFields {
+  id?: string;
+  title?: string | null;
+  summary?: string | null;
+  abstract?: string | null;
+  description?: string | null;
+  componentsJson?: string | null;
+  featuresJson?: string | null;
+  advantagesJson?: string | null;
+  useCasesJson?: string | null;
+  backgroundJson?: string | null;
+  features?: string[];
+  advantages?: string[];
+  use_cases?: string[];
+  useCases?: string[];
+  background?: Record<string, unknown> | null;
+}
+
 /**
  * Helper to safely parse JSON fields
  */
-const safeJsonParse = (jsonString: string | undefined | null, defaultValue: any): any => {
+const safeJsonParse = <T = unknown>(
+  jsonString: string | undefined | null,
+  defaultValue: T
+): T => {
   if (!jsonString) return defaultValue;
   try {
-    return JSON.parse(jsonString);
+    return JSON.parse(jsonString) as T;
   } catch (error) {
-    logger.debug('[transformProjectsForSidebar] Failed to parse JSON', { jsonString, error });
+    logger.debug('[transformProjectsForSidebar] Failed to parse JSON', {
+      jsonString,
+      error,
+    });
     return defaultValue;
   }
 };
@@ -28,45 +55,91 @@ const safeJsonParse = (jsonString: string | undefined | null, defaultValue: any)
  * Replaces the old structuredData approach with proper Invention model
  */
 export const transformProjectsForSidebar = (
-  projects: any[]
+  projects: (ProjectData | ProjectDataResponse)[]
 ): ProjectSidebarProject[] => {
   return projects
     .filter(p => p.id !== undefined)
     .map(p => {
-      const transformed = {
-        id: p.id as string,
+      // Cast invention to a type that includes all possible fields
+      const invention = p.invention as InventionWithJsonFields | null;
+
+      // Debug the raw project data
+      logger.info('[transformProjectsForSidebar] Raw project data', {
+        projectId: p.id,
+        projectName: p.name,
+        hasProcessedInvention: p.hasProcessedInvention,
+        inventionExists: !!invention,
+        inventionType: typeof invention,
+        inventionKeys: invention ? Object.keys(invention) : [],
+        inventionTitle: invention?.title,
+        rawInvention: invention,
+      });
+
+      const transformed: ProjectSidebarProject = {
+        id: p.id,
         name: p.name || 'Untitled Project',
         status: p.status,
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-        documents: p.documents || [],
-        invention: p.invention
+        createdAt:
+          p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
+        updatedAt:
+          p.updatedAt instanceof Date ? p.updatedAt.toISOString() : p.updatedAt,
+        documents: (p.documents || []).map(doc => ({
+          id: doc.id,
+          name: doc.type || 'Untitled Document',
+          type: doc.type,
+        })),
+        hasProcessedInvention: p.hasProcessedInvention || false,
+        invention: invention
           ? {
-              id: p.invention.id,
-              title: p.invention.title,
-              summary: p.invention.summary,
-              abstract: p.invention.abstract,
-              description: p.invention.description,
-              components: safeJsonParse(p.invention.componentsJson, []),
-              features: safeJsonParse(p.invention.featuresJson, []),
-              advantages: safeJsonParse(p.invention.advantagesJson, []),
-              use_cases: safeJsonParse(p.invention.useCasesJson, []),
-              background: safeJsonParse(p.invention.backgroundJson, null),
+              id: invention.id || undefined,
+              title: invention.title || undefined,
+              summary: invention.summary || undefined,
+              abstract: invention.abstract || undefined,
+              description: invention.description || undefined,
+              components: invention.componentsJson
+                ? safeJsonParse<string[]>(invention.componentsJson, [])
+                : [],
+              features: invention.featuresJson
+                ? safeJsonParse<string[]>(invention.featuresJson, [])
+                : Array.isArray(invention.features)
+                  ? invention.features
+                  : [],
+              advantages: invention.advantagesJson
+                ? safeJsonParse<string[]>(invention.advantagesJson, [])
+                : Array.isArray(invention.advantages)
+                  ? invention.advantages
+                  : [],
+              use_cases: invention.useCasesJson
+                ? safeJsonParse<string[]>(invention.useCasesJson, [])
+                : Array.isArray(invention.use_cases)
+                  ? invention.use_cases
+                  : Array.isArray(invention.useCases)
+                    ? invention.useCases
+                    : [],
+              background: invention.backgroundJson
+                ? safeJsonParse<Record<string, unknown>>(
+                    invention.backgroundJson,
+                    {}
+                  )
+                : typeof invention.background === 'object' &&
+                    invention.background !== null
+                  ? (invention.background as Record<string, unknown>)
+                  : null,
             }
           : null,
       };
-      
+
       // Debug logging to see what data we're working with
-      if (p.invention) {
+      if (invention) {
         logger.debug('[transformProjectsForSidebar] Project invention data', {
           projectId: p.id,
-          hasTitle: !!p.invention.title,
-          hasFeatures: !!p.invention.featuresJson,
-          featuresJson: p.invention.featuresJson?.substring(0, 100),
+          hasTitle: !!invention.title,
+          hasFeatures: !!transformed.invention?.features?.length,
+          featureCount: transformed.invention?.features?.length || 0,
           parsedFeatures: transformed.invention?.features,
         });
       }
-      
+
       return transformed;
     });
 };
@@ -213,7 +286,7 @@ export const createSafeClickEvent = (): React.MouseEvent => {
  */
 export const logSidebarOperation = (
   operation: string,
-  data: Record<string, any>
+  data: Record<string, unknown>
 ): void => {
   logger.debug(`[ProjectSidebar] ${operation}`, data);
 };
@@ -231,7 +304,7 @@ export const logNavigationOperation = (
 export const handleNavigationError = (
   error: unknown,
   operation: string,
-  context: Record<string, any>
+  context: Record<string, unknown>
 ): void => {
   logger.error(`Error during ${operation}:`, error);
   logSidebarOperation(`${operation} failed`, { error, ...context });
@@ -316,4 +389,14 @@ export const normalizeDocumentType = (documentType: string): DocumentType => {
     default:
       return 'patent';
   }
+};
+
+/**
+ * Transform a single project to sidebar format
+ */
+export const transformProjectToSidebarFormat = (
+  project: ProjectData
+): ProjectSidebarProject => {
+  // Use the same transformation logic for consistency
+  return transformProjectsForSidebar([project])[0];
 };

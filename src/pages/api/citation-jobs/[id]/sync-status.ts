@@ -1,5 +1,5 @@
 import { NextApiResponse } from 'next';
-import { createApiLogger } from '../../../../lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { findWithResult as getCitationJobWithResult } from '../../../../repositories/citationJobRepository';
 import { CitationsServerService } from '@/server/services/citations.server.service';
 import { countCitationMatchesByJobId } from '../../../../repositories/citationMatchRepository';
@@ -7,8 +7,8 @@ import { CustomApiRequest } from '@/types/api';
 import { z } from 'zod';
 import { idQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
 
 const apiLogger = createApiLogger('citation-jobs-sync-status');
 
@@ -55,7 +55,10 @@ async function handler(req: CustomApiRequest<EmptyBody>, res: NextApiResponse) {
         jobId: id,
       };
       apiLogger.logResponse(200, response);
-      return res.status(200).json(response);
+      return res.status(200).json({
+        success: true,
+        data: response,
+      });
     }
 
     // Check if the job has been running for a while - mark as completed if it's been too long
@@ -82,7 +85,10 @@ async function handler(req: CustomApiRequest<EmptyBody>, res: NextApiResponse) {
           jobId: id,
         };
         apiLogger.logResponse(200, response);
-        return res.status(200).json(response);
+        return res.status(200).json({
+          success: true,
+          data: response,
+        });
       }
     }
 
@@ -114,7 +120,10 @@ async function handler(req: CustomApiRequest<EmptyBody>, res: NextApiResponse) {
           jobId: id,
         };
         apiLogger.logResponse(200, response);
-        return res.status(200).json(response);
+        return res.status(200).json({
+          success: true,
+          data: response,
+        });
       }
     }
 

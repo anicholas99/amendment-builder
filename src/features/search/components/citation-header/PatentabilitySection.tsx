@@ -1,13 +1,9 @@
 import React from 'react';
-import {
-  Badge,
-  Button,
-  HStack,
-  Icon,
-  Text,
-  useColorModeValue,
-} from '@chakra-ui/react';
 import { FiBarChart2, FiRefreshCw, FiX } from 'react-icons/fi';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface PatentabilitySectionProps {
   showPatentabilityDashboard?: boolean;
@@ -26,53 +22,57 @@ export function PatentabilitySection({
   onCombinedAnalysis,
   hasReferences,
 }: PatentabilitySectionProps) {
-  const blueTextColor = useColorModeValue('blue.700', 'blue.300');
-  const iconColor = useColorModeValue('gray.600', 'blue.300');
+  const { isDarkMode } = useThemeContext();
 
   if (!hasReferences) {
     return null;
   }
 
+  const getScoreColor = (score: number) => {
+    if (score >= 65)
+      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+    if (score >= 50)
+      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+    return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+  };
+
   return (
-    <HStack spacing={1} mr={3} alignItems="center">
+    <div className="flex items-center gap-1 mr-3">
       {/* Always show score badge when dashboard is hidden and we have a patentability score value */}
       {!showPatentabilityDashboard && patentabilityScore !== undefined && (
-        <HStack spacing={2} mr={1}>
+        <div className="flex items-center gap-2 mr-1">
           <Badge
-            colorScheme={
-              (patentabilityScore ?? 0) >= 65
-                ? 'green'
-                : (patentabilityScore ?? 0) >= 50
-                  ? 'yellow'
-                  : 'red'
-            }
-            p={1}
+            className={cn(
+              'flex items-center gap-1 p-1',
+              getScoreColor(patentabilityScore ?? 0)
+            )}
           >
-            <HStack spacing={1}>
-              <Icon as={FiBarChart2} size="xs" />
-              <Text>Patentability: {patentabilityScore ?? 0}/100</Text>
-            </HStack>
+            <FiBarChart2 className="w-3 h-3" />
+            <span>Patentability: {patentabilityScore ?? 0}/100</span>
           </Badge>
           <Button
-            size="xs"
-            leftIcon={<Icon as={FiRefreshCw} color={iconColor} />}
-            onClick={onRunPatentabilityAnalysis}
+            size="sm"
             variant="ghost"
+            onClick={onRunPatentabilityAnalysis}
+            className={cn(
+              'flex items-center gap-1 px-2 py-1 h-6',
+              isDarkMode
+                ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+            )}
             title="Re-analyze patentability"
-            color={iconColor}
-            _hover={{ color: useColorModeValue('gray.800', 'blue.100') }}
           >
+            <FiRefreshCw className="w-3 h-3" />
             Re-analyze
           </Button>
-        </HStack>
+        </div>
       )}
 
       {/* Show Analysis Button - only when dashboard is hidden */}
       {!showPatentabilityDashboard && (
         <Button
-          size="xs"
-          colorScheme="blue"
-          ml={1}
+          size="sm"
+          className="ml-1 h-6 px-2 py-1 text-xs"
           onClick={onCombinedAnalysis}
         >
           Combined Analysis
@@ -82,24 +82,31 @@ export function PatentabilitySection({
       {/* Add Close button - visible when dashboard is shown */}
       {showPatentabilityDashboard && (
         <Button
-          size="xs"
+          size="sm"
           variant="ghost"
-          colorScheme="gray"
-          leftIcon={<Icon as={FiX} color={iconColor} />}
           onClick={() => onTogglePatentability && onTogglePatentability(false)}
-          mr={1}
-          color={iconColor}
-          _hover={{ color: useColorModeValue('gray.800', 'blue.100') }}
+          className={cn(
+            'flex items-center gap-1 px-2 py-1 h-6 mr-1',
+            isDarkMode
+              ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+              : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+          )}
         >
+          <FiX className="w-3 h-3" />
           Close
         </Button>
       )}
 
       {patentabilityScore !== null && patentabilityScore !== undefined && (
-        <Text fontSize="sm" color={blueTextColor} ml={2} fontWeight="medium">
+        <p
+          className={cn(
+            'text-sm font-medium ml-2',
+            isDarkMode ? 'text-blue-300' : 'text-blue-700'
+          )}
+        >
           Patentability Score: {Math.round(patentabilityScore)}%
-        </Text>
+        </p>
       )}
-    </HStack>
+    </div>
   );
 }

@@ -1,11 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { StorageServerService } from '@/server/services/storage.server-service';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
 import { FigureStatus } from '@/constants/database-enums';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
 import { ApplicationError } from '@/lib/error';
 
 const apiLogger = createApiLogger('projects/figures/download');

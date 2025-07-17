@@ -104,6 +104,7 @@ export interface DeepAnalysisResult {
     strategicRecommendations: string[];
   };
   holisticAnalysis: string;
+  amendmentExplanation?: string;
   originalClaim?: string;
   revisedClaim?: string;
 }

@@ -3,7 +3,7 @@
  * Handles patent search operations
  */
 
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { PatentSearchResult } from '../types';
 
 /**

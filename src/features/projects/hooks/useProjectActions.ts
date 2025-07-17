@@ -1,12 +1,13 @@
 import { useCallback } from 'react';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import {
   useDeleteProjectMutation,
   useUpdateProjectMutation,
 } from '@/hooks/api/useProjects';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useProjectData } from '@/contexts';
 import { useRouter } from 'next/router';
+import { extractTenantFromQuery } from '@/utils/routerTenant';
 
 /**
  * Hook that provides actions for managing projects by composing other hooks.
@@ -54,7 +55,7 @@ export const useProjectActions = () => {
 
         if (projectId === activeProjectId) {
           await setActiveProject(null);
-          const { tenant = 'development' } = router.query;
+          const { tenant } = extractTenantFromQuery(router.query);
           await router.push(`/${tenant}/projects`);
         }
       } catch (error) {

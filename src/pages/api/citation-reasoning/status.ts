@@ -1,5 +1,5 @@
 import { NextApiResponse, NextApiRequest } from 'next';
-import { createApiLogger } from '../../../lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { AuthenticatedRequest } from '@/types/middleware';
 import {
   findMatchesWithReasoning,
@@ -16,7 +16,7 @@ import { withErrorHandling } from '@/middleware/errorHandling';
 import { withRateLimit } from '@/middleware/rateLimiter';
 import { requireRole } from '@/middleware/role';
 import { withMethod } from '@/middleware/method';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 // No request body needed for this GET-only endpoint
 interface EmptyBody {}

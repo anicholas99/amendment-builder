@@ -1,19 +1,9 @@
 import React from 'react';
-import {
-  Box,
-  Text,
-  VStack,
-  HStack,
-  Button,
-  Icon,
-  Flex,
-  Tabs,
-  TabList,
-  Tab,
-  TabPanels,
-  TabPanel,
-} from '@chakra-ui/react';
-import { FiPlus, FiEdit } from 'react-icons/fi';
+import { Plus, Edit } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 interface Figure {
   id: string;
@@ -45,108 +35,106 @@ const FigureSection: React.FC<FigureSectionProps> = ({
   FigureCarouselComponent,
   ReferenceNumeralsComponent,
 }) => {
+  const { isDarkMode } = useThemeContext();
+
   return (
-    <Box w="100%" p={4}>
-      <Flex justifyContent="space-between" alignItems="center" mb={4}>
-        <Text fontSize="xl" fontWeight="bold">
-          Figures
-        </Text>
-        <HStack>
-          <Button
-            leftIcon={<Icon as={FiPlus} />}
-            variant="secondary"
-            size="action"
-            onClick={onAddFigure}
-          >
+    <div className="w-full p-4">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">Figures</h2>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onAddFigure}>
+            <Plus className="h-4 w-4 mr-2" />
             Add Figure
           </Button>
-        </HStack>
-      </Flex>
+        </div>
+      </div>
 
-      <Tabs variant="enclosed" colorScheme="blue">
-        <TabList>
-          <Tab>Carousel View</Tab>
-          <Tab>Element Labels</Tab>
-        </TabList>
+      <Tabs defaultValue="carousel" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="carousel">Carousel View</TabsTrigger>
+          <TabsTrigger value="labels">Element Labels</TabsTrigger>
+        </TabsList>
 
-        <TabPanels>
-          <TabPanel p={0} pt={4}>
-            <FigureCarouselComponent figures={figures} />
+        <TabsContent value="carousel" className="pt-4">
+          <FigureCarouselComponent figures={figures} />
 
-            {figures.length > 0 && (
-              <Flex mt={4} justifyContent="center">
-                {figures.map((figure, index) => (
-                  <Button
-                    key={figure.id}
-                    size="action"
-                    variant={index === 0 ? 'primary' : 'secondary'}
-                    mx={1}
-                    onClick={() => onViewFigure(figure.id)}
-                  >
-                    {index + 1}
-                  </Button>
-                ))}
-              </Flex>
-            )}
-          </TabPanel>
+          {figures.length > 0 && (
+            <div className="flex justify-center mt-4 gap-2">
+              {figures.map((figure, index) => (
+                <Button
+                  key={figure.id}
+                  size="sm"
+                  variant={index === 0 ? 'default' : 'outline'}
+                  onClick={() => onViewFigure(figure.id)}
+                >
+                  {index + 1}
+                </Button>
+              ))}
+            </div>
+          )}
+        </TabsContent>
 
-          <TabPanel p={0} pt={4}>
-            {figures.length === 0 ? (
-              <Box p={4} borderWidth="1px" borderRadius="md" bg="bg.secondary">
-                <Text color="text.secondary" textAlign="center">
-                  No figures added yet. Add a figure to see its element labels
-                  here.
-                </Text>
-              </Box>
-            ) : (
-              <VStack spacing={4} align="stretch">
-                {figures.map(figure => (
-                  <Box
-                    key={figure.id}
-                    p={4}
-                    borderWidth="1px"
-                    borderRadius="md"
-                    boxShadow="sm"
-                  >
-                    <Flex
-                      justifyContent="space-between"
-                      alignItems="center"
-                      mb={3}
+        <TabsContent value="labels" className="pt-4">
+          {figures.length === 0 ? (
+            <div
+              className={cn(
+                'p-4 border rounded-md text-center',
+                isDarkMode
+                  ? 'bg-gray-800 border-gray-700'
+                  : 'bg-gray-50 border-gray-200'
+              )}
+            >
+              <p className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
+                No figures added yet. Add a figure to see its element labels
+                here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {figures.map(figure => (
+                <div
+                  key={figure.id}
+                  className={cn(
+                    'p-4 border rounded-md shadow-sm',
+                    isDarkMode ? 'border-gray-700' : 'border-gray-200'
+                  )}
+                >
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-bold">{figure.title}</h3>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onEditFigure(figure.id)}
                     >
-                      <Text fontWeight="bold">{figure.title}</Text>
-                      <Button
-                        size="action"
-                        variant="secondary"
-                        leftIcon={<Icon as={FiEdit} />}
-                        onClick={() => onEditFigure(figure.id)}
-                      >
-                        Edit
-                      </Button>
-                    </Flex>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                  </div>
 
-                    {figure.elements && figure.elements.length > 0 ? (
-                      <ReferenceNumeralsComponent
-                        elements={figure.elements.reduce(
-                          (acc, el) => {
-                            acc[el.id] = el.description;
-                            return acc;
-                          },
-                          {} as Record<string, string>
-                        )}
-                      />
-                    ) : (
-                      <Text color="text.secondary">
-                        No element labels for this figure.
-                      </Text>
-                    )}
-                  </Box>
-                ))}
-              </VStack>
-            )}
-          </TabPanel>
-        </TabPanels>
+                  {figure.elements && figure.elements.length > 0 ? (
+                    <ReferenceNumeralsComponent
+                      elements={figure.elements.reduce(
+                        (acc, el) => {
+                          acc[el.id] = el.description;
+                          return acc;
+                        },
+                        {} as Record<string, string>
+                      )}
+                    />
+                  ) : (
+                    <p
+                      className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}
+                    >
+                      No element labels for this figure.
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
-    </Box>
+    </div>
   );
 };
 

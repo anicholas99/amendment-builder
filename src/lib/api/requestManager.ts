@@ -1,6 +1,5 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { rateLimitMonitor } from './rateLimitMonitor';
-import { environment } from '@/config/environment';
 
 interface PendingRequest {
   promise: Promise<Response>;
@@ -156,22 +155,111 @@ class RequestManager {
         if (url.startsWith('/')) {
           // If it's a relative URL and we're in a browser context, use the current origin
           if (typeof window !== 'undefined') {
-            absoluteUrl = `${window.location.origin}${url}`;
-          } else {
-            // If we're in a server context, use the centralized appUrl from config
-            const appUrl = environment.appUrl;
-            absoluteUrl = `${appUrl}${url}`;
-            logger.debug(
-              '[RequestManager] Constructed absolute URL for server context',
-              {
+            const origin = window.location.origin;
+
+            // Debug logging to understand the URL construction issue
+            if (url.includes('/versions/latest')) {
+              logger.debug('[RequestManager] URL construction debug', {
                 originalUrl: url,
-                absoluteUrl,
-              }
+                windowOrigin: origin,
+                windowLocation: window.location.href,
+                hostname: window.location.hostname,
+                port: window.location.port,
+                protocol: window.location.protocol,
+              });
+            }
+
+            // Ensure we have a proper origin - be more strict about validation
+            if (
+              !origin ||
+              origin === 'null' ||
+              origin.includes('undefined') ||
+              !origin.includes('://') ||
+              origin.length < 10
+            ) {
+              // Minimum length for a valid origin
+
+              // Try to construct origin from individual parts
+              const protocol = window.location.protocol || 'http:';
+              const hostname = window.location.hostname || 'localhost';
+              const port = window.location.port || '3000';
+
+              const reconstructedOrigin = `${protocol}//${hostname}${port ? ':' + port : ''}`;
+
+              logger.warn(
+                '[RequestManager] Invalid origin detected, reconstructing',
+                {
+                  originalOrigin: origin,
+                  protocol,
+                  hostname,
+                  port,
+                  reconstructedOrigin,
+                }
+              );
+
+              absoluteUrl = `${reconstructedOrigin}${url}`;
+            } else {
+              absoluteUrl = `${origin}${url}`;
+            }
+
+            // Additional validation to prevent malformed URLs
+            if (
+              !absoluteUrl.startsWith('http://') &&
+              !absoluteUrl.startsWith('https://')
+            ) {
+              logger.error(
+                '[RequestManager] Malformed URL detected, using fallback',
+                {
+                  malformedUrl: absoluteUrl,
+                  originalUrl: url,
+                  origin,
+                }
+              );
+              absoluteUrl = `http://localhost:3000${url}`;
+            }
+
+            // Remove any trailing colons or unexpected characters
+            absoluteUrl = absoluteUrl.replace(/:(\d+):\d+$/, ':$1'); // Fix :3000:1 -> :3000
+          } else {
+            // In server context, this module shouldn't be used
+            // RequestManager is for client-side request management only
+            throw new Error(
+              '[RequestManager] Cannot resolve relative URLs in server context. This module is for client-side use only.'
             );
           }
         }
 
+        // Final URL validation before making the request
+        try {
+          const testUrl = new URL(absoluteUrl);
+          // Additional check to ensure the URL looks correct
+          if (!testUrl.protocol || !testUrl.hostname) {
+            throw new Error('Invalid URL components');
+          }
+        } catch (urlError) {
+          logger.error(
+            '[RequestManager] Invalid URL constructed, using fallback',
+            {
+              invalidUrl: absoluteUrl,
+              originalUrl: url,
+              error: urlError,
+            }
+          );
+          // Fallback to localhost with clean URL
+          absoluteUrl = `http://localhost:3000${url}`;
+        }
+
         const response = await fetch(absoluteUrl, options);
+
+        // Log successful URL construction for debugging
+        if (url.includes('/versions/latest')) {
+          logger.debug('[RequestManager] Successful URL construction', {
+            originalUrl: url,
+            absoluteUrl,
+            responseStatus: response.status,
+            responseOk: response.ok,
+          });
+        }
 
         // Cache successful GET responses
         if (response.ok && (!options?.method || options.method === 'GET')) {
@@ -294,5 +382,5 @@ class RequestManager {
   }
 }
 
-// Export singleton instance
-export const requestManager = new RequestManager();
+// Export the class for context-based instantiation
+export { RequestManager };

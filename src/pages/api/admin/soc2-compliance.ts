@@ -1,11 +1,26 @@
 import { NextApiResponse } from 'next';
 import { CustomApiRequest } from '@/types/api';
-import { queryAuditLogs } from '@/lib/monitoring/audit-logger';
-import { logger } from '@/lib/monitoring/logger';
+import { queryAuditLogs } from '@/server/monitoring/audit-logger';
+import { logger } from '@/server/logger';
 import { getAllUsers } from '@/repositories/userRepository';
 import { readFileSync, existsSync } from 'fs';
 import * as path from 'path';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
+
+// Type definition for API security metrics
+interface ApiSecurityMetrics {
+  endpointsWithAuth: number;
+  totalEndpoints: number;
+  endpointsWithValidation: number;
+  endpointsWithTenantGuard: number;
+  endpointsWithRoleCheck: number;
+  endpointsWithRateLimit: number;
+  endpointsWithCsrf: number;
+}
+
+interface MetricsFileData {
+  metrics: ApiSecurityMetrics;
+}
 
 /**
  * SOC 2 Compliance Dashboard
@@ -123,12 +138,20 @@ async function handler(req: CustomApiRequest, res: NextApiResponse) {
 
     // Try to load real-time metrics from the security analysis
     try {
-      const metricsPath = path.join(
-        process.cwd(),
-        'scripts/api-security-metrics.json'
-      );
-      if (existsSync(metricsPath)) {
-        const metricsData = JSON.parse(readFileSync(metricsPath, 'utf-8'));
+      // Validate that the metrics file is within the expected directory
+      const metricsFileName = 'api-security-metrics.json';
+      const scriptsDir = path.join(process.cwd(), 'scripts');
+      const metricsPath = path.join(scriptsDir, metricsFileName);
+
+      // Ensure the resolved path is within the scripts directory
+      const resolvedPath = path.resolve(metricsPath);
+      if (!resolvedPath.startsWith(path.resolve(scriptsDir))) {
+        throw new Error('Invalid metrics path');
+      }
+
+      if (existsSync(resolvedPath)) {
+        const fileContent = readFileSync(resolvedPath, 'utf-8');
+        const metricsData = JSON.parse(fileContent) as MetricsFileData;
         const { metrics } = metricsData;
 
         securityCoverage = {
@@ -236,7 +259,10 @@ async function handler(req: CustomApiRequest, res: NextApiResponse) {
       ].filter(Boolean),
     };
 
-    return res.status(200).json(complianceReport);
+    return res.status(200).json({
+      success: true,
+      data: complianceReport,
+    });
   } catch (error) {
     logger.error('SOC2 compliance report error:', { error });
     return res

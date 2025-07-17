@@ -1,11 +1,17 @@
-import React, { memo, useMemo, useRef, useEffect, startTransition, useState } from 'react';
-import { Box, Text } from '@chakra-ui/react';
+import React, {
+  memo,
+  useMemo,
+  useRef,
+  useEffect,
+  startTransition,
+  useState,
+} from 'react';
 import ReactMarkdown, { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 // @ts-ignore
 import remarkBreaks from 'remark-breaks';
 import { ClaimRevisionDiff } from './ClaimRevisionDiff';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 interface MemoizedMarkdownRendererProps {
   content: string;
@@ -20,180 +26,227 @@ interface MemoizedMarkdownRendererProps {
 // Cache for processed markdown to avoid re-parsing
 const markdownCache = new Map<string, React.ReactNode>();
 
-export const MemoizedMarkdownRenderer = memo<MemoizedMarkdownRendererProps>(({
-  content,
-  isStreaming,
-  pageContext,
-  projectId,
-  formatPatentClaim,
-  MarkdownComponentsWithClaims,
-  justCompleted,
-}) => {
-  // Keep track of the last rendered content to avoid re-processing
-  const lastProcessedContentRef = useRef<React.ReactNode | null>(null);
-  const lastContentRef = useRef<string>('');
-  const lastStreamingStateRef = useRef<boolean | null>(null);
-  const [deferredContent, setDeferredContent] = useState<React.ReactNode | null>(null);
-  
-  // Generate a cache key based on content and context
-  const cacheKey = useMemo(
-    () => `${pageContext}-${content.length}-${content.slice(0, 100)}`,
-    [pageContext, content]
+/**
+ * Filters out HTML comments that should not be visible to users
+ * These are typically used for internal processing/communication
+ */
+const filterInternalComments = (content: string): string => {
+  return (
+    content
+      .replace(/<!--\s*CLAIMS_ADDED[^>]*-->/g, '')
+      .replace(/<!--\s*CLAIMS_UPDATED[^>]*-->/g, '')
+      .replace(/<!--\s*CLAIMS_DELETED[^>]*-->/g, '')
+      .replace(/<!--\s*INVENTION_UPDATED[^>]*-->/g, '')
+      .replace(/<!--\s*FIGURE_CREATED[^>]*-->/g, '')
+      .replace(/<!--\s*SEARCH_COMPLETED[^>]*-->/g, '')
+      .replace(/<!--\s*ANALYSIS_COMPLETED[^>]*-->/g, '')
+      // Remove any standalone HTML comments that look like internal commands
+      // BUT preserve REVISION_DIFF comments for the diff parser
+      .replace(
+        /<!--\s*(?!REVISION_DIFF|END_REVISION_DIFF)[A-Z_]+(?::[^>]*)?\s*-->/g,
+        ''
+      )
+      // Clean up any extra whitespace left behind
+      .replace(/\n\s*\n\s*\n/g, '\n\n')
+      .trim()
   );
+};
 
-  // If content hasn't changed but streaming state has, reuse the last processed content
-  if (content === lastContentRef.current && 
-      lastStreamingStateRef.current === true && 
-      isStreaming === false &&
-      lastProcessedContentRef.current) {
-    lastStreamingStateRef.current = isStreaming;
-    logger.debug('[MemoizedMarkdownRenderer] Reusing content after streaming ended');
-    return (
-      <Box
-        position="relative"
-        style={{
-          WebkitFontSmoothing: 'antialiased',
-          MozOsxFontSmoothing: 'grayscale',
-        }}
-      >
-        {lastProcessedContentRef.current}
-      </Box>
+export const MemoizedMarkdownRenderer = memo<MemoizedMarkdownRendererProps>(
+  ({
+    content,
+    isStreaming,
+    pageContext,
+    projectId,
+    formatPatentClaim,
+    MarkdownComponentsWithClaims,
+    justCompleted,
+  }) => {
+    // Keep track of the last rendered content to avoid re-processing
+    const lastProcessedContentRef = useRef<React.ReactNode | null>(null);
+    const lastContentRef = useRef<string>('');
+    const lastStreamingStateRef = useRef<boolean | null>(null);
+
+    // Filter out internal comments early
+    const cleanContent = useMemo(
+      () => filterInternalComments(content),
+      [content]
     );
-  }
 
-  // Update refs
-  lastContentRef.current = content;
-  lastStreamingStateRef.current = isStreaming;
+    // Generate a cache key based on content and context
+    const cacheKey = useMemo(
+      () =>
+        `${pageContext}-${cleanContent.length}-${cleanContent.slice(0, 100)}`,
+      [pageContext, cleanContent]
+    );
 
-  // Process the content only when it changes
-  const processedContent = useMemo(() => {
-    // For streaming content, use lightweight processing
-    if (isStreaming) {
-      // Skip expensive regex operations during streaming
-      const result = (
-        <ReactMarkdown
-          components={MarkdownComponentsWithClaims}
-          remarkPlugins={[remarkGfm, remarkBreaks]}
-        >
-          {content}
-        </ReactMarkdown>
+    // Determine if we can reuse the last processed content to avoid expensive re-processing.
+    const canReuseLastContent = useMemo(() => {
+      return (
+        cleanContent === lastContentRef.current &&
+        lastStreamingStateRef.current === true &&
+        isStreaming === false &&
+        lastProcessedContentRef.current !== null
       );
-      
-      // Store for potential reuse
-      lastProcessedContentRef.current = result;
-      lastContentRef.current = content;
-      
-      return result;
-    }
+    }, [cleanContent, isStreaming]);
 
-    // Check cache first (only for non-streaming content)
-    if (!isStreaming && markdownCache.has(cacheKey)) {
-      const cached = markdownCache.get(cacheKey)!;
-      lastProcessedContentRef.current = cached;
-      lastContentRef.current = content;
-      return cached;
-    }
+    // Always keep refs up to date for future comparisons
+    lastContentRef.current = cleanContent;
+    lastStreamingStateRef.current = isStreaming;
 
-    // For completed messages, defer expensive processing
-    if (!isStreaming && content.length > 500) {
-      // Show simple markdown first
-      const simpleResult = (
-        <ReactMarkdown
-          components={MarkdownComponentsWithClaims}
-          remarkPlugins={[remarkGfm, remarkBreaks]}
-        >
-          {content}
-        </ReactMarkdown>
-      );
+    // Process the content only when it changes
+    const processedContent = useMemo(() => {
+      // Fast path: reuse previously processed content when appropriate
+      if (canReuseLastContent && lastProcessedContentRef.current) {
+        logger.debug(
+          '[MemoizedMarkdownRenderer] Reusing content after streaming ended'
+        );
+        return lastProcessedContentRef.current;
+      }
 
-      // Defer expensive processing
-      startTransition(() => {
-        // Clean escaped newlines and fix formatting
-        let safeContent = content.replace(/\\n/g, '\n');
+      // Use consistent processing for both streaming and completed states
+      // This prevents layout shifts during the streaming -> completed transition
 
-        // Check for REVISION_DIFF sections
-        const revisionDiffPattern = /<!-- REVISION_DIFF -->\n([\s\S]*?)\n<!-- END_REVISION_DIFF -->/g;
-        const revisionMatches = [...safeContent.matchAll(revisionDiffPattern)];
-        
-        if (revisionMatches.length > 0) {
-          // Parse the revision data and render with diff component
-          const parts: React.ReactNode[] = [];
-          let lastIndex = 0;
-          
-          revisionMatches.forEach((match, idx) => {
-            // Add content before this match
-            const beforeContent = safeContent.slice(lastIndex, match.index!);
-            if (beforeContent) {
-              // Only apply patent claim formatting to actual claim text
-              let formattedContent = beforeContent;
-              if (
-                pageContext === 'claim-refinement' &&
-                /^Claim\s+\d+:\s*A\s+/m.test(formattedContent)
-              ) {
-                formattedContent = formatPatentClaim(formattedContent);
-              }
-              
-              parts.push(
-                <Box key={`text-${idx}`}>
-                  <ReactMarkdown
-                    components={MarkdownComponentsWithClaims}
-                    remarkPlugins={[remarkGfm, remarkBreaks]}
-                  >
-                    {formattedContent}
-                  </ReactMarkdown>
-                </Box>
-              );
-            }
-            
-            // Parse and render the diff component
-            try {
-              const diffData = JSON.parse(match[1]);
-              parts.push(
-                <ClaimRevisionDiff
-                  key={`diff-${idx}`}
-                  claimId={diffData.claimId}
-                  claimNumber={diffData.claimNumber}
-                  changes={diffData.changes}
-                  projectId={projectId}
-                  proposedText={diffData.proposedText}
-                />
-              );
-            } catch (error) {
-              logger.error('[MemoizedMarkdownRenderer] Failed to parse revision diff data', { error });
-            }
-            
-            lastIndex = match.index! + match[0].length;
-          });
-          
-          // Add any remaining content
-          const remainingContent = safeContent.slice(lastIndex);
-          if (remainingContent) {
-            let formattedContent = remainingContent;
+      // Check cache first (only for non-streaming content)
+      if (!isStreaming && markdownCache.has(cacheKey)) {
+        const cached = markdownCache.get(cacheKey)!;
+        lastProcessedContentRef.current = cached;
+        lastContentRef.current = cleanContent;
+        return cached;
+      }
+
+      // Clean escaped newlines and fix formatting
+      let safeContent = cleanContent.replace(/\\n/g, '\n');
+
+      // Check for REVISION_DIFF sections
+      const revisionDiffPattern =
+        /<!-- REVISION_DIFF -->\s*\n([\s\S]*?)\n\s*<!-- END_REVISION_DIFF -->/g;
+      const revisionMatches = [...safeContent.matchAll(revisionDiffPattern)];
+
+      if (revisionMatches.length > 0) {
+        // Parse the revision data and render with diff component
+        const parts: React.ReactNode[] = [];
+        let lastIndex = 0;
+
+        revisionMatches.forEach((match, idx) => {
+          // Add content before this match
+          const beforeContent = safeContent.slice(lastIndex, match.index!);
+          if (beforeContent) {
+            // Only apply patent claim formatting to actual claim text
+            let formattedContent = beforeContent;
             if (
               pageContext === 'claim-refinement' &&
               /^Claim\s+\d+:\s*A\s+/m.test(formattedContent)
             ) {
               formattedContent = formatPatentClaim(formattedContent);
             }
-            
+
             parts.push(
-              <Box key={`text-final`}>
+              <div key={`text-${idx}`}>
                 <ReactMarkdown
                   components={MarkdownComponentsWithClaims}
                   remarkPlugins={[remarkGfm, remarkBreaks]}
                 >
                   {formattedContent}
                 </ReactMarkdown>
-              </Box>
+              </div>
             );
           }
-          
-          const result = <>{parts}</>;
-          
-          // Cache and update deferred content
+
+          // Parse and render the diff component
+          try {
+            const rawJson = match[1].trim();
+            logger.debug(
+              '[MemoizedMarkdownRenderer] Parsing revision diff JSON',
+              {
+                rawJson:
+                  rawJson.substring(0, 200) +
+                  (rawJson.length > 200 ? '...' : ''),
+                fullLength: rawJson.length,
+              }
+            );
+
+            const diffData = JSON.parse(rawJson);
+
+            // Validate required fields
+            if (
+              !diffData.claimId ||
+              !diffData.claimNumber ||
+              !diffData.changes
+            ) {
+              throw new Error('Missing required fields in revision diff data');
+            }
+
+            parts.push(
+              <ClaimRevisionDiff
+                key={`diff-${idx}`}
+                claimId={diffData.claimId}
+                claimNumber={diffData.claimNumber}
+                changes={diffData.changes}
+                projectId={projectId}
+                proposedText={diffData.proposedText}
+              />
+            );
+          } catch (error) {
+            logger.error(
+              '[MemoizedMarkdownRenderer] Failed to parse revision diff data',
+              {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                rawData:
+                  match[1].substring(0, 500) +
+                  (match[1].length > 500 ? '...' : ''),
+                fullMatch: match[0].substring(0, 200) + '...',
+              }
+            );
+
+            // Fallback: render as raw text with error message
+            parts.push(
+              <div
+                key={`error-${idx}`}
+                className="p-4 border border-red-300 bg-red-50 rounded-md text-red-700"
+              >
+                <p className="font-semibold">Error parsing revision data</p>
+                <p className="text-sm mt-1">
+                  There was an issue displaying the claim revision. Raw data:
+                </p>
+                <pre className="text-xs mt-2 bg-white p-2 rounded border overflow-x-auto">
+                  {match[1]}
+                </pre>
+              </div>
+            );
+          }
+
+          lastIndex = match.index! + match[0].length;
+        });
+
+        // Add any remaining content
+        const remainingContent = safeContent.slice(lastIndex);
+        if (remainingContent) {
+          let formattedContent = remainingContent;
+          if (
+            pageContext === 'claim-refinement' &&
+            /^Claim\s+\d+:\s*A\s+/m.test(formattedContent)
+          ) {
+            formattedContent = formatPatentClaim(formattedContent);
+          }
+
+          parts.push(
+            <div key={`text-final`}>
+              <ReactMarkdown
+                components={MarkdownComponentsWithClaims}
+                remarkPlugins={[remarkGfm, remarkBreaks]}
+              >
+                {formattedContent}
+              </ReactMarkdown>
+            </div>
+          );
+        }
+
+        const result = <>{parts}</>;
+
+        // Cache the result for non-streaming content
+        if (!isStreaming) {
           markdownCache.set(cacheKey, result);
-          setDeferredContent(result);
-          
           // Limit cache size
           if (markdownCache.size > 100) {
             const firstKey = markdownCache.keys().next().value;
@@ -201,114 +254,33 @@ export const MemoizedMarkdownRenderer = memo<MemoizedMarkdownRendererProps>(({
               markdownCache.delete(firstKey);
             }
           }
-        } else {
-          // No revision diffs, but still apply formatting
-          if (
-            pageContext === 'claim-refinement' &&
-            /^Claim\s+\d+:\s*A\s+/m.test(safeContent)
-          ) {
-            safeContent = formatPatentClaim(safeContent);
-          }
-
-          const result = (
-            <ReactMarkdown
-              components={MarkdownComponentsWithClaims}
-              remarkPlugins={[remarkGfm, remarkBreaks]}
-            >
-              {safeContent}
-            </ReactMarkdown>
-          );
-
-          markdownCache.set(cacheKey, result);
-          setDeferredContent(result);
         }
-      });
 
-      return simpleResult;
-    }
+        // Store for potential reuse
+        lastProcessedContentRef.current = result;
+        lastContentRef.current = cleanContent;
 
-    // Clean escaped newlines and fix formatting
-    let safeContent = content.replace(/\\n/g, '\n');
-
-    // Check for REVISION_DIFF sections
-    const revisionDiffPattern = /<!-- REVISION_DIFF -->\n([\s\S]*?)\n<!-- END_REVISION_DIFF -->/g;
-    const revisionMatches = [...safeContent.matchAll(revisionDiffPattern)];
-      
-    if (revisionMatches.length > 0) {
-      // Parse the revision data and render with diff component
-      const parts: React.ReactNode[] = [];
-      let lastIndex = 0;
-      
-      revisionMatches.forEach((match, idx) => {
-        // Add content before this match
-        const beforeContent = safeContent.slice(lastIndex, match.index!);
-        if (beforeContent) {
-          // Only apply patent claim formatting to actual claim text
-          let formattedContent = beforeContent;
-          if (
-            pageContext === 'claim-refinement' &&
-            /^Claim\s+\d+:\s*A\s+/m.test(formattedContent)
-          ) {
-            formattedContent = formatPatentClaim(formattedContent);
-          }
-          
-          parts.push(
-            <Box key={`text-${idx}`}>
-              <ReactMarkdown
-                components={MarkdownComponentsWithClaims}
-                remarkPlugins={[remarkGfm, remarkBreaks]}
-              >
-                {formattedContent}
-              </ReactMarkdown>
-            </Box>
-          );
-        }
-        
-        // Parse and render the diff component
-        try {
-          const diffData = JSON.parse(match[1]);
-          parts.push(
-            <ClaimRevisionDiff
-              key={`diff-${idx}`}
-              claimId={diffData.claimId}
-              claimNumber={diffData.claimNumber}
-              changes={diffData.changes}
-              projectId={projectId}
-              proposedText={diffData.proposedText}
-            />
-          );
-        } catch (error) {
-          logger.error('[MemoizedMarkdownRenderer] Failed to parse revision diff data', { error });
-        }
-        
-        lastIndex = match.index! + match[0].length;
-      });
-      
-      // Add any remaining content
-      const remainingContent = safeContent.slice(lastIndex);
-      if (remainingContent) {
-        let formattedContent = remainingContent;
-        if (
-          pageContext === 'claim-refinement' &&
-          /^Claim\s+\d+:\s*A\s+/m.test(formattedContent)
-        ) {
-          formattedContent = formatPatentClaim(formattedContent);
-        }
-        
-        parts.push(
-          <Box key={`text-final`}>
-            <ReactMarkdown
-              components={MarkdownComponentsWithClaims}
-              remarkPlugins={[remarkGfm, remarkBreaks]}
-            >
-              {formattedContent}
-            </ReactMarkdown>
-          </Box>
-        );
+        return result;
       }
-      
-      const result = <>{parts}</>;
-      
+
+      // No revision diffs, render normally
+      // Only apply patent claim formatting to actual claim text
+      if (
+        pageContext === 'claim-refinement' &&
+        /^Claim\s+\d+:\s*A\s+/m.test(safeContent)
+      ) {
+        safeContent = formatPatentClaim(safeContent);
+      }
+
+      const result = (
+        <ReactMarkdown
+          components={MarkdownComponentsWithClaims}
+          remarkPlugins={[remarkGfm, remarkBreaks]}
+        >
+          {safeContent}
+        </ReactMarkdown>
+      );
+
       // Cache the result for non-streaming content
       if (!isStreaming) {
         markdownCache.set(cacheKey, result);
@@ -320,81 +292,41 @@ export const MemoizedMarkdownRenderer = memo<MemoizedMarkdownRendererProps>(({
           }
         }
       }
-      
+
+      // Store for potential reuse
+      lastProcessedContentRef.current = result;
+      lastContentRef.current = cleanContent;
+
       return result;
-    }
+    }, [
+      canReuseLastContent,
+      isStreaming,
+      cleanContent,
+      cacheKey,
+      pageContext,
+      formatPatentClaim,
+      MarkdownComponentsWithClaims,
+      projectId,
+    ]);
 
-    // No revision diffs, render normally
-    // Only apply patent claim formatting to actual claim text
-    if (
-      pageContext === 'claim-refinement' &&
-      /^Claim\s+\d+:\s*A\s+/m.test(safeContent)
-    ) {
-      safeContent = formatPatentClaim(safeContent);
-    }
-
-    const result = (
-      <ReactMarkdown
-        components={MarkdownComponentsWithClaims}
-        remarkPlugins={[remarkGfm, remarkBreaks]}
+    // Return the processed content directly - no more deferred content logic
+    return (
+      <div
+        className="relative"
+        style={{
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale',
+        }}
       >
-        {safeContent}
-      </ReactMarkdown>
+        {processedContent}
+        {isStreaming && cleanContent && (
+          <span className="inline-block ml-1">
+            <span className="animate-pulse text-primary">▊</span>
+          </span>
+        )}
+      </div>
     );
+  }
+);
 
-    // Cache the result for non-streaming content
-    if (!isStreaming) {
-      markdownCache.set(cacheKey, result);
-      // Limit cache size
-      if (markdownCache.size > 100) {
-        const firstKey = markdownCache.keys().next().value;
-        if (firstKey) {
-          markdownCache.delete(firstKey);
-        }
-      }
-    }
-
-    return result;
-  }, [content, isStreaming, pageContext, projectId, formatPatentClaim, MarkdownComponentsWithClaims, cacheKey]);
-
-  // Use deferred content if available for long messages
-  const finalContent = deferredContent || processedContent;
-
-  return (
-    <Box
-      position="relative"
-      style={{
-        WebkitFontSmoothing: 'antialiased',
-        MozOsxFontSmoothing: 'grayscale',
-      }}
-    >
-      {finalContent}
-      {isStreaming && (
-        <Text
-          as="span"
-          display="inline-block"
-          width="8px"
-          height="16px"
-          bg="currentColor"
-          ml={1}
-          animation="blink 1s infinite"
-          sx={{
-            '@keyframes blink': {
-              '0%, 50%': { opacity: 1 },
-              '51%, 100%': { opacity: 0 },
-            },
-          }}
-        />
-      )}
-    </Box>
-  );
-}, (prevProps, nextProps) => {
-  // Custom comparison - only re-render if content or streaming state changes
-  return (
-    prevProps.content === nextProps.content &&
-    prevProps.isStreaming === nextProps.isStreaming &&
-    prevProps.pageContext === nextProps.pageContext
-  );
-});
-
-MemoizedMarkdownRenderer.displayName = 'MemoizedMarkdownRenderer'; 
+MemoizedMarkdownRenderer.displayName = 'MemoizedMarkdownRenderer';

@@ -1,42 +1,90 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { logger } from '@/lib/monitoring/logger';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { logger } from '@/server/logger';
+import { SecurePresets } from '@/server/api/securePresets';
+
+// Simple in-memory throttle for development
+const throttleMap = new Map<string, number>();
+const THROTTLE_DURATION = 60000; // 1 minute
 
 /**
- * CSP Violation Report endpoint
- * Receives reports when CSP blocks resources
+ * Content Security Policy (CSP) violation report endpoint
+ * Browsers will POST CSP violation reports to this endpoint
  */
-export default async function handler(
+async function handler(
   req: NextApiRequest,
   res: NextApiResponse
-) {
+): Promise<void> {
+  // Only accept POST requests (CSP reports are always POST)
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
+    // Log the CSP violation report
     const report = req.body;
 
-    // Log CSP violations for monitoring
-    logger.warn('CSP Violation Report', {
-      documentUri: report['csp-report']?.['document-uri'],
-      violatedDirective: report['csp-report']?.['violated-directive'],
-      effectiveDirective: report['csp-report']?.['effective-directive'],
-      blockedUri: report['csp-report']?.['blocked-uri'],
-      lineNumber: report['csp-report']?.['line-number'],
-      columnNumber: report['csp-report']?.['column-number'],
-      sourceFile: report['csp-report']?.['source-file'],
-      sample: report['csp-report']?.['script-sample'],
-      referrer: report['csp-report']?.referrer,
-    });
+    // Extract the most important information
+    const violation = report['csp-report'] || report;
 
-    // In production, you might want to:
-    // - Send to monitoring service (Sentry, DataDog, etc.)
-    // - Store in database for analysis
-    // - Alert on high violation rates
+    // In development, throttle similar violations to prevent log spam
+    if (process.env.NODE_ENV === 'development') {
+      const throttleKey = `${violation['violated-directive']}-${violation['blocked-uri']}`;
+      const lastLogged = throttleMap.get(throttleKey);
+      const now = Date.now();
 
+      if (lastLogged && now - lastLogged < THROTTLE_DURATION) {
+        // Skip logging this violation
+        res.status(204).end();
+        return;
+      }
+
+      // Update throttle map
+      throttleMap.set(throttleKey, now);
+
+      // Clean up old entries periodically
+      if (throttleMap.size > 100) {
+        for (const [key, time] of throttleMap.entries()) {
+          if (now - time > THROTTLE_DURATION) {
+            throttleMap.delete(key);
+          }
+        }
+      }
+    }
+
+    // Only log in production or for non-throttled violations
+    if (
+      process.env.NODE_ENV === 'production' ||
+      !throttleMap.has(
+        `${violation['violated-directive']}-${violation['blocked-uri']}`
+      )
+    ) {
+      logger.warn('CSP Violation Report', {
+        documentUri: violation['document-uri'],
+        violatedDirective: violation['violated-directive'],
+        effectiveDirective: violation['effective-directive'],
+        originalPolicy: violation['original-policy'],
+        blockedUri: violation['blocked-uri'],
+        lineNumber: violation['line-number'],
+        columnNumber: violation['column-number'],
+        sourceFile: violation['source-file'],
+        statusCode: violation['status-code'],
+        referrer: violation['referrer'],
+      });
+    }
+
+    // Return 204 No Content (standard for report endpoints)
     res.status(204).end();
   } catch (error) {
-    logger.error('Failed to process CSP report', { error });
-    res.status(500).json({ error: 'Failed to process report' });
+    logger.error('Error processing CSP report', {
+      error,
+      headers: req.headers,
+    });
+
+    // Still return success to prevent browser from retrying
+    res.status(204).end();
   }
 }
+
+// SECURITY: This is a public endpoint for receiving CSP violation reports
+// It needs to be public so browsers can send reports
+export default SecurePresets.public(handler);

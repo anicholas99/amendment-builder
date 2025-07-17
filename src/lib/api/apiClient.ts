@@ -4,17 +4,25 @@
  * This module provides a wrapper around the native fetch function
  * to automatically add required headers (like tenant slug) to API requests.
  */
-import { addTenantToHeaders } from '../../utils/tenant';
-import { logger } from '@/lib/monitoring/logger';
+import { addTenantToHeaders } from '@/utils/tenant';
+import { logger } from '@/utils/clientLogger';
 import { CSRF_CONFIG } from '@/config/security';
-import { requestManager } from './requestManager';
+import { RequestManager } from './requestManager';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { API_ROUTES } from '@/constants/apiRoutes';
-import { environment } from '@/config/environment';
+import { isDevelopment } from '@/config/environment.client';
+import { rateLimitMonitor } from './rateLimitMonitor';
+import { trackApiPerformance } from '@/utils/performanceMonitor';
+
+// Create a module-scoped instance for backward compatibility
+// This is safe for client-side usage as it's tied to the browser session
+const requestManager = new RequestManager();
 
 // CSRF handling logic moved from src/utils/security.ts
 let csrfTokenInternal: string | null = null;
 let csrfTokenPromise: Promise<void> | null = null;
+let lastCsrfWarningTime = 0;
+const CSRF_WARNING_THROTTLE = 60000; // 1 minute
 
 /**
  * Extract CSRF token from a Response object (if present in headers)
@@ -60,7 +68,15 @@ async function ensureCsrfTokenInternal(): Promise<void> {
 
       captureTokenFromResponse(res);
       if (!csrfTokenInternal) {
-        logger.warn('[apiFetch] CSRF token endpoint did not return a token.');
+        // Throttle this warning in development
+        const now = Date.now();
+        if (
+          process.env.NODE_ENV !== 'development' ||
+          now - lastCsrfWarningTime > CSRF_WARNING_THROTTLE
+        ) {
+          logger.warn('[apiFetch] CSRF token endpoint did not return a token.');
+          lastCsrfWarningTime = now;
+        }
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -136,9 +152,13 @@ export async function apiFetch(
     retries?: number;
     isStream?: boolean;
     retryCount?: number;
+    startTime?: number; // Add startTime to track across retries
   } = {}
 ): Promise<Response> {
   const { retries = 3, isStream = false, retryCount = 0 } = internalOptions;
+
+  // Track performance - use existing startTime if this is a retry
+  const startTime = internalOptions.startTime || performance.now();
 
   const method = (options.method || 'GET').toUpperCase();
 
@@ -165,6 +185,20 @@ export async function apiFetch(
     // logger.debug('[apiFetch] Added CSRF token to request headers.');
   }
 
+  // Add Content-Type header for JSON body if not already set
+  if (options.body && !currentHeaders.has('Content-Type')) {
+    // Check if body is a string (likely JSON)
+    if (typeof options.body === 'string') {
+      // Try to parse to verify it's JSON
+      try {
+        JSON.parse(options.body);
+        currentHeaders.set('Content-Type', 'application/json');
+      } catch {
+        // Not JSON, don't set Content-Type
+      }
+    }
+  }
+
   const finalOptions: RequestInit = {
     ...options,
     headers: currentHeaders,
@@ -188,6 +222,9 @@ export async function apiFetch(
 
     // Check if response is successful (2xx status)
     if (response.ok) {
+      // Track successful performance
+      trackApiPerformance(url, method, startTime);
+
       // logger.debug(`[apiFetch] Request successful: ${url}`, {
       //   status: response.status,
       // });
@@ -217,10 +254,11 @@ export async function apiFetch(
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, retryDelay));
 
-      // Retry the request
+      // Retry the request - pass the original startTime
       return apiFetch(url, options, {
         ...internalOptions,
         retryCount: retryCount + 1,
+        startTime, // Preserve original start time
       });
     }
 
@@ -288,6 +326,9 @@ export async function apiFetch(
       errorCode = ErrorCode.AUTH_TOKEN_INVALID;
     }
 
+    // Track performance even on errors
+    trackApiPerformance(url, method, startTime);
+
     throw new ApplicationError(
       errorCode,
       errorData?.message ||
@@ -296,6 +337,9 @@ export async function apiFetch(
       response.status
     );
   } catch (error: unknown) {
+    // Track performance on exceptions too
+    trackApiPerformance(url, method, startTime);
+
     if (error instanceof ApplicationError) {
       throw error;
     }
@@ -340,9 +384,6 @@ export function getApiCacheStats() {
   return requestManager.getCacheStats();
 }
 
-// Export rate limit monitor for debugging
-import { rateLimitMonitor } from './rateLimitMonitor';
-
 /**
  * Get rate limit metrics for debugging
  */
@@ -351,7 +392,7 @@ export function getRateLimitMetrics() {
 }
 
 // Add debug functions to window in development
-if (typeof window !== 'undefined' && environment.isDevelopment) {
+if (typeof window !== 'undefined' && isDevelopment) {
   (window as any).__apiDebug = {
     getCacheStats: getApiCacheStats,
     getRateLimitMetrics: getRateLimitMetrics,

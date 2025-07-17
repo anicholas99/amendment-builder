@@ -6,7 +6,7 @@ export const formatPatentClaim = (content: string): string => {
   if (!content.includes('Claim') || !content.includes(':')) {
     return content;
   }
-  
+
   // Check if this looks like a patent claim
   const claimPattern = /Claim\s+\d+:\s*A\s+[^:]+:\s*([\s\S]*?)(?=\n\n|$)/gi;
 
@@ -37,15 +37,16 @@ export const getInitialMessage = (
   if (pageContext === 'technology' && projectData?.invention) {
     const title =
       projectData.name || projectData.invention?.title || 'your invention';
-    
+
     // Clean up technical field - remove underscores, capitalize properly
-    let techField = projectData.invention?.technicalField ||
+    let techField =
+      projectData.invention?.technicalField ||
       (typeof projectData.invention?.background === 'object' &&
       projectData.invention.background !== null &&
       'technical_field' in projectData.invention.background
         ? (projectData.invention.background as any).technical_field
         : undefined);
-    
+
     // Clean up the technical field if it exists
     if (techField) {
       techField = techField

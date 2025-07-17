@@ -5,12 +5,12 @@
  */
 
 // Pricing rates per 1000 tokens (as of 2024-2025)
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 const PRICING = {
   // OpenAI models
   'gpt-4': { input: 0.03, output: 0.06 },
   'gpt-4-turbo': { input: 0.01, output: 0.03 },
-  'gpt-4.1': { input: 0.01, output: 0.03 },
+  'gpt-4.1': { input: 0.002, output: 0.008 }, // $2.00/1M input, $8.00/1M output (July 2025)
   'gpt-4.1-mini': { input: 0.0004, output: 0.0016 }, // $0.40/1M input, $1.60/1M output
   'gpt-4.1-nano': { input: 0.0001, output: 0.0004 }, // $0.10/1M input, $0.40/1M output
   'gpt-3.5-turbo': { input: 0.0015, output: 0.002 },

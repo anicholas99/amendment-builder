@@ -7,6 +7,10 @@ const prettierOptions = JSON.parse(
 
 module.exports = {
   parser: '@typescript-eslint/parser',
+  parserOptions: {
+    project: './tsconfig.json',
+    tsconfigRootDir: __dirname,
+  },
   extends: [
     'next/core-web-vitals',
     'plugin:@typescript-eslint/recommended',
@@ -26,10 +30,23 @@ module.exports = {
     'local/no-legacy-error-handling': 'error',
     'local/no-direct-api-calls': 'error',
     'local/no-direct-env-access': 'error',
+    'local/no-hardcoded-colors': 'error',
+    'local/no-singleton-services': 'error',
+    'local/no-console-logs': 'error',
+    'local/require-secure-presets': 'error',
     // TEMPORARILY DISABLED: This rule has false positives on server-side code
     // 'local/no-unstable-deps': 'warn',
+    
+    // Prevent mixed exports in React components to maintain Fast Refresh boundaries
+    'local/no-mixed-exports-in-components': 'warn',
 
-    '@typescript-eslint/no-explicit-any': 'off',
+    // SECURITY: Prevent any usage which can hide type safety issues
+    '@typescript-eslint/no-explicit-any': 'error',
+    '@typescript-eslint/no-unsafe-assignment': 'error',
+    '@typescript-eslint/no-unsafe-member-access': 'error',
+    '@typescript-eslint/no-unsafe-call': 'error',
+    '@typescript-eslint/no-unsafe-return': 'error',
+    '@typescript-eslint/no-unsafe-argument': 'error',
     '@typescript-eslint/no-unused-vars': [
       'warn',
       {
@@ -126,18 +143,23 @@ module.exports = {
     ],
     'no-undef': 'error',
     'no-restricted-imports': [
-      'warn',
+      'error',
       {
-        patterns: [
-          // Remove the restriction on @chakra-ui/* since we now use it directly
-        ],
         paths: [
-          // Remove the restriction on @chakra-ui/react since we now use it directly
+          // Client-server boundary enforcement
           {
-            name: '@chakra-ui/icons',
-            message:
-              '🚨 Direct Chakra UI icon imports should be avoided outside of src/ui/. Create abstracted icon components or use react-icons instead.',
+            name: '@/config/environment',
+            message: 'Use @/config/environment.client in React/client code',
           },
+          {
+            name: '@/lib/monitoring/logger',
+            message: 'Use @/utils/clientLogger in React/client code',
+          },
+          {
+            name: '@/lib/logger/serverLogger',
+            message: 'Use @/utils/clientLogger in React/client code',
+          },
+          // Deprecated error handlers
           {
             name: '@/utils/errorHandler',
             message:
@@ -153,7 +175,16 @@ module.exports = {
             message:
               '🚨 DEPRECATED: Use ApplicationError from @/lib/error instead. Legacy error handlers have been removed.',
           },
-
+        ],
+        patterns: [
+          {
+            group: ['**/server/**', '**/repositories/**'],
+            message: 'Server code and repositories must not be imported in React components or client code',
+          },
+          {
+            group: ['@/repositories/*'],
+            message: 'Repositories must only be imported server-side. Use API calls from client code instead',
+          },
         ],
       },
     ],
@@ -380,6 +411,52 @@ module.exports = {
               'Use crypto-secure random functions (crypto.randomUUID / randomBytes) instead of Math.random()',
           },
           // setTimeout/setInterval are OK in server-side code
+        ],
+      },
+    },
+    {
+      files: ['src/middleware/**/*'],
+      rules: {
+        // Middleware files are server-side code used by API routes
+        'react-hooks/rules-of-hooks': 'off',
+        'react-hooks/exhaustive-deps': 'off',
+        'local/no-unstable-deps': 'off',
+        'no-restricted-imports': [
+          'error',
+          {
+            paths: [
+              {
+                name: '@/config/environment.client',
+                message: 'Use @/config/environment in server-side middleware code',
+              },
+              {
+                name: '@/utils/clientLogger',
+                message: 'Use @/server/logger in server-side middleware code',
+              },
+            ],
+          },
+        ],
+        'no-restricted-globals': [
+          'error',
+          {
+            name: 'localStorage',
+            message: 'localStorage is not available in server-side code.',
+          },
+        ],
+        'no-restricted-syntax': [
+          'error',
+          {
+            selector:
+              "CallExpression[callee.object.name='console'][callee.property.name=/^(log|info|warn|error)$/]",
+            message:
+              "Use the logger from '@/server/logger' instead. Example: logger.info('message')",
+          },
+          {
+            selector:
+              "MemberExpression[object.name='Math'][property.name='random']",
+            message:
+              'Use crypto-secure random functions (crypto.randomUUID / randomBytes) instead of Math.random()',
+          },
         ],
       },
     },

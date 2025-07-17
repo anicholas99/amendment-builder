@@ -1,7 +1,7 @@
 import { NextApiResponse } from 'next';
 import { CustomApiRequest } from '@/types/api';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { z } from 'zod';
 import { queueDeepAnalysisInline } from '@/server/services/deep-analysis-inline.server.service';
 import {
@@ -11,8 +11,8 @@ import {
 import environment from '@/config/environment';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { idQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
 
 // Initialize logger
 const apiLogger = createApiLogger('citation-jobs/:id/deep-analysis');
@@ -100,8 +100,10 @@ async function handler(
       apiLogger.info('Deep analysis already exists for job', { jobId });
       return res.status(200).json({
         success: true,
-        message: 'Deep analysis already completed',
-        hasAnalysis: true,
+        data: {
+          message: 'Deep analysis already completed',
+          hasAnalysis: true,
+        },
       });
     }
 
@@ -113,8 +115,10 @@ async function handler(
 
     return res.status(202).json({
       success: true,
-      message: 'Deep analysis queued for processing',
-      jobId,
+      data: {
+        message: 'Deep analysis queued for processing',
+        jobId,
+      },
     });
   } catch (error) {
     apiLogger.error('Failed to perform deep analysis', {

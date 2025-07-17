@@ -26,10 +26,13 @@ const ProtectedHeading = Heading.extend({
   renderHTML({ node, HTMLAttributes }) {
     // Allow editing for the title (level-1) heading, but lock all others.
     const level = node.attrs.level;
-    const attrs = level === 1 ? HTMLAttributes : { ...HTMLAttributes, contenteditable: 'false' };
+    const attrs =
+      level === 1
+        ? HTMLAttributes
+        : { ...HTMLAttributes, contenteditable: 'false' };
 
     return [`h${level}`, attrs, 0];
   },
 });
 
-export default ProtectedHeading; 
+export default ProtectedHeading;

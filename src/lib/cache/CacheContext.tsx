@@ -13,7 +13,7 @@ import React, {
   useEffect,
 } from 'react';
 import { useRouter } from 'next/router';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { InMemoryCacheProvider, CacheOptions } from './cache-manager';
 
 interface CacheContextValue {

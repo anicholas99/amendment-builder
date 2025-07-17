@@ -1,14 +1,17 @@
-import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { ClaimRepository } from '@/repositories/claimRepository';
 import { inventionRepository } from '@/repositories/inventionRepository';
-import { ClaimMirroringService, ClaimType } from '@/server/services/claim-mirroring.server-service';
+import {
+  ClaimMirroringService,
+  ClaimType,
+} from '@/server/services/claim-mirroring.server-service';
 import { z } from 'zod';
+import { findProjectByIdAndTenant } from '@/repositories/project/core.repository';
 
 /**
  * Add new claims to a project
- * 
+ *
  * SECURITY: Always validates tenant ownership before accessing data
  */
 export async function addClaims(
@@ -22,21 +25,8 @@ export async function addClaims(
   });
 
   try {
-    if (!prisma) {
-      throw new ApplicationError(
-        ErrorCode.DB_CONNECTION_ERROR,
-        'Database client not initialized'
-      );
-    }
-
     // Verify project and tenant ownership
-    const project = await prisma.project.findFirst({
-      where: {
-        id: projectId,
-        tenantId: tenantId,
-        deletedAt: null,
-      },
-    });
+    const project = await findProjectByIdAndTenant(projectId, tenantId);
 
     if (!project) {
       throw new ApplicationError(
@@ -76,7 +66,7 @@ export async function addClaims(
 
 /**
  * Edit an existing claim
- * 
+ *
  * SECURITY: Always validates tenant ownership before accessing data
  */
 export async function editClaim(
@@ -122,7 +112,7 @@ export async function editClaim(
 
 /**
  * Delete claims
- * 
+ *
  * SECURITY: Always validates tenant ownership before accessing data
  */
 export async function deleteClaims(
@@ -147,19 +137,8 @@ export async function deleteClaims(
       }
     }
 
-    // Delete claims
-    let deletedCount = 0;
-    for (const claimId of claimIds) {
-      try {
-        await ClaimRepository.delete(claimId);
-        deletedCount++;
-      } catch (error: any) {
-        // Handle already deleted claims gracefully
-        if (error?.code !== 'P2025') {
-          throw error;
-        }
-      }
-    }
+    // Batch delete claims efficiently
+    const deletedCount = await ClaimRepository.deleteMany(claimIds, tenantId);
 
     return {
       success: true,
@@ -175,8 +154,14 @@ export async function deleteClaims(
 }
 
 /**
- * Reorder claims by swapping their text content
- * 
+ * Reorder claims by updating claim numbers
+ *
+ * Intelligently handles reordering:
+ * - If moving to an empty number (gap) → claim is simply moved to that number
+ * - If moving to an occupied number → the two claims swap positions
+ *
+ * This allows intuitive reordering where gaps are filled before swapping occurs.
+ *
  * SECURITY: Always validates tenant ownership before accessing data
  */
 export async function reorderClaims(
@@ -193,7 +178,10 @@ export async function reorderClaims(
 
   try {
     // Fetch both claims
-    const claims = await ClaimRepository.findByIds([claim1Id, claim2Id], tenantId);
+    const claims = await ClaimRepository.findByIds(
+      [claim1Id, claim2Id],
+      tenantId
+    );
 
     if (!claims || claims.length !== 2) {
       throw new ApplicationError(
@@ -212,13 +200,13 @@ export async function reorderClaims(
       );
     }
 
-    // Swap claim texts (no userId means no history tracking for these system operations)
-    await ClaimRepository.update(claim1Id, claim2.text);
-    await ClaimRepository.update(claim2Id, claim1.text);
+    // Swap claim numbers - the repository method handles the transaction and history tracking
+    await ClaimRepository.updateClaimNumber(claim1Id, claim2.number);
+    // The above will automatically swap the numbers between the two claims
 
     return {
       success: true,
-      message: `Successfully swapped claims ${claim1.number} and ${claim2.number}`,
+      message: `Successfully reordered claims ${claim1.number} and ${claim2.number}`,
     };
   } catch (error) {
     logger.error('[ReorderClaimsTool] Failed to reorder claims', {
@@ -231,7 +219,7 @@ export async function reorderClaims(
 
 /**
  * Mirror claims to a different type
- * 
+ *
  * SECURITY: Always validates tenant ownership before accessing data
  */
 export async function mirrorClaims(
@@ -280,7 +268,7 @@ export async function mirrorClaims(
 
 /**
  * Get all claims for a project
- * 
+ *
  * SECURITY: Always validates tenant ownership before accessing data
  */
 export async function getClaims(
@@ -292,21 +280,8 @@ export async function getClaims(
   });
 
   try {
-    if (!prisma) {
-      throw new ApplicationError(
-        ErrorCode.DB_CONNECTION_ERROR,
-        'Database client not initialized'
-      );
-    }
-
     // Verify project and tenant ownership
-    const project = await prisma.project.findFirst({
-      where: {
-        id: projectId,
-        tenantId: tenantId,
-        deletedAt: null,
-      },
-    });
+    const project = await findProjectByIdAndTenant(projectId, tenantId);
 
     if (!project) {
       throw new ApplicationError(
@@ -340,4 +315,4 @@ export async function getClaims(
     });
     throw error;
   }
-} 
+}

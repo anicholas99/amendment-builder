@@ -5,7 +5,7 @@
  * the reference number, citation text, score, status, and any metadata
  * about the reference and reasoning.
  */
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { ProcessedCitationMatch } from '@/types/domain/citation';
 
 export interface TableCitationMatch {
@@ -111,7 +111,7 @@ export function groupAndSortCitationMatches(
   citationMatchesData: ProcessedCitationMatch[] | undefined,
   selectedReference: string | null,
   activeSearchEntry: {
-    parsedElements?: string | { text?: string }[];
+    parsedElements?: string | string[];
     [key: string]: unknown;
   } | null,
   versionElementsArray?: { text: string }[]
@@ -197,11 +197,10 @@ export function groupAndSortCitationMatches(
           ? JSON.parse(activeSearchEntry.parsedElements)
           : activeSearchEntry.parsedElements;
       if (Array.isArray(elements)) {
-        originalElementTexts = elements
-          .map(el =>
-            typeof el === 'object' && el !== null ? el.text : undefined
-          )
-          .filter((text): text is string => typeof text === 'string');
+        // Elements are now always strings
+        originalElementTexts = elements.filter(
+          (text): text is string => typeof text === 'string'
+        );
         logger.debug(
           '[CitationUtils] Sorted groups using activeSearchEntry.parsedElements as fallback.'
         );

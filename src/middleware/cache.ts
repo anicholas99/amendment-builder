@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { API_ROUTES } from '@/constants/apiRoutes';
 

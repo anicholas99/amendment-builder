@@ -43,7 +43,7 @@ export function buildCSPHeader(nonce?: string): string {
   const directives: Record<string, string[]> = {
     'default-src': ["'self'"],
     'script-src': ["'self'", ...TRUSTED_DOMAINS.scripts],
-    'style-src': ["'self'", ...TRUSTED_DOMAINS.styles],
+    'style-src': ["'self'", "'unsafe-inline'", ...TRUSTED_DOMAINS.styles],
     'img-src': ["'self'", ...TRUSTED_DOMAINS.images],
     'font-src': ["'self'", ...TRUSTED_DOMAINS.fonts],
     'connect-src': ["'self'", ...TRUSTED_DOMAINS.connect],

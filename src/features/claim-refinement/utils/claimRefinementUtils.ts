@@ -1,6 +1,6 @@
 import React, { startTransition } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { useToast } from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
+import { useToast } from '@/hooks/useToastWrapper';
 import { ClaimsClientService } from '@/client/services/claims.client-service';
 import { ProjectApiService } from '@/client/services/project.client-service';
 import {
@@ -131,16 +131,17 @@ export const handleDeleteClaimWithHistory = (
   // Since state updates can be async, we need to ensure we have the updated
   // value to send to the DB. A better approach might be to get it from the
   // functional update, but this is a safe way to do it without major refactoring.
-  setTimeout(() => {
+  queueMicrotask(() => {
     if (updatedInventionForDb) {
       updateClaimsInDatabaseFn(updatedInventionForDb);
     }
-  }, 0);
+  });
 
   toast({
     title: 'Claim deleted',
     status: 'success',
     duration: 2000,
+    position: 'bottom-right',
   });
 };
 
@@ -188,16 +189,17 @@ export const handleInsertNewClaimWithHistory = (
 
   saveToHistoryFn(`Add claim ${newClaimNumber}`);
 
-  setTimeout(() => {
+  queueMicrotask(() => {
     if (updatedInventionForDb) {
       updateClaimsInDatabaseFn(updatedInventionForDb);
     }
-  }, 0);
+  });
 
   toast({
     title: 'Claim added',
     status: 'success',
     duration: 2000,
+    position: 'bottom-right',
   });
 };
 
@@ -221,7 +223,7 @@ export const handleGenerateClaim1 = async (
   try {
     const data = await ClaimsClientService.generateClaim1(
       projectId,
-      analyzedInvention
+      analyzedInvention || {}
     );
 
     if (data.claim && analyzedInvention) {
@@ -309,11 +311,11 @@ export const handleAddClaimWithHistory = (
 
   saveToHistoryFn(`Add claim ${newClaimNumber}`);
 
-  setTimeout(() => {
+  queueMicrotask(() => {
     if (updatedInventionForDb) {
       updateClaimsInDatabaseFn(updatedInventionForDb);
     }
-  }, 0);
+  });
 
   setNewClaimText('');
   setNewClaimDependsOn('');
@@ -323,6 +325,7 @@ export const handleAddClaimWithHistory = (
     title: 'Claim added',
     status: 'success',
     duration: 2000,
+    position: 'bottom-right',
   });
 };
 
@@ -357,11 +360,11 @@ export const handleConfirmApply = (
     });
   });
 
-  setTimeout(() => {
+  queueMicrotask(() => {
     if (updatedInventionForDb) {
       updateClaimsInDatabaseFn(updatedInventionForDb);
     }
-  }, 0);
+  });
 };
 
 /**
@@ -559,6 +562,6 @@ export const handleAnalyzePriorArt = async (
  * Refreshes invention data (placeholder implementation)
  */
 export const refreshInventionData = async (): Promise<void> => {
-  logger.log('Refreshing invention data');
+  logger.info('Refreshing invention data');
   return Promise.resolve();
 };

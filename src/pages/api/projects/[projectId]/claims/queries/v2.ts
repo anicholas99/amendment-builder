@@ -1,10 +1,10 @@
 import { NextApiResponse } from 'next';
 import { CustomApiRequest } from '@/types/api';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { z } from 'zod';
 // import { withAuth } from '@/middleware/auth';
 import { QueryGenerationService } from '@/server/services/query-generation.server-service';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import {
   GenerateQueriesRequestV2Schema,
   // GenerateQueriesResponseV2Schema
@@ -58,9 +58,12 @@ async function handler(
     });
 
     return res.status(200).json({
-      searchQueries: searchQueries,
-      timestamp: new Date().toISOString(),
-      projectId,
+      success: true,
+      data: {
+        searchQueries: searchQueries,
+        timestamp: new Date().toISOString(),
+        projectId,
+      },
     });
   } catch (error) {
     apiLogger.error('V2 query generation failed', { error });

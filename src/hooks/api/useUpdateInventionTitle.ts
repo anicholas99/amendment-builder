@@ -1,9 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import { useApiMutation } from '@/lib/api/queryClient';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { inventionQueryKeys } from '@/lib/queryKeys/inventionKeys';
-import { inventionClientService } from '@/client/services/invention.client-service';
+import { useInventionService } from '@/contexts/ClientServicesContext';
+import { logger } from '@/utils/clientLogger';
 import { InventionData } from '@/types';
 
 /**
@@ -14,6 +15,7 @@ export function useUpdateInventionTitle(projectId: string | undefined) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const inventionDetailKey = inventionQueryKeys.detail(projectId || '');
+  const inventionService = useInventionService();
 
   return useApiMutation<{ message: string }, { title: string }>({
     mutationFn: async ({ title }) => {
@@ -23,7 +25,8 @@ export function useUpdateInventionTitle(projectId: string | undefined) {
           'Project ID is required'
         );
       }
-      return inventionClientService.updateTitle(projectId, title);
+      await inventionService.updateInvention(projectId, { title });
+      return { message: 'Title updated successfully' };
     },
     onMutate: async ({ title }) => {
       // Optimistically update the title in the cache

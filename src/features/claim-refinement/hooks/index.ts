@@ -15,7 +15,7 @@ export * from './usePriorArtOperations';
 export { usePriorArtAnalysis } from './usePriorArtAnalysis';
 export { usePriorArtAnalysisHandlers } from './usePriorArtAnalysisHandlers';
 export { usePriorArtHandlers } from './usePriorArtHandlers';
-export { usePriorArtManagement } from './usePriorArtManagement';
+// Deprecated: export { usePriorArtManagement } from './usePriorArtManagement'; - Stub only, do not use
 export { usePriorArtSets } from './usePriorArtSets';
 export { useSearchHistoryState } from './useSearchHistoryState';
 export { useMessagesState } from './useMessagesState';

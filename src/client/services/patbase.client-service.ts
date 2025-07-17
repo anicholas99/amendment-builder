@@ -1,7 +1,7 @@
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 interface LookupResult {
   patentNumber: string;
@@ -37,7 +37,12 @@ export class PatbaseApiService {
         );
       }
 
-      return await response.json();
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: { results } }
+      const unwrappedResult = result.data || result;
+
+      return unwrappedResult;
     } catch (error) {
       logger.error('[PatbaseApiService] Error enhancing references', {
         references,

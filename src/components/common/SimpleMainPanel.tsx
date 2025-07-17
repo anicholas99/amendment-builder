@@ -1,13 +1,22 @@
 import React from 'react';
-import { Box } from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
 import { useViewHeight } from '@/hooks/useViewHeight';
+import { useLayout } from '@/contexts/LayoutContext';
 
 interface SimpleMainPanelProps {
   header?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
   contentPadding?: boolean;
-  contentStyles?: React.ComponentProps<typeof Box>;
+  contentStyles?: React.CSSProperties;
+  viewHeightOffset?: number;
+  /**
+   * Whether to reserve gutter space for the scrollbar on the outer scrollable container.
+   * Defaults to `true` to preserve the previous behaviour. Set to `false` when the
+   * scrolling happens in a nested element (e.g. TipTap editor) so the scrollbar
+   * sits flush against the panel border.
+   */
+  reserveScrollbarGutter?: boolean;
 }
 
 /**
@@ -20,51 +29,57 @@ export const SimpleMainPanel: React.FC<SimpleMainPanelProps> = ({
   footer,
   contentPadding = true,
   contentStyles = {},
+  viewHeightOffset,
+  reserveScrollbarGutter = true,
 }) => {
-  // Minimal offset to maximize container height (50px default + 10px = 60px total)
-  // This maximizes the available space while maintaining proper layout
-  const viewHeight = useViewHeight(60);
+  const { isProductivityMode, isHeaderHidden } = useLayout();
+
+  // Use provided offset or calculate based on layout mode
+  // In productivity mode, always use 0 to fill container
+  // In standard mode, use 60px for visual balance
+  const offset =
+    viewHeightOffset !== undefined
+      ? viewHeightOffset
+      : isProductivityMode
+        ? 0
+        : 60;
+  const viewHeight = useViewHeight(offset);
+
+  // In productivity mode, use a concrete height calculation instead of 100%
+  const containerHeight = isProductivityMode
+    ? 'calc(100vh - 120px)' // Same as ProductivityPanel and ViewLayout containers
+    : viewHeight;
 
   return (
-    <Box
-      height={viewHeight}
-      display="flex"
-      flexDirection="column"
-      bg="bg.card"
-      borderRadius="lg"
-      boxShadow="lg"
-      overflow="hidden"
+    <div
+      className="flex flex-col bg-card border border-border rounded-lg shadow-lg overflow-hidden"
+      style={{ height: containerHeight }}
     >
       {/* Fixed header */}
       {header && (
-        <Box
-          flexShrink={0}
-          bg="bg.card"
-          borderBottomWidth="1px"
-          borderBottomColor="border.primary"
-          _dark={{
-            bg: 'bg.card',
-            borderBottomColor: 'border.primary',
-          }}
-        >
+        <div className="flex-shrink-0 bg-card border-b border-border">
           {header}
-        </Box>
+        </div>
       )}
 
       {/* Scrollable content - Using CSS class for scrollbar styling */}
-      <Box
-        flex="1"
-        overflowY="auto"
-        p={contentPadding ? 4 : 0}
-        className="custom-scrollbar"
-        {...contentStyles}
+      <div
+        className={cn(
+          'flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar min-h-0',
+          contentPadding ? 'p-4' : 'p-0'
+        )}
+        style={{
+          // Always reserve space for scrollbar unless explicitly disabled
+          scrollbarGutter: reserveScrollbarGutter ? 'stable' : undefined,
+          ...contentStyles,
+        }}
       >
         {children}
-      </Box>
+      </div>
 
       {/* Fixed footer */}
-      {footer && <Box flexShrink={0}>{footer}</Box>}
-    </Box>
+      {footer && <div className="flex-shrink-0">{footer}</div>}
+    </div>
   );
 };
 

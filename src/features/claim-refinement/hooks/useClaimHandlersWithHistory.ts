@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
 import { useClaimManagement, useClaimHistory } from './index';
 import { useSimpleClaimGeneration } from './useSimpleClaimGeneration';
 import { InventionData } from '@/types';
@@ -73,9 +73,12 @@ export function useClaimHandlersWithHistory({
   // Wrap handlers with history tracking
   const handleClaimChangeWithHistory = useCallback(
     (claimNumber: string, text: string) => {
+      // Save current state BEFORE making the change (for undo)
       if (!isUndoRedoOperation) {
         addToHistory(`Updated claim ${claimNumber}`);
       }
+
+      // Then make the change
       handleClaimChange(claimNumber, text);
     },
     [handleClaimChange, addToHistory, isUndoRedoOperation]
@@ -83,9 +86,12 @@ export function useClaimHandlersWithHistory({
 
   const handleDeleteClaimWithHistory = useCallback(
     (claimNumber: string) => {
+      // Save current state BEFORE making the change (for undo)
       if (!isUndoRedoOperation) {
         addToHistory(`Deleted claim ${claimNumber}`);
       }
+
+      // Then make the change
       handleDeleteClaim(claimNumber);
     },
     [handleDeleteClaim, addToHistory, isUndoRedoOperation]
@@ -93,26 +99,35 @@ export function useClaimHandlersWithHistory({
 
   const handleInsertNewClaimWithHistory = useCallback(
     (afterClaimNumber: string, text: string = '', dependsOn: string = '') => {
+      // Save current state BEFORE making the change (for undo)
       if (!isUndoRedoOperation) {
         addToHistory(`Added dependent claim after claim ${afterClaimNumber}`);
       }
+
+      // Then make the change
       handleInsertNewClaim(afterClaimNumber, text, dependsOn);
     },
     [handleInsertNewClaim, addToHistory, isUndoRedoOperation]
   );
 
   const handleAddClaimWithHistory = useCallback(() => {
+    // Save current state BEFORE making the change (for undo)
     if (!isUndoRedoOperation) {
       addToHistory('Added new claim');
     }
+
+    // Then make the change
     handleAddClaim();
   }, [handleAddClaim, addToHistory, isUndoRedoOperation]);
 
   const handleReorderClaimWithHistory = useCallback(
     (claimNumber: string, direction: 'up' | 'down') => {
+      // Save current state BEFORE making the change (for undo)
       if (!isUndoRedoOperation) {
         addToHistory(`Moved claim ${claimNumber} ${direction}`);
       }
+
+      // Then make the change
       handleReorderClaim(claimNumber, direction);
     },
     [handleReorderClaim, addToHistory, isUndoRedoOperation]
@@ -147,9 +162,12 @@ export function useClaimHandlersWithHistory({
   // Handle confirm apply
   const handleConfirmApply = useCallback(
     (newClaimText: string) => {
+      // Save current state BEFORE making the change (for undo)
       if (!isUndoRedoOperation) {
         addToHistory('Applied amendment to claim 1');
       }
+
+      // Then make the change
       handleClaimChange('1', newClaimText);
     },
     [handleClaimChange, addToHistory, isUndoRedoOperation]

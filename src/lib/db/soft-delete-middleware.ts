@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 
 /**
  * Models that should use soft delete instead of hard delete

@@ -1,19 +1,30 @@
 import { useState, useCallback } from 'react';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import { useCombinedAnalysisMutation } from '@/hooks/api/useAI';
-import { logger } from '@/lib/monitoring/logger';
 import { CitationJob } from '@/features/search/hooks/useCitationJobs';
+import { StructuredCombinedAnalysis } from '@/client/services/patent/patentability/combined-analysis.client-service';
 
-interface UseCombinedAnalysisStateProps {
+interface Claim {
+  id?: string;
+  number: number;
+  text: string;
+}
+
+export interface UseCombinedAnalysisStateProps {
   activeSearchId: string | null;
   claim1Text: string;
   citationJobs: CitationJob[];
+  allClaims?: Claim[];
+  projectId?: string;
 }
 
 export function useCombinedAnalysisState({
   activeSearchId,
   claim1Text,
   citationJobs,
+  allClaims,
+  projectId,
 }: UseCombinedAnalysisStateProps) {
   const toast = useToast();
 
@@ -21,20 +32,72 @@ export function useCombinedAnalysisState({
   const [selectedReferencesForCombined, setSelectedReferencesForCombined] =
     useState<string[]>([]);
   const [combinedAnalysisResult, setCombinedAnalysisResult] =
-    useState<any>(null);
+    useState<StructuredCombinedAnalysis | null>(null);
+  const [isCheckingFreshness, setIsCheckingFreshness] = useState(false);
+  const [refreshingReferences, setRefreshingReferences] = useState<string[]>(
+    []
+  );
+  const [isPreparingReferences, setIsPreparingReferences] = useState(false);
 
   // Use the proper mutation hook
-  const combinedAnalysisMutation = useCombinedAnalysisMutation(result => {
-    // Extract the analysis from the result
-    const analysis = result.analysis || result;
-    setCombinedAnalysisResult(analysis);
-  });
+  const combinedAnalysisMutation = useCombinedAnalysisMutation(
+    (result: any) => {
+      // Success callback
+      let analysis: StructuredCombinedAnalysis;
+
+      if (result && typeof result === 'object' && 'analysis' in result) {
+        analysis = result.analysis as StructuredCombinedAnalysis;
+      } else if (result && typeof result === 'object') {
+        analysis = result as StructuredCombinedAnalysis;
+      } else {
+        logger.error(
+          '[useCombinedAnalysisState] Invalid analysis result format',
+          {
+            result,
+            hasAnalysis:
+              result && typeof result === 'object' && 'analysis' in result,
+            resultType: typeof result,
+          }
+        );
+        return;
+      }
+
+      // Ensure required arrays exist with default values
+      const safeAnalysis: StructuredCombinedAnalysis = {
+        ...analysis,
+        combinedReferences: analysis.combinedReferences || [],
+        strategicRecommendations: analysis.strategicRecommendations || [],
+        rejectionJustification: analysis.rejectionJustification || {
+          motivationToCombine: null,
+          claimElementMapping: [],
+          fullNarrative: '',
+        },
+        completeDisclosureAnalysis: {
+          singleReferences:
+            analysis.completeDisclosureAnalysis?.singleReferences || [],
+          minimalCombinations:
+            analysis.completeDisclosureAnalysis?.minimalCombinations || [],
+        },
+      };
+
+      setCombinedAnalysisResult(safeAnalysis);
+
+      // Reset preparation state on success
+      setIsPreparingReferences(false);
+      setRefreshingReferences([]);
+    }
+  );
 
   const handleCombinedAnalysis = useCallback(() => {
     setShowCombinedAnalysis(true);
   }, []);
 
   const handleBackFromCombinedAnalysis = useCallback(() => {
+    setShowCombinedAnalysis(false);
+  }, []);
+
+  // Reset function to force back to individual results view
+  const resetToCitationResults = useCallback(() => {
     setShowCombinedAnalysis(false);
   }, []);
 
@@ -45,13 +108,19 @@ export function useCombinedAnalysisState({
         claim1Text: claim1Text ? 'present' : 'missing',
         citationJobsCount: citationJobs.length,
         activeSearchId,
+        allClaimsCount: allClaims?.length || 0,
+        projectId,
       });
+
+      // Set loading state immediately for instant feedback
+      setIsPreparingReferences(true);
 
       // Clear previous result when starting a new analysis
       setCombinedAnalysisResult(null);
 
       if (!claim1Text) {
         logger.warn('[CombinedAnalysisState] Missing claim 1 text');
+        setIsPreparingReferences(false);
         toast({
           title: 'Unable to run analysis',
           description:
@@ -65,6 +134,7 @@ export function useCombinedAnalysisState({
 
       if (selectedRefs.length < 2) {
         logger.warn('[CombinedAnalysisState] Insufficient references selected');
+        setIsPreparingReferences(false);
         toast({
           title: 'Select more references',
           description:
@@ -76,37 +146,13 @@ export function useCombinedAnalysisState({
         return;
       }
 
-      setSelectedReferencesForCombined(selectedRefs);
-
-      // Find the citation jobs for the selected references
-      const jobsToAnalyze = citationJobs.filter(job => {
-        const matches = selectedRefs.includes(job.referenceNumber || '');
-        logger.debug('[CombinedAnalysisState] Checking job', {
-          jobId: job.id,
-          jobRef: job.referenceNumber,
-          selectedRefs,
-          matches,
-        });
-        return matches;
-      });
-
-      logger.info('[CombinedAnalysisState] Jobs to analyze', {
-        selectedRefs,
-        jobsToAnalyze: jobsToAnalyze.map(j => ({
-          id: j.id,
-          ref: j.referenceNumber,
-        })),
-        citationJobsRefs: citationJobs.map(j => j.referenceNumber),
-      });
-
-      if (jobsToAnalyze.length < 2) {
-        logger.warn(
-          '[CombinedAnalysisState] Not enough citation jobs found for selected references'
-        );
+      if (!activeSearchId) {
+        logger.warn('[CombinedAnalysisState] No active search ID available');
+        setIsPreparingReferences(false);
         toast({
           title: 'Unable to run analysis',
           description:
-            'Could not find citation jobs for the selected references. Please ensure the references have completed deep analysis.',
+            'No active search selected. Please select a search first.',
           status: 'error',
           duration: 5000,
           isClosable: true,
@@ -114,17 +160,109 @@ export function useCombinedAnalysisState({
         return;
       }
 
-      // Use the mutation hook with proper parameters
-      combinedAnalysisMutation.mutate({
-        claim1Text,
-        referenceIds: jobsToAnalyze.map(job => job.id),
-        referenceNumbers: jobsToAnalyze.map(job =>
-          (job.referenceNumber || '').replace(/-/g, '')
-        ),
-        searchHistoryId: activeSearchId!,
+      setSelectedReferencesForCombined(selectedRefs);
+
+      // Find existing citation jobs and missing references
+      const existingJobs: CitationJob[] = [];
+      const missingReferences: string[] = [];
+
+      selectedRefs.forEach(refNumber => {
+        const job = citationJobs.find(
+          j => j.referenceNumber === refNumber && j.deepAnalysisJson
+        );
+        if (job) {
+          existingJobs.push(job);
+        } else {
+          missingReferences.push(refNumber);
+        }
       });
+
+      logger.info('[CombinedAnalysisState] Reference analysis status', {
+        totalSelected: selectedRefs.length,
+        existingJobs: existingJobs.length,
+        missingReferences: missingReferences.length,
+        missingRefs: missingReferences,
+      });
+
+      // If we need to run deep analysis for some references
+      if (missingReferences.length > 0) {
+        // This is handled by the existing logic, isPreparingReferences is already true
+        // ... existing missing references logic ...
+      }
+
+      // Check if we have enough existing jobs to proceed
+      if (existingJobs.length < 2) {
+        logger.warn(
+          '[CombinedAnalysisState] Not enough citation jobs found for selected references'
+        );
+        setIsPreparingReferences(false);
+        toast({
+          title: 'Unable to run analysis',
+          description:
+            'Not enough references with deep analysis found. Please ensure the selected references have completed deep analysis.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+        return;
+      }
+
+      // Run the combined analysis
+      try {
+        logger.info(
+          '[CombinedAnalysisState] Starting combined analysis API call'
+        );
+
+        // Show immediate loading feedback
+        toast({
+          title: 'Starting Analysis',
+          description: 'Generating comprehensive combined analysis...',
+          status: 'info',
+          duration: 3000,
+          isClosable: true,
+        });
+
+        await combinedAnalysisMutation.mutateAsync({
+          claim1Text,
+          referenceIds: existingJobs.map(job => job.id),
+          referenceNumbers: selectedRefs,
+          searchHistoryId: activeSearchId,
+          allClaims: allClaims || [],
+        });
+
+        logger.info(
+          '[CombinedAnalysisState] Combined analysis completed successfully'
+        );
+
+        // Success will be handled by the mutation's onSuccess callback
+      } catch (error) {
+        logger.error('[CombinedAnalysisState] Combined analysis failed', {
+          error,
+        });
+
+        // Reset loading states on error
+        setIsPreparingReferences(false);
+        setRefreshingReferences([]);
+
+        // Show error toast
+        toast({
+          title: 'Analysis Failed',
+          description:
+            'Failed to generate combined analysis. Please try again.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
     },
-    [claim1Text, citationJobs, activeSearchId, toast, combinedAnalysisMutation]
+    [
+      claim1Text,
+      citationJobs,
+      activeSearchId,
+      allClaims,
+      combinedAnalysisMutation,
+      toast,
+    ]
   );
 
   const clearCombinedAnalysisResult = useCallback(() => {
@@ -136,10 +274,14 @@ export function useCombinedAnalysisState({
     showCombinedAnalysis,
     selectedReferencesForCombined,
     combinedAnalysisResult,
-    isRunningCombinedAnalysis: combinedAnalysisMutation.isPending,
+    isLoadingCombinedAnalysis:
+      combinedAnalysisMutation.isPending || isPreparingReferences,
+    isCheckingFreshness,
+    refreshingReferences,
     handleCombinedAnalysis,
     handleBackFromCombinedAnalysis,
     handleRunCombinedAnalysis,
-    clearCombinedAnalysisResult,
+    resetToCitationResults,
+    clearCombinedAnalysisResult: () => setCombinedAnalysisResult(null),
   };
 }

@@ -1,13 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
-import { CustomApiRequest } from '@/types/api';
-import { logger } from '@/lib/monitoring/logger';
-import { ApplicationError, ErrorCode } from '@/lib/error';
-import { AuthenticatedRequest } from '@/types/middleware';
+import { AuthenticatedRequest, RequestWithServices } from '@/types/middleware';
 import { transformProject, CreateProjectData } from '@/types/project';
-import { projectService } from '@/server/services/project.server-service';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { VALIDATION_LIMITS } from '@/constants/validation';
+import { AuditService } from '@/server/services/audit.server-service';
+import { logger } from '@/server/logger';
 
 const createProjectSchema = z.object({
   name: z
@@ -232,13 +230,22 @@ const getProjectsQuerySchema = z.object({
  */
 
 const handler = async (
-  req: CustomApiRequest<CreateProjectData>,
+  req: NextApiRequest,
   res: NextApiResponse
 ): Promise<void> => {
   const { method } = req;
 
+  // Cast to get typed request with services
+  const authReq = req as AuthenticatedRequest & RequestWithServices;
+
   // User and tenant are guaranteed by middleware
-  const { id: userId, tenantId } = (req as AuthenticatedRequest).user!;
+  if (!authReq.user) {
+    throw new Error('User is required but was not provided by middleware');
+  }
+  const { id: userId, tenantId } = authReq.user;
+
+  // Get the request-scoped service
+  const { projectService } = authReq.services;
 
   // TypeScript safety check - middleware guarantees this
   if (!tenantId) {
@@ -254,6 +261,18 @@ const handler = async (
   }
 
   if (method === 'GET') {
+    // SecurePresets middleware adds validatedQuery to the request
+    interface RequestWithValidatedQuery extends AuthenticatedRequest {
+      validatedQuery?: z.infer<typeof getProjectsQuerySchema>;
+    }
+    const reqWithQuery = req as RequestWithValidatedQuery;
+
+    if (!reqWithQuery.validatedQuery) {
+      throw new Error(
+        'Validated query is required but was not provided by middleware'
+      );
+    }
+
     const {
       page: pageStr,
       limit: limitStr,
@@ -261,7 +280,7 @@ const handler = async (
       filterBy,
       sortBy,
       sortOrder,
-    } = (req as any).validatedQuery as z.infer<typeof getProjectsQuerySchema>;
+    } = reqWithQuery.validatedQuery;
 
     const page = parseInt(pageStr);
     const limit = parseInt(limitStr);
@@ -282,6 +301,21 @@ const handler = async (
 
     const transformedProjects = result.projects.map(transformProject);
 
+    // Debug logging to check hasProcessedInvention
+    logger.debug('[API /projects] Projects response', {
+      totalProjects: result.projects.length,
+      projectsWithProcessedInvention: result.projects.filter(
+        p => p.hasProcessedInvention
+      ).length,
+      firstProject: result.projects[0]
+        ? {
+            id: result.projects[0].id,
+            name: result.projects[0].name,
+            hasProcessedInvention: result.projects[0].hasProcessedInvention,
+          }
+        : null,
+    });
+
     res.status(200).json({
       projects: transformedProjects,
       pagination: {
@@ -298,7 +332,7 @@ const handler = async (
   }
 
   if (method === 'POST') {
-    const projectData = req.body;
+    const projectData = req.body as CreateProjectData;
     const newProject = await projectService.createProject(
       {
         name: projectData.name,
@@ -310,6 +344,14 @@ const handler = async (
     );
 
     const transformedProject = transformProject(newProject);
+
+    // Audit log the project creation
+    await AuditService.logProjectAction(authReq, 'create', newProject.id, {
+      projectName: newProject.name,
+      status: newProject.status,
+      hasTextInput: !!projectData.textInput,
+    });
+
     res.status(201).json(transformedProject);
     return;
   }

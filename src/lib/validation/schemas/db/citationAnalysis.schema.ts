@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { logger } from '@/lib/monitoring/logger';
 
 /**
  * Schemas for Citation Analysis JSON Blobs
@@ -62,8 +61,26 @@ export const DeepAnalysisResultSchema = z.object({
   elementAnalysis: z.record(ExaminerElementAnalysisSchema),
   overallAssessment: ExaminerOverallAssessmentSchema,
   holisticAnalysis: z.string().optional(),
+  amendmentExplanation: z.string().optional(),
   originalClaim: z.string().optional(),
   revisedClaim: z.string().optional(),
+  validationPerformed: z.boolean().optional(),
+  validationSummary: z.string().optional(),
+  validationResults: z.record(z.object({
+    suggestionText: z.string().optional(),
+    isDisclosed: z.boolean().optional(),
+    disclosureEvidence: z.array(z.string()).optional(),
+    validationScore: z.number().optional(),
+    recommendation: z.string().optional(),
+  })).optional(),
+  potentialAmendments: z.array(z.object({
+    suggestionText: z.string(),
+    reasoning: z.string().optional(),
+    addressesElements: z.array(z.string()).optional(),
+    priority: z.string().optional(),
+  })).optional(),
+  validatedAmendments: z.array(z.string()).optional(),
+  finalRevisedClaim: z.string().optional(),
 });
 
 export const LegacyDeepAnalysisSchema = z.object({
@@ -150,10 +167,10 @@ export function parseDeepAnalysis(
       return transformLegacyDeepAnalysis(legacyResult.data);
     }
 
-    logger.error('Failed to parse deep analysis - unknown format');
+    // Unknown format
     return null;
   } catch (error) {
-    logger.error('Failed to parse deep analysis JSON:', error);
+    // Failed to parse JSON
     return null;
   }
 }
@@ -182,7 +199,7 @@ export function stringifyDeepAnalysis(
     const validated = DeepAnalysisResultSchema.parse(analysis);
     return JSON.stringify(validated);
   } catch (error) {
-    logger.error('Failed to stringify deep analysis:', error);
+    // Failed to validate or stringify
     return null;
   }
 }

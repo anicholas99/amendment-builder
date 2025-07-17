@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 
 import { Tenant, Prisma } from '@prisma/client'; // Import the Tenant and Prisma types

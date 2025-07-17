@@ -1,11 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import {
-  Box,
-  Center,
-  Spinner,
-  Text,
-  useColorModeValue,
-} from '@chakra-ui/react';
+import { LoadingState } from '@/components/common/LoadingState';
 
 // Lazy load the component that includes react-dnd
 const ClaimRefinementViewClean = lazy(
@@ -13,23 +7,19 @@ const ClaimRefinementViewClean = lazy(
 );
 
 interface ClaimRefinementViewCleanProps {
-  analyzedInvention?: { id: string; title?: string; description?: string; background?: Record<string, unknown>; technicalImplementation?: Record<string, unknown> } | null;
-  setAnalyzedInvention?: (invention: { id: string; title?: string; description?: string; background?: Record<string, unknown>; technicalImplementation?: Record<string, unknown> } | null) => void;
+  analyzedInvention?: Record<string, unknown>;
+  setAnalyzedInvention?: (invention: Record<string, unknown>) => void;
 }
 
 const LoadingFallback = () => {
-  const spinnerColor = useColorModeValue('blue.500', 'blue.300');
-  const textColor = useColorModeValue('gray.600', 'gray.400');
-
   return (
-    <Center h="100vh" w="100%">
-      <Box textAlign="center">
-        <Spinner size="xl" color={spinnerColor} thickness="4px" />
-        <Text mt={4} color={textColor}>
-          Loading claim refinement view...
-        </Text>
-      </Box>
-    </Center>
+    <div className="flex items-center justify-center h-screen w-full">
+      <LoadingState
+        variant="spinner"
+        size="xl"
+        message="Loading claim refinement view..."
+      />
+    </div>
   );
 };
 

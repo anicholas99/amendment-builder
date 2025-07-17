@@ -1,5 +1,5 @@
 import { NextApiResponse, NextApiRequest } from 'next';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { withErrorHandling } from '@/middleware/errorHandling';
 import { AuthenticatedRequest } from '@/types/middleware';
@@ -7,7 +7,7 @@ import { updateVersionDocument } from '../../../../../../repositories/applicatio
 import { CustomApiRequest } from '@/types/api';
 import { z } from 'zod';
 import { versionQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { withAuth } from '@/middleware/auth';
 import { withTenantGuard } from '@/middleware/authorization';
 import { withCsrf } from '@/lib/security/csrf';
@@ -16,7 +16,7 @@ import { withRateLimit } from '@/middleware/rateLimiter';
 import { requireRole } from '@/middleware/role';
 import { withMethod } from '@/middleware/method';
 import { withQueryValidation } from '@/middleware/queryValidation';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 
 // Define request body type for document updates
 interface DocumentUpdateBody {

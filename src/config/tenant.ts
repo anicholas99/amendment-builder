@@ -1,52 +1,36 @@
 /**
  * Tenant Configuration
  *
- * Centralizes all tenant-related configuration to prevent hardcoded values
- * and make the multi-tenant architecture more maintainable.
+ * Enforces explicit tenant context for all operations.
+ * NO DEFAULT TENANTS - every request must specify its tenant explicitly.
  */
 
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
-import { environment } from './environment';
+import { logger } from '@/server/logger';
 
 /**
- * Default tenant slug used ONLY for local development when no tenant is specified.
- *
- * ⚠️ WARNING: This should NEVER be used in production!
- * In production, all requests must include an explicit tenant context.
- */
-export const DEFAULT_DEVELOPMENT_TENANT_SLUG = 'development';
-
-/**
- * Get the tenant slug from the request or fall back to development default.
+ * Validate and extract tenant slug from request headers/query
  *
  * @param tenantSlug - The tenant slug from the request
- * @returns The tenant slug to use
- * @throws Error in production if no tenant slug is provided
+ * @returns The validated tenant slug
+ * @throws ApplicationError if no tenant slug is provided
  */
-export function getTenantSlugWithFallback(
+export function validateTenantSlug(
   tenantSlug: string | string[] | undefined
 ): string {
   const slug = Array.isArray(tenantSlug) ? tenantSlug[0] : tenantSlug;
 
   if (!slug || slug.trim() === '') {
-    // In production, missing tenant context is a critical error
-    if (environment.isProduction) {
-      throw new ApplicationError(
-        ErrorCode.TENANT_NOT_FOUND,
-        'Tenant context is required in production'
-      );
-    }
-
-    // In development, use the configured default
-    logger.warn('No tenant slug provided, using development default', {
-      defaultTenantSlug: DEFAULT_DEVELOPMENT_TENANT_SLUG,
-      environment: environment.env,
-      warning: 'This should not happen in production!',
+    logger.error('Missing tenant context', {
+      tenantSlug,
+      type: typeof tenantSlug,
     });
-    return DEFAULT_DEVELOPMENT_TENANT_SLUG;
+    throw new ApplicationError(
+      ErrorCode.TENANT_NOT_FOUND,
+      'Tenant context is required for all operations'
+    );
   }
 
-  // Return the normalized slug - tenant validation is handled elsewhere in the middleware chain
+  // Return the normalized slug - tenant existence validation happens in middleware
   return slug.trim();
 }

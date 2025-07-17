@@ -3,7 +3,7 @@
  * These utilities provide safer type assertions with runtime validation
  */
 
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 /**
  * Type guard for objects with specific properties

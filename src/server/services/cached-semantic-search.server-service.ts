@@ -1,8 +1,8 @@
 /**
  * Enhanced Semantic Search Service with Caching and Performance Optimizations
  */
-import { logger } from '@/lib/monitoring/logger';
-import { searchCache } from '@/lib/cache/searchCache';
+import { logger } from '@/server/logger';
+import { SearchResultCache } from '@/lib/cache/searchCache';
 import {
   executeSemanticSearch,
   SemanticSearchServiceParams,
@@ -27,10 +27,12 @@ export interface OptimizedSearchResponse {
 
 /**
  * Enhanced semantic search with caching and optimization
+ * Now accepts searchCache as a parameter for request isolation
  */
 export async function executeOptimizedSearch(
   params: CachedSearchParams,
-  apiKey: string
+  apiKey: string,
+  searchCache: SearchResultCache
 ): Promise<OptimizedSearchResponse> {
   const startTime = Date.now();
 
@@ -85,7 +87,7 @@ export async function executeOptimizedSearch(
         jurisdiction: params.jurisdiction,
       },
       {
-        results: searchResult.results.map((ref: { number: string; title?: string; abstract?: string; score?: number }) => ({
+        results: searchResult.results.map((ref: any) => ({
           ...ref,
           patentNumber: ref.number, // Map 'number' to 'patentNumber'
         })) as SearchResult[],
@@ -114,7 +116,8 @@ export async function executeOptimizedSearch(
  */
 export async function quickSimilaritySearch(
   query: string,
-  options?: {
+  searchCache: SearchResultCache,
+  _options?: {
     maxResults?: number;
     threshold?: number;
   }
@@ -142,7 +145,8 @@ export async function quickSimilaritySearch(
 export async function preloadCommonSearches(
   projectId: string,
   commonQueries: string[],
-  apiKey: string
+  apiKey: string,
+  searchCache: SearchResultCache
 ): Promise<void> {
   logger.info('[CachedSemanticSearch] Preloading common searches', {
     projectId,
@@ -158,7 +162,8 @@ export async function preloadCommonSearches(
           projectId,
           useCache: true, // Will cache the results
         },
-        apiKey
+        apiKey,
+        searchCache
       );
     } catch (error) {
       logger.warn('[CachedSemanticSearch] Preload failed for query', {
@@ -175,14 +180,16 @@ export async function preloadCommonSearches(
 /**
  * Get cache statistics for monitoring
  */
-export function getCacheStatistics() {
+export function getCacheStatistics(searchCache: SearchResultCache) {
   return searchCache.getCacheStats();
 }
 
 /**
  * Clear search cache (useful for debugging or manual refresh)
  */
-export async function clearSearchCache(): Promise<void> {
+export async function clearSearchCache(
+  searchCache: SearchResultCache
+): Promise<void> {
   await searchCache.clearCache();
   logger.info('[CachedSemanticSearch] Cache cleared');
 }

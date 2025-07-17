@@ -1,7 +1,7 @@
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { ExaminerAnalysisResult } from '@/types/domain/citation';
 
 export class CitationJobApiService {
@@ -23,7 +23,12 @@ export class CitationJobApiService {
         );
       }
 
-      return await response.json();
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: analysis }
+      const unwrappedResult = result.data || result;
+
+      return unwrappedResult;
     } catch (error) {
       logger.error('[CitationJobApiService] Error fetching examiner analysis', {
         jobId,
@@ -55,7 +60,12 @@ export class CitationJobApiService {
         );
       }
 
-      return await response.json();
+      const result = await response.json();
+
+      // Handle wrapped response format - API returns { data: { success } }
+      const unwrappedResult = result.data || result;
+
+      return unwrappedResult;
     } catch (error) {
       logger.error('[CitationJobApiService] Error running examiner analysis', {
         jobId,

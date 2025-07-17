@@ -1,7 +1,9 @@
 import React from 'react';
-import { Box, Text } from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
 
 interface ReactFlowDiagramProps {
+  className?: string;
+  children?: React.ReactNode;
   initialNodes?: unknown[];
   initialEdges?: unknown[];
   title?: string;
@@ -9,15 +11,16 @@ interface ReactFlowDiagramProps {
   onDiagramChange?: (nodes: unknown[], edges: unknown[]) => void;
 }
 
-// Simplified placeholder component
-const ReactFlowDiagram: React.FC<ReactFlowDiagramProps> = ({
-  title,
-  readOnly,
+export const ReactFlowDiagram: React.FC<ReactFlowDiagramProps> = ({
+  className,
+  children,
   initialNodes = [],
   initialEdges = [],
+  title,
+  readOnly,
   onDiagramChange,
 }) => {
-  // In the placeholder version, we'll just call onDiagramChange with empty arrays
+  // Call onDiagramChange with initial data when component mounts
   React.useEffect(() => {
     if (onDiagramChange) {
       onDiagramChange(initialNodes, initialEdges);
@@ -25,11 +28,30 @@ const ReactFlowDiagram: React.FC<ReactFlowDiagramProps> = ({
   }, [initialNodes, initialEdges, onDiagramChange]);
 
   return (
-    <Box p={4} border="1px" borderColor="border.primary" borderRadius="md">
-      <Text>ReactFlow Content</Text>
-      {readOnly && <Text color="text.secondary">(Read Only)</Text>}
-    </Box>
+    <div
+      className={cn(
+        'w-full h-full bg-gray-50 dark:bg-gray-900',
+        'border border-border rounded-lg',
+        'flex items-center justify-center',
+        className
+      )}
+    >
+      {children || (
+        <div className="text-center p-8">
+          {title && (
+            <h3 className="text-lg font-medium text-foreground mb-2">
+              {title}
+            </h3>
+          )}
+          <p className="text-muted-foreground text-sm">
+            React Flow diagram placeholder
+          </p>
+          <p className="text-muted-foreground text-xs mt-2">
+            Diagram components will be rendered here
+            {readOnly && ' (Read Only)'}
+          </p>
+        </div>
+      )}
+    </div>
   );
 };
-
-export default ReactFlowDiagram;

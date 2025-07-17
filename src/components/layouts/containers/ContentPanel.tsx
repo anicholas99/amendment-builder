@@ -1,6 +1,5 @@
-import React, { ReactNode, useCallback } from 'react';
-import { Box } from '@chakra-ui/react';
-import { VIEW_LAYOUT_CONFIG } from '@/constants/layout';
+import React, { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 
 interface ContentPanelProps {
   children: ReactNode;
@@ -13,6 +12,7 @@ interface ContentPanelProps {
 /**
  * ContentPanel component wraps content with consistent styling
  * Used for both main content and sidebar content containers
+ * Matches SimpleMainPanel's island look with borders and shadows
  */
 export const ContentPanel: React.FC<ContentPanelProps> = React.memo(
   ({
@@ -22,48 +22,18 @@ export const ContentPanel: React.FC<ContentPanelProps> = React.memo(
     height = '100%',
     className,
   }) => {
-    const shadows = isDarkMode
-      ? VIEW_LAYOUT_CONFIG.SHADOWS.DARK
-      : VIEW_LAYOUT_CONFIG.SHADOWS.LIGHT;
-
-    const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
-        e.currentTarget.style.boxShadow = shadows.HOVER;
-      },
-      [shadows.HOVER]
-    );
-
-    const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
-        e.currentTarget.style.boxShadow = shadows.DEFAULT;
-      },
-      [shadows.DEFAULT]
-    );
-
     return (
-      <Box
-        height={height}
-        width="100%"
-        borderRadius="lg"
-        className={className}
-        boxShadow={shadows.DEFAULT}
-        transition="box-shadow 0.15s ease-out"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+      <div
+        className={cn(
+          'w-full rounded-lg shadow-lg border border-border overflow-hidden',
+          className
+        )}
+        style={{ height }}
       >
-        <Box
-          height="100%"
-          bg={isDarkMode ? '#1A202C' : 'white'}
-          borderRadius="lg"
-          display="flex"
-          flexDirection="column"
-          position="relative"
-          zIndex="15"
-          transition="background-color 0.15s ease-out"
-        >
+        <div className="h-full bg-card rounded-lg flex flex-col relative z-10 transition-colors duration-150 custom-scrollbar">
           {children}
-        </Box>
-      </Box>
+        </div>
+      </div>
     );
   }
 );

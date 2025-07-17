@@ -3,19 +3,13 @@
  * React Query hooks for invention/technology details operations
  * Centralized data fetching logic for invention management
  */
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  keepPreviousData,
-} from '@tanstack/react-query';
-import {
-  inventionClientService,
-  InventionClientService,
-} from '@/client/services/invention.client-service';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { InventionClientService } from '@/client/services/invention.client-service';
+import { useInventionService } from '@/contexts/ClientServicesContext';
 import { InventionData } from '@/types/invention';
 import { STALE_TIME, GC_TIME } from '@/constants/time';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
+import { projectKeys } from '@/lib/queryKeys';
 
 // Query key factory for invention queries
 export const inventionQueryKeys = {
@@ -29,10 +23,12 @@ export const inventionQueryKeys = {
  * Query hook for fetching invention data by project ID
  */
 export const useInventionQuery = (projectId: string) => {
+  const inventionService = useInventionService();
+
   const queryResult = useQuery({
     queryKey: inventionQueryKeys.byProject(projectId),
     queryFn: async () => {
-      const result = await inventionClientService.getInvention(projectId);
+      const result = await inventionService.getInvention(projectId);
       return result;
     },
     enabled: !!projectId,
@@ -41,9 +37,6 @@ export const useInventionQuery = (projectId: string) => {
     refetchOnWindowFocus: false,
     refetchOnMount: false, // Changed from true - trust the cache
     refetchOnReconnect: false,
-    // Keep the data in cache and don't refetch if we already have it
-    // This preserves optimistic updates when navigating
-    placeholderData: keepPreviousData,
     retry: (failureCount, error: any) => {
       // Don't retry for 404 errors as they're expected for new projects
       if (error?.code === 'DB_RECORD_NOT_FOUND' || error?.status === 404) {
@@ -55,7 +48,7 @@ export const useInventionQuery = (projectId: string) => {
     // Important: Reset error state when projectId changes
     throwOnError: false,
     // Return null for 404s to skip loading state for new projects
-    select: (data) => data === undefined ? null : data,
+    select: data => (data === undefined ? null : data),
   });
 
   return queryResult;
@@ -66,6 +59,8 @@ export const useInventionQuery = (projectId: string) => {
  */
 export const useUpdateInventionMutation = () => {
   const queryClient = useQueryClient();
+  const inventionService = useInventionService();
+
   return useMutation({
     mutationFn: ({
       projectId,
@@ -83,7 +78,7 @@ export const useUpdateInventionMutation = () => {
           { projectId }
         );
       }
-      return inventionClientService.updateInvention(projectId, safeUpdates);
+      return inventionService.updateInvention(projectId, safeUpdates);
     },
     onMutate: async ({ projectId, updates }) => {
       // Cancel any in-flight queries
@@ -140,6 +135,13 @@ export const useUpdateInventionMutation = () => {
           refetchType: 'none', // Don't force immediate refetch
         });
       }, 3000); // Wait 3 seconds before marking as stale
+
+      // Invalidate project lists to update modified time
+      queryClient.invalidateQueries({
+        queryKey: projectKeys.lists(),
+        exact: false,
+        refetchType: 'active', // Force immediate refetch for dashboard accuracy
+      });
     },
     onSettled: undefined, // Remove the immediate invalidation
   });
@@ -177,9 +179,18 @@ export const useProcessDocumentMutation = () => {
  * Mutation hook for uploading figures
  */
 export const useUploadFigureMutation = () => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ projectId, file }: { projectId: string; file: File }) =>
       InventionClientService.uploadFigure(projectId, file),
+    onSuccess: (_data, variables) => {
+      // Invalidate project lists to update modified time
+      queryClient.invalidateQueries({
+        queryKey: projectKeys.lists(),
+        exact: false,
+        refetchType: 'active',
+      });
+    },
   });
 };
 
@@ -187,6 +198,7 @@ export const useUploadFigureMutation = () => {
  * Mutation hook for deleting figures
  */
 export const useDeleteFigureMutation = () => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
       projectId,
@@ -195,6 +207,14 @@ export const useDeleteFigureMutation = () => {
       projectId: string;
       figureId: string;
     }) => InventionClientService.deleteFigure(projectId, figureId),
+    onSuccess: (_data, variables) => {
+      // Invalidate project lists to update modified time
+      queryClient.invalidateQueries({
+        queryKey: projectKeys.lists(),
+        exact: false,
+        refetchType: 'active',
+      });
+    },
   });
 };
 
@@ -209,8 +229,17 @@ export const useGenerateFigureDetailsMutation = () => {
  * Mutation hook for updating figure details
  */
 export const useUpdateFigureMutation = () => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ figureId, updates }: { figureId: string; updates: any }) =>
       InventionClientService.updateFigure(figureId, updates),
+    onSuccess: () => {
+      // Invalidate project lists to update modified time
+      queryClient.invalidateQueries({
+        queryKey: projectKeys.lists(),
+        exact: false,
+        refetchType: 'active',
+      });
+    },
   });
 };

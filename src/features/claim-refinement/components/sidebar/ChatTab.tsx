@@ -1,9 +1,8 @@
 import React, { useRef, useEffect, useCallback, useMemo } from 'react';
-import { Box } from '@chakra-ui/react';
-import ChatInterface from '@/features/chat/components/ChatInterface';
+import EnhancedChatInterface from '@/features/chat/components/EnhancedChatInterface';
 import { ProjectData } from '@/types/project';
 import { InventionData } from '@/types/invention';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 interface ChatTabProps {
   projectData: ProjectData | null;
@@ -38,39 +37,30 @@ export function ChatTab({
       tenantId: projectData.tenantId || '',
       status: projectData.status || 'draft',
       textInput: projectData.textInput || '',
+      hasPatentContent: projectData.hasPatentContent || false,
+      hasProcessedInvention: projectData.hasProcessedInvention || false,
       createdAt: projectData.createdAt || new Date(),
       lastModified: projectData.lastModified || new Date().toISOString(),
       documents: projectData.documents || [],
       savedPriorArtItems: projectData.savedPriorArtItems || [],
       invention: analyzedInvention || undefined,
     };
-  }, [
-    projectData?.id,
-    projectData?.name,
-    projectData?.userId,
-    projectData?.tenantId,
-    projectData?.status,
-    projectData?.textInput,
-    projectData?.createdAt,
-    projectData?.lastModified,
-    projectData?.documents,
-    projectData?.savedPriorArtItems,
-    projectId,
-    analyzedInvention,
-  ]);
+  }, [projectData, projectId, analyzedInvention]);
 
   // Memoize the onContentUpdate handler
   const handleChatContentUpdate = useCallback((action: string) => {
-    logger.log('[ChatTab] onContentUpdate called with action:', { action });
+    logger.info('[ChatTab] onContentUpdate called with action:', { action });
 
     if (action === 'refresh') {
-      logger.log('[ChatTab] Refreshing claims data using refreshInventionData');
+      logger.info(
+        '[ChatTab] Refreshing claims data using refreshInventionData'
+      );
 
       if (refreshInventionDataRef.current) {
         refreshInventionDataRef
           .current()
           .then(() => {
-            logger.log('[ChatTab] Successfully refreshed invention data');
+            logger.info('[ChatTab] Successfully refreshed invention data');
           })
           .catch(error => {
             logger.error('[ChatTab] Failed to refresh invention data:', error);
@@ -79,15 +69,15 @@ export function ChatTab({
         logger.warn('[ChatTab] refreshInventionData is not available');
       }
     } else if (typeof action === 'string') {
-      logger.log(
+      logger.info(
         '[ChatTab] Direct content update not supported in claim refinement'
       );
     }
   }, []);
 
   return (
-    <Box height="100%" overflow="hidden">
-      <ChatInterface
+    <div className="h-full overflow-hidden">
+      <EnhancedChatInterface
         projectData={memoizedProjectData}
         onContentUpdate={handleChatContentUpdate}
         setPreviousContent={() => {
@@ -96,6 +86,6 @@ export function ChatTab({
         pageContext="claim-refinement"
         projectId={projectId}
       />
-    </Box>
+    </div>
   );
 }

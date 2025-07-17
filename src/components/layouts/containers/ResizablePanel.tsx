@@ -52,6 +52,10 @@ export const ResizablePanel: React.FC<ResizablePanelProps> = ({
         position: 'relative',
         height,
         zIndex: 1,
+        // Prevent layout shifts during resize
+        willChange: 'width',
+        // Ensure no transition effects that could cause flicker
+        transition: 'none',
       }}
       handleStyles={{
         right: {

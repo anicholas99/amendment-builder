@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { useToast } from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
+import { useToast } from '@/hooks/useToastWrapper';
 import { ProcessedSearchHistoryEntry } from '@/types/domain/searchHistory';
 import { useCitationHandler } from './useCitationHandler';
 import { SearchHistoryApiService } from '@/client/services/search-history.client-service';
@@ -79,7 +79,7 @@ export function useCitationsTabLogic({
 
   // Function to refresh citation data
   const refreshCitationData = useCallback(() => {
-    logger.log('[useCitationsTabLogic] Refreshing citation data');
+    logger.info('[useCitationsTabLogic] Refreshing citation data');
 
     // Invalidate queries related to citation data
     const searchId = persistentSelectedSearchIdRef.current;
@@ -95,7 +95,7 @@ export function useCitationsTabLogic({
       // Explicitly trigger refetch for citationJobs immediately after invalidation
       queryClient.refetchQueries({ queryKey: ['citationJobs', searchId] });
 
-      logger.log(
+      logger.info(
         `[useCitationsTabLogic] Invalidated and triggered refetch for queries for search ID: ${searchId}`
       );
     } else {
@@ -154,7 +154,7 @@ export function useCitationsTabLogic({
         return;
       }
 
-      logger.log(
+      logger.info(
         `[useCitationsTabLogic] Creating citation job for reference ${referenceNumber} from search ${searchHistoryId} with threshold ${threshold}`
       );
 
@@ -246,7 +246,7 @@ export function useCitationsTabLogic({
         return;
       }
 
-      logger.log(
+      logger.info(
         `[useCitationsTabLogic] VIEW CLICK: Setting context for Search ID ${searchHistoryId}, Reference ${referenceNumber}`
       );
 
@@ -258,7 +258,7 @@ export function useCitationsTabLogic({
 
       // Set the target reference
       if (setSelectedReference) {
-        logger.log(
+        logger.info(
           `[useCitationsTabLogic] VIEW CLICK: Setting selected reference to ${referenceNumber}`
         );
         setSelectedReference(referenceNumber);
@@ -269,7 +269,7 @@ export function useCitationsTabLogic({
       }
 
       // Switch to Citations tab
-      logger.log(
+      logger.info(
         `[useCitationsTabLogic] VIEW CLICK: Calling handleTabChange(1)...`
       );
       handleTabChange(1);

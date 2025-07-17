@@ -1,9 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
-import { SecurePresets } from '@/lib/api/securePresets';
-import { withCsrf } from '@/lib/security/csrf';
-import { withRateLimit } from '@/middleware/rateLimiter';
-import { withErrorHandling } from '@/middleware/errorHandling';
+import crypto from 'crypto';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
+import { SecurePresets } from '@/server/api/securePresets';
+import { CSRF_CONFIG } from '@/config/security';
+import { env } from '@/config/env';
+import { apiResponse } from '@/utils/api/responses';
 
 const apiLogger = createApiLogger('csrf-token');
 
@@ -20,13 +21,42 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader('Cache-Control', 'private, max-age=60');
   res.setHeader('Vary', 'Cookie'); // Cache varies based on cookies
 
-  // The withCsrf middleware will handle setting the cookie and response header.
-  const response = { ok: true, message: 'CSRF token set in cookies' };
+  // Get or generate CSRF token
+  let csrfToken = req.cookies[CSRF_CONFIG.COOKIE_NAME];
+
+  if (!csrfToken) {
+    // Generate a new token if none exists
+    csrfToken = crypto.randomBytes(32).toString('hex');
+
+    // Set the cookie with appropriate security settings
+    const isProd = env.NODE_ENV === 'production';
+    const cookieOptions = [
+      `${CSRF_CONFIG.COOKIE_NAME}=${csrfToken}`,
+      'Path=/',
+      'SameSite=Lax',
+      'HttpOnly',
+      isProd ? 'Secure' : '',
+      'Max-Age=3600', // 1 hour
+    ]
+      .filter(Boolean)
+      .join('; ');
+
+    res.setHeader('Set-Cookie', cookieOptions);
+  }
+
+  // Always return the token in the response header for the client to capture
+  res.setHeader(CSRF_CONFIG.HEADER_NAME, csrfToken);
+
+  const response = {
+    ok: true,
+    message: 'CSRF token available',
+    // Don't expose the actual token value in the JSON response for security
+  };
+
   apiLogger.logResponse(200, response);
-  return res.status(200).json(response);
+  return apiResponse.ok(res, response);
 }
 
-// Apply withCsrf directly along with rate limiting and error handling
-export default withErrorHandling(
-  withRateLimit(withCsrf(handler), 'critical-auth') as any
-) as (req: NextApiRequest, res: NextApiResponse) => Promise<void>;
+// SECURITY: This is a public endpoint that provides CSRF tokens
+// It uses the critical-auth rate limit for protection
+export default SecurePresets.public(handler, { rateLimit: 'critical-auth' });

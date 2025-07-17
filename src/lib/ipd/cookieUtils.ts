@@ -4,10 +4,15 @@
  * This module contains utilities for reading, validating, and parsing
  * IPD authentication cookies. Implementation will be completed once
  * IPD provides the specific cookie format and validation requirements.
+ *
+ * SECURITY WARNING: Cookie validation methods are not yet implemented.
+ * Until IPD provides specifications, authentication should not rely solely
+ * on these cookies. Consider using an alternative authentication method
+ * or additional security layers.
  */
 
 import { NextApiRequest, NextApiResponse } from 'next';
-import { logger } from '@/lib/monitoring/logger';
+
 import {
   ipdConfig,
   IPDUserClaims,
@@ -51,10 +56,7 @@ export async function validateIPDCookies(
   userCookie: string
 ): Promise<IPDUserClaims | null> {
   try {
-    logger.debug('Validating IPD cookies', {
-      hasSession: !!sessionCookie,
-      hasUser: !!userCookie,
-    });
+    // Debug logging removed for client compatibility
 
     switch (cookieValidationConfig.method) {
       case IPDCookieValidationMethod.API_ENDPOINT:
@@ -73,9 +75,7 @@ export async function validateIPDCookies(
         );
     }
   } catch (error) {
-    logger.error('IPD cookie validation failed:', {
-      error: error instanceof Error ? error : new Error(String(error)),
-    });
+    // Error logging removed for client compatibility
     return null;
   }
 }
@@ -105,24 +105,17 @@ async function validateCookiesViaAPI(
 
     // Validate token expiry
     if (claims.tokenExpiry && claims.tokenExpiry < Date.now() / 1000) {
-      logger.warn('IPD token has expired', {
-        expiry: claims.tokenExpiry,
-        now: Date.now() / 1000,
-      });
+      // Warning logging removed for client compatibility
       return null;
     }
 
     return claims;
   } catch (error: any) {
     if (error.status >= 400 && error.status < 500) {
-      logger.warn('IPD cookie validation API returned client error', {
-        status: error.status,
-      });
+      // Warning logging removed for client compatibility
       return null;
     }
-    logger.error('Error calling IPD validation API:', {
-      error: error instanceof Error ? error : new Error(String(error)),
-    });
+    // Error logging removed for client compatibility
     return null;
   }
 }
@@ -141,8 +134,7 @@ async function validateCookiesViaPublicKey(
   // 1. Parsing the signed cookie
   // 2. Verifying the signature using IPD's public key
   // 3. Extracting and returning the user claims
-
-  logger.warn('Public key validation not yet implemented');
+  // Warning logging removed for client compatibility
   return null;
 }
 
@@ -160,8 +152,7 @@ async function validateCookiesViaSharedSecret(
   // 1. Parsing the signed cookie
   // 2. Verifying the HMAC signature using the shared secret
   // 3. Extracting and returning the user claims
-
-  logger.warn('Shared secret validation not yet implemented');
+  // Warning logging removed for client compatibility
   return null;
 }
 
@@ -178,13 +169,10 @@ export function parseIPDUserClaims(cookieData: string): IPDUserClaims | null {
     // - JSON parsing
     // - Decryption
     // - Signature verification
-
-    logger.warn('IPD cookie parsing not yet implemented');
+    // Warning logging removed for client compatibility
     return null;
   } catch (error) {
-    logger.error('Error parsing IPD user claims:', {
-      error: error instanceof Error ? error : new Error(String(error)),
-    });
+    // Error logging removed for client compatibility
     return null;
   }
 }
@@ -217,13 +205,10 @@ export async function refreshIPDTokens(
     // 1. Calling IPD's refresh endpoint
     // 2. Updating cookies with new tokens
     // 3. Returning success/failure
-
-    logger.warn('IPD token refresh not yet implemented');
+    // Warning logging removed for client compatibility
     return false;
   } catch (error) {
-    logger.error('Error refreshing IPD tokens:', {
-      error: error instanceof Error ? error : new Error(String(error)),
-    });
+    // Error logging removed for client compatibility
     return false;
   }
 }

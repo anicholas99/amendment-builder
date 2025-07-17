@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { findCitationMatchesBySearchWithOptions } from '@/repositories/citationRepository';
 import { getSearchHistoryWithTenant } from '@/repositories/search';
 import { AuthenticatedRequest } from '@/types/middleware';
@@ -13,7 +13,8 @@ import { withErrorHandling } from '@/middleware/errorHandling';
 import { withRateLimit } from '@/middleware/rateLimiter';
 import { requireRole } from '@/middleware/role';
 import { withMethod } from '@/middleware/method';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 const apiLogger = createApiLogger('citation-matches/by-search');
 
@@ -26,7 +27,7 @@ const querySchema = z.object({
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   // Only allow GET requests
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return apiResponse.methodNotAllowed(res, ['GET']);
   }
 
   try {
@@ -123,21 +124,18 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
       CitationMatchesBySearchResponseSchema.parse(serializableMatches);
 
-      return res.status(200).json(serializableMatches);
+      return apiResponse.ok(res, serializableMatches);
     } catch (validationError) {
       apiLogger.error('Response validation failed', {
         error: validationError,
         sampleMatch: allProcessedMatches[0],
       });
       // Still return the data but log the validation error for monitoring
-      return res.status(200).json(allProcessedMatches);
+      return apiResponse.ok(res, allProcessedMatches);
     }
   } catch (error) {
     apiLogger.error('Error fetching citation matches', { error });
-    return res.status(500).json({
-      error: 'Internal Server Error',
-      details: (error as Error).message,
-    });
+    return apiResponse.serverError(res, new Error('Internal Server Error'));
   }
 }
 

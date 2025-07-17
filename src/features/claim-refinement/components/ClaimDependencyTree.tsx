@@ -1,5 +1,4 @@
 import React from 'react';
-import { Box, Text, Stack, Icon } from '@chakra-ui/react';
 import { FiArrowRight } from 'react-icons/fi';
 
 interface ClaimDependencyTreeProps {
@@ -37,42 +36,43 @@ const ClaimDependencyTree: React.FC<ClaimDependencyTreeProps> = ({
     const dependents = dependencies[claimNumber] || [];
 
     return (
-      <Box key={claimNumber} ml={level * 6} mb={4}>
-        <Stack direction="row">
-          {level > 0 && <Icon as={FiArrowRight} color="blue.500" />}
-          <Box
-            p={3}
-            borderWidth="1px"
-            borderRadius="md"
-            borderColor={level === 0 ? 'blue.500' : 'gray.300'}
-            bg={level === 0 ? 'blue.50' : 'white'}
-            width="100%"
+      <div
+        key={claimNumber}
+        className={`mb-4`}
+        style={{ marginLeft: `${level * 24}px` }}
+      >
+        <div className="flex items-start space-x-2">
+          {level > 0 && <FiArrowRight className="w-4 h-4 text-blue-500 mt-4" />}
+          <div
+            className={`p-4 border rounded-md w-full ${
+              level === 0
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                : 'border-muted bg-background'
+            }`}
           >
-            <Text fontWeight={level === 0 ? 'bold' : 'normal'}>
+            <p className={level === 0 ? 'font-bold' : 'font-normal'}>
               Claim {claimNumber}: {claims[claimNumber].substring(0, 100)}
               {claims[claimNumber].length > 100 ? '...' : ''}
-            </Text>
-          </Box>
-        </Stack>
+            </p>
+          </div>
+        </div>
 
         {dependents.length > 0 && (
-          <Stack direction="column" align="stretch" spacing={2} mt={2}>
+          <div className="flex flex-col space-y-2 mt-2">
             {dependents.map(dep => renderClaimBranch(dep, level + 1))}
-          </Stack>
+          </div>
         )}
-      </Box>
+      </div>
     );
   };
 
   return (
-    <Box>
-      <Text fontSize="lg" fontWeight="medium" mb={4}>
-        Claim Dependency Structure
-      </Text>
-      <Stack direction="column" align="stretch" spacing={4}>
+    <div>
+      <h2 className="text-lg font-medium mb-4">Claim Dependency Structure</h2>
+      <div className="flex flex-col space-y-4">
         {independentClaims.map(claim => renderClaimBranch(claim))}
-      </Stack>
-    </Box>
+      </div>
+    </div>
   );
 };
 

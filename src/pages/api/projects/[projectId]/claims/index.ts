@@ -1,8 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
-import { logger } from '@/lib/monitoring/logger';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { logger } from '@/server/logger';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { ClaimRepository } from '@/repositories/claimRepository';
 import { inventionRepository } from '@/repositories/inventionRepository';
 import { ApplicationError, ErrorCode } from '@/lib/error';
@@ -35,12 +35,18 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           '[API] No invention found for project, returning empty claims array.',
           { projectId }
         );
-        return res.status(200).json({ claims: [] });
+        return res.status(200).json({
+          success: true,
+          data: { claims: [] },
+        });
       }
 
       const claims = await ClaimRepository.findByInventionId(invention.id);
 
-      return res.status(200).json({ claims });
+      return res.status(200).json({
+        success: true,
+        data: { claims },
+      });
     }
 
     if (req.method === 'POST') {
@@ -69,7 +75,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         claimsData
       );
 
-      return res.status(201).json({ claims: result.claims });
+      return res.status(201).json({
+        success: true,
+        data: { claims: result.claims },
+      });
     }
 
     return res.status(405).json({ error: 'Method not allowed' });

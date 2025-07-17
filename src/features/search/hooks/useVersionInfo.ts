@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { ProcessedSearchHistoryEntry as SearchHistoryEntry } from '@/types/domain/searchHistory';
 
 interface ClaimSetVersion {

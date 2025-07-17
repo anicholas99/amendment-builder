@@ -1,17 +1,18 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { z } from 'zod';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import {
   updateProjectFigure,
   deleteProjectFigure,
   assignFigureToSlot,
   getProjectFigure,
   unassignFigure,
-} from '@/repositories/figureRepository';
+} from '@/repositories/figure';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { sendSafeErrorResponse } from '@/utils/secure-error-response';
+import { sendSafeErrorResponse } from '@/utils/secureErrorResponse';
+import { apiResponse } from '@/utils/api/responses';
 
 const apiLogger = createApiLogger('projects/figures/[figureId]');
 
@@ -50,9 +51,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         );
 
         if (!currentFigure) {
-          return res.status(404).json({
-            error: 'Figure not found or access denied',
-          });
+          return apiResponse.notFound(res, 'Figure not found or access denied');
         }
 
         // Check if this is an unassignment operation
@@ -71,7 +70,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           );
 
           apiLogger.logResponse(200, unassignedFigure);
-          return res.status(200).json(unassignedFigure);
+          return apiResponse.ok(res, unassignedFigure);
         }
 
         // Check if this is an assignment operation
@@ -96,7 +95,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           );
 
           apiLogger.logResponse(200, assignedFigure);
-          return res.status(200).json(assignedFigure);
+          return apiResponse.ok(res, assignedFigure);
         }
 
         // Regular update operation
@@ -126,13 +125,11 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         );
 
         if (!updatedFigure) {
-          return res.status(404).json({
-            error: 'Figure not found or access denied',
-          });
+          return apiResponse.notFound(res, 'Figure not found or access denied');
         }
 
         apiLogger.logResponse(200, updatedFigure);
-        return res.status(200).json(updatedFigure);
+        return apiResponse.ok(res, updatedFigure);
       }
 
       case 'DELETE': {
@@ -146,9 +143,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         const deleted = await deleteProjectFigure(figureId, userId, tenantId);
 
         if (!deleted) {
-          return res.status(404).json({
-            error: 'Figure not found or access denied',
-          });
+          return apiResponse.notFound(res, 'Figure not found or access denied');
         }
 
         apiLogger.logResponse(204);
@@ -156,7 +151,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       }
 
       default:
-        return res.status(405).json({ error: 'Method not allowed' });
+        return apiResponse.methodNotAllowed(res, ['PATCH', 'DELETE']);
     }
   } catch (error) {
     apiLogger.error('Failed to update figure', {

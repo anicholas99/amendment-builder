@@ -1,5 +1,5 @@
 import { useApiMutation } from '@/lib/api/queryClient';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/utils/toast';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   CombinedAnalysisParams,
@@ -9,8 +9,7 @@ import {
 } from '@/types/api/responses';
 import { AiApiService } from '@/client/services/ai.client-service';
 import { ApplicationError } from '@/lib/error';
-import { showSuccessToast, showErrorToast } from '@/utils/toast';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 export function useCombinedAnalysisMutation(
   onSuccess?: (data: CombinedAnalysisResult) => void
@@ -20,14 +19,18 @@ export function useCombinedAnalysisMutation(
 
   return useApiMutation<CombinedAnalysisResult, CombinedAnalysisParams>({
     mutationFn: params => AiApiService.getCombinedAnalysis(params),
-    onSuccess: (data, variables) => {
-      showSuccessToast(toast, 'Analysis completed successfully');
+    onSuccess: async (data, variables) => {
+      toast.success('Analysis completed successfully');
 
       // Invalidate combined analyses query to refresh the list
-      // This follows the pattern from other mutations in the codebase
+      // Force active refetch to ensure new analysis appears immediately
       if ('searchHistoryId' in variables) {
+        // Small delay to ensure API has fully processed the new analysis
+        await new Promise(resolve => setTimeout(resolve, 100));
+
         queryClient.invalidateQueries({
-          queryKey: ['combinedAnalyses', (variables as any).searchHistoryId],
+          queryKey: ['combinedAnalyses', variables.searchHistoryId],
+          refetchType: 'active', // Force immediate refetch
         });
       }
 
@@ -35,7 +38,7 @@ export function useCombinedAnalysisMutation(
     },
     onError: error => {
       logger.error('Combined analysis failed:', error);
-      showErrorToast(toast, error.message || 'Analysis failed');
+      toast.error(error.message || 'Analysis failed');
     },
   });
 }
@@ -48,11 +51,11 @@ export function useGenerateSuggestionsMutation(
   return useApiMutation<GenerateSuggestionsResult, GenerateSuggestionsParams>({
     mutationFn: params => AiApiService.generateSuggestions(params),
     onSuccess: data => {
-      showSuccessToast(toast, 'Suggestions generated successfully');
+      toast.success('Suggestions generated successfully');
       onSuccess?.(data);
     },
     onError: error => {
-      showErrorToast(toast, error.message || 'Failed to generate suggestions');
+      toast.error(error.message || 'Failed to generate suggestions');
     },
   });
 }

@@ -1,10 +1,11 @@
 import React from 'react';
-import { Flex, Icon } from '@chakra-ui/react';
 import {
   FiMessageCircle,
   FiSearch,
   FiFileText,
   FiBookmark,
+  // NOTE: FiImage temporarily removed with Image Analysis - may be reactivated in the future
+  // FiImage,
   // NOTE: FiZap temporarily removed with Prior Art Analysis - may be reactivated in the future
   // FiZap,
 } from 'react-icons/fi';
@@ -14,26 +15,31 @@ import {
  */
 export function SidebarTabIcons() {
   return [
-    <Flex key="searchIcon" align="center" justify="center" height="24px">
-      <Icon as={FiSearch} boxSize="16px" />
-    </Flex>, // Search tab
-    <Flex key="citationsIcon" align="center" justify="center" height="24px">
-      <Icon as={FiFileText} boxSize="16px" />
-    </Flex>, // Citations tab
-    <Flex key="savedPriorArtIcon" align="center" justify="center" height="24px">
-      <Icon as={FiBookmark} boxSize="16px" />
-    </Flex>, // Saved Prior Art tab
+    <div key="searchIcon" className="flex items-center justify-center h-6">
+      <FiSearch className="w-4 h-4" />
+    </div>, // Search tab
+    // NOTE: Image Analysis icon temporarily removed - may be reactivated in the future
+    // <div key="imageAnalysisIcon" className="flex items-center justify-center h-6">
+    //   <FiImage className="w-4 h-4" />
+    // </div>, // Image Analysis tab
+    <div key="citationsIcon" className="flex items-center justify-center h-6">
+      <FiFileText className="w-4 h-4" />
+    </div>, // Citations tab
+    <div
+      key="savedPriorArtIcon"
+      className="flex items-center justify-center h-6"
+    >
+      <FiBookmark className="w-4 h-4" />
+    </div>, // Saved Prior Art tab
     // NOTE: Prior Art Analysis icon temporarily removed - may be reactivated in the future
-    // <Flex
+    // <div
     //   key="priorArtAnalysisIcon"
-    //   align="center"
-    //   justify="center"
-    //   height="24px"
+    //   className="flex items-center justify-center h-6"
     // >
-    //   <Icon as={FiZap} boxSize="16px" />
-    // </Flex>, // Prior Art Analysis tab
-    <Flex key="chatIcon" align="center" justify="center" height="24px">
-      <Icon as={FiMessageCircle} boxSize="16px" />
-    </Flex>, // Chat tab
+    //   <FiZap className="w-4 h-4" />
+    // </div>, // Prior Art Analysis tab
+    <div key="chatIcon" className="flex items-center justify-center h-6">
+      <FiMessageCircle className="w-4 h-4" />
+    </div>, // Chat tab
   ];
 }

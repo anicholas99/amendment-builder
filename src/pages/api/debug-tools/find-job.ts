@@ -1,8 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { CustomApiRequest } from '@/types/api';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { findByReferenceAndSearch } from '@/repositories/citationJobRepository';
 import { getSearchHistoryWithTenant } from '@/repositories/searchRepository';
 import { requireRole } from '@/middleware/role';
@@ -12,7 +12,7 @@ import { withTenantGuard } from '@/middleware/authorization';
 import { withErrorHandling } from '@/middleware/errorHandling';
 import { withRateLimit } from '@/middleware/rateLimiter';
 import { withMethod } from '@/middleware/method';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { env } from '@/config/env';
 
 const apiLogger = createApiLogger('debug/find-job');

@@ -14,31 +14,23 @@ export const projectKeys = {
 
 export const versioningKeys = {
   all: (projectId: string) =>
-    [getCurrentTenant(), ...projectKeys.detail(projectId), 'versions'] as const,
+    [...projectKeys.detail(projectId), 'versions'] as const,
   detail: (projectId: string, versionId: string) =>
     [...versioningKeys.all(projectId), versionId] as const,
 };
 
 export const searchHistoryKeys = {
   all: (projectId: string) =>
-    [
-      getCurrentTenant(),
-      ...projectKeys.detail(projectId),
-      'searchHistory',
-    ] as const,
+    [...projectKeys.detail(projectId), 'searchHistory'] as const,
   project: (projectId: string) => searchHistoryKeys.all(projectId),
 };
 
 export const priorArtKeys = {
   all: (projectId: string) =>
-    [getCurrentTenant(), ...projectKeys.detail(projectId), 'priorArt'] as const,
+    [...projectKeys.detail(projectId), 'priorArt'] as const,
 };
 
 export const exclusionKeys = {
   all: (projectId: string) =>
-    [
-      getCurrentTenant(),
-      ...projectKeys.detail(projectId),
-      'exclusions',
-    ] as const,
+    [...projectKeys.detail(projectId), 'exclusions'] as const,
 };

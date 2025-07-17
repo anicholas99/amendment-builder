@@ -19,9 +19,8 @@ import {
   NormalizedSearchResult,
 } from '@/types/domain/searchHistory';
 import { SearchResult, MappedSearchResult } from '@/types/searchTypes';
-import { safeJsonParse } from '@/utils/json-utils';
-import { logger } from '@/lib/monitoring/logger';
-import { findManyBySearchHistory as getCitationJobsBySearchHistoryId } from '@/repositories/citationJobRepository';
+import { safeJsonParse } from '@/utils/jsonUtils';
+import { logger } from '@/utils/clientLogger';
 
 // Type for search results that can be stored in search history
 export type SearchHistoryResults =
@@ -81,53 +80,39 @@ export async function processSearchHistory(
   fetchCitationJobs: boolean = true
 ): Promise<ProcessedSearchHistoryEntry | null> {
   try {
-    // Parse results if needed
-    let parsedResults: SearchHistoryResults = [];
+    // Parse results if needed - optimized to avoid double parsing
+    let normalizedResults: NormalizedSearchResult[] = [];
+
     if (entry.results) {
-      // First check if it's already an array
+      let parsedResults: SearchHistoryResults = [];
+
+      // Check if already an array (shouldn't be in DB, but handle gracefully)
       if (Array.isArray(entry.results)) {
         parsedResults = entry.results;
-      } else if (typeof entry.results === 'string') {
-        // Try to parse the string
-        let parsed = safeJsonParse<SearchHistoryResults>(entry.results);
+      } else if (typeof entry.results === 'string' && entry.results.trim()) {
+        // Parse once and check result
+        const parsed = safeJsonParse<SearchHistoryResults>(entry.results);
 
-        // Check if the result is still a string (double-stringified)
-        if (typeof parsed === 'string') {
-          parsed = safeJsonParse<SearchHistoryResults>(parsed);
+        // Only parse again if we got a string (double-stringified case)
+        if (typeof parsed === 'string' && parsed.trim()) {
+          parsedResults = safeJsonParse<SearchHistoryResults>(parsed) || [];
+        } else {
+          parsedResults = parsed || [];
         }
+      }
 
-        parsedResults = parsed || [];
+      // Normalize results if we have an array
+      if (Array.isArray(parsedResults)) {
+        normalizedResults = normalizeSearchResults(parsedResults);
       }
     }
-
-    // Ensure each result has the required fields using our centralized normalization
-    const normalizedResults = Array.isArray(parsedResults)
-      ? normalizeSearchResults(parsedResults)
-      : [];
 
     // Initialize citation job fields
-    let citationJobCount = 0;
+    const citationJobCount = 0;
     let citationJobId: string | undefined;
 
-    // Only fetch citation jobs on server side
-    if (fetchCitationJobs && typeof window === 'undefined') {
-      try {
-        // Get citation jobs for this search
-        const jobs = await getCitationJobsBySearchHistoryId(entry.id);
-        citationJobCount = jobs.length;
-
-        // Get primary citation job if only one exists
-        if (citationJobCount === 1) {
-          citationJobId = jobs[0].id;
-        }
-      } catch (error) {
-        logger.warn('Failed to get citation job data', {
-          error,
-          entryId: entry.id,
-        });
-        // Continue without citation job data
-      }
-    }
+    // Note: Citation jobs must be fetched separately via API calls
+    // They cannot be fetched directly in client-side code
 
     const processed: ProcessedSearchHistoryEntry = {
       id: entry.id,
@@ -187,9 +172,15 @@ export async function processSearchHistories(
   entries: RawSearchHistoryEntry[],
   fetchCitationJobs: boolean = true
 ): Promise<ProcessedSearchHistoryEntry[]> {
-  const processed = await Promise.all(
-    entries.map(entry => processSearchHistory(entry, fetchCitationJobs))
+  // Process all entries in parallel for better performance
+  const processingPromises = entries.map(entry =>
+    processSearchHistory(entry, fetchCitationJobs)
   );
+
+  // Wait for all processing to complete
+  const processed = await Promise.all(processingPromises);
+
+  // Filter out any failed entries
   return processed.filter(
     (entry): entry is ProcessedSearchHistoryEntry => entry !== null
   );

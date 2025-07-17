@@ -2,9 +2,9 @@
 import { handleLogin } from '@auth0/nextjs-auth0';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { environment } from '@/config/environment';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
 
 const apiLogger = createApiLogger('auth/login');
 
@@ -37,14 +37,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { returnTo } = validation.data;
 
   apiLogger.info('Initiating Auth0 login', {
-    returnTo: returnTo || '/projects',
+    returnTo: returnTo || '/',
     hasAudience: !!environment.auth.audience,
   });
 
   // Call Auth0's handleLogin with the returnTo parameter
   // Note: handleLogin takes control of the response, so we don't need to return anything
   await handleLogin(req, res, {
-    returnTo: returnTo || '/projects',
+    returnTo: returnTo || '/',
     authorizationParams: {
       // Add any additional authorization parameters here
       prompt: 'login', // Always show the login prompt

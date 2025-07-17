@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Stack, useToast } from '@chakra-ui/react';
-import { logger } from '@/lib/monitoring/logger';
+import { useToast } from '@/hooks/useToastWrapper';
+import { logger } from '@/utils/clientLogger';
 import { PriorArtReference } from '../../../types/claimTypes';
 import {
   FullAnalysisResponse,
@@ -125,12 +125,12 @@ const PriorArtAnalysisTab: React.FC<PriorArtAnalysisTabProps> = ({
   // Placeholder handlers for ReferenceCard
   const handleSaveReference = (ref: PriorArtReference) => {
     logger.warn('Save action triggered in PriorArtAnalysisTab', { ref });
-    toast({ title: 'Save action not implemented here', status: 'info' });
+    toast({ title: 'Save action not implemented here' });
   };
 
   const handleExcludeReference = (ref: PriorArtReference) => {
     logger.warn('Exclude action triggered in PriorArtAnalysisTab', { ref });
-    toast({ title: 'Exclude action not implemented here', status: 'info' });
+    toast({ title: 'Exclude action not implemented here' });
   };
 
   const getCitationIcon = (refNum: string) => {
@@ -153,8 +153,8 @@ const PriorArtAnalysisTab: React.FC<PriorArtAnalysisTabProps> = ({
   }, [isAnalyzing, analysisData]);
 
   return (
-    <Box height="100%" p={4} overflowY="auto">
-      <Stack spacing={4} align="stretch">
+    <div className="h-full p-4 overflow-y-auto">
+      <div className="space-y-4">
         {/* Search Selection Panel */}
         <SearchSelectionPanel
           showSavedPriorArt={showSavedPriorArt}
@@ -207,7 +207,7 @@ const PriorArtAnalysisTab: React.FC<PriorArtAnalysisTabProps> = ({
             onDismissSuggestion={handleDismissSuggestion}
           />
         </div>
-      </Stack>
+      </div>
 
       {/* Edit Modal */}
       <DependentClaimEditModal
@@ -216,7 +216,7 @@ const PriorArtAnalysisTab: React.FC<PriorArtAnalysisTabProps> = ({
         initialText={editingSuggestionText}
         onSave={handleSaveEditedClaim}
       />
-    </Box>
+    </div>
   );
 };
 

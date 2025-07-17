@@ -1,14 +1,10 @@
 import React, { useState } from 'react';
-import {
-  Box,
-  Input,
-  Textarea,
-  Button,
-  HStack,
-  VStack,
-  Text,
-  useToast,
-} from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/useToastWrapper';
 import { useUpdateFigureMetadata } from '@/hooks/api/useFiguresNormalized';
 
 interface FigureDescriptionEditorProps {
@@ -65,53 +61,57 @@ export const FigureDescriptionEditor: React.FC<
     description.trim() !== currentDescription.trim();
 
   return (
-    <VStack spacing={4} align="stretch">
-      <Box>
-        <Text fontWeight="medium" mb={1}>
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor={`figure-title-${figureId}`} className="font-medium">
           Figure {figureKey} Title
-        </Text>
+        </Label>
         <Input
+          id={`figure-title-${figureId}`}
           value={title}
           onChange={e => setTitle(e.target.value)}
           placeholder="Enter figure title..."
-          size="sm"
+          className="text-sm"
         />
-      </Box>
+      </div>
 
-      <Box>
-        <Text fontWeight="medium" mb={1}>
+      <div className="space-y-2">
+        <Label
+          htmlFor={`figure-description-${figureId}`}
+          className="font-medium"
+        >
           Description
-        </Text>
+        </Label>
         <Textarea
+          id={`figure-description-${figureId}`}
           value={description}
           onChange={e => setDescription(e.target.value)}
           placeholder="Enter figure description..."
           rows={4}
-          size="sm"
+          className="text-sm"
         />
-      </Box>
+      </div>
 
-      <HStack justify="flex-end" spacing={2}>
+      <div className="flex justify-end space-x-2">
         {onCancel && (
           <Button
             size="sm"
             variant="ghost"
             onClick={onCancel}
-            isDisabled={updateMetadata.isPending}
+            disabled={updateMetadata.isPending}
           >
             Cancel
           </Button>
         )}
         <Button
           size="sm"
-          colorScheme="blue"
           onClick={handleSave}
-          isLoading={updateMetadata.isPending}
-          isDisabled={!hasChanges || updateMetadata.isPending}
+          disabled={!hasChanges || updateMetadata.isPending}
+          className="bg-blue-600 hover:bg-blue-700 text-white"
         >
-          Save Changes
+          {updateMetadata.isPending ? 'Saving...' : 'Save Changes'}
         </Button>
-      </HStack>
-    </VStack>
+      </div>
+    </div>
   );
 };

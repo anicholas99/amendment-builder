@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { logger } from '../../lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { rebuildHtmlContent } from '@/features/patent-application/utils/patent-sections';
 
@@ -9,25 +9,29 @@ import { rebuildHtmlContent } from '@/features/patent-application/utils/patent-s
  * @param projectId The ID of the project
  * @returns Array of draft documents
  */
-export async function findDraftDocumentsByProject(
-  projectId: string
-): Promise<Array<{
-  id: string;
-  projectId: string;
-  type: string;
-  content: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}>> {
+export async function findDraftDocumentsByProject(projectId: string): Promise<
+  Array<{
+    id: string;
+    projectId: string;
+    type: string;
+    content: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }>
+> {
   try {
-    logger.debug(`Repository: Finding draft documents for project: ${projectId}`);
+    logger.debug(
+      `Repository: Finding draft documents for project: ${projectId}`
+    );
 
     const documents = await prisma!.draftDocument.findMany({
       where: { projectId },
       orderBy: { type: 'asc' },
     });
 
-    logger.debug(`Repository: Found ${documents.length} draft documents for project: ${projectId}`);
+    logger.debug(
+      `Repository: Found ${documents.length} draft documents for project: ${projectId}`
+    );
     return documents;
   } catch (error) {
     logger.error('Failed to find draft documents', { error, projectId });
@@ -56,7 +60,9 @@ export async function findDraftDocumentByType(
   updatedAt: Date;
 } | null> {
   try {
-    logger.debug(`Repository: Finding draft document for project: ${projectId}, type: ${type}`);
+    logger.debug(
+      `Repository: Finding draft document for project: ${projectId}, type: ${type}`
+    );
 
     const document = await prisma!.draftDocument.findUnique({
       where: {
@@ -68,11 +74,15 @@ export async function findDraftDocumentByType(
     });
 
     if (!document) {
-      logger.debug(`Repository: No draft document found for project: ${projectId}, type: ${type}`);
+      logger.debug(
+        `Repository: No draft document found for project: ${projectId}, type: ${type}`
+      );
       return null;
     }
 
-    logger.debug(`Repository: Found draft document for project: ${projectId}, type: ${type}`);
+    logger.debug(
+      `Repository: Found draft document for project: ${projectId}, type: ${type}`
+    );
     return document;
   } catch (error) {
     logger.error('Failed to find draft document', { error, projectId, type });
@@ -103,7 +113,9 @@ export async function upsertDraftDocument(
   updatedAt: Date;
 }> {
   try {
-    logger.debug(`Repository: Upserting draft document for project: ${projectId}, type: ${type}`);
+    logger.debug(
+      `Repository: Upserting draft document for project: ${projectId}, type: ${type}`
+    );
 
     const document = await prisma!.draftDocument.upsert({
       where: {
@@ -123,7 +135,9 @@ export async function upsertDraftDocument(
       },
     });
 
-    logger.info(`Repository: Upserted draft document for project: ${projectId}, type: ${type}`);
+    logger.info(
+      `Repository: Upserted draft document for project: ${projectId}, type: ${type}`
+    );
     return document;
   } catch (error) {
     logger.error('Failed to upsert draft document', { error, projectId, type });
@@ -145,7 +159,9 @@ export async function batchUpdateDraftDocuments(
   updates: Array<{ type: string; content: string }>
 ): Promise<number> {
   try {
-    logger.debug(`Repository: Batch updating ${updates.length} draft documents for project: ${projectId}`);
+    logger.debug(
+      `Repository: Batch updating ${updates.length} draft documents for project: ${projectId}`
+    );
 
     const results = await prisma!.$transaction(
       updates.map(update =>
@@ -169,10 +185,15 @@ export async function batchUpdateDraftDocuments(
       )
     );
 
-    logger.info(`Repository: Batch updated ${results.length} draft documents for project: ${projectId}`);
+    logger.info(
+      `Repository: Batch updated ${results.length} draft documents for project: ${projectId}`
+    );
     return results.length;
   } catch (error) {
-    logger.error('Failed to batch update draft documents', { error, projectId });
+    logger.error('Failed to batch update draft documents', {
+      error,
+      projectId,
+    });
     throw new ApplicationError(
       ErrorCode.DB_QUERY_ERROR,
       `Failed to batch update draft documents: ${error instanceof Error ? error.message : String(error)}`
@@ -189,16 +210,50 @@ export async function deleteDraftDocumentsByProject(
   projectId: string
 ): Promise<number> {
   try {
-    logger.debug(`Repository: Deleting draft documents for project: ${projectId}`);
+    logger.info(
+      `Repository: About to delete draft documents for project: ${projectId}`
+    );
+
+    // Check how many documents exist before deletion
+    const countBefore = await prisma!.draftDocument.count({
+      where: { projectId },
+    });
+
+    logger.info(
+      `Repository: Found ${countBefore} draft documents to delete for project: ${projectId}`
+    );
 
     const result = await prisma!.draftDocument.deleteMany({
       where: { projectId },
     });
 
-    logger.info(`Repository: Deleted ${result.count} draft documents for project: ${projectId}`);
+    // Verify deletion worked
+    const countAfter = await prisma!.draftDocument.count({
+      where: { projectId },
+    });
+
+    logger.info(`Repository: Deletion complete for project: ${projectId}`, {
+      projectId,
+      countBefore,
+      countDeleted: result.count,
+      countAfter,
+      deletionSuccess: countAfter === 0,
+    });
+
+    if (countAfter > 0) {
+      logger.error(
+        `Repository: DELETION FAILED! ${countAfter} documents still exist after deletion for project: ${projectId}`
+      );
+    }
+
     return result.count;
   } catch (error) {
-    logger.error('Failed to delete draft documents', { error, projectId });
+    logger.error('Failed to delete draft documents', {
+      error,
+      projectId,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+    });
     throw new ApplicationError(
       ErrorCode.DB_QUERY_ERROR,
       `Failed to delete draft documents: ${error instanceof Error ? error.message : String(error)}`
@@ -217,20 +272,26 @@ export async function copyDraftDocumentsToVersion(
   projectId: string,
   versionId: string,
   userId: string
-): Promise<Array<{
-  id: string;
-  applicationVersionId: string;
-  type: string;
-  content: string | null;
-}>> {
+): Promise<
+  Array<{
+    id: string;
+    applicationVersionId: string;
+    type: string;
+    content: string | null;
+  }>
+> {
   try {
-    logger.debug(`Repository: Copying draft documents to version for project: ${projectId}, version: ${versionId}`);
+    logger.debug(
+      `Repository: Copying draft documents to version for project: ${projectId}, version: ${versionId}`
+    );
 
     // Get all draft documents
     const draftDocuments = await findDraftDocumentsByProject(projectId);
 
     if (draftDocuments.length === 0) {
-      logger.warn(`Repository: No draft documents found to copy for project: ${projectId}`);
+      logger.warn(
+        `Repository: No draft documents found to copy for project: ${projectId}`
+      );
       return [];
     }
 
@@ -256,10 +317,16 @@ export async function copyDraftDocumentsToVersion(
       },
     });
 
-    logger.info(`Repository: Copied ${createdDocuments.length} documents to version: ${versionId}`);
+    logger.info(
+      `Repository: Copied ${createdDocuments.length} documents to version: ${versionId}`
+    );
     return createdDocuments;
   } catch (error) {
-    logger.error('Failed to copy draft documents to version', { error, projectId, versionId });
+    logger.error('Failed to copy draft documents to version', {
+      error,
+      projectId,
+      versionId,
+    });
     throw new ApplicationError(
       ErrorCode.DB_QUERY_ERROR,
       `Failed to copy draft documents to version: ${error instanceof Error ? error.message : String(error)}`
@@ -278,7 +345,9 @@ export async function initializeDraftDocumentsFromVersion(
   versionId: string
 ): Promise<number> {
   try {
-    logger.debug(`Repository: Initializing draft documents from version: ${versionId} for project: ${projectId}`);
+    logger.debug(
+      `Repository: Initializing draft documents from version: ${versionId} for project: ${projectId}`
+    );
 
     // Get version documents
     const versionDocuments = await prisma!.document.findMany({
@@ -290,7 +359,9 @@ export async function initializeDraftDocumentsFromVersion(
     });
 
     if (versionDocuments.length === 0) {
-      logger.warn(`Repository: No version documents found to initialize from version: ${versionId}`);
+      logger.warn(
+        `Repository: No version documents found to initialize from version: ${versionId}`
+      );
       return 0;
     }
 
@@ -308,10 +379,16 @@ export async function initializeDraftDocumentsFromVersion(
       data: draftsToCreate,
     });
 
-    logger.info(`Repository: Initialized ${draftsToCreate.length} draft documents for project: ${projectId}`);
+    logger.info(
+      `Repository: Initialized ${draftsToCreate.length} draft documents for project: ${projectId}`
+    );
     return draftsToCreate.length;
   } catch (error) {
-    logger.error('Failed to initialize draft documents from version', { error, projectId, versionId });
+    logger.error('Failed to initialize draft documents from version', {
+      error,
+      projectId,
+      versionId,
+    });
     throw new ApplicationError(
       ErrorCode.DB_QUERY_ERROR,
       `Failed to initialize draft documents from version: ${error instanceof Error ? error.message : String(error)}`
@@ -328,7 +405,9 @@ export async function initializeEmptyDraftDocuments(
   projectId: string
 ): Promise<number> {
   try {
-    logger.debug(`Repository: Initializing empty draft documents for project: ${projectId}`);
+    logger.debug(
+      `Repository: Initializing empty draft documents for project: ${projectId}`
+    );
 
     // Check if draft documents already exist
     const existing = await prisma!.draftDocument.count({
@@ -336,15 +415,22 @@ export async function initializeEmptyDraftDocuments(
     });
 
     if (existing > 0) {
-      logger.debug(`Repository: Draft documents already exist for project: ${projectId}`);
+      logger.debug(
+        `Repository: Draft documents already exist for project: ${projectId}`
+      );
       return 0;
     }
 
     // No need to create any empty documents - sections will be created when content is generated
-    logger.info(`Repository: No empty draft documents needed for project: ${projectId}`);
+    logger.info(
+      `Repository: No empty draft documents needed for project: ${projectId}`
+    );
     return 0;
   } catch (error) {
-    logger.error('Failed to initialize empty draft documents', { error, projectId });
+    logger.error('Failed to initialize empty draft documents', {
+      error,
+      projectId,
+    });
     throw new ApplicationError(
       ErrorCode.DB_QUERY_ERROR,
       `Failed to initialize empty draft documents: ${error instanceof Error ? error.message : String(error)}`
@@ -363,10 +449,27 @@ export async function initializeDraftDocumentsWithSections(
   sections: { [type: string]: string }
 ): Promise<number> {
   try {
-    logger.debug(`Repository: Initializing draft documents with sections for project: ${projectId}`);
+    logger.info(
+      `Repository: Initializing draft documents with sections for project: ${projectId}`,
+      {
+        projectId,
+        sectionKeys: Object.keys(sections),
+        sectionCount: Object.keys(sections).length,
+        sectionsPreview: Object.entries(sections)
+          .slice(0, 3)
+          .map(([type, content]) => ({
+            type,
+            contentLength: content?.length || 0,
+            hasContent: !!(content && content.trim().length > 0),
+          })),
+      }
+    );
 
     // Delete existing draft documents
-    await deleteDraftDocumentsByProject(projectId);
+    const deletedCount = await deleteDraftDocumentsByProject(projectId);
+    logger.info(
+      `Repository: Deleted ${deletedCount} existing draft documents for project: ${projectId}`
+    );
 
     // Create draft documents from sections ONLY - no FULL_CONTENT
     const draftsToCreate = Object.entries(sections)
@@ -377,19 +480,71 @@ export async function initializeDraftDocumentsWithSections(
         content,
       }));
 
+    logger.info(
+      `Repository: Preparing to create ${draftsToCreate.length} draft documents`,
+      {
+        projectId,
+        draftsToCreate: draftsToCreate.map(draft => ({
+          type: draft.type,
+          contentLength: draft.content?.length || 0,
+          hasContent: !!(draft.content && draft.content.trim().length > 0),
+        })),
+      }
+    );
+
     if (draftsToCreate.length > 0) {
       await prisma!.draftDocument.createMany({
         data: draftsToCreate,
       });
+
+      logger.info(
+        `Repository: Successfully created ${draftsToCreate.length} draft documents for project: ${projectId}`
+      );
+
+      // Verify the documents were actually created
+      const verificationCount = await prisma!.draftDocument.count({
+        where: { projectId },
+      });
+
+      logger.info(
+        `Repository: Verification count: ${verificationCount} draft documents exist for project: ${projectId}`
+      );
+
+      if (verificationCount !== draftsToCreate.length) {
+        logger.error(
+          `Repository: MISMATCH! Expected ${draftsToCreate.length} but found ${verificationCount} documents`,
+          {
+            projectId,
+            expected: draftsToCreate.length,
+            actual: verificationCount,
+          }
+        );
+      }
+    } else {
+      logger.warn(
+        `Repository: No valid sections to create draft documents for project: ${projectId}`,
+        {
+          sectionsProvided: Object.keys(sections),
+          sectionsFiltered: 'all sections were null/undefined',
+        }
+      );
     }
 
-    logger.info(`Repository: Initialized ${draftsToCreate.length} draft documents for project: ${projectId}`);
+    logger.info(
+      `Repository: Initialized ${draftsToCreate.length} draft documents for project: ${projectId}`
+    );
     return draftsToCreate.length;
   } catch (error) {
-    logger.error('Failed to initialize draft documents with sections', { error, projectId });
+    logger.error('Failed to initialize draft documents with sections', {
+      error,
+      projectId,
+      sectionKeys: Object.keys(sections || {}),
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+    });
     throw new ApplicationError(
       ErrorCode.DB_QUERY_ERROR,
       `Failed to initialize draft documents: ${error instanceof Error ? error.message : String(error)}`
     );
   }
-} 
+}

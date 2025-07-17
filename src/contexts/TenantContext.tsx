@@ -5,10 +5,11 @@ import React, {
   useEffect,
   useRef,
   useMemo,
+  useCallback,
 } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/router';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import {
   useUserTenantsQuery,
   useSetActiveTenantMutation,
@@ -16,9 +17,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { resetTenantCache } from '@/utils/tenant';
 import { clearApiCache } from '@/lib/api/apiClient';
-
-// @ts-nocheck
-// TODO: Remove ts-nocheck after tenant typing cleanup
+import { useTimeout } from '@/hooks/useTimeout';
 
 interface Tenant {
   id: string;
@@ -32,25 +31,11 @@ interface TenantContextType {
   userTenants: Tenant[];
   setCurrentTenant: (tenant: Tenant) => void;
   isLoading: boolean;
+  isValidTenantSlug: (slug: string) => boolean;
+  getUrlTenantSlug: () => string | null;
 }
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
-
-// Fallback tenants to use if API fails to load
-const FALLBACK_TENANTS: Tenant[] = [
-  {
-    id: 'development',
-    name: 'Development',
-    slug: 'development',
-    settings: {},
-  },
-  {
-    id: 'testing',
-    name: 'Testing',
-    slug: 'testing',
-    settings: {},
-  },
-];
 
 export function TenantProvider({ children }: { children: React.ReactNode }) {
   const {
@@ -183,62 +168,97 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
         // Invalidate all queries to force refetch with new tenant context
         queryClient.invalidateQueries();
-
-        // Clean up old queries after a delay (safety measure)
-        if (currentTenant && currentTenant.slug !== urlTenant) {
-          setTimeout(() => {
-            logger.info('Cleaning up old tenant queries after URL change');
-            queryClient.removeQueries({
-              predicate: query => {
-                const queryKey = query.queryKey as string[];
-                // Remove any queries whose key contains the old tenant slug
-                return queryKey?.includes(currentTenant.slug);
-              },
-            });
-          }, 5000);
-        }
-
-        // Reset flag after delay
-        setTimeout(() => {
-          isUpdatingFromUrl.current = false;
-        }, 500);
       }
     }
   }, [router.isReady, router.asPath, userTenants, currentTenant, queryClient]);
 
-  const handleSetCurrentTenant = async (tenant: Tenant) => {
-    if (isUpdatingFromUrl.current || currentTenant?.slug === tenant.slug) {
-      logger.info('Skipping tenant update:', {
-        isUpdating: isUpdatingFromUrl.current,
-        isSame: currentTenant?.slug === tenant.slug,
-      });
-      return;
-    }
+  // Cleanup old queries after tenant change
+  useTimeout(
+    () => {
+      if (currentTenant && router.isReady) {
+        const pathParts = router.asPath.split('/');
+        const urlTenantSlug = pathParts.length > 1 ? pathParts[1] : null;
 
-    logger.info('Switching tenant:', {
-      from: currentTenant?.slug,
-      to: tenant.slug,
-    });
+        if (urlTenantSlug && currentTenant.slug !== urlTenantSlug) {
+          logger.info('Cleaning up old tenant queries after URL change');
+          queryClient.removeQueries({
+            predicate: query => {
+              const queryKey = query.queryKey as string[];
+              // Remove any queries whose key contains the old tenant slug
+              return queryKey?.includes(currentTenant.slug);
+            },
+          });
+        }
+      }
+    },
+    currentTenant && router.isReady ? 5000 : null
+  );
 
-    try {
-      isUpdatingFromUrl.current = true;
-      lastTenantSlug.current = tenant.slug;
-
-      // Update local state immediately
-      setCurrentTenant(tenant);
-
-      // Update on server
-      await setActiveTenantMutation.mutateAsync(tenant);
-
-      // Reset flag after delay
-      setTimeout(() => {
+  // Reset URL update flag after delay
+  useTimeout(
+    () => {
+      if (isUpdatingFromUrl.current) {
         isUpdatingFromUrl.current = false;
-      }, 500);
-    } catch (error) {
-      logger.error('Error switching tenant:', error);
-      isUpdatingFromUrl.current = false;
-    }
-  };
+      }
+    },
+    isUpdatingFromUrl.current ? 500 : null
+  );
+
+  const handleSetCurrentTenant = useCallback(
+    async (tenant: Tenant) => {
+      if (isUpdatingFromUrl.current || currentTenant?.slug === tenant.slug) {
+        logger.info('Skipping tenant update:', {
+          isUpdating: isUpdatingFromUrl.current,
+          isSame: currentTenant?.slug === tenant.slug,
+        });
+        return;
+      }
+
+      logger.info('Switching tenant:', {
+        from: currentTenant?.slug,
+        to: tenant.slug,
+      });
+
+      try {
+        isUpdatingFromUrl.current = true;
+        lastTenantSlug.current = tenant.slug;
+
+        // Update local state immediately
+        setCurrentTenant(tenant);
+
+        // Update on server
+        await setActiveTenantMutation.mutateAsync(tenant);
+      } catch (error) {
+        logger.error('Error switching tenant:', error);
+        isUpdatingFromUrl.current = false;
+      }
+    },
+    [currentTenant, setActiveTenantMutation]
+  );
+
+  // Reset flag after tenant switch
+  useTimeout(
+    () => {
+      if (isUpdatingFromUrl.current) {
+        isUpdatingFromUrl.current = false;
+      }
+    },
+    isUpdatingFromUrl.current ? 500 : null
+  );
+
+  // Helper functions
+  const isValidTenantSlug = useCallback(
+    (slug: string): boolean => {
+      return userTenants.some(tenant => tenant.slug === slug);
+    },
+    [userTenants]
+  );
+
+  const getUrlTenantSlug = useCallback((): string | null => {
+    if (!router.isReady) return null;
+    const pathParts = router.asPath.split('/');
+    return pathParts.length > 1 && pathParts[1] !== '' ? pathParts[1] : null;
+  }, [router.isReady, router.asPath]);
 
   const contextValue = useMemo<TenantContextType>(
     () => ({
@@ -246,6 +266,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       userTenants,
       setCurrentTenant: handleSetCurrentTenant,
       isLoading: isUserLoading || isTenantsLoading,
+      isValidTenantSlug,
+      getUrlTenantSlug,
     }),
     [
       currentTenant,
@@ -253,6 +275,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       isUserLoading,
       isTenantsLoading,
       handleSetCurrentTenant,
+      isValidTenantSlug,
+      getUrlTenantSlug,
     ]
   );
 

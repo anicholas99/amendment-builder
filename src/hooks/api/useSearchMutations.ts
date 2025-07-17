@@ -2,18 +2,18 @@
  * Centralized hook for Search-related API mutations.
  */
 import { useQueryClient, UseMutationOptions } from '@tanstack/react-query';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/utils/toast';
 import {
   SearchApiService,
   SearchHistoryEntry,
 } from '@/client/services/search.client-service';
-// import { ProcessedSearchHistoryEntry } from '@/types/search';
-import { ApplicationError, ErrorCode } from '@/lib/error';
-import { showSuccessToast, showErrorToast } from '@/utils/toast';
+import { ProcessedSearchHistoryEntry } from '@/types/search';
+import { ApplicationError } from '@/lib/error';
+
 import { searchHistoryKeys } from '@/lib/queryKeys/projectKeys';
 import { getCurrentTenant } from '@/lib/queryKeys/tenant';
 import { useApiMutation, useApiQuery } from '@/lib/api/queryClient';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useProjectData } from '@/contexts/ProjectDataContext';
 import { useRouter } from 'next/router';
 import { API_ROUTES } from '@/constants/apiRoutes';
@@ -49,6 +49,7 @@ export interface StartAsyncSearchParams {
   projectId: string;
   searchQueries: string[];
   parsedElements?: string[]; // V2 format - string array
+  correlationId?: string; // Add correlation ID for tracking
 }
 
 /**
@@ -58,6 +59,8 @@ export interface StartAsyncSearchResponse {
   message: string;
   success: boolean;
   searchHistoryId?: string;
+  searchId?: string;
+  searchHistory?: ProcessedSearchHistoryEntry;
 }
 
 /**
@@ -76,6 +79,7 @@ export function useStartAsyncSearch() {
         queryCount: params.searchQueries.length,
         hasParsedElements: !!params.parsedElements,
         parsedElementsCount: params.parsedElements?.length,
+        correlationId: params.correlationId,
       });
 
       try {
@@ -83,6 +87,9 @@ export function useStartAsyncSearch() {
           projectId: params.projectId,
           searchQueries: params.searchQueries,
           parsedElements: params.parsedElements,
+          metadata: params.correlationId
+            ? { correlationId: params.correlationId }
+            : undefined,
         });
 
         logger.info('[useStartAsyncSearch] Async search started successfully', {
@@ -103,24 +110,68 @@ export function useStartAsyncSearch() {
       }
     },
 
-    onSuccess: (data, variables) => {
-      logger.info('[useStartAsyncSearch] Success', {
-        searchHistoryId: data.searchHistoryId,
-      });
+    onSuccess: async (data, variables) => {
+      const projectIdForInvalidate = variables.projectId;
 
-      // Invalidate search history queries
-      queryClient.invalidateQueries({
-        queryKey: searchHistoryKeys.all(variables.projectId),
-      });
+      // If the server returned the full search history entry, add it directly to the cache
+      if (data.searchHistory) {
+        logger.info(
+          '[useStartAsyncSearch] Server returned full search entry, updating cache directly',
+          {
+            searchId: data.searchHistory.id,
+            projectId: projectIdForInvalidate,
+          }
+        );
+
+        // Get the current cache data
+        const currentData =
+          queryClient.getQueryData<ProcessedSearchHistoryEntry[]>(
+            searchHistoryKeys.all(projectIdForInvalidate)
+          ) || [];
+
+        // Add the new entry at the beginning
+        const updatedData = [data.searchHistory, ...currentData];
+
+        // Update the cache immediately
+        queryClient.setQueryData(
+          searchHistoryKeys.all(projectIdForInvalidate),
+          updatedData
+        );
+
+        logger.info(
+          '[useStartAsyncSearch] Cache updated with new search entry',
+          {
+            searchId: data.searchHistory.id,
+            projectId: projectIdForInvalidate,
+            cacheSize: updatedData.length,
+          }
+        );
+      } else {
+        // Fallback for old API response format - just invalidate and let React Query refetch
+        logger.info(
+          '[useStartAsyncSearch] Using fallback - invalidating queries',
+          {
+            searchId: data.searchId,
+            projectId: projectIdForInvalidate,
+          }
+        );
+
+        await queryClient.invalidateQueries({
+          queryKey: searchHistoryKeys.all(projectIdForInvalidate),
+        });
+      }
 
       // Show success message
-      showSuccessToast(
-        toast,
-        'Search started - Analyzing claims and searching for prior art'
+      toast.success(
+        'Search started - Analyzing claims and searching for prior art',
+        {
+          description:
+            'New citations have been found and added to your results.',
+        }
       );
 
       // Navigate to claim refinement view where search results are displayed
-      if (data.searchHistoryId) {
+      if (data.searchId) {
         const tenant = router.query.tenant as string;
         if (tenant && variables.projectId) {
           router.push(
@@ -132,12 +183,7 @@ export function useStartAsyncSearch() {
 
     onError: error => {
       logger.error('[useStartAsyncSearch] Mutation error', error);
-      showErrorToast(
-        toast,
-        error instanceof ApplicationError
-          ? error.message
-          : 'Failed to start search'
-      );
+      toast.error(error.message || 'Failed to start search. Please try again.');
     },
   });
 }
@@ -193,16 +239,13 @@ export function useDeleteSearchHistory() {
         queryKey: [getCurrentTenant(), 'searchHistory'],
       });
 
-      showSuccessToast(toast, 'Search history deleted successfully');
+      toast.success('Search history deleted successfully');
     },
 
     onError: error => {
       logger.error('[useDeleteSearchHistory] Failed to delete search', error);
-      showErrorToast(
-        toast,
-        error instanceof ApplicationError
-          ? error.message
-          : 'Failed to delete search history'
+      toast.error(
+        error.message || 'Failed to delete search history. Please try again.'
       );
     },
   });
@@ -256,7 +299,7 @@ export function useCreateSearchHistory(
   return useApiMutation({
     mutationFn: request => SearchApiService.createSearchHistory(request),
     onSuccess: (data, variables) => {
-      showSuccessToast(toast, 'Search history created.');
+      toast.success('Search history created.');
       queryClient.invalidateQueries({
         queryKey: searchHistoryKeys.all(variables.projectId),
       });

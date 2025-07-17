@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 
 /**
  * Hook that returns a function to defer execution to the next tick
@@ -47,11 +47,11 @@ export function useMicrotask() {
   }, []);
 
   // Track mount state
-  useRef(() => {
+  useEffect(() => {
     return () => {
       isMountedRef.current = false;
     };
-  });
+  }, []);
 
   return queueTask;
 }

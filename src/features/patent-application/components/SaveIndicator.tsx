@@ -1,18 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, Fade, HStack } from '@chakra-ui/react';
-import { CheckIcon } from '@chakra-ui/icons';
-import { keyframes } from '@emotion/react';
+import { FiCheck } from 'react-icons/fi';
+import { cn } from '@/lib/utils';
 
 interface SaveIndicatorProps {
   isSaving: boolean;
   hasUnsavedChanges: boolean;
 }
-
-const pulse = keyframes`
-  0% { opacity: 0.6; }
-  50% { opacity: 1; }
-  100% { opacity: 0.6; }
-`;
 
 export const SaveIndicator: React.FC<SaveIndicatorProps> = ({
   isSaving,
@@ -37,59 +30,40 @@ export const SaveIndicator: React.FC<SaveIndicatorProps> = ({
   }
 
   return (
-    <Box position="fixed" top={4} right={4} zIndex={1000} pointerEvents="none">
-      <Fade in={isSaving || hasUnsavedChanges || showSaved}>
-        <HStack
-          spacing={2}
-          bg="rgba(255, 255, 255, 0.95)"
-          _dark={{ bg: 'rgba(26, 32, 44, 0.95)' }}
-          px={3}
-          py={1.5}
-          borderRadius="full"
-          boxShadow="sm"
-        >
-          {isSaving ? (
-            <>
-              <Box
-                w={2}
-                h={2}
-                borderRadius="full"
-                bg="blue.500"
-                animation={`${pulse} 1.5s ease-in-out infinite`}
-              />
-              <Text
-                fontSize="sm"
-                color="gray.600"
-                _dark={{ color: 'gray.400' }}
-              >
-                Saving...
-              </Text>
-            </>
-          ) : showSaved ? (
-            <>
-              <CheckIcon color="green.500" boxSize={3} />
-              <Text
-                fontSize="sm"
-                color="green.600"
-                _dark={{ color: 'green.400' }}
-              >
-                Saved
-              </Text>
-            </>
-          ) : hasUnsavedChanges ? (
-            <>
-              <Box w={2} h={2} borderRadius="full" bg="yellow.500" />
-              <Text
-                fontSize="sm"
-                color="gray.600"
-                _dark={{ color: 'gray.400' }}
-              >
-                Unsaved
-              </Text>
-            </>
-          ) : null}
-        </HStack>
-      </Fade>
-    </Box>
+    <div className="fixed top-4 right-4 z-[1000] pointer-events-none">
+      <div
+        className={cn(
+          'flex items-center gap-2 px-4 py-1.5 rounded-full shadow-sm transition-opacity duration-200',
+          'bg-white/95 dark:bg-gray-900/95',
+          isSaving || hasUnsavedChanges || showSaved
+            ? 'opacity-100'
+            : 'opacity-0'
+        )}
+      >
+        {isSaving ? (
+          <>
+            <div
+              className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"
+              style={{
+                animation: 'pulse 1.5s ease-in-out infinite',
+              }}
+            />
+            <span className="text-sm text-muted-foreground">Saving...</span>
+          </>
+        ) : showSaved ? (
+          <>
+            <FiCheck className="w-3 h-3 text-green-500" />
+            <span className="text-sm text-green-600 dark:text-green-400">
+              Saved
+            </span>
+          </>
+        ) : hasUnsavedChanges ? (
+          <>
+            <div className="w-2 h-2 rounded-full bg-yellow-500" />
+            <span className="text-sm text-muted-foreground">Unsaved</span>
+          </>
+        ) : null}
+      </div>
+    </div>
   );
 };

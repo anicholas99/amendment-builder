@@ -41,4 +41,4 @@ For each claim, return JSON with:
   ]
 }`,
   variables: ['claims', 'targetType', 'typeGuidance'],
-}; 
+};

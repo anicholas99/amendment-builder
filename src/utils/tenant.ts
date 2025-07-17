@@ -2,8 +2,8 @@
  * Utility functions for tenant-related operations
  */
 
-import { logger } from '@/lib/monitoring/logger';
-import { environment } from '@/config/environment';
+import { logger } from '@/utils/clientLogger';
+import { isDevelopment } from '@/config/environment.client';
 
 // Cache for tenant slug to avoid repeated expensive operations
 let cachedTenantSlug: string | null = null;
@@ -15,8 +15,9 @@ let lastPathChecked: string | null = null;
  */
 export function getTenantSlugFromPath(): string | null {
   if (typeof window === 'undefined') {
-    logger.warn(
-      '[getTenantSlugFromPath] Called on server side - returning null'
+    // This is expected during SSR - use debug level instead of warn
+    logger.debug(
+      '[getTenantSlugFromPath] Called on server side - returning null (expected during SSR)'
     );
     return null;
   }
@@ -103,7 +104,7 @@ export function getLastPathChecked(): string | null {
 }
 
 // Expose cache values to window for debugging in development
-if (typeof window !== 'undefined' && environment.isDevelopment) {
+if (typeof window !== 'undefined' && isDevelopment) {
   (window as any).__tenantCache = {
     get cachedTenantSlug() {
       return cachedTenantSlug;
@@ -113,4 +114,9 @@ if (typeof window !== 'undefined' && environment.isDevelopment) {
     },
     reset: resetTenantCache,
   };
+}
+
+// Test comment for Husky commit hook
+export function getCurrentTenantSlug(): string | null {
+  return cachedTenantSlug;
 }

@@ -1,10 +1,10 @@
 import { NextApiResponse } from 'next';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { z } from 'zod';
 import { CustomApiRequest } from '@/types/api';
 // import { withAuth } from '@/middleware/auth';
 import { ClaimsServerService } from '@/server/services/claims.server.service';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import {
   ParseClaimRequestV2Schema,
   ParseClaimResponseV2Schema,
@@ -64,8 +64,13 @@ async function handler(
       elementCount: elements.length,
     });
 
-    apiLogger.logResponse(200, response);
-    return res.status(200).json(response);
+    const standardizedResponse = {
+      success: true,
+      data: response,
+    };
+
+    apiLogger.logResponse(200, standardizedResponse);
+    return res.status(200).json(standardizedResponse);
   } catch (error) {
     apiLogger.error('V2 claim parsing failed', { error });
     throw error;

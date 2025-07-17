@@ -1,4 +1,4 @@
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { InventionData } from '@/types/invention';
 import {
   UpdateInventionRequest,
@@ -7,7 +7,7 @@ import {
 import { inventionRepository } from '@/repositories/inventionRepository';
 import { Invention } from '@prisma/client';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { flexibleJsonParse } from '@/utils/json-utils';
+import { flexibleJsonParse } from '@/utils/jsonUtils';
 import { ClaimRepository } from '@/repositories/claimRepository';
 
 /**
@@ -556,7 +556,7 @@ export class InventionDataService {
     updates: UpdateInventionRequest
   ): Promise<void> {
     try {
-      logger.info('[InventionService] Updating multiple fields', {
+      logger.debug('[InventionService] Updating multiple fields', {
         projectId,
         fields: Object.keys(updates),
       });
@@ -664,7 +664,7 @@ export class InventionDataService {
       // Execute all updates in parallel
       await Promise.all(updatePromises);
 
-      logger.info('[InventionService] Successfully updated multiple fields', {
+      logger.debug('[InventionService] Successfully updated multiple fields', {
         projectId,
         fieldsUpdated: Object.keys(updates).length,
       });
@@ -694,6 +694,8 @@ export class InventionDataService {
       patentCategory: invention.patentCategory ?? undefined,
       technicalField: invention.technicalField ?? undefined,
       noveltyStatement: invention.noveltyStatement ?? undefined,
+      // UI compatibility: Map noveltyStatement to novelty for legacy UI components
+      novelty: invention.noveltyStatement ?? undefined,
       lastSyncedClaim: invention.lastSyncedClaim ?? undefined,
       claimSyncedAt: invention.claimSyncedAt ?? undefined,
 
@@ -712,6 +714,8 @@ export class InventionDataService {
         {}
       ),
       background: flexibleJsonParse(invention.backgroundJson, {}),
+      definitions: flexibleJsonParse(invention.definitionsJson, {}),
+      futureDirections: flexibleJsonParse(invention.futureDirectionsJson, []),
 
       // Claims will be populated from the Claim table
       claims: {},
@@ -724,6 +728,8 @@ export class InventionDataService {
     delete (transformed as any).useCasesJson;
     delete (transformed as any).processStepsJson;
     delete (transformed as any).technicalImplementationJson;
+    delete (transformed as any).definitionsJson;
+    delete (transformed as any).futureDirectionsJson;
 
     return transformed;
   }
@@ -844,6 +850,3 @@ export class InventionDataService {
     `;
   }
 }
-
-// Export singleton instance
-export const inventionDataService = new InventionDataService();

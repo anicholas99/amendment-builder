@@ -37,7 +37,7 @@ The database schema is managed declaratively using the `schema.prisma` file.
 
 This is the **most critical data access pattern** in the codebase.
 
-**Rule**: All database operations **must** be executed through a function in a "repository" file located in `src/server/repositories/`.
+**Rule**: All database operations **must** be executed through a function in a "repository" file located in `src/repositories/`.
 
 -   **Purpose**: To create a stable, centralized, and secure data access layer.
 -   **Structure**: Each repository typically corresponds to a major database model (e.g., `projectRepository.ts`, `userRepository.ts`).

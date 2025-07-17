@@ -64,13 +64,28 @@ export interface SavedPriorArt {
   savedCitationsData?: string | null; // JSON string of SavedCitationUI[]
   claim1?: string | null; // Main independent claim - what the prior art actually claims
   summary?: string | null; // Brief summary of the invention - what problem it solves and how
+  // Include the savedCitations relation when using Prisma include
+  savedCitations?: SavedCitationRecord[];
+}
+
+// Database record for SavedCitation (matches Prisma schema)
+export interface SavedCitationRecord {
+  id: string;
+  savedPriorArtId: string;
+  elementText?: string;
+  citationText?: string;
+  location?: string | null;
+  reasoning?: string | null;
+  displayOrder?: number;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
 }
 
 // UI-ready version with processed data
 export interface ProcessedSavedPriorArt
-  extends Omit<SavedPriorArt, 'savedCitationsData'> {
+  extends Omit<SavedPriorArt, 'savedCitationsData' | 'savedCitations'> {
   priorArtData: PriorArtReference; // Built from DB fields
-  savedCitations?: SavedCitationUI[]; // Parsed from savedCitationsData
+  savedCitations?: SavedCitationUI[]; // Parsed from savedCitationsData or savedCitations relation
 }
 
 // For type compatibility with database SavedCitation model

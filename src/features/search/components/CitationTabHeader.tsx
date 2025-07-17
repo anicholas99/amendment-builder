@@ -1,28 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import {
-  Box,
-  Flex,
-  Text,
-  HStack,
-  Badge,
-  IconButton,
-  Icon,
-  Spinner,
-  Tooltip,
-  Alert,
-  AlertIcon,
-  Button,
-  Circle,
-  Switch,
-  Select,
-  VStack,
-  useColorModeValue,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-} from '@chakra-ui/react';
+import { logger } from '@/utils/clientLogger';
+import { cn } from '@/lib/utils';
 import {
   FiCheckCircle,
   FiXCircle,
@@ -37,11 +15,22 @@ import {
   FiFileText,
 } from 'react-icons/fi';
 import { BsBookmarkFill } from 'react-icons/bs';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useThemeContext } from '@/contexts/ThemeContext';
 import ReferenceRelevancySummary, {
   CitationMatchSummary,
 } from './ReferenceRelevancySummary';
 import VersionSelector from './VersionSelector';
 import { isEnhancedCitationJob } from '@/types/ui-types';
+import { LoadingState } from '@/components/common/LoadingState';
 
 // Import extracted components
 import {
@@ -167,16 +156,23 @@ export const CitationTabHeader: React.FC<CitationTabHeaderProps> = ({
   citationHistory,
   onViewHistoricalRun,
 }) => {
+  const { isDarkMode } = useThemeContext();
+
   return (
-    <Box borderBottomWidth="1px" borderBottomColor="border.primary" p={3}>
+    <div
+      className={cn(
+        'border-b p-4',
+        isDarkMode ? 'border-gray-800' : 'border-gray-200'
+      )}
+    >
       {/* Top row with title and dropdown */}
-      <Flex justify="space-between" align="center" mb={3}>
-        <Text fontSize="lg" fontWeight="medium">
+      <div className="flex justify-between items-center mb-3">
+        <h2 className="text-lg font-medium">
           Citations for{' '}
           {availableSearches.find(s => s.id === selectedSearchId)?.display ||
             'Search'}
-        </Text>
-        <Flex alignItems="center">
+        </h2>
+        <div className="flex items-center">
           {/* Enhanced Patentability Analysis Section */}
           <PatentabilitySection
             showPatentabilityDashboard={showPatentabilityDashboard}
@@ -188,45 +184,42 @@ export const CitationTabHeader: React.FC<CitationTabHeaderProps> = ({
           />
 
           {/* Search selection dropdown */}
-          <Menu>
-            <MenuButton
-              as={Button}
-              rightIcon={<Icon as={FiChevronDown} />}
-              size="sm"
-              maxW="200px"
-              variant="outline"
-            >
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center justify-center max-w-[200px] h-9 px-3 text-sm font-medium rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground">
               {availableSearches.find(s => s.id === selectedSearchId)
                 ?.display || 'Select a search'}
-            </MenuButton>
-            <MenuList zIndex={9999}>
+              <FiChevronDown className="ml-2 h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="z-[9999]">
               {availableSearches.map((search, index) => (
-                <MenuItem
+                <DropdownMenuItem
                   key={search.id}
-                  onClick={() => {
-                    onSelectSearch(search.id);
-                  }}
+                  onClick={() => onSelectSearch(search.id)}
                 >
                   {search.display}
                   {index === 0 ? ' (Latest)' : ''}
-                </MenuItem>
+                </DropdownMenuItem>
               ))}
-            </MenuList>
-          </Menu>
-        </Flex>
-      </Flex>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
 
       {/* Processing Indicator */}
       {referenceJobStatuses.some(ref => ref.status === 'processing') && (
-        <Alert status="info" mb={3} borderRadius="md">
-          <AlertIcon />
-          <Box flex="1">
-            <Text fontWeight="medium">Citations are being processed</Text>
-            <Text fontSize="sm">
-              Results will appear automatically when ready.
-            </Text>
-          </Box>
-          <Spinner size="sm" ml={3} />
+        <Alert className="mb-3">
+          <FiInfo className="h-4 w-4" />
+          <AlertDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">Citations are being processed</div>
+                <div className="text-sm">
+                  Results will appear automatically when ready.
+                </div>
+              </div>
+              <LoadingState variant="minimal" />
+            </div>
+          </AlertDescription>
         </Alert>
       )}
 
@@ -239,22 +232,27 @@ export const CitationTabHeader: React.FC<CitationTabHeaderProps> = ({
 
       {/* Show message when no references are available */}
       {!isLoading && referenceJobStatuses.length === 0 && (
-        <Box p={3} textAlign="center" color="text.secondary" mb={3}>
-          <Text>No citations loaded yet.</Text>
-        </Box>
+        <div
+          className={cn(
+            'p-4 text-center mb-3',
+            isDarkMode ? 'text-gray-400' : 'text-gray-500'
+          )}
+        >
+          <p>No citations loaded yet.</p>
+        </div>
       )}
 
       {/* Display Metadata Section with Action Icons */}
-      <Flex justify="space-between" align="center" mb={3} minH="40px">
+      <div className="flex justify-between items-center mb-3 min-h-[40px]">
         {/* Metadata Box */}
-        <Box flexGrow={1} overflow="hidden" mr={2}>
+        <div className="flex-grow overflow-hidden mr-2">
           <MetadataDisplay
             referenceMetadata={referenceMetadata}
             selectedReference={selectedReference}
             isLoading={isLoading}
             citationMatches={citationMatches}
           />
-        </Box>
+        </div>
 
         {/* Action Icons */}
         <ActionButtons
@@ -275,7 +273,7 @@ export const CitationTabHeader: React.FC<CitationTabHeaderProps> = ({
           citationHistory={citationHistory}
           onViewHistoricalRun={onViewHistoricalRun}
         />
-      </Flex>
+      </div>
 
       {/* Version Selector */}
       <VersionSelector
@@ -284,20 +282,25 @@ export const CitationTabHeader: React.FC<CitationTabHeaderProps> = ({
         latestVersionId={latestClaimSetVersionId}
         onChange={onClaimSetVersionChange}
         selectedReference={selectedReference}
-        referenceMetadata={referenceMetadata}
+        referenceMetadata={referenceMetadata ? { isMetadataOnly: false } : null}
         onRerunExtraction={onRerunExtraction}
       />
 
       {/* If no job statuses at all */}
       {referenceJobStatuses.length === 0 && (
-        <Box textAlign="center" py={10}>
-          <Text fontSize="sm" color="text.secondary">
+        <div className="text-center py-10">
+          <p
+            className={cn(
+              'text-sm',
+              isDarkMode ? 'text-gray-400' : 'text-gray-500'
+            )}
+          >
             No reference selected. Select a search from the dropdown to see
             citations.
-          </Text>
-        </Box>
+          </p>
+        </div>
       )}
-    </Box>
+    </div>
   );
 };
 

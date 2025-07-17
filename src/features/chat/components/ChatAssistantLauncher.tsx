@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
-import {
-  IconButton,
-  Drawer,
-  DrawerOverlay,
-  DrawerContent,
-  DrawerHeader,
-  DrawerBody,
-  Tooltip,
-  useDisclosure,
-  Flex,
-  Text,
-} from '@chakra-ui/react';
 import { FiMessageCircle, FiX } from 'react-icons/fi';
+import { Button } from '@/components/ui/button';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import ChatInterface from './ChatInterface';
 import { useProjectData } from '@/contexts/ProjectDataContext';
 import { useRouter } from 'next/router';
@@ -42,11 +45,7 @@ interface ChatAssistantLauncherProps {
 const ChatAssistantLauncher: React.FC<ChatAssistantLauncherProps> = ({
   pageContext: _pageContext,
 }) => {
-  const {
-    isOpen: drawerOpen,
-    onOpen: openDrawer,
-    onClose: closeDrawer,
-  } = useDisclosure();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const router = useRouter();
   const { activeProjectId } = useProjectData();
   const { data: activeProjectData } = useProject(activeProjectId);
@@ -65,64 +64,53 @@ const ChatAssistantLauncher: React.FC<ChatAssistantLauncherProps> = ({
   return (
     <>
       {/* Floating launcher button */}
-      <Tooltip label="Open project assistant" placement="top">
-        <IconButton
-          icon={<FiMessageCircle />}
-          aria-label="Open project assistant"
-          position="fixed"
-          bottom="24px"
-          right="24px"
-          zIndex={1500}
-          borderRadius="full"
-          colorScheme="blue"
-          size="lg"
-          onClick={openDrawer}
-          boxShadow="lg"
-        />
-      </Tooltip>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={() => setDrawerOpen(true)}
+              className={cn(
+                'fixed bottom-6 right-6 z-[1500] rounded-full w-12 h-12 p-0',
+                'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl',
+                'transition-all duration-200 hover:scale-105'
+              )}
+              aria-label="Open project assistant"
+            >
+              <FiMessageCircle className="w-6 h-6" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Open project assistant</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
       {/* Side drawer with chat */}
-      <Drawer
-        placement="right"
-        size="md"
-        isOpen={drawerOpen}
-        onClose={closeDrawer}
-      >
-        <DrawerOverlay />
-        <DrawerContent
-          display="flex"
-          flexDirection="column"
-          maxWidth={{ base: '100%', md: '420px' }}
-          h="100vh"
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent
+          side="right"
+          className={cn(
+            'flex flex-col h-full max-w-full md:max-w-[420px] p-0',
+            'border-l border-border bg-background'
+          )}
         >
-          <DrawerHeader
-            borderBottomWidth="1px"
-            display="flex"
-            alignItems="center"
-            justifyContent="space-between"
-            p={0}
-          >
-            <Flex align="center" justify="space-between" w="100%" p={4}>
-              <Text fontSize="lg" fontWeight="semibold" color="gray.800">
+          <SheetHeader className="border-b border-border p-0">
+            <div className="flex items-center justify-between w-full p-4">
+              <SheetTitle className="text-lg font-semibold text-foreground">
                 {activeProjectData?.name || 'Project Assistant'}
-              </Text>
-              <IconButton
-                icon={<FiX />}
-                aria-label="Close assistant"
+              </SheetTitle>
+              <Button
                 variant="ghost"
-                onClick={closeDrawer}
                 size="sm"
-                _hover={{ bg: 'gray.100' }}
-              />
-            </Flex>
-          </DrawerHeader>
-          <DrawerBody
-            p={0}
-            overflow="hidden"
-            flex="1"
-            display="flex"
-            flexDirection="column"
-          >
+                onClick={() => setDrawerOpen(false)}
+                className="h-8 w-8 p-0 hover:bg-accent"
+                aria-label="Close assistant"
+              >
+                <FiX className="w-4 h-4" />
+              </Button>
+            </div>
+          </SheetHeader>
+          <div className="flex-1 flex flex-col overflow-hidden">
             <ChatInterface
               projectData={activeProjectData || null}
               onContentUpdate={() => {
@@ -138,9 +126,9 @@ const ChatAssistantLauncher: React.FC<ChatAssistantLauncherProps> = ({
                 ''
               }
             />
-          </DrawerBody>
-        </DrawerContent>
-      </Drawer>
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 };

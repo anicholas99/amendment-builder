@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { basicProjectSelect, ProjectBasicInfo } from './types';
 
@@ -178,6 +178,59 @@ export async function findProjectForAccess(projectId: string): Promise<{
     throw new ApplicationError(
       ErrorCode.DB_QUERY_ERROR,
       `Failed to find project for access check: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+/**
+ * Check if a user has access to a project (owner or collaborator)
+ * This function supports both owned projects and shared projects
+ * @param projectId The ID of the project
+ * @param userId The ID of the user
+ * @param tenantId The ID of the tenant (for additional security)
+ * @returns True if user has access to the project
+ */
+export async function checkUserProjectAccess(
+  projectId: string,
+  userId: string,
+  tenantId: string
+): Promise<boolean> {
+  try {
+    logger.debug(
+      `Repository: Checking project access for user: ${userId} on project: ${projectId}`
+    );
+
+    const project = await prisma!.project.findFirst({
+      where: {
+        id: projectId,
+        tenantId: tenantId,
+        deletedAt: null,
+        OR: [
+          { userId: userId }, // User owns the project
+          {
+            collaborators: {
+              some: { userId: userId }, // User is a collaborator
+            },
+          },
+        ],
+      },
+    });
+
+    const hasAccess = !!project;
+    logger.debug(
+      `Repository: User ${userId} ${hasAccess ? 'has' : 'does not have'} access to project ${projectId}`
+    );
+    return hasAccess;
+  } catch (error) {
+    logger.error('Failed to check user project access', {
+      error,
+      projectId,
+      userId,
+      tenantId,
+    });
+    throw new ApplicationError(
+      ErrorCode.DB_QUERY_ERROR,
+      `Failed to check project access: ${error instanceof Error ? error.message : String(error)}`
     );
   }
 }

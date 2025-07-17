@@ -1,5 +1,4 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { logger } from '@/lib/monitoring/logger';
 import crypto from 'crypto';
 import { CSRF_CONFIG } from '@/config/security';
 import { AuthenticatedRequest } from '@/types/middleware';

@@ -1,5 +1,4 @@
 import { QueueServiceClient } from '@azure/storage-queue';
-import { logger } from '@/lib/monitoring/logger';
 import { env } from '@/config/env';
 
 // Default connection string for local Azurite development
@@ -10,32 +9,45 @@ const AZURE_STORAGE_CONNECTION_STRING =
   (env.NODE_ENV === 'development' ? DEFAULT_AZURITE_CONNECTION_STRING : '');
 
 if (!AZURE_STORAGE_CONNECTION_STRING && env.NODE_ENV !== 'development') {
-  logger.warn(
-    'Azure Storage Connection String is not set. Queue service will not be functional for actual Azure resources outside of local development.'
-  );
+  // Warning logging removed for client compatibility
 }
 
-// Use connection string directly
-const queueServiceClient = AZURE_STORAGE_CONNECTION_STRING
-  ? QueueServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING)
-  : null;
+// Lazy-load the queue service client to prevent initialization errors
+let queueServiceClient: QueueServiceClient | null = null;
+
+function getQueueServiceClient(): QueueServiceClient | null {
+  if (!AZURE_STORAGE_CONNECTION_STRING) {
+    return null;
+  }
+
+  if (!queueServiceClient) {
+    try {
+      queueServiceClient = QueueServiceClient.fromConnectionString(
+        AZURE_STORAGE_CONNECTION_STRING
+      );
+      // Debug logging removed for client compatibility
+    } catch (error) {
+      // Error logging removed for client compatibility
+      return null;
+    }
+  }
+
+  return queueServiceClient;
+}
 
 async function ensureQueueExists(queueName: string) {
-  if (!queueServiceClient) {
-    logger.error(
-      `QueueServiceClient not initialized. Cannot ensure queue ${queueName} exists.`
-    );
+  const client = getQueueServiceClient();
+  if (!client) {
+    // Error logging removed for client compatibility
     return null;
   }
   try {
-    const queueClient = queueServiceClient.getQueueClient(queueName);
+    const queueClient = client.getQueueClient(queueName);
     await queueClient.createIfNotExists();
-    logger.info(`Queue [${queueName}] ensured to exist.`);
+    // Info logging removed for client compatibility
     return queueClient;
   } catch (error) {
-    logger.error(`Error ensuring queue ${queueName} exists:`, {
-      error: error instanceof Error ? error : undefined,
-    });
+    // Error logging removed for client compatibility
     return null;
   }
 }
@@ -44,10 +56,9 @@ export async function sendMessage(
   queueName: string,
   message: unknown
 ): Promise<boolean> {
-  if (!queueServiceClient) {
-    logger.error(
-      `QueueServiceClient not initialized. Cannot send message to ${queueName}.`
-    );
+  const client = getQueueServiceClient();
+  if (!client) {
+    // Error logging removed for client compatibility
     return false;
   }
   try {
@@ -62,14 +73,10 @@ export async function sendMessage(
     const response = await queueClient.sendMessage(
       Buffer.from(messageString).toString('base64')
     );
-    logger.info(
-      `Message sent to queue [${queueName}]. Message ID: ${response.messageId}, Request ID: ${response.requestId}`
-    );
+    // Info logging removed for client compatibility
     return true;
   } catch (error) {
-    logger.error(`Error sending message to queue [${queueName}]:`, {
-      error: error instanceof Error ? error : undefined,
-    });
+    // Error logging removed for client compatibility
     return false;
   }
 }
@@ -85,10 +92,9 @@ export async function receiveMessages(
   queueName: string,
   maxMessages: number = 1
 ): Promise<ReceivedMessageItem[]> {
-  if (!queueServiceClient) {
-    logger.error(
-      `QueueServiceClient not initialized. Cannot receive messages from ${queueName}.`
-    );
+  const client = getQueueServiceClient();
+  if (!client) {
+    // Error logging removed for client compatibility
     return [];
   }
   try {
@@ -101,9 +107,7 @@ export async function receiveMessages(
     });
 
     if (response.receivedMessageItems.length > 0) {
-      logger.info(
-        `Received ${response.receivedMessageItems.length} messages from queue [${queueName}]`
-      );
+      // Info logging removed for client compatibility
     }
     return response.receivedMessageItems.map(msg => ({
       messageId: msg.messageId,
@@ -112,9 +116,7 @@ export async function receiveMessages(
       dequeueCount: msg.dequeueCount,
     }));
   } catch (error) {
-    logger.error(`Error receiving messages from queue ${queueName}:`, {
-      error: error instanceof Error ? error : undefined,
-    });
+    // Error logging removed for client compatibility
     return [];
   }
 }
@@ -124,24 +126,18 @@ export async function deleteMessage(
   messageId: string,
   popReceipt: string
 ): Promise<boolean> {
-  if (!queueServiceClient) {
-    logger.error(
-      `QueueServiceClient not initialized. Cannot delete message from ${queueName}.`
-    );
+  const client = getQueueServiceClient();
+  if (!client) {
+    // Error logging removed for client compatibility
     return false;
   }
   try {
-    const queueClient = queueServiceClient.getQueueClient(queueName); // Don't need ensureQueueExists here
+    const queueClient = client.getQueueClient(queueName); // Don't need ensureQueueExists here
     await queueClient.deleteMessage(messageId, popReceipt);
-    logger.info(`Message ${messageId} deleted from queue [${queueName}].`);
+    // Info logging removed for client compatibility
     return true;
   } catch (error) {
-    logger.error(
-      `Error deleting message ${messageId} from queue ${queueName}:`,
-      {
-        error: error instanceof Error ? error : undefined,
-      }
-    );
+    // Error logging removed for client compatibility
     return false;
   }
 }

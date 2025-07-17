@@ -1,6 +1,6 @@
 import React, { useCallback, useRef } from 'react';
 import { InventionData } from '@/types';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { isRecord } from '@/types/safe-type-helpers';
 import { useDebouncedCallback } from '@/hooks/useDebounce';
 

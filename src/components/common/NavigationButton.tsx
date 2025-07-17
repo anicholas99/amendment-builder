@@ -3,16 +3,18 @@
  * Ensures data is loaded before user clicks
  */
 import React, { useCallback, useRef } from 'react';
-import { Button, ButtonProps } from '@chakra-ui/react';
 import { useRouter } from 'next/router';
 import { usePrefetchViewData } from '@/hooks/navigation/usePrefetchViewData';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
+import { Button, ButtonProps } from '@/components/ui/button';
 
-interface NavigationButtonProps extends ButtonProps {
+interface NavigationButtonProps extends Omit<ButtonProps, 'size'> {
   href: string;
   viewType?: 'technology' | 'claims' | 'patent' | 'all';
   projectId?: string;
   children: React.ReactNode;
+  size?: 'xs' | 'sm' | 'md' | 'lg';
+  colorScheme?: string;
 }
 
 export const NavigationButton: React.FC<NavigationButtonProps> = ({
@@ -21,6 +23,9 @@ export const NavigationButton: React.FC<NavigationButtonProps> = ({
   projectId,
   children,
   onClick,
+  size = 'md',
+  colorScheme,
+  variant,
   ...buttonProps
 }) => {
   const router = useRouter();
@@ -104,12 +109,44 @@ export const NavigationButton: React.FC<NavigationButtonProps> = ({
     hasPrefetched.current = false;
   }, [projectId]);
 
+  // Map props to shadcn/tailwind classes
+  const getVariantClass = () => {
+    if (variant === 'ghost') return 'ghost';
+    if (variant === 'outline') return 'outline';
+    if (variant === 'link') return 'link';
+    if (colorScheme === 'red') return 'destructive';
+    return 'default';
+  };
+
+  const getSizeClass = () => {
+    switch (size) {
+      case 'xs':
+        return 'sm';
+      case 'sm':
+        return 'sm';
+      case 'md':
+        return 'default';
+      case 'lg':
+        return 'lg';
+      default:
+        return 'default';
+    }
+  };
+
   return (
     <Button
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}
-      {...buttonProps}
+      variant={getVariantClass()}
+      size={getSizeClass()}
+      style={{
+        position: 'relative',
+        zIndex: 1,
+        pointerEvents: 'auto',
+        ...buttonProps.style,
+      }}
+      className={buttonProps.className}
     >
       {children}
     </Button>

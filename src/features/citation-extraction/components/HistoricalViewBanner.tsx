@@ -1,6 +1,6 @@
 import React from 'react';
-import { Box, Flex, HStack, Icon, Text, Button } from '@chakra-ui/react';
-import { FiClock } from 'react-icons/fi';
+import { Clock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { CitationJob } from '@/features/search/hooks/useCitationJobs';
 
 interface HistoricalViewBannerProps {
@@ -19,29 +19,24 @@ export const HistoricalViewBanner: React.FC<HistoricalViewBannerProps> = ({
   if (!job) return null;
 
   return (
-    <Box
-      bg="blue.50"
-      p={2}
-      borderBottomWidth="1px"
-      borderBottomColor="blue.200"
-    >
-      <Flex justify="space-between" align="center">
-        <HStack>
-          <Icon as={FiClock} color="blue.600" />
-          <Text fontSize="sm" color="blue.800">
+    <div className="bg-blue-50 dark:bg-blue-950/20 p-2 border-b border-blue-200 dark:border-blue-800">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <p className="text-sm text-blue-800 dark:text-blue-200">
             Viewing historical extraction from{' '}
             {new Date(job.createdAt).toLocaleString()}
-          </Text>
-        </HStack>
+          </p>
+        </div>
         <Button
-          size="xs"
+          size="sm"
           variant="outline"
-          colorScheme="blue"
           onClick={onReturnToLatest}
+          className="h-6 px-3 text-xs border-blue-300 text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900/20"
         >
           Return to Latest
         </Button>
-      </Flex>
-    </Box>
+      </div>
+    </div>
   );
 };

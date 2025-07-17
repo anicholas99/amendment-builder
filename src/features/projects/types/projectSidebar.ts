@@ -9,20 +9,25 @@ export interface ProjectSidebarProject {
   id: string;
   name: string;
   status?: string;
+  hasProcessedInvention?: boolean;
   createdAt?: string;
   updatedAt?: string;
-  documents?: any[];
+  documents?: Array<{
+    id: string;
+    name: string;
+    type: string;
+  }>;
   invention?: {
     id?: string;
     title?: string;
     summary?: string;
     abstract?: string;
     description?: string;
-    components?: any[];
-    features?: any[];
-    advantages?: any[];
-    use_cases?: any[];
-    background?: any;
+    components?: string[];
+    features?: string[];
+    advantages?: string[];
+    use_cases?: string[];
+    background?: Record<string, unknown> | null;
   } | null;
 }
 
@@ -40,7 +45,6 @@ export interface LoadingState {
 
 export interface ModalStates {
   isNewProjectOpen: boolean;
-  isManageProjectsOpen: boolean;
   isSwitchModalOpen: boolean;
 }
 
@@ -94,7 +98,6 @@ export interface ModalManagerProps {
   onConfirmSwitch: () => Promise<void>;
   onCancelSwitch: () => void;
   onCloseNewProject: () => void;
-  onCloseManageProjects: () => void;
   children?: ReactNode;
 }
 

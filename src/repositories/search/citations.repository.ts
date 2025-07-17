@@ -5,13 +5,13 @@
  */
 
 import { prisma } from '../../lib/prisma';
-import { logger } from '../../lib/monitoring/logger';
+import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import {
   CitationResults,
   SearchHistoryResponse,
 } from '../../types/searchTypes';
-import { safeJsonParse } from '@/utils/json-utils';
+import { safeJsonParse } from '@/utils/jsonUtils';
 import { ProcessedCitationMatch } from '@/types/domain/citation';
 import { processCitationMatchArray } from '@/features/citation-extraction/utils/citation';
 import { Prisma } from '@prisma/client';

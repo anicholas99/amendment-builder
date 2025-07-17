@@ -1,21 +1,14 @@
 import React from 'react';
+import { cn } from '@/lib/utils';
 import {
-  IconButton,
   Popover,
-  PopoverTrigger,
   PopoverContent,
-  PopoverArrow,
-  PopoverCloseButton,
-  PopoverHeader,
-  PopoverBody,
-  VStack,
-  Box,
-  Text,
-  Button,
-  Divider,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import { FiAlertCircle } from 'react-icons/fi';
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { FiAlertCircle, FiX } from 'react-icons/fi';
+import { useThemeContext } from '@/contexts/ThemeContext';
 
 /**
  * Represents an issue found in the document
@@ -45,109 +38,115 @@ const IssueIndicator: React.FC<IssueIndicatorProps> = ({
   // Don't render anything if there are no issues
   if (issues.length === 0) return null;
 
+  const { isDarkMode } = useThemeContext();
   const hasErrors = issues.some(issue => issue.type === 'error');
   const issueCount = issues.length;
   const issueType = hasErrors ? 'error' : 'warning';
 
-  // Dynamic colors for better contrast in dark/light mode
-  const errorBg = useColorModeValue('red.50', 'red.900');
-  const warningBg = useColorModeValue('yellow.50', 'yellow.900');
-  const errorIconColor = useColorModeValue('red.500', 'red.300');
-  const warningIconColor = useColorModeValue('yellow.500', 'yellow.300');
-
   return (
-    <Popover placement="right" closeOnBlur={true} gutter={8}>
-      <PopoverTrigger>
-        <IconButton
-          aria-label={`${issueCount} ${issueType} ${issueCount === 1 ? 'issue' : 'issues'} at ${location}`}
-          aria-haspopup="dialog"
-          icon={<FiAlertCircle />}
-          size="sm"
-          colorScheme={hasErrors ? 'red' : 'yellow'}
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
           variant="ghost"
-          ml={2}
-          _hover={{
-            bg: hasErrors ? 'red.100' : 'yellow.100',
-            transform: 'scale(1.05)',
-          }}
-          _focus={{
-            boxShadow: hasErrors
-              ? `0 0 0 3px ${useColorModeValue('red.100', 'red.700')}`
-              : `0 0 0 3px ${useColorModeValue('yellow.100', 'yellow.700')}`,
-            outline: 'none',
-          }}
+          size="sm"
+          className={cn(
+            'ml-2 h-8 w-8 p-0 hover:scale-105 transition-transform',
+            hasErrors
+              ? 'text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50'
+              : 'text-yellow-500 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-900/50',
+            'focus:ring-2 focus:ring-offset-2',
+            hasErrors
+              ? 'focus:ring-red-200 dark:focus:ring-red-700'
+              : 'focus:ring-yellow-200 dark:focus:ring-yellow-700'
+          )}
+          aria-label={`${issueCount} ${issueType} ${issueCount === 1 ? 'issue' : 'issues'} at ${location}`}
           data-testid={`issue-indicator-${location}`}
-        />
+        >
+          <FiAlertCircle className="h-4 w-4" />
+        </Button>
       </PopoverTrigger>
       <PopoverContent
-        width="320px"
-        shadow="lg"
-        borderColor={hasErrors ? 'red.200' : 'yellow.200'}
-        _focus={{ outline: 'none' }}
+        className={cn(
+          'w-80 shadow-lg focus:outline-none',
+          hasErrors
+            ? 'border-red-200 dark:border-red-800'
+            : 'border-yellow-200 dark:border-yellow-800'
+        )}
+        side="right"
+        sideOffset={8}
       >
-        <PopoverArrow bg={hasErrors ? errorBg : warningBg} />
-        <PopoverCloseButton aria-label="Close issues panel" />
-        <PopoverHeader
-          fontWeight="bold"
-          bg={hasErrors ? errorBg : warningBg}
-          color={hasErrors ? 'red.700' : 'yellow.700'}
-          borderTopRadius="md"
-          display="flex"
-          alignItems="center"
+        <div
+          className={cn(
+            'rounded-t-md px-4 py-3 flex items-center font-bold',
+            hasErrors
+              ? 'bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-300'
+              : 'bg-yellow-50 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
+          )}
         >
           <FiAlertCircle
-            className="mr-2"
-            color={hasErrors ? errorIconColor : warningIconColor}
+            className={cn(
+              'mr-2 h-4 w-4',
+              hasErrors
+                ? 'text-red-500 dark:text-red-400'
+                : 'text-yellow-500 dark:text-yellow-400'
+            )}
           />
           {issueCount} {issueCount === 1 ? 'Issue' : 'Issues'} Found at{' '}
           {location}
-        </PopoverHeader>
-        <PopoverBody p={0}>
-          <VStack spacing={0} align="stretch" divider={<Divider />}>
+        </div>
+        <div className="p-0">
+          <div className="divide-y">
             {issues.map((issue, index) => (
-              <Box
+              <div
                 key={index}
-                p={3}
-                bg={issue.type === 'error' ? errorBg : warningBg}
+                className={cn(
+                  'p-4',
+                  issue.type === 'error'
+                    ? 'bg-red-50 dark:bg-red-900'
+                    : 'bg-yellow-50 dark:bg-yellow-900'
+                )}
                 role="alertdialog"
                 aria-labelledby={`issue-title-${index}`}
                 aria-describedby={`issue-description-${index}`}
               >
-                <Text
-                  fontWeight="medium"
+                <p
+                  className={cn(
+                    'font-medium',
+                    issue.type === 'error'
+                      ? 'text-red-700 dark:text-red-300'
+                      : 'text-yellow-700 dark:text-yellow-300'
+                  )}
                   id={`issue-title-${index}`}
-                  color={issue.type === 'error' ? 'red.700' : 'yellow.700'}
                 >
                   {issue.message}
-                </Text>
+                </p>
                 {issue.suggestion && (
-                  <Text
-                    fontSize="sm"
-                    mt={1}
+                  <p
+                    className={cn(
+                      'text-sm mt-1',
+                      issue.type === 'error'
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-yellow-600 dark:text-yellow-400'
+                    )}
                     id={`issue-description-${index}`}
-                    color={issue.type === 'error' ? 'red.600' : 'yellow.600'}
                   >
                     Suggestion: {issue.suggestion}
-                  </Text>
+                  </p>
                 )}
                 {issue.type === 'warning' && (
                   <Button
-                    size="xs"
-                    colorScheme="blue"
-                    mt={2}
+                    size="sm"
+                    className="mt-2 bg-blue-600 hover:bg-blue-700 text-white text-xs"
                     onClick={() => onApplyFix(issue)}
                     aria-label={`Apply fix for issue: ${issue.message}`}
-                    _focus={{
-                      boxShadow: 'outline',
-                    }}
                   >
                     Apply Fix
                   </Button>
                 )}
-              </Box>
+              </div>
             ))}
-          </VStack>
-        </PopoverBody>
+          </div>
+        </div>
       </PopoverContent>
     </Popover>
   );

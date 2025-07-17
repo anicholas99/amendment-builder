@@ -1,12 +1,12 @@
 import type { NextApiResponse } from 'next';
-import { AuthenticatedRequest } from '@/types/middleware';
+import { AuthenticatedRequest, RequestWithServices } from '@/types/middleware';
 import { z } from 'zod';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { CustomApiRequest } from '@/types/api';
 import { updateProjectFieldSchema } from '@/lib/validation/schemas/project.schemas';
 import { projectIdQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
-import { projectService } from '@/server/services/project.server-service';
-import { SecurePresets } from '@/lib/api/securePresets';
+import { SecurePresets } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 const apiLogger = createApiLogger('update-field');
 
@@ -20,6 +20,7 @@ async function handler(
   req: CustomApiRequest<UpdateFieldBody>,
   res: NextApiResponse
 ): Promise<void> {
+  const { projectService } = (req as RequestWithServices).services;
   apiLogger.logRequest(req);
 
   const { projectId } = req.query as z.infer<typeof projectIdQuerySchema>;
@@ -36,11 +37,11 @@ async function handler(
       operation,
       field,
     });
-    return res.status(501).json({ error: 'Operation not implemented' });
+    return res.status(501).json({ error: 'Operation not implemented' }); // Keep 501 - no helper exists
   }
 
   if (!req.user || !req.user.id || !req.user.tenantId) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return apiResponse.unauthorized(res, 'Unauthorized');
   }
 
   const result = await projectService.updateProject(
@@ -50,13 +51,14 @@ async function handler(
     req.user.tenantId
   );
 
-  res.status(200).json(result);
+  return apiResponse.ok(res, result);
 }
 
 // Custom tenant resolver for project field updates
 const projectFieldTenantResolver = async (
   req: AuthenticatedRequest
 ): Promise<string | null> => {
+  const { projectService } = (req as RequestWithServices).services;
   const { projectId } = (req as any).validatedQuery as z.infer<
     typeof projectIdQuerySchema
   >;

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { ChatMessage, PageContext, ProjectData } from '../types';
-import { useToast } from '@/ui/hooks/useToast';
+import { useToast } from '@/hooks/useToastWrapper';
 
 interface UseChatStreamOptions {
   projectId: string;
@@ -10,6 +10,7 @@ interface UseChatStreamOptions {
   onContentUpdate: (content: string) => void;
   sendMessage: any; // The mutation from useChatHistory
   messages: ChatMessage[];
+  sessionId?: string;
 }
 
 export const useChatStream = ({
@@ -19,6 +20,7 @@ export const useChatStream = ({
   onContentUpdate,
   sendMessage,
   messages,
+  sessionId,
 }: UseChatStreamOptions) => {
   const toast = useToast();
   const [inputMessage, setInputMessage] = useState('');
@@ -35,6 +37,7 @@ export const useChatStream = ({
         // Use the mutation to send the message
         await sendMessage.mutateAsync({
           content,
+          sessionId,
         });
       } catch (error: unknown) {
         logger.error('Error in chat assistant:', error);
@@ -54,7 +57,7 @@ export const useChatStream = ({
         });
       }
     },
-    [messages, sendMessage, toast]
+    [messages, sendMessage, toast, sessionId]
   );
 
   // Cleanup function (no longer needed but kept for compatibility)

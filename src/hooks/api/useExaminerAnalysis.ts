@@ -7,10 +7,10 @@ import {
   UseQueryOptions,
   UseMutationOptions,
 } from '@tanstack/react-query';
-import { useToast } from '@chakra-ui/react';
+import { useToast } from '@/utils/toast';
 import { CitationJobApiService } from '@/client/services/citation-job.client-service';
 import { ApplicationError } from '@/lib/error';
-import { showSuccessToast, showErrorToast } from '@/utils/toast';
+
 import { ExaminerAnalysisResult } from '@/types/domain/citation';
 import { STALE_TIME } from '@/constants/time';
 import { API_ROUTES } from '@/constants/apiRoutes';
@@ -61,20 +61,19 @@ export function useRunExaminerAnalysis(
       CitationJobApiService.runExaminerAnalysis(jobId),
     onSuccess: (data, jobId) => {
       if (data.success) {
-        showSuccessToast(toast, 'Examiner analysis started.');
+        toast.success('Examiner analysis started.');
         // Invalidate queries that depend on this
         queryClient.invalidateQueries({
           queryKey: examinerAnalysisQueryKeys.byJob(jobId),
         });
         queryClient.invalidateQueries({ queryKey: ['citationJob', jobId] });
       } else {
-        showErrorToast(toast, 'Failed to start examiner analysis.');
+        toast.error('Failed to start examiner analysis.');
       }
     },
     onError: error => {
-      showErrorToast(
-        toast,
-        error.message || 'An error occurred while starting examiner analysis.'
+      toast.error(
+        error.message || 'Failed to start examiner analysis. Please try again.'
       );
     },
     ...options,

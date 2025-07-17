@@ -1,22 +1,21 @@
 import React from 'react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import {
-  Box,
-  IconButton,
-  HStack,
-  Text,
   Tooltip,
-  Icon,
-  Spinner,
-  VStack,
-  useColorModeValue,
-} from '@chakra-ui/react';
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   FiCheck,
   FiAlertCircle,
   FiRefreshCw,
   FiEye,
   FiPlus,
+  FiLoader,
 } from 'react-icons/fi';
+import { LoadingMinimal } from '@/components/common/LoadingState';
 import { SyncStatus } from '../hooks/useClaimSyncState';
 
 interface ClaimSyncIndicatorProps {
@@ -34,19 +33,17 @@ export const ClaimSyncIndicator: React.FC<ClaimSyncIndicatorProps> = ({
   onResync,
   onOpenModal,
 }) => {
-  const iconColor = useColorModeValue('gray.600', 'blue.300');
-  const iconHoverColor = useColorModeValue('gray.800', 'blue.100');
   const getStatusIcon = () => {
     switch (syncStatus) {
       case 'synced':
-        return <Icon as={FiCheck} color="green.500" />;
+        return <FiCheck className="w-4 h-4 text-green-500" />;
       case 'parsing':
       case 'generating':
-        return <Spinner size="sm" color="blue.500" />;
+        return <LoadingMinimal size="sm" />;
       case 'error':
-        return <Icon as={FiAlertCircle} color="red.500" />;
+        return <FiAlertCircle className="w-4 h-4 text-red-500" />;
       case 'out-of-sync':
-        return <Icon as={FiRefreshCw} color="orange.500" />;
+        return <FiRefreshCw className="w-4 h-4 text-orange-500" />;
       default:
         return null;
     }
@@ -71,136 +68,149 @@ export const ClaimSyncIndicator: React.FC<ClaimSyncIndicatorProps> = ({
     }
   };
 
-  // Dynamic colors for dot indicator
-  const colorDot = useColorModeValue('gray.400', 'gray.500');
-
-  const statusColorMap: Record<SyncStatus, string> = {
-    synced: 'green.400',
-    parsing: 'blue.400',
-    generating: 'blue.400',
-    error: 'red.400',
-    'out-of-sync': 'orange.400',
-    idle: colorDot,
+  const getStatusDotColor = () => {
+    switch (syncStatus) {
+      case 'synced':
+        return 'bg-green-500/70 dark:bg-green-400/70';
+      case 'parsing':
+      case 'generating':
+        return 'bg-blue-500/70 dark:bg-blue-400/70';
+      case 'error':
+        return 'bg-red-500/70 dark:bg-red-400/70';
+      case 'out-of-sync':
+        return 'bg-amber-500/70 dark:bg-amber-400/70';
+      case 'idle':
+        return 'bg-muted-foreground/50 dark:bg-muted-foreground/60';
+      default:
+        return 'bg-muted-foreground/50';
+    }
   };
 
   return (
-    <HStack spacing={1} align="center">
-      <Tooltip
-        label={
-          error ? (
-            <VStack align="start" spacing={1} maxW="250px">
-              <Text fontWeight="bold">Error:</Text>
-              <Text>{error}</Text>
-            </VStack>
-          ) : lastSyncTime ? (
-            `Last synced: ${lastSyncTime.toLocaleTimeString()}`
-          ) : (
-            getStatusText()
-          )
-        }
-        hasArrow
-        placement="bottom-start"
-      >
-        <HStack spacing={1} cursor="default">
-          {/* Colored status dot or spinner */}
-          {syncStatus === 'parsing' || syncStatus === 'generating' ? (
-            <Spinner size="xs" color={statusColorMap[syncStatus]} />
-          ) : (
-            <Box
-              boxSize="8px"
-              borderRadius="full"
-              bg={statusColorMap[syncStatus]}
-            />
-          )}
+    <TooltipProvider>
+      <div className="flex items-center space-x-1">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center space-x-1 cursor-default">
+              {/* Colored status dot or spinner */}
+              {syncStatus === 'parsing' || syncStatus === 'generating' ? (
+                <LoadingMinimal size="sm" />
+              ) : (
+                <div
+                  className={cn('w-2 h-2 rounded-full', getStatusDotColor())}
+                />
+              )}
 
-          <Text fontSize="xs" color="text.secondary">
-            {getStatusText()}
-          </Text>
-        </HStack>
-      </Tooltip>
-
-      {/* Action buttons as subtle IconButtons */}
-      {syncStatus === 'idle' && onResync && (
-        <Tooltip label="Sync claim 1" hasArrow>
-          <IconButton
-            aria-label="sync claim 1"
-            size="sm"
-            icon={<Icon as={FiRefreshCw} color={iconColor} />}
-            variant="ghost"
-            onClick={onResync}
-            _hover={{
-              color: iconHoverColor,
-              bg: 'bg.hover',
-            }}
-          />
+              <span className="text-xs text-muted-foreground">
+                {getStatusText()}
+              </span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            {error ? (
+              <div className="space-y-1 max-w-[250px]">
+                <p className="font-bold">Error:</p>
+                <p>{error}</p>
+              </div>
+            ) : lastSyncTime ? (
+              `Last synced: ${lastSyncTime.toLocaleTimeString()}`
+            ) : (
+              getStatusText()
+            )}
+          </TooltipContent>
         </Tooltip>
-      )}
 
-      {(syncStatus === 'synced' || syncStatus === 'out-of-sync') && (
-        <Tooltip label="View or Edit parsed data" hasArrow>
-          <IconButton
-            aria-label="view parsed data"
-            size="sm"
-            icon={<Icon as={FiEye} color={iconColor} />}
-            variant="ghost"
-            onClick={onOpenModal}
-            _hover={{
-              color: iconHoverColor,
-              bg: 'bg.hover',
-            }}
-          />
-        </Tooltip>
-      )}
+        {/* Action buttons as subtle IconButtons */}
+        {syncStatus === 'idle' && onResync && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onResync}
+                className="w-8 h-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              >
+                <FiRefreshCw className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Sync claim 1</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
 
-      {syncStatus === 'out-of-sync' && onResync && (
-        <Tooltip label="Re-sync" hasArrow>
-          <IconButton
-            aria-label="re-sync"
-            size="sm"
-            icon={<Icon as={FiRefreshCw} color="orange.500" />}
-            variant="ghost"
-            onClick={onResync}
-            colorScheme="orange"
-            _hover={{
-              color: 'orange.600',
-              bg: 'orange.50',
-            }}
-          />
-        </Tooltip>
-      )}
+        {(syncStatus === 'synced' || syncStatus === 'out-of-sync') && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onOpenModal}
+                className="w-8 h-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              >
+                <FiEye className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>View elements</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
 
-      {syncStatus === 'error' && onResync && (
-        <Tooltip label="Retry sync" hasArrow>
-          <IconButton
-            aria-label="retry sync"
-            size="sm"
-            icon={<Icon as={FiRefreshCw} color="red.500" />}
-            variant="ghost"
-            onClick={onResync}
-            colorScheme="red"
-            _hover={{
-              color: 'red.600',
-              bg: 'red.50',
-            }}
-          />
-        </Tooltip>
-      )}
+        {syncStatus === 'out-of-sync' && onResync && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onResync}
+                className="w-8 h-8 p-0 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50/50 dark:hover:bg-amber-950/30 transition-colors"
+              >
+                <FiRefreshCw className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Re-sync</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
 
-      {syncStatus === 'error' && error?.includes('limit reached') && (
-        <Tooltip label="Add parsed data manually" hasArrow>
-          <IconButton
-            aria-label="add manually"
-            size="sm"
-            icon={<Icon as={FiPlus} color={iconColor} />}
-            variant="ghost"
-            onClick={onOpenModal}
-            _hover={{
-              color: iconHoverColor,
-              bg: 'bg.hover',
-            }}
-          />
-        </Tooltip>
-      )}
-    </HStack>
+        {syncStatus === 'error' && onResync && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onResync}
+                className="w-8 h-8 p-0 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50/50 dark:hover:bg-red-950/30 transition-colors"
+              >
+                <FiRefreshCw className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Retry sync</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        {syncStatus === 'error' && error?.includes('limit reached') && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onOpenModal}
+                className="w-8 h-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              >
+                <FiPlus className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Add parsed data manually</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+    </TooltipProvider>
   );
 };

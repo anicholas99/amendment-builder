@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 import { useQueryInvalidationDelay } from './useQueryInvalidationDelay';
 
 interface InvalidateOptions {

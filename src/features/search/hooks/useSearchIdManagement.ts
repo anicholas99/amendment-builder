@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 interface UseSearchIdManagementProps {
   initialSelectedSearchId?: string;
@@ -51,7 +51,10 @@ export function useSearchIdManagement({
         return;
       }
 
-      logger.debug(`[useSearchIdManagement] Setting search ID to: ${newId}`);
+      logger.info('[useSearchIdManagement] Setting search ID', {
+        newId,
+        previousId: selectedSearchId,
+      });
       setSelectedSearchId(newId);
 
       // Start stabilization period
@@ -84,9 +87,9 @@ export function useSearchIdManagement({
         null;
 
       if (initialId) {
-        logger.debug(
-          `[useSearchIdManagement] Setting initial search ID: ${initialId}`
-        );
+        logger.info('[useSearchIdManagement] Initial search ID', {
+          initialId,
+        });
         setSelectedSearchIdSafe(initialId);
         // If we have an onChange handler, call it to persist the selection
         if (onSearchIdChange) {
@@ -100,8 +103,12 @@ export function useSearchIdManagement({
       initialSelectedSearchId &&
       initialSelectedSearchId !== previousInitialSelectedSearchIdRef.current
     ) {
-      logger.debug(
-        `[useSearchIdManagement] Parent changed initialSelectedSearchId from ${previousInitialSelectedSearchIdRef.current} to ${initialSelectedSearchId}`
+      logger.info(
+        '[useSearchIdManagement] Parent changed initialSelectedSearchId',
+        {
+          from: previousInitialSelectedSearchIdRef.current,
+          to: initialSelectedSearchId,
+        }
       );
       setSelectedSearchIdSafe(initialSelectedSearchId);
       if (onSearchIdChange) {

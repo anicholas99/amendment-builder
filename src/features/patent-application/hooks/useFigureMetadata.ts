@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { logger } from '@/lib/monitoring/logger';
-import { FigureApiService } from '@/services/api/figureApiService';
+import { useState, useEffect, useMemo } from 'react';
+import { logger } from '@/utils/clientLogger';
+import { useFigures } from '@/hooks/api/useFigures';
 
 interface FigureMetadata {
   id: string;
@@ -10,40 +10,37 @@ interface FigureMetadata {
 /**
  * Hook for fetching and managing figure metadata
  * Maps figureKey to figureId for API operations
+ *
+ * PERFORMANCE OPTIMIZATION: This hook now reuses the data from useFigures
+ * instead of making a duplicate API call to the same endpoint
  */
 export function useFigureMetadata(projectId: string | null | undefined) {
-  const [allFiguresData, setAllFiguresData] = useState<FigureMetadata[]>([]);
   const [currentFigureId, setCurrentFigureId] = useState<string | null>(null);
 
-  // Fetch figure metadata
-  useEffect(() => {
-    async function fetchFigureData() {
-      if (!projectId) return;
+  // Reuse existing figures data from useFigures hook (no duplicate API call!)
+  const { data: figuresData, isLoading } = useFigures(
+    projectId || '',
+    undefined
+  );
 
-      try {
-        const response =
-          await FigureApiService.listFiguresWithElements(projectId);
-        const newFiguresData = response.figures.map(f => ({
-          id: f.id,
-          figureKey: f.figureKey || null,
-        }));
+  // Transform figures data to metadata array format
+  const allFiguresData = useMemo<FigureMetadata[]>(() => {
+    if (!figuresData || isLoading) return [];
 
-        // Only update if data has changed
-        const currentDataStr = JSON.stringify(allFiguresData);
-        const newDataStr = JSON.stringify(newFiguresData);
+    // Convert the figures object to array of metadata
+    const metadata: FigureMetadata[] = [];
 
-        if (currentDataStr !== newDataStr) {
-          setAllFiguresData(newFiguresData);
-        }
-      } catch (error) {
-        logger.error('[useFigureMetadata] Failed to fetch figure data', {
-          error,
+    Object.entries(figuresData).forEach(([figureKey, figure]) => {
+      if (figure._id) {
+        metadata.push({
+          id: figure._id,
+          figureKey: figureKey,
         });
       }
-    }
+    });
 
-    fetchFigureData();
-  }, [projectId]);
+    return metadata;
+  }, [figuresData, isLoading]);
 
   // Get figure ID for a given figure key
   const getFigureId = (figureKey: string | null): string | null => {

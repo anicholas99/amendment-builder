@@ -4,11 +4,9 @@
  * This service provides a clean interface for invention-related API calls,
  * following the established client/server architecture pattern.
  */
-import { environment } from '@/config/environment';
 import { API_ROUTES } from '@/constants/apiRoutes';
 import { apiFetch } from '@/lib/api/apiClient';
-import { logger } from '@/lib/monitoring/logger';
-import { ProjectApiService } from '@/client/services/project.client-service';
+import { logger } from '@/utils/clientLogger';
 import { InventionData } from '@/types/invention';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { FigureApiService } from '@/services/api/figureApiService';
@@ -43,38 +41,54 @@ class InventionClientService {
     }
   }
 
+  private handleApiError(error: unknown, projectId: string): never {
+    if (error instanceof ApplicationError) {
+      throw error;
+    }
+
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error occurred';
+    logger.error('[InventionClientService] Unexpected error', {
+      projectId,
+      error: errorMessage,
+    });
+    throw new ApplicationError(
+      ErrorCode.INTERNAL_ERROR,
+      'An unexpected error occurred while processing invention data'
+    );
+  }
+
   /**
-   * Update invention data for a project.
+   * Update invention data for a project
    */
   async updateInvention(
     projectId: string,
-    updates: Partial<InventionData>
+    updateData: Partial<InventionData>
   ): Promise<InventionData> {
-    if (!projectId) {
-      throw new ApplicationError(
-        ErrorCode.INVALID_INPUT,
-        'Project ID is required.'
-      );
-    }
     try {
-      const response = await apiFetch(`/api/projects/${projectId}/invention`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      if (!response.ok) {
-        throw new ApplicationError(
-          ErrorCode.API_INVALID_RESPONSE,
-          `Failed to update invention data: ${response.status}`
-        );
-      }
-      return await response.json();
-    } catch (error) {
-      logger.error('[InventionClientService] Error updating invention data', {
+      logger.debug('[InventionClientService] Updating invention data', {
         projectId,
-        error,
+        updateFields: Object.keys(updateData),
       });
-      throw error;
+
+      const response = await apiFetch(
+        API_ROUTES.PROJECTS.INVENTION(projectId),
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(updateData),
+        }
+      );
+
+      const result: InventionData = await response.json();
+      logger.info(
+        '[InventionClientService] Invention data updated successfully'
+      );
+      return result;
+    } catch (error) {
+      return this.handleApiError(error, projectId);
     }
   }
 
@@ -184,7 +198,9 @@ class InventionClientService {
   /**
    * Upload a document
    */
-  static async uploadDocument(file: File): Promise<{ id: string; filename: string; url: string }> {
+  static async uploadDocument(
+    file: File
+  ): Promise<{ id: string; filename: string; url: string }> {
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -213,7 +229,9 @@ class InventionClientService {
   /**
    * Process a document file (extract and structure)
    */
-  static async processDocumentFile(file: File): Promise<{ id: string; filename: string; url: string }> {
+  static async processDocumentFile(
+    file: File
+  ): Promise<{ id: string; filename: string; url: string }> {
     try {
       // For now, delegate to uploadDocument - can be extended later
       return await this.uploadDocument(file);
@@ -229,8 +247,24 @@ class InventionClientService {
    * Upload a figure for a project
    * Delegates to the FigureApiService for consistency.
    */
-  static async uploadFigure(projectId: string, file: File): Promise<{ id: string; url: string; filename: string; description?: string }> {
-    return FigureApiService.uploadFigure(projectId, file);
+  static async uploadFigure(
+    projectId: string,
+    file: File
+  ): Promise<{
+    id: string;
+    url: string;
+    filename: string;
+    description?: string;
+  }> {
+    const result = await FigureApiService.uploadFigure(projectId, file);
+
+    // Map the FigureApiService response to the expected format
+    return {
+      id: `figure_${Date.now()}`, // Generate a temporary ID since FigureApiService doesn't return one
+      url: result.url,
+      filename: result.fileName,
+      description: undefined, // FigureApiService doesn't return description in uploadFigure response
+    };
   }
 
   /**
@@ -280,7 +314,10 @@ class InventionClientService {
   /**
    * Update a figure
    */
-  static async updateFigure(figureId: string, updates: Record<string, unknown>): Promise<{ id: string; success: boolean }> {
+  static async updateFigure(
+    figureId: string,
+    updates: Record<string, unknown>
+  ): Promise<{ id: string; success: boolean }> {
     try {
       const response = await apiFetch(`/api/figures/${figureId}`, {
         method: 'PATCH',
@@ -307,7 +344,43 @@ class InventionClientService {
       throw error;
     }
   }
+
+  /**
+   * Fetch extracted text from uploaded files by their IDs
+   */
+  static async getExtractedTextFromFiles(
+    projectId: string,
+    fileIds: string[]
+  ): Promise<{
+    [fileId: string]: { name: string; extractedText: string | null };
+  }> {
+    if (fileIds.length === 0) {
+      return {};
+    }
+
+    const response = await apiFetch(
+      `/api/projects/${projectId}/files/extracted-text`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ fileIds }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new ApplicationError(
+        ErrorCode.API_INVALID_RESPONSE,
+        'Failed to fetch extracted text from files'
+      );
+    }
+
+    return response.json();
+  }
 }
 
-export const inventionClientService = new InventionClientService();
+// Export the class for context-based instantiation
 export { InventionClientService };
+
+// REMOVED: Singleton export that could cause session isolation issues

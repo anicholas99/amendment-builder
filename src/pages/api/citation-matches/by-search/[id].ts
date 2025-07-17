@@ -7,7 +7,7 @@ import { getSearchHistoryWithTenant } from '@/repositories/search';
 import { CustomApiRequest } from '@/types/api';
 import { z } from 'zod';
 import { idQuerySchema } from '@/lib/validation/schemas/shared/querySchemas';
-import { createApiLogger } from '@/lib/monitoring/apiLogger';
+import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { serializeCitationMatch } from '@/features/citation-extraction/utils/citation';
 import { withAuth } from '@/middleware/auth';
 import { withTenantGuard } from '@/middleware/authorization';
@@ -15,7 +15,8 @@ import { withErrorHandling } from '@/middleware/errorHandling';
 import { withRateLimit } from '@/middleware/rateLimiter';
 import { requireRole } from '@/middleware/role';
 import { withMethod } from '@/middleware/method';
-import { SecurePresets, TenantResolvers } from '@/lib/api/securePresets';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { apiResponse } from '@/utils/api/responses';
 
 // Define request body type (empty for this GET endpoint)
 interface EmptyBody {}
@@ -53,8 +54,7 @@ async function handler(
 
   if (req.method !== 'GET') {
     apiLogger.warn('Method not allowed', { method: req.method });
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
+    return apiResponse.methodNotAllowed(res, ['GET']);
   }
 
   // Query parameters are validated by middleware
@@ -128,7 +128,7 @@ async function handler(
       totalMatches: citationMatches.length,
     });
 
-    res.status(200).json({
+    return apiResponse.ok(res, {
       groupedResults,
     });
   } catch (error: unknown) {
@@ -154,13 +154,7 @@ const withQueryValidation = (handler: any) => {
       return handler(req, res);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          error: 'Query validation failed',
-          details: error.errors.map(err => ({
-            path: err.path.join('.'),
-            message: err.message,
-          })),
-        });
+        return apiResponse.badRequest(res, 'Query validation failed');
       }
       throw error;
     }

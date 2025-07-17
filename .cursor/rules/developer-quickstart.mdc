@@ -20,7 +20,7 @@ npm run format           # Format code with Prettier
 npm run setup:precommit  # Install pre-commit hooks (run once)
 npm run analyze:routes   # Analyze all API routes
 npm run analyze:route <path>  # Analyze specific route
-npm run audit:chakra     # Audit Chakra UI usage
+npm run audit:types      # Audit TypeScript types
 ```
 
 ### Database

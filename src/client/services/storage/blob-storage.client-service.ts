@@ -3,7 +3,7 @@
  */
 import { apiFetch } from '@/lib/api/apiClient';
 import { ApplicationError, ErrorCode } from '@/lib/error';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 class BlobStorageClientService {
   /**
@@ -67,4 +67,7 @@ class BlobStorageClientService {
   }
 }
 
-export const blobStorageClientService = new BlobStorageClientService();
+// Export the class for context-based instantiation
+export { BlobStorageClientService };
+
+// REMOVED: Singleton export that could cause session isolation issues

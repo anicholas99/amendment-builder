@@ -6,39 +6,34 @@
 import React from 'react';
 import ViewLayout from './ViewLayout';
 import { VIEW_LAYOUT_CONFIG } from '@/constants/layout';
-import { Box, Heading, Text } from '@chakra-ui/react';
 
 // Example header component
 const ExampleHeader = () => (
-  <Box p={4}>
-    <Heading size="lg">My View Title</Heading>
-  </Box>
+  <div className="p-4">
+    <h1 className="text-2xl font-bold">My View Title</h1>
+  </div>
 );
 
 // Example main content component
 const ExampleMainContent = () => (
-  <Box p={4}>
-    <Heading size="md" mb={4}>
-      Main Content Area
-    </Heading>
-    <Text>
+  <div className="p-4">
+    <h2 className="text-xl font-semibold mb-4">Main Content Area</h2>
+    <p>
       This is where your main content goes. It will be displayed in the larger
       panel on the left side of the layout.
-    </Text>
-  </Box>
+    </p>
+  </div>
 );
 
 // Example sidebar component
 const ExampleSidebar = () => (
-  <Box p={4}>
-    <Heading size="md" mb={4}>
-      Sidebar
-    </Heading>
-    <Text>
+  <div className="p-4">
+    <h2 className="text-xl font-semibold mb-4">Sidebar</h2>
+    <p>
       This is the sidebar area. It's perfect for secondary controls, navigation,
       or supplementary information.
-    </Text>
-  </Box>
+    </p>
+  </div>
 );
 
 /**
@@ -117,11 +112,11 @@ export const WithBottomContentExample = () => (
     mainContent={<ExampleMainContent />}
     sidebarContent={<ExampleSidebar />}
     bottomContent={
-      <Box p={4} bg="gray.100" borderRadius="md">
-        <Text>
+      <div className="p-4 bg-muted rounded-md">
+        <p>
           This is optional bottom content that appears below the main panels.
-        </Text>
-      </Box>
+        </p>
+      </div>
     }
     islandMode={true}
   />

@@ -6,7 +6,7 @@
  */
 import { ProcessedSearchHistoryEntry } from '@/types/domain/searchHistory';
 import { DetailedSearchHistoryEntry } from '@/features/citation-extraction/hooks/useCitationsTabLogic';
-import { logger } from '@/lib/monitoring/logger';
+import { logger } from '@/utils/clientLogger';
 
 import { apiFetch } from '@/lib/api/apiClient';
 import { API_ROUTES } from '@/constants/apiRoutes';
@@ -225,4 +225,7 @@ class SearchHistoryClientService {
   }
 }
 
-export const searchHistoryClientService = new SearchHistoryClientService();
+// Export the class for context-based instantiation
+export { SearchHistoryClientService };
+
+// REMOVED: Singleton export that could cause session isolation issues

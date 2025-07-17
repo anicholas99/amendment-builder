@@ -1,11 +1,8 @@
 import React from 'react';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  Flex,
-} from '@chakra-ui/react';
+import { cn } from '@/lib/utils';
 import { FiChevronRight, FiArrowLeft } from 'react-icons/fi';
+import { useThemeContext } from '@/contexts/ThemeContext';
+import { Button } from '@/components/ui/button';
 
 interface CombinedAnalysisBreadcrumbProps {
   onBack: () => void;
@@ -14,30 +11,31 @@ interface CombinedAnalysisBreadcrumbProps {
 export const CombinedAnalysisBreadcrumb: React.FC<
   CombinedAnalysisBreadcrumbProps
 > = ({ onBack }) => {
+  const { isDarkMode } = useThemeContext();
+
   return (
-    <Breadcrumb
-      spacing="8px"
-      separator={<FiChevronRight color="text.tertiary" />}
-      mb={4}
-      fontSize="sm"
-    >
-      <BreadcrumbItem>
-        <BreadcrumbLink
-          as="button"
-          onClick={onBack}
-          color="blue.500"
-          fontWeight="semibold"
-        >
-          <Flex align="center">
-            <FiArrowLeft className="mr-1" /> Citations
-          </Flex>
-        </BreadcrumbLink>
-      </BreadcrumbItem>
-      <BreadcrumbItem isCurrentPage>
-        <BreadcrumbLink color="text.primary" fontWeight="semibold">
-          Combined Examiner Analysis
-        </BreadcrumbLink>
-      </BreadcrumbItem>
-    </Breadcrumb>
+    <nav className="mb-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            className="flex items-center gap-2"
+          >
+            <FiArrowLeft className="w-4 h-4" />
+            Back to Citations
+          </Button>
+
+          <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+            <span>Citations</span>
+            <FiChevronRight className="w-4 h-4 mx-2" />
+            <span className="text-gray-900 dark:text-gray-100 font-medium">
+              Combined Examiner Analysis
+            </span>
+          </div>
+        </div>
+      </div>
+    </nav>
   );
 };
