@@ -38,6 +38,7 @@ model User {
   collaboratingProjects ProjectCollaborator[]
   invitedCollaborators  ProjectCollaborator[] @relation("InvitedCollaborators")
   aiAuditLogs          AIAuditLog[]
+  amendmentProjects    AmendmentProject[]
 
   @@map("users")
 }
@@ -89,6 +90,8 @@ model Project {
   searchHistory                SearchHistory[]
   collaborators                ProjectCollaborator[]
   aiAuditLogs                  AIAuditLog[]
+  officeActions                OfficeAction[]
+  amendmentProjects            AmendmentProject[]
 
   @@index([tenantId])
   @@index([userId])
@@ -141,6 +144,8 @@ model Tenant {
   projects    Project[]
   users       UserTenant[]
   aiAuditLogs AIAuditLog[]
+  officeActions OfficeAction[]
+  amendmentProjects AmendmentProject[]
 
   @@map("tenants")
 }
@@ -373,16 +378,19 @@ model Document {
 }
 
 model DraftDocument {
-  id        String   @id @default(uuid())
-  projectId String
-  type      String
-  content   String?  @db.NVarChar(Max)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id                String            @id @default(uuid())
+  projectId         String
+  amendmentProjectId String?          // Optional: for amendment response documents
+  type              String
+  content           String?           @db.NVarChar(Max)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  amendmentProject  AmendmentProject? @relation(fields: [amendmentProjectId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([projectId, type])
   @@index([projectId])
+  @@index([amendmentProjectId])
   @@map("draft_documents")
 }
 
@@ -577,11 +585,25 @@ model Invention {
   claim1ParsedAt              DateTime?      // When claim 1 was last parsed
   parserVersion               String?        @default("v1.0") // Parser version used
   
+  // Template fields (added in recent migration)
+  alternativeEmbodimentsJson  String?        @db.NVarChar(Max)
+  commercialPotential         String?        @db.NVarChar(Max)
+  elevatorPitch               String?        @db.NVarChar(Max)
+  fundingSourcesJson          String?        @db.NVarChar(Max)
+  inventorsJson               String?        @db.NVarChar(Max)
+  knownLimitationsJson        String?        @db.NVarChar(Max)
+  plannedUses                 String?        @db.NVarChar(Max)
+  problemStatement            String?        @db.NVarChar(Max)
+  publicDisclosuresJson       String?        @db.NVarChar(Max)
+  templateCompleteness        Float?         @default(0.0)
+  templateMode                String?        @default("simple")
+  
   claimVersions               ClaimVersion[]
   claims                      Claim[]
   project                     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([claim1Hash])
+  @@index([templateMode])
   @@map("inventions")
 }
 
@@ -731,4 +753,85 @@ model AIAuditLog {
   @@index([tenantId, userId])
   @@index([operation, createdAt])
   @@map("ai_audit_logs")
+}
+
+// Amendment-related models following existing patterns
+model OfficeAction {
+  id                String             @id @default(uuid())
+  projectId         String
+  tenantId          String
+  oaNumber          String?            // "Non-Final Office Action" or examiner reference
+  dateIssued        DateTime?
+  examinerId        String?
+  artUnit           String?
+  blobName          String?            // S3 storage key (follows ProjectFigure pattern)
+  originalFileName  String?
+  mimeType          String?
+  sizeBytes         Int?
+  parsedJson        String?            @db.NVarChar(Max) // Structured OA data
+  status            String             @default("UPLOADED") // UPLOADED, PARSED, PROCESSING, COMPLETED
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  deletedAt         DateTime?          // Soft delete pattern
+  
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rejections        Rejection[]
+  amendmentProjects AmendmentProject[]
+  
+  @@index([projectId])
+  @@index([tenantId])
+  @@index([tenantId, projectId])
+  @@index([status])
+  @@map("office_actions")
+}
+
+model Rejection {
+  id              String      @id @default(uuid())
+  officeActionId  String
+  type            String      // "102", "103", "101", "112"
+  claimNumbers    String      @db.NVarChar(Max) // JSON array: ["1", "3", "7"]
+  citedPriorArt   String?     @db.NVarChar(Max) // JSON array of patent numbers
+  examinerText    String      @db.NVarChar(Max) // Raw examiner reasoning
+  parsedElements  String?     @db.NVarChar(Max) // Structured claim element mapping
+  status          String      @default("PENDING") // PENDING, ADDRESSED, RESOLVED
+  displayOrder    Int         @default(0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  officeAction    OfficeAction @relation(fields: [officeActionId], references: [id], onDelete: Cascade)
+  
+  @@index([officeActionId])
+  @@index([type])
+  @@map("rejections")
+}
+
+model AmendmentProject {
+  id              String          @id @default(uuid())
+  officeActionId  String
+  projectId       String          // Link to original patent project
+  tenantId        String
+  userId          String
+  name            String          // "Response to Non-Final OA - Dec 2024"
+  status          String          @default("DRAFT") // DRAFT, IN_REVIEW, READY_TO_FILE, FILED
+  dueDate         DateTime?       // USPTO response deadline
+  filedDate       DateTime?
+  responseType    String?         // "AMENDMENT", "CONTINUATION", "RCE"
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
+  
+  officeAction    OfficeAction    @relation(fields: [officeActionId], references: [id], onDelete: Cascade)
+  project         Project         @relation(fields: [projectId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user            User            @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  draftDocuments  DraftDocument[] // Reuse existing draft system
+  
+  @@index([officeActionId])
+  @@index([projectId])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([tenantId, userId])
+  @@index([status, dueDate])
+  @@map("amendment_projects")
 }
