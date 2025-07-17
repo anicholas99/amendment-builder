@@ -347,6 +347,32 @@ export const API_ROUTES = {
   UTILS: {
     EXTRACT_TEXT: '/api/utils/extract-text',
   },
+
+  // ============ AMENDMENTS ============
+  AMENDMENTS: {
+    OFFICE_ACTIONS: {
+      UPLOAD: (projectId: string) => `/api/projects/${projectId}/office-actions/upload`,
+      BY_ID: (projectId: string, officeActionId: string) => 
+        `/api/projects/${projectId}/office-actions/${officeActionId}`,
+      PARSE: (projectId: string, officeActionId: string) =>
+        `/api/projects/${projectId}/office-actions/${officeActionId}/parse`,
+      LIST: (projectId: string) => `/api/projects/${projectId}/office-actions`,
+    },
+    REJECTIONS: {
+      ANALYZE: (projectId: string, officeActionId: string) =>
+        `/api/projects/${projectId}/office-actions/${officeActionId}/analyze`,
+      BY_ID: (projectId: string, officeActionId: string, rejectionId: string) =>
+        `/api/projects/${projectId}/office-actions/${officeActionId}/rejections/${rejectionId}`,
+    },
+    RESPONSES: {
+      GENERATE: (projectId: string, officeActionId: string) =>
+        `/api/projects/${projectId}/office-actions/${officeActionId}/generate-response`,
+      BY_ID: (projectId: string, responseId: string) =>
+        `/api/projects/${projectId}/amendment-responses/${responseId}`,
+      EXPORT: (projectId: string, responseId: string) =>
+        `/api/projects/${projectId}/amendment-responses/${responseId}/export`,
+    },
+  },
 } as const;
 
 /**
