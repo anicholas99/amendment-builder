@@ -58,6 +58,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/useToastWrapper';
 import { AmendmentFileHistory } from './AmendmentFileHistory';
+import ClaimDiffViewer from './ClaimDiffViewer';
 import { 
   useAmendmentProjectFiles, 
   useDeleteAmendmentProjectFile 
@@ -144,8 +145,8 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
       claimNumber: '1',
       status: 'CURRENTLY_AMENDED',
       originalText: 'A method comprising: providing a system for processing data; executing operations on the data; and generating output results.',
-      amendedText: 'A method comprising: providing a system for processing data in real-time with sub-100ms latency; executing operations on the data using dedicated hardware acceleration; and generating output results with enhanced accuracy.',
-      reasoning: 'Added real-time processing limitation and hardware acceleration to distinguish over Smith + Johnson combination.',
+      amendedText: 'A method comprising: providing a system for processing data in real-time with sub-100ms latency constraints; executing operations on the data using dedicated hardware acceleration; and generating output results with enhanced accuracy and improved reliability.',
+      reasoning: 'Added real-time processing limitation with specific latency constraint and hardware acceleration requirement to distinguish over Smith (US 8,123,456) + Johnson (US 7,987,654) combination. The specific sub-100ms latency limitation is not taught or suggested by the cited prior art.',
     },
   ]);
 
@@ -266,23 +267,14 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
     setHasUnsavedChanges(true);
   };
 
-  // Format claim text for display
-  const formatClaimText = (original: string, amended: string) => {
-    // This is a simplified diff - in a real implementation, you'd use a proper diff algorithm
-    const words = amended.split(' ');
-    return words.map((word, index) => {
-      const isAdded = !original.includes(word);
-      return (
-        <span
-          key={index}
-          className={cn(
-            isAdded && "underline decoration-blue-500 decoration-2 bg-blue-50"
-          )}
-        >
-          {word}{' '}
-        </span>
-      );
-    });
+  // View mode state for each claim
+  const [claimViewModes, setClaimViewModes] = useState<Record<string, 'edit' | 'preview'>>({});
+
+  const toggleClaimViewMode = (claimId: string) => {
+    setClaimViewModes(prev => ({
+      ...prev,
+      [claimId]: prev[claimId] === 'preview' ? 'edit' : 'preview'
+    }));
   };
 
   // Render header
@@ -378,6 +370,7 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
   // Render claim amendment item
   const renderClaimAmendment = (claim: ClaimAmendment) => {
     const statusConfig = CLAIM_STATUS_CONFIG[claim.status];
+    const viewMode = claimViewModes[claim.id] || 'edit';
 
     return (
       <Card key={claim.id} className="mb-4">
@@ -391,6 +384,24 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
+              <Button
+                variant={viewMode === 'edit' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => toggleClaimViewMode(claim.id)}
+              >
+                {viewMode === 'edit' ? (
+                  <>
+                    <Eye className="h-4 w-4 mr-2" />
+                    Preview Changes
+                  </>
+                ) : (
+                  <>
+                    <FileEdit className="h-4 w-4 mr-2" />
+                    Edit
+                  </>
+                )}
+              </Button>
+
               <Select
                 value={claim.status}
                 onValueChange={(value: any) => updateClaimAmendment(claim.id, { status: value })}
@@ -418,39 +429,114 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* Claim text editor */}
-          <div>
-            <label className="text-sm font-medium mb-2 block">
-              {statusConfig.prefix} Claim Text
-            </label>
-            <Textarea
-              value={claim.amendedText}
-              onChange={(e) => updateClaimAmendment(claim.id, { amendedText: e.target.value })}
-              placeholder="Enter the amended claim text..."
-              className="min-h-[120px] font-mono text-sm"
-            />
-          </div>
-
-          {/* Reasoning */}
-          <div>
-            <label className="text-sm font-medium mb-2 block">Amendment Reasoning</label>
-            <Textarea
-              value={claim.reasoning}
-              onChange={(e) => updateClaimAmendment(claim.id, { reasoning: e.target.value })}
-              placeholder="Explain why this amendment was made..."
-              className="min-h-[60px] text-sm"
-            />
-          </div>
-
-          {/* Formatted preview */}
-          {claim.originalText && claim.amendedText && (
-            <div>
-              <label className="text-sm font-medium mb-2 block">Formatted Preview</label>
-              <div className="p-3 bg-gray-50 rounded border text-sm font-mono leading-relaxed">
-                <div className="font-semibold mb-2">{claim.claimNumber}. {statusConfig.prefix}</div>
-                {formatClaimText(claim.originalText, claim.amendedText)}
+          {viewMode === 'edit' ? (
+            <>
+              {/* Original Text Field - Read Only */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    Original Claim Text (As Filed)
+                    <Badge variant="secondary" className="text-xs">Read Only</Badge>
+                  </label>
+                  {!claim.originalText && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const originalText = prompt('Enter the original claim text as filed with the USPTO:');
+                        if (originalText) {
+                          updateClaimAmendment(claim.id, { originalText });
+                        }
+                      }}
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add Original Text
+                    </Button>
+                  )}
+                </div>
+                <div className="min-h-[100px] p-3 bg-gray-50 border rounded font-mono text-sm leading-relaxed text-gray-700">
+                  {claim.originalText || (
+                    <span className="text-gray-400 italic">
+                      Click "Add Original Text" to enter the claim as originally filed with the USPTO...
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  This is the claim text as originally filed with the USPTO (cannot be edited)
+                </p>
               </div>
-            </div>
+
+              {/* Amended Text Field with Live Preview */}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Edit Amended Claim Text
+                  </label>
+                  <Textarea
+                    value={claim.amendedText}
+                    onChange={(e) => updateClaimAmendment(claim.id, { amendedText: e.target.value })}
+                    placeholder="Enter the amended claim text..."
+                    className="min-h-[120px] font-mono text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Edit your amendment below - changes are highlighted in real-time
+                  </p>
+                </div>
+
+                {/* Live Diff Preview */}
+                {claim.originalText && claim.amendedText && (
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Live Amendment Preview</label>
+                    <ClaimDiffViewer
+                      claimNumber={claim.claimNumber}
+                      originalText={claim.originalText}
+                      amendedText={claim.amendedText}
+                      status={claim.status}
+                      showSideBySide={false}
+                      className="border border-blue-200 bg-blue-50/30"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Reasoning */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Amendment Reasoning</label>
+                <Textarea
+                  value={claim.reasoning}
+                  onChange={(e) => updateClaimAmendment(claim.id, { reasoning: e.target.value })}
+                  placeholder="Explain why this amendment was made (e.g., to distinguish over prior art, add limitations, etc.)..."
+                  className="min-h-[80px] text-sm"
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Preview Mode using ClaimDiffViewer */}
+              {claim.originalText && claim.amendedText ? (
+                <ClaimDiffViewer
+                  claimNumber={claim.claimNumber}
+                  originalText={claim.originalText}
+                  amendedText={claim.amendedText}
+                  status={claim.status}
+                  showSideBySide={false}
+                />
+              ) : (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded">
+                  <p className="text-amber-800 text-sm">
+                    Please enter both original and amended text to see the comparison view.
+                  </p>
+                </div>
+              )}
+
+              {/* Amendment Reasoning in Preview */}
+              {claim.reasoning && (
+                <div className="mt-4 p-3 bg-blue-50 border-l-4 border-blue-400">
+                  <h4 className="font-medium text-blue-900 mb-1">Amendment Reasoning</h4>
+                  <p className="text-blue-800 text-sm whitespace-pre-wrap">{claim.reasoning}</p>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -733,12 +819,14 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
                         const statusConfig = CLAIM_STATUS_CONFIG[claim.status];
                         return (
                           <div key={claim.id} className="mb-8">
-                            <p className="font-bold mb-3">
-                              {claim.claimNumber}. {statusConfig.prefix}
-                            </p>
-                            <div className="pl-8 mb-4 text-justify" style={{ textIndent: '0' }}>
-                              {formatClaimText(claim.originalText, claim.amendedText)}
-                            </div>
+                            <ClaimDiffViewer
+                              claimNumber={claim.claimNumber}
+                              originalText={claim.originalText}
+                              amendedText={claim.amendedText}
+                              status={claim.status}
+                              showSideBySide={false}
+                              className="border-0 shadow-none bg-transparent"
+                            />
                             
                             {claim.reasoning && claim.status === 'CURRENTLY_AMENDED' && (
                               <div className="pl-8 text-sm italic border-l-2 border-blue-300 bg-blue-50 p-3 mb-4">
