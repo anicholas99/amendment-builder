@@ -287,7 +287,7 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-background border-l">
+    <div className="h-full flex flex-col bg-background border-l ai-assistant-panel">
       {/* Header */}
       <div className="flex-shrink-0 p-4 border-b">
         <div className="flex items-center gap-2 mb-2">
@@ -328,14 +328,18 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
               </div>
 
               {/* Chat Interface */}
-              <div className="flex-1 overflow-hidden">
-                                 <EnhancedChatInterface
-                   projectId={projectId}
-                   projectData={chatProjectData}
-                   onContentUpdate={handleContentUpdate}
-                   pageContext="patent" // Use patent context for amendment workflow
-                   setPreviousContent={() => {}} // Not used in this context
-                 />
+              <div className="flex-1 overflow-hidden min-h-0">
+                <div className="h-full w-full overflow-hidden chat-interface-container">
+                  <div className="enhanced-chat-interface">
+                    <EnhancedChatInterface
+                      projectId={projectId}
+                      projectData={chatProjectData}
+                      onContentUpdate={handleContentUpdate}
+                      pageContext="patent" // Use patent context for amendment workflow
+                      setPreviousContent={() => {}} // Not used in this context
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </TabsContent>

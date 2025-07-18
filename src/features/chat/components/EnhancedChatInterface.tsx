@@ -149,7 +149,7 @@ const MessageRenderer = memo<MessageRendererProps>(
             isTyping={isStreaming && !message.content}
             className={cn(
               // Use a single smooth transition instead of conflicting animations
-              'transition-all duration-300 ease-out',
+              'transition-all duration-300 ease-out chat-bubble-container',
               isStreaming && 'opacity-90',
               !isStreaming && 'opacity-100',
               // Remove conflicting animations - let the bubble handle its own animation
@@ -157,7 +157,7 @@ const MessageRenderer = memo<MessageRendererProps>(
             )}
           >
             {(message.content || (isStreaming && !isUser)) && (
-              <ChatBubbleMessage isLoading={false}>
+              <ChatBubbleMessage isLoading={false} className="chat-message-content">
                 {isUser ? (
                   <p className="leading-relaxed text-sm text-current">
                     {message.content}
@@ -494,13 +494,13 @@ const EnhancedChatInterface: React.FC<ChatInterfaceProps> = ({
   }, [allDocuments, pendingAttachments]);
 
   return (
-    <ExpandableChat size="full" position="center" className="h-full">
+    <ExpandableChat size="full" position="center" className="h-full enhanced-chat-interface">
       <ExpandableChatBody className="overflow-hidden">
         <ChatMessageList
           isLoading={loadingHistory}
           loadingText="Loading chat history..."
           messagesEndRef={messagesEndRef}
-          className="h-full"
+          className="h-full chat-scroll-area"
         >
           {messages.map((message, index) => (
             <MessageRenderer

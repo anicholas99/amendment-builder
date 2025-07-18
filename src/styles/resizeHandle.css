@@ -56,3 +56,57 @@
 .ai-panel-resize-handle:hover::before {
   opacity: 1;
 }
+
+/* Chat Interface Containment - Prevent Layout Shifts */
+.chat-interface-container {
+  contain: layout style size;
+  overflow: hidden;
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+/* Chat Message List Strict Containment */
+.chat-scroll-area {
+  contain: strict;
+  overflow: hidden !important;
+  position: relative;
+}
+
+/* Chat Bubble Containment */
+.chat-bubble-container {
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Prevent any chat content from causing layout shifts */
+.ai-assistant-panel .chat-interface-container,
+.ai-assistant-panel .chat-interface-container * {
+  box-sizing: border-box;
+}
+
+/* Ensure chat messages don't overflow their containers */
+.ai-assistant-panel [data-radix-scroll-area-viewport] {
+  contain: layout style;
+  overflow: auto !important;
+  scrollbar-width: thin;
+}
+
+/* Enhanced chat message containment */
+.enhanced-chat-interface {
+  contain: layout style size;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+/* Chat message content containment */
+.chat-message-content {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  contain: layout style;
+}
