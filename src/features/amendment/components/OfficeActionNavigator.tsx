@@ -73,6 +73,7 @@ interface OfficeActionData {
     examinerName?: string;
     artUnit?: string;
   };
+  examinerRemarks?: string; // User-friendly summary of the Office Action
   rejections: Rejection[];
   allPriorArtReferences: string[];
   summary: {
@@ -358,6 +359,19 @@ export const OfficeActionNavigator: React.FC<OfficeActionNavigatorProps> = ({
               <CollapsibleContent className="mt-3">
                 <Card>
                   <CardContent className="pt-3">
+                    {/* Display user-friendly summary if available */}
+                    {officeAction.examinerRemarks && (
+                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                        <div className="flex items-start gap-2">
+                          <FileText className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <h4 className="text-sm font-medium text-blue-900 mb-1">Summary</h4>
+                            <p className="text-sm text-blue-800">{officeAction.examinerRemarks}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
                         <div className="font-medium text-gray-900">

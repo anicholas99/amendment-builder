@@ -28,6 +28,7 @@ export async function createOfficeAction(
     originalFileName?: string;
     mimeType?: string;
     sizeBytes?: number;
+    extractedText?: string; // Add extractedText parameter
   },
   tenantId: string,
   userId: string
@@ -83,6 +84,7 @@ export async function createOfficeAction(
         originalFileName: data.originalFileName,
         mimeType: data.mimeType,
         sizeBytes: data.sizeBytes,
+        extractedText: data.extractedText, // Save the raw extracted text
         status: 'UPLOADED',
       },
     });
@@ -309,6 +311,7 @@ export async function updateOfficeActionParsedData(
       where: { id: id },
       data: {
         parsedJson: JSON.stringify(parsedData),
+        examinerRemarks: parsedData.examinerRemarks || null, // Store summary in dedicated field
         status: status,
         updatedAt: new Date(),
       },
@@ -318,6 +321,7 @@ export async function updateOfficeActionParsedData(
       id,
       status,
       tenantId,
+      hasSummary: !!parsedData.examinerRemarks,
     });
 
     return updatedOfficeAction;

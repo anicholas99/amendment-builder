@@ -180,7 +180,7 @@ export class AzureComputerVisionOCRService {
         };
       });
 
-      const fullContent = pages.map(page => page.content).join('\n\n');
+      const fullContent = pages.map(page => page.content).join('\n\n--- PAGE BREAK ---\n\n');
       const overallConfidence = pages.length > 0 
         ? pages.reduce((sum, page) => sum + page.confidence, 0) / pages.length
         : 0;
@@ -192,6 +192,12 @@ export class AzureComputerVisionOCRService {
         confidence: overallConfidence,
         contentLength: fullContent.length,
         processingTime,
+        pageConfidences: pages.map(p => ({ page: p.pageNumber, confidence: p.confidence })),
+        pageLengths: pages.map(p => ({ page: p.pageNumber, length: p.content.length })), // Add page lengths for debugging
+        textPreviewFirst500: fullContent.substring(0, 500),
+        textPreviewLast500: fullContent.length > 500 ? fullContent.substring(fullContent.length - 500) : '',
+        // Add warning about free tier limitation
+        warning: pages.length === 2 ? 'WARNING: Only 2 pages detected - may be limited by Free (F0) tier. Upgrade to Standard (S0) to process all pages.' : null,
       });
 
       return {

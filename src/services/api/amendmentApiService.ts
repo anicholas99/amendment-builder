@@ -48,6 +48,7 @@ const OfficeActionDetailResponseSchema = z.object({
   originalFileName: z.string().nullable(),
   status: z.string(),
   parsedJson: z.string().nullable(),
+  examinerRemarks: z.string().nullable(), // AI-generated user-friendly summary
   createdAt: z.string(),
   updatedAt: z.string(),
   // Include metadata and examiner fields from API response
@@ -115,6 +116,7 @@ export interface ProcessedOfficeAction {
     name?: string;
     artUnit?: string;
   };
+  examinerRemarks?: string; // AI-generated user-friendly summary
   rejections: ProcessedRejection[];
   metadata?: ParsedOfficeActionData;
   createdAt: Date;
@@ -250,6 +252,7 @@ export class AmendmentApiService {
           name: validated.examiner?.name || validated.metadata?.examinerName || undefined,
           artUnit: validated.artUnit || validated.examiner?.artUnit || validated.metadata?.artUnit || undefined,
         },
+        examinerRemarks: validated.examinerRemarks || undefined, // Include AI-generated summary
         rejections,
         metadata: {
           // Create UI-compatible metadata structure

@@ -197,12 +197,9 @@ export class AmendmentServerService {
         textLength: extractedText.length,
       });
 
-      // Use enhanced multi-pass analysis for comprehensive Office Action parsing
-      const { EnhancedOfficeActionParserService } = await import('./enhanced-office-action-parser.server-service');
-      const parseResult = await EnhancedOfficeActionParserService.parseOfficeAction(extractedText, {
-        maxBudget: 0.50, // Up to 50 cents per Office Action for thorough analysis
-        forceFullAnalysis: false, // Respect budget limits
-      });
+      // Use simple single-pass analysis (much faster and cheaper!)
+      const { SimpleOfficeActionParserService } = await import('./simple-office-action-parser.server-service');
+      const parseResult = await SimpleOfficeActionParserService.parseOfficeAction(extractedText);
 
       // Transform enhanced parser result to repository format
       const parsedData: ParsedOfficeActionData = {
@@ -215,19 +212,22 @@ export class AmendmentServerService {
         dateIssued: parseResult.metadata.mailingDate || undefined,
         responseDeadline: undefined,
         rejections: parseResult.rejections.map(rejection => ({
-          type: rejection.type as '102' | '103' | '101' | '112',
+          type: rejection.type.replace('§', '') as '102' | '103' | '101' | '112', // Remove § symbol for DB
           claimNumbers: rejection.claims,
           reasoning: rejection.examinerReasoning,
           citedReferences: rejection.priorArtReferences,
           elements: [],
         })),
-        citedReferences: parseResult.allPriorArtReferences.map(ref => ({
-          patentNumber: ref,
-          title: undefined,
-          inventors: undefined,
-          assignee: undefined,
-        })),
-        examinerRemarks: `Enhanced Analysis - Document Type: ${parseResult.metadata.documentType}, Confidence: ${(parseResult.metadata.analysisConfidence * 100).toFixed(1)}%, Cost: $${parseResult.analysisDetails.totalCost.toFixed(3)}, Passes: ${parseResult.analysisDetails.passesCompleted.join(', ')}`,
+        citedReferences: parseResult.rejections.flatMap(rejection => 
+          rejection.priorArtReferences.map((ref: string) => ({
+            patentNumber: ref,
+            title: undefined,
+            inventors: undefined,
+            assignee: undefined,
+          }))
+        ),
+        // Store the AI-generated user-friendly summary in examinerRemarks
+        examinerRemarks: parseResult.summary.userFriendlySummary || undefined,
       };
 
       // Update the Office Action with parsed data
@@ -266,15 +266,12 @@ export class AmendmentServerService {
 
       // Note: Status is already updated in updateOfficeActionParsedData call above
 
-      logger.info('[AmendmentService] Enhanced Office Action parsing completed successfully', {
+      logger.info('[AmendmentService] Simple Office Action parsing completed successfully', {
         officeActionId,
         rejectionCount,
-        priorArtCount: parseResult.allPriorArtReferences.length,
+        priorArtCount: parseResult.summary.uniquePriorArtCount,
         documentType: parseResult.metadata.documentType,
         analysisConfidence: parseResult.metadata.analysisConfidence,
-        totalCost: parseResult.analysisDetails.totalCost,
-        passesCompleted: parseResult.analysisDetails.passesCompleted,
-        warnings: parseResult.analysisDetails.warnings,
         hasMetadata: !!parseResult.metadata,
       });
 

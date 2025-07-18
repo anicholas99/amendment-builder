@@ -15,7 +15,9 @@ export interface OfficeAction {
   originalFileName?: string | null;
   mimeType?: string | null;
   sizeBytes?: number | null;
+  extractedText?: string | null;
   parsedJson?: string | null;
+  examinerRemarks?: string | null; // AI-generated user-friendly summary
   status: string;
   createdAt: Date;
   updatedAt: Date;

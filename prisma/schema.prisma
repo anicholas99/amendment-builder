@@ -771,7 +771,9 @@ model OfficeAction {
   originalFileName String?
   mimeType         String?
   sizeBytes        Int?
+  extractedText    String?   @db.NVarChar(Max) // Raw extracted text from OCR/parsing
   parsedJson       String?   @db.NVarChar(Max) // Structured OA data
+  examinerRemarks  String?   @db.NVarChar(Max) // AI-generated user-friendly summary
   status           String    @default("UPLOADED") // UPLOADED, PARSED, PROCESSING, COMPLETED
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt

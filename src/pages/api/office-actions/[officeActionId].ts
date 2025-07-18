@@ -118,6 +118,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       originalFileName: officeAction.originalFileName,
       status: officeAction.status,
       parsedJson: officeAction.parsedJson,
+      examinerRemarks: officeAction.examinerRemarks, // Include the AI-generated summary
       createdAt: officeAction.createdAt,
       updatedAt: officeAction.updatedAt,
       // Include parsed metadata for UI consumption

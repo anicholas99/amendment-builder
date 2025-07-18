@@ -75,6 +75,7 @@ const adaptOfficeActionData = (processedOA: any) => {
       examinerName: processedOA.metadata?.examinerName || processedOA.examiner?.name,
       artUnit: processedOA.metadata?.artUnit || processedOA.examiner?.artUnit || processedOA.artUnit,
     },
+    examinerRemarks: processedOA.examinerRemarks, // Add the user-friendly summary
     rejections: processedOA.rejections.map((r: any) => {
       // Parse JSON strings if needed
       const claimNumbers = typeof r.claimNumbers === 'string' 
