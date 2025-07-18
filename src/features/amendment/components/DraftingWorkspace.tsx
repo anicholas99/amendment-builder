@@ -58,6 +58,10 @@ import {
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/useToastWrapper';
 import { AmendmentFileHistory } from './AmendmentFileHistory';
+import { 
+  useAmendmentProjectFiles, 
+  useDeleteAmendmentProjectFile 
+} from '@/hooks/api/useAmendmentProjectFiles';
 
 // Types
 interface ClaimAmendment {
@@ -80,6 +84,7 @@ interface ArgumentSection {
 interface DraftingWorkspaceProps {
   selectedOfficeAction?: any;
   selectedOfficeActionId?: string | null;
+  amendmentProjectId?: string;
   onSave?: (content: any) => void;
   onExport?: () => void;
   className?: string;
@@ -112,12 +117,25 @@ const CLAIM_STATUS_CONFIG = {
 export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
   selectedOfficeAction,
   selectedOfficeActionId,
+  amendmentProjectId,
   onSave,
   onExport,
   className,
 }) => {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState('claims');
+  
+  // Fetch amendment project files
+  const { 
+    data: filesData, 
+    isLoading: filesLoading, 
+    error: filesError 
+  } = useAmendmentProjectFiles(amendmentProjectId || '', {
+    enabled: !!amendmentProjectId,
+  });
+  
+  // Delete file mutation
+  const deleteFileMutation = useDeleteAmendmentProjectFile();
   
   // Claims state
   const [claimAmendments, setClaimAmendments] = useState<ClaimAmendment[]>([
@@ -596,20 +614,46 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
         <TabsContent value="files" className="flex-1 mt-0">
           <div className="h-full p-6">
             <AmendmentFileHistory
-              amendmentProjectId="mock-amendment-id" // TODO: Get from props
-              files={[]} // TODO: Fetch from API
-              isLoading={false}
+              amendmentProjectId={amendmentProjectId || ''}
+              files={filesData?.files || []}
+              isLoading={filesLoading}
               onDownload={(file) => {
-                console.log('Download file:', file);
-                // TODO: Implement download
+                // Open download URL in new tab
+                if (file.storageUrl) {
+                  window.open(file.storageUrl, '_blank');
+                } else {
+                  toast.error({
+                    title: 'Download Failed',
+                    description: 'No download URL available for this file',
+                  });
+                }
               }}
               onPreview={(file) => {
-                console.log('Preview file:', file);
-                // TODO: Implement preview
+                // Open preview in new tab for supported file types
+                if (file.storageUrl) {
+                  window.open(file.storageUrl, '_blank');
+                } else {
+                  toast.error({
+                    title: 'Preview Failed',
+                    description: 'No preview available for this file',
+                  });
+                }
               }}
               onDelete={(file) => {
-                console.log('Delete file:', file);
-                // TODO: Implement delete
+                deleteFileMutation.mutate(file.id, {
+                  onSuccess: () => {
+                    toast.success({
+                      title: 'File Deleted',
+                      description: `${file.fileName} has been deleted successfully`,
+                    });
+                  },
+                  onError: (error) => {
+                    toast.error({
+                      title: 'Delete Failed',
+                      description: error.message || 'Failed to delete file',
+                    });
+                  },
+                });
               }}
             />
           </div>

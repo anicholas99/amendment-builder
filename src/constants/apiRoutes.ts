@@ -372,6 +372,23 @@ export const API_ROUTES = {
       EXPORT: (projectId: string, responseId: string) =>
         `/api/projects/${projectId}/amendment-responses/${responseId}/export`,
     },
+    FILES: {
+      // Amendment project file tracking
+      LIST: (amendmentProjectId: string) => 
+        `/api/amendment-projects/${amendmentProjectId}/files`,
+      UPLOAD: (amendmentProjectId: string) => 
+        `/api/amendment-projects/${amendmentProjectId}/files/upload`,
+      STATS: (amendmentProjectId: string) => 
+        `/api/amendment-projects/${amendmentProjectId}/files/stats`,
+      
+      // Individual file operations
+      BY_ID: (fileId: string) => `/api/amendment-project-files/${fileId}`,
+      UPDATE: (fileId: string) => `/api/amendment-project-files/${fileId}`,
+      DELETE: (fileId: string) => `/api/amendment-project-files/${fileId}`,
+      DOWNLOAD: (fileId: string) => `/api/amendment-project-files/${fileId}/download`,
+      VERSION: (fileId: string) => `/api/amendment-project-files/${fileId}/versions`,
+      HISTORY: (fileId: string) => `/api/amendment-project-files/${fileId}/history`,
+    },
   },
 } as const;
 

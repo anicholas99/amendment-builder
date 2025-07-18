@@ -5,10 +5,11 @@
  * Integrates all amendment components with clean state management
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { logger } from '@/utils/clientLogger';
 import { cn } from '@/lib/utils';
+import { Resizable, ResizeCallback } from 're-resizable';
 
 // Import new components
 import { AmendmentProjectsList } from './AmendmentProjectsList';
@@ -25,6 +26,17 @@ interface AmendmentStudioProps {
   projectId: string;
   officeActionId?: string;
 }
+
+// Constants for panel sizing
+const PANEL_CONFIG = {
+  LEFT_PANEL_WIDTH: 320, // 80 * 4 = 320px (w-80)
+  AI_PANEL: {
+    DEFAULT_WIDTH: 600, // Start at maximum width for better AI assistant experience
+    MIN_WIDTH: 280,
+    MAX_WIDTH: 600,
+  },
+  PANEL_GAP: 0, // No gap needed as borders are handled by panels
+} as const;
 
 // Adapter function to convert ProcessedOfficeAction to OfficeActionData format
 const adaptOfficeActionData = (processedOA: any) => {
@@ -83,6 +95,27 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
     initialOfficeActionId || null
   );
 
+  // AI Assistant panel width state with localStorage persistence
+  const [aiPanelWidth, setAiPanelWidth] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('amendmentStudio-aiPanelWidth');
+      if (saved) {
+        const width = parseInt(saved, 10);
+        if (width >= PANEL_CONFIG.AI_PANEL.MIN_WIDTH && width <= PANEL_CONFIG.AI_PANEL.MAX_WIDTH) {
+          return width;
+        }
+      }
+    }
+    return PANEL_CONFIG.AI_PANEL.DEFAULT_WIDTH;
+  });
+
+  // Persist AI panel width preference
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('amendmentStudio-aiPanelWidth', aiPanelWidth.toString());
+    }
+  }, [aiPanelWidth]);
+
   // Fetch office actions
   const {
     data: officeActions = [],
@@ -112,8 +145,21 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
   // Get selected rejection
   const selectedRejection = useMemo(() => {
     if (!officeActionData || !selectedRejectionId) return undefined;
-    return officeActionData.rejections.find(r => r.id === selectedRejectionId);
+    return officeActionData.rejections.find((r: any) => r.id === selectedRejectionId);
   }, [officeActionData, selectedRejectionId]);
+
+  // Handle AI panel resize
+  const handleAiPanelResize: ResizeCallback = useCallback(
+    (e, direction, ref) => {
+      const newWidth = ref.offsetWidth;
+      const clampedWidth = Math.min(
+        PANEL_CONFIG.AI_PANEL.MAX_WIDTH,
+        Math.max(PANEL_CONFIG.AI_PANEL.MIN_WIDTH, newWidth)
+      );
+      setAiPanelWidth(clampedWidth);
+    },
+    []
+  );
 
   // Handlers
   const handleRejectionSelect = useCallback((rejectionId: string) => {
@@ -220,7 +266,7 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
     </div>
   );
 
-  // Render studio workspace
+  // Render studio workspace with resizable AI panel
   return (
     <SimpleMainPanel
       header={renderStudioHeader()}
@@ -228,8 +274,11 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
       viewHeightOffset={0}
     >
       <div className="h-full flex overflow-hidden">
-        {/* Left Panel - Office Action Navigator */}
-        <div className="w-80 border-r bg-gray-50 flex flex-col">
+        {/* Left Panel - Office Action Navigator (Fixed Width) */}
+        <div 
+          className="border-r bg-gray-50 flex flex-col flex-shrink-0"
+          style={{ width: PANEL_CONFIG.LEFT_PANEL_WIDTH }}
+        >
           <OfficeActionNavigator
             officeAction={officeActionData}
             selectedRejectionId={selectedRejectionId}
@@ -239,23 +288,57 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
           />
         </div>
 
-        {/* Center Panel - Drafting Workspace */}
+        {/* Center Panel - Drafting Workspace (Flexible) */}
         <div className="flex-1 bg-white flex flex-col min-w-0">
           <DraftingWorkspace
             selectedOfficeAction={officeActionData}
             selectedOfficeActionId={selectedOfficeActionId}
+            amendmentProjectId={amendmentId}
             onSave={handleSaveDraft}
             onExport={handleExportResponse}
           />
         </div>
 
-        {/* Right Panel - AI Assistant */}
-        <div className="w-80 border-l bg-gray-50 flex flex-col">
+        {/* Right Panel - AI Assistant (Resizable) */}
+        <Resizable
+          size={{
+            width: aiPanelWidth,
+            height: '100%',
+          }}
+          minWidth={PANEL_CONFIG.AI_PANEL.MIN_WIDTH}
+          maxWidth={PANEL_CONFIG.AI_PANEL.MAX_WIDTH}
+          minHeight="100%"
+          maxHeight="100%"
+          enable={{
+            top: false,
+            right: false,
+            bottom: false,
+            left: true, // Enable resize from left edge
+            topRight: false,
+            bottomRight: false,
+            bottomLeft: false,
+            topLeft: false,
+          }}
+          onResizeStop={handleAiPanelResize}
+          handleStyles={{
+            left: {
+              width: '8px',
+              left: '-4px',
+              cursor: 'col-resize',
+              zIndex: 10,
+              background: 'transparent',
+            },
+          }}
+          handleClasses={{
+            left: 'ai-panel-resize-handle',
+          }}
+          className="border-l bg-gray-50 flex flex-col flex-shrink-0"
+        >
           <AIAssistantPanel
             projectId={projectId}
             officeAction={officeActionData ? {
               id: officeActionData.id,
-              rejections: officeActionData.rejections.map(r => ({
+              rejections: officeActionData.rejections.map((r: any) => ({
                 id: r.id,
                 type: r.type,
                 claims: r.claims,
@@ -265,7 +348,7 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
             } : undefined}
             onAnalysisComplete={handleAnalysisGenerated}
           />
-        </div>
+        </Resizable>
       </div>
     </SimpleMainPanel>
   );
