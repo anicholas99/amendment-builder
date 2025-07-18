@@ -257,6 +257,9 @@ export class AmendmentClientService {
           body: JSON.stringify({
             forceRefresh: request.forceRefresh,
           }),
+        },
+        {
+          timeout: 120000, // 2 minutes for rejection analysis
         }
       );
 
@@ -267,7 +270,10 @@ export class AmendmentClientService {
         );
       }
 
-      const result = await response.json();
+      const rawResult = await response.json();
+      
+      // Unwrap the data if it's wrapped by apiResponse.ok()
+      const result = rawResult.data || rawResult;
 
       logger.info('[AmendmentClientService] Rejections analyzed successfully', {
         officeActionId: request.officeActionId,

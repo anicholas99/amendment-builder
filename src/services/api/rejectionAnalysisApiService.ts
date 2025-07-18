@@ -32,7 +32,11 @@ const RejectionAnalysisResultSchema = z.object({
   strategyRationale: z.string(),
   argumentPoints: z.array(z.string()),
   amendmentSuggestions: z.array(z.string()),
-  analyzedAt: z.string().transform(str => new Date(str)),
+  analyzedAt: z.union([
+    z.string().transform(str => new Date(str)),
+    z.date(),
+    z.string().datetime(),
+  ]).transform(val => val instanceof Date ? val : new Date(val)),
 });
 
 const StrategyRecommendationSchema = z.object({
@@ -83,10 +87,33 @@ export class RejectionAnalysisApiService {
           body: JSON.stringify({
             includeClaimCharts: options?.includeClaimCharts ?? true,
           }),
+        },
+        {
+          timeout: 120000, // 2 minutes for rejection analysis
         }
       );
 
-      const data = await response.json();
+      const rawData = await response.json();
+      
+      // Unwrap the data if it's wrapped by apiResponse.ok()
+      const data = rawData.data || rawData;
+      
+      // Log the raw response for debugging
+      logger.debug('[RejectionAnalysisApiService] Raw API response', {
+        projectId,
+        officeActionId,
+        rawResponseKeys: Object.keys(rawData),
+        unwrappedResponseKeys: Object.keys(data),
+        wasWrapped: 'data' in rawData,
+        hasAnalyses: 'analyses' in data,
+        hasOverallStrategy: 'overallStrategy' in data,
+        hasSuccess: 'success' in data,
+        analysesType: Array.isArray(data.analyses) ? 'array' : typeof data.analyses,
+        analysesLength: Array.isArray(data.analyses) ? data.analyses.length : 'N/A',
+        overallStrategyKeys: data.overallStrategy ? Object.keys(data.overallStrategy) : 'null',
+        dataPreview: JSON.stringify(data).substring(0, 300) + '...',
+      });
+      
       const validated = AnalyzeOfficeActionResponseSchema.parse(data);
 
       logger.info('[RejectionAnalysisApiService] Analysis completed successfully', {
@@ -101,18 +128,25 @@ export class RejectionAnalysisApiService {
         overallStrategy: validated.overallStrategy,
       };
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        logger.error('[RejectionAnalysisApiService] Validation error details', {
+          projectId,
+          officeActionId,
+          zodErrors: error.errors,
+          fullErrorMessage: error.message,
+        });
+        
+        throw new ApplicationError(
+          ErrorCode.VALIDATION_FAILED,
+          `Invalid response from server: ${error.message}`
+        );
+      }
+
       logger.error('[RejectionAnalysisApiService] Failed to analyze rejections', {
         projectId,
         officeActionId,
         error: error instanceof Error ? error.message : String(error),
       });
-
-      if (error instanceof z.ZodError) {
-        throw new ApplicationError(
-          ErrorCode.VALIDATION_FAILED,
-          'Invalid response from server'
-        );
-      }
 
       throw new ApplicationError(
         ErrorCode.API_NETWORK_ERROR,
@@ -149,10 +183,17 @@ export class RejectionAnalysisApiService {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(options || {}),
+        },
+        {
+          timeout: 120000, // 2 minutes for rejection analysis
         }
       );
 
-      const data = await response.json();
+      const rawData = await response.json();
+      
+      // Unwrap the data if it's wrapped by apiResponse.ok()
+      const data = rawData.data || rawData;
+      
       const validated = RejectionAnalysisResultSchema.parse(data);
 
       logger.info('[RejectionAnalysisApiService] Rejection analyzed successfully', {

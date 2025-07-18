@@ -13,6 +13,7 @@ import { API_ROUTES } from '@/constants/apiRoutes';
 import { isDevelopment } from '@/config/environment.client';
 import { rateLimitMonitor } from './rateLimitMonitor';
 import { trackApiPerformance } from '@/utils/performanceMonitor';
+import { apiConfig } from '@/config/environment.client';
 
 // Create a module-scoped instance for backward compatibility
 // This is safe for client-side usage as it's tied to the browser session
@@ -153,6 +154,7 @@ export async function apiFetch(
     isStream?: boolean;
     retryCount?: number;
     startTime?: number; // Add startTime to track across retries
+    timeout?: number; // Custom timeout in milliseconds
   } = {}
 ): Promise<Response> {
   const { retries = 3, isStream = false, retryCount = 0 } = internalOptions;
@@ -161,6 +163,17 @@ export async function apiFetch(
   const startTime = internalOptions.startTime || performance.now();
 
   const method = (options.method || 'GET').toUpperCase();
+
+  // Determine timeout - use custom timeout or default based on request type
+  let timeoutMs = internalOptions.timeout;
+  if (!timeoutMs) {
+    // For long-running operations like rejection analysis, use extended timeout
+    if (url.includes('/analyze-rejections') || url.includes('/deep-analysis')) {
+      timeoutMs = 60000; // 60 seconds for analysis operations
+    } else {
+      timeoutMs = apiConfig.timeout; // Default 30 seconds
+    }
+  }
 
   // Ensure we have a CSRF token (fetch once and reuse to prevent 429s)
   await ensureCsrfTokenInternal();
@@ -199,15 +212,23 @@ export async function apiFetch(
     }
   }
 
+  // Create AbortController for timeout handling
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => {
+    abortController.abort();
+  }, timeoutMs);
+
   const finalOptions: RequestInit = {
     ...options,
     headers: currentHeaders,
     credentials: 'same-origin',
+    signal: abortController.signal,
   };
 
   // logger.debug(`[apiFetch] Making request to: ${url}`, {
   //   method: finalOptions.method || 'GET',
   //   isStream,
+  //   timeoutMs,
   // });
 
   try {
@@ -217,6 +238,9 @@ export async function apiFetch(
       method === 'GET' && !isStream
         ? await requestManager.fetch(url, finalOptions)
         : await fetch(url, finalOptions);
+
+    // Clear timeout on successful response
+    clearTimeout(timeoutId);
 
     captureTokenFromResponse(response);
 
@@ -337,12 +361,29 @@ export async function apiFetch(
       response.status
     );
   } catch (error: unknown) {
+    // Clear timeout in case of error
+    clearTimeout(timeoutId);
+
     // Track performance on exceptions too
     trackApiPerformance(url, method, startTime);
 
     if (error instanceof ApplicationError) {
       throw error;
     }
+
+    // Handle timeout errors specifically
+    if (error instanceof Error && error.name === 'AbortError') {
+      logger.error(`[apiFetch] Request timeout for ${url}`, {
+        timeoutMs,
+        url,
+        method,
+      });
+      throw new ApplicationError(
+        ErrorCode.API_TIMEOUT,
+        `Request timed out after ${timeoutMs}ms`
+      );
+    }
+
     // Handle network errors (e.g., failed to fetch)
     logger.error(`[apiFetch] Network or unknown error for ${url}`, {
       error: error instanceof Error ? error.message : 'Unknown error',
