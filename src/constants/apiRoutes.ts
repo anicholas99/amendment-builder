@@ -177,6 +177,9 @@ export const API_ROUTES = {
 
     // Claim version tracking
     CLAIM_HASH: (projectId: string) => `/api/projects/${projectId}/claim-hash`,
+    
+    // Patent PDF retrieval
+    RETRIEVE_PATENT_PDF: (projectId: string) => `/api/projects/${projectId}/retrieve-patent-pdf`,
   },
 
   // ============ SEARCH & HISTORY ============
