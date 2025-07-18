@@ -121,22 +121,52 @@ export const AmendmentProjectsList: React.FC<AmendmentProjectsListProps> = ({
     refetch,
   } = useOfficeActions(projectId);
 
-  // Mock amendment projects for now (will be replaced with real data)
+  // Create amendment projects from office actions with real status
   const amendmentProjects: AmendmentProject[] = useMemo(() => {
-    return officeActions.map((oa, index) => ({
-      id: `amendment-${oa.id}`,
-      name: `Response to ${oa.fileName || 'Office Action'} - ${new Date().getFullYear()}`,
-      status: (['DRAFT', 'IN_REVIEW', 'READY_TO_FILE', 'FILED'] as const)[index % 4],
-      dueDate: new Date(Date.now() + (90 * 24 * 60 * 60 * 1000)), // 90 days from now
-      responseType: (['AMENDMENT', 'CONTINUATION', 'RCE'] as const)[index % 3],
-      createdAt: new Date(oa.uploadedAt),
-      updatedAt: new Date(),
-      officeAction: {
-        id: oa.id,
-        originalFileName: oa.fileName,
-        rejectionCount: oa.rejections?.length || 0,
-      },
-    }));
+    return officeActions.map((oa) => {
+      // Determine status based on office action status and time since upload
+      let status: AmendmentProject['status'] = 'DRAFT';
+      const daysSinceUpload = Math.floor(
+        (Date.now() - new Date(oa.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      
+      // More realistic status assignment based on office action status
+      if (oa.status === 'UPLOADED') {
+        status = 'DRAFT';
+      } else if (oa.status === 'PARSED' && daysSinceUpload < 30) {
+        status = 'DRAFT';
+      } else if (oa.status === 'PARSED' && daysSinceUpload >= 30) {
+        status = 'IN_REVIEW';
+      } else if (oa.status === 'COMPLETED') {
+        status = 'READY_TO_FILE';
+      }
+
+      // Calculate response deadline (typically 3 months from office action date)
+      const dueDate = oa.dateIssued 
+        ? new Date(oa.dateIssued.getTime() + (90 * 24 * 60 * 60 * 1000))
+        : new Date(Date.now() + (90 * 24 * 60 * 60 * 1000));
+
+      // Default response type based on rejection count
+      let responseType: AmendmentProject['responseType'] = 'AMENDMENT';
+      if (oa.rejections && oa.rejections.length === 0) {
+        responseType = 'RCE'; // Request for Continued Examination if no rejections
+      }
+
+      return {
+        id: `amendment-${oa.id}`,
+        name: `Response to ${oa.fileName || 'Office Action'} - ${new Date().getFullYear()}`,
+        status,
+        dueDate,
+        responseType,
+        createdAt: oa.createdAt,
+        updatedAt: oa.updatedAt,
+        officeAction: {
+          id: oa.id,
+          originalFileName: oa.fileName,
+          rejectionCount: oa.rejections?.length || 0,
+        },
+      };
+    });
   }, [officeActions]);
 
   // Filter projects

@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/apiClient';
 import { logger } from '@/utils/clientLogger';
 import { useToast } from '@/hooks/useToastWrapper';
+import { AmendmentApiService } from '@/services/api/amendmentApiService';
 import type { 
   ResponseShellResult, 
   ResponseShellRequest 
@@ -75,40 +76,22 @@ export function useUploadOfficeAction(projectId: string) {
 
   return useMutation({
     mutationFn: async (request: OfficeActionUploadRequest): Promise<OfficeActionUploadResponse> => {
-      logger.info('[useUploadOfficeAction] Starting upload', {
+      const result = await AmendmentApiService.uploadOfficeAction(
         projectId,
-        fileName: request.file.name,
-        fileSize: request.file.size,
-      });
-
-      const formData = new FormData();
-      formData.append('file', request.file);
-      
-      if (request.metadata) {
-        formData.append('metadata', JSON.stringify(request.metadata));
-      }
-
-      const response = await apiFetch(
-        `/api/projects/${projectId}/office-actions/upload`,
-        {
-          method: 'POST',
-          body: formData,
-        }
+        request.file,
+        request.metadata
       );
 
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      logger.info('[useUploadOfficeAction] Upload completed', {
+      // Adapt the service response to match the hook interface
+      return {
+        id: result.id,
         projectId,
-        officeActionId: data.id,
-        rejectionCount: data.rejectionCount,
-      });
-
-      return data;
+        fileName: result.fileName,
+        extractedTextLength: 0, // Not available from service
+        rejectionCount: result.rejectionCount,
+        textExtractionWarning: result.warning,
+        message: 'Office Action uploaded successfully',
+      };
     },
     onSuccess: (data) => {
       toast.success({
@@ -136,17 +119,8 @@ export function useUploadOfficeAction(projectId: string) {
 export function useOfficeActions(projectId: string) {
   return useQuery({
     queryKey: amendmentQueryKeys.officeActions(projectId),
-    queryFn: async (): Promise<OfficeAction[]> => {
-      logger.debug('[useOfficeActions] Fetching office actions', { projectId });
-
-      const response = await apiFetch(`/api/projects/${projectId}/office-actions`);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch office actions: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data.officeActions || [];
+    queryFn: async () => {
+      return AmendmentApiService.getOfficeActions(projectId);
     },
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -160,17 +134,8 @@ export function useOfficeActions(projectId: string) {
 export function useOfficeAction(officeActionId: string) {
   return useQuery({
     queryKey: amendmentQueryKeys.officeAction(officeActionId),
-    queryFn: async (): Promise<OfficeAction> => {
-      logger.debug('[useOfficeAction] Fetching office action details', { officeActionId });
-
-      const response = await apiFetch(`/api/office-actions/${officeActionId}`);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch office action: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data.officeAction;
+    queryFn: async () => {
+      return AmendmentApiService.getOfficeActionDetail(officeActionId);
     },
     enabled: !!officeActionId,
     staleTime: 10 * 60 * 1000, // 10 minutes

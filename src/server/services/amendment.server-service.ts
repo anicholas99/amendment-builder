@@ -36,6 +36,8 @@ import {
   createRejections,
   findRejectionsByOfficeAction 
 } from '@/repositories/rejectionRepository';
+import { ClaimRepository } from '@/repositories/claimRepository';
+import { prisma } from '@/lib/prisma';
 
 // ============ PROMPT TEMPLATES ============
 
@@ -277,25 +279,22 @@ export class AmendmentServerService {
     });
 
          try {
-       // TODO: Get office action and rejections - integrate with repository
-       // const officeAction = await findOfficeActionById(request.officeActionId);
-       // if (!officeAction) {
-       //   throw new ApplicationError(
-       //     ErrorCode.DB_RECORD_NOT_FOUND,
-       //     `Office Action ${request.officeActionId} not found`
-       //   );
-       // }
+       // Get office action and rejections from repositories
+       const officeAction = await findOfficeActionById(request.officeActionId, 'tenant-placeholder');
+       if (!officeAction) {
+         throw new ApplicationError(
+           ErrorCode.DB_RECORD_NOT_FOUND,
+           `Office Action ${request.officeActionId} not found`
+         );
+       }
 
-       // const rejections = await findRejectionsByOfficeAction(request.officeActionId);
-       // if (rejections.length === 0) {
-       //   throw new ApplicationError(
-       //     ErrorCode.INVALID_INPUT,
-       //     'No rejections found for analysis'
-       //   );
-       // }
-
-       // Placeholder for demonstration - TODO: integrate with actual repositories
-       const rejections = [] as any[];
+       const rejections = await findRejectionsByOfficeAction(request.officeActionId);
+       if (rejections.length === 0) {
+         throw new ApplicationError(
+           ErrorCode.INVALID_INPUT,
+           'No rejections found for analysis'
+         );
+       }
 
       // Get current claims from project (leverage existing claim repository)
       const currentClaim1 = await this.getCurrentClaim1Text(request.projectId);
@@ -378,21 +377,17 @@ export class AmendmentServerService {
     });
 
          try {
-       // TODO: Get office action and analysis data - integrate with repository  
-       // const officeAction = await findOfficeActionById(request.officeActionId);
-       // if (!officeAction) {
-       //   throw new ApplicationError(
-       //     ErrorCode.DB_RECORD_NOT_FOUND,
-       //     `Office Action ${request.officeActionId} not found`
-       //   );
-       // }
+       // Get office action and analysis data from repositories  
+       const officeAction = await findOfficeActionById(request.officeActionId, 'tenant-placeholder');
+       if (!officeAction) {
+         throw new ApplicationError(
+           ErrorCode.DB_RECORD_NOT_FOUND,
+           `Office Action ${request.officeActionId} not found`
+         );
+       }
 
-       // const rejections = await findRejectionsByOfficeAction(request.officeActionId);
+       const rejections = await findRejectionsByOfficeAction(request.officeActionId);
        const currentClaim1 = await this.getCurrentClaim1Text(request.projectId);
-
-       // Placeholder data - TODO: integrate with actual repositories
-       const officeAction = {} as any;
-       const rejections = [] as any[];
 
        // Generate amendment using AI
        const systemPrompt = renderPromptTemplate(AMENDMENT_GENERATION_SYSTEM_PROMPT, {});
@@ -461,15 +456,55 @@ export class AmendmentServerService {
    * Get current Claim 1 text from project
    */
   private static async getCurrentClaim1Text(projectId: string): Promise<string | null> {
-    // This would integrate with existing claim repository
-    // For now, return a placeholder - this should be implemented to use existing claim retrieval
     logger.debug('[AmendmentService] Getting current Claim 1 text', { projectId });
     
-    // TODO: Integrate with existing claimRepository.findByProjectId()
-    // const claims = await claimRepository.findByProjectId(projectId);
-    // return claims?.['1'] || null;
-    
-    return null; // Placeholder - implement with existing claim repository
+    try {
+      if (!prisma) {
+        throw new ApplicationError(
+          ErrorCode.DB_CONNECTION_ERROR,
+          'Database client not initialized'
+        );
+      }
+
+      // First get the invention ID from the project
+      const invention = await prisma.invention.findUnique({
+        where: { projectId },
+        select: { id: true },
+      });
+
+      if (!invention) {
+        logger.warn('[AmendmentService] No invention found for project', { projectId });
+        return null;
+      }
+
+      // Get claims for this invention
+      const claims = await ClaimRepository.findByInventionId(invention.id);
+      
+      // Find claim 1
+      const claim1 = claims.find(claim => claim.number === 1);
+      
+      if (!claim1) {
+        logger.warn('[AmendmentService] No Claim 1 found for invention', { 
+          projectId, 
+          inventionId: invention.id 
+        });
+        return null;
+      }
+
+      logger.info('[AmendmentService] Found Claim 1', { 
+        projectId, 
+        inventionId: invention.id,
+        claimLength: claim1.text.length 
+      });
+
+      return claim1.text;
+    } catch (error) {
+      logger.error('[AmendmentService] Error getting Claim 1 text', {
+        projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
   }
 
   /**

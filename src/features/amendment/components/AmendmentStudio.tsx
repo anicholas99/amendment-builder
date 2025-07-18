@@ -18,50 +18,51 @@ import { DraftingWorkspace } from './DraftingWorkspace';
 
 // Import existing components
 import { SimpleMainPanel } from '@/components/common/SimpleMainPanel';
-import { useOfficeActions } from '@/hooks/api/useAmendment';
+import { useOfficeActions, useOfficeAction } from '@/hooks/api/useAmendment';
+import { AmendmentApiService } from '@/services/api/amendmentApiService';
 
 interface AmendmentStudioProps {
   projectId: string;
   officeActionId?: string;
 }
 
-// Mock office action data for development
-const createMockOfficeActionData = (officeActionId?: string) => {
-  if (!officeActionId) return null;
+// Adapter function to convert ProcessedOfficeAction to OfficeActionData format
+const adaptOfficeActionData = (processedOA: any) => {
+  if (!processedOA) return undefined;
+
+  // Calculate summary data
+  const rejectionTypes = [...new Set(processedOA.rejections.map((r: any) => r.type))];
+  const allClaimNumbers = new Set<string>();
+  const allPriorArtRefs = new Set<string>();
+
+  processedOA.rejections.forEach((r: any) => {
+    r.claimNumbers.forEach((claim: string) => allClaimNumbers.add(claim));
+    r.citedPriorArt.forEach((ref: string) => allPriorArtRefs.add(ref));
+  });
 
   return {
-    id: officeActionId,
-    fileName: 'Non-Final Office Action - Dec 2024.pdf',
+    id: processedOA.id,
+    fileName: processedOA.fileName,
     metadata: {
-      applicationNumber: '17/123,456',
-      mailingDate: '2024-12-15',
-      examinerName: 'Sarah Johnson',
-      artUnit: '3685',
+      applicationNumber: processedOA.metadata?.applicationNumber,
+      mailingDate: processedOA.dateIssued?.toISOString(),
+      examinerName: processedOA.examiner?.name,
+      artUnit: processedOA.examiner?.artUnit,
     },
-    rejections: [
-      {
-        id: 'rej-1',
-        type: '§103' as const,
-        claims: ['1', '2', '3'],
-        priorArtReferences: ['US8,123,456', 'US2020/0234567'],
-        examinerReasoning: 'Claims 1-3 are rejected under 35 U.S.C. § 103 as being obvious over Smith (US 8,123,456) in view of Johnson (US 2020/0234567). Smith discloses a system for processing data but lacks real-time processing capability, which Johnson teaches.',
-        rawText: 'Complete rejection text from office action...',
-      },
-      {
-        id: 'rej-2',
-        type: '§102' as const,
-        claims: ['4'],
-        priorArtReferences: ['US9,987,654'],
-        examinerReasoning: 'Claim 4 is rejected under 35 U.S.C. § 102(a)(1) as being anticipated by Wilson (US 9,987,654). Wilson discloses every element of claim 4.',
-        rawText: 'Complete rejection text for claim 4...',
-      },
-    ],
-    allPriorArtReferences: ['US8,123,456', 'US2020/0234567', 'US9,987,654'],
+    rejections: processedOA.rejections.map((r: any) => ({
+      id: r.id,
+      type: r.type,
+      claims: r.claimNumbers,
+      priorArtReferences: r.citedPriorArt,
+      examinerReasoning: r.examinerText,
+      rawText: r.examinerText, // Use examiner text as raw text
+    })),
+    allPriorArtReferences: Array.from(allPriorArtRefs) as string[],
     summary: {
-      totalRejections: 2,
-      rejectionTypes: ['§103', '§102'],
-      totalClaimsRejected: 4,
-      uniquePriorArtCount: 3,
+      totalRejections: processedOA.rejections.length,
+      rejectionTypes: rejectionTypes as string[],
+      totalClaimsRejected: allClaimNumbers.size,
+      uniquePriorArtCount: allPriorArtRefs.size,
     },
   };
 };
@@ -90,14 +91,23 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
     refetch: refetchOfficeActions,
   } = useOfficeActions(projectId);
 
-  // Get office action data (mock for now)
-  const officeActionData = useMemo(() => {
-    if (!isStudioView || !amendmentId) return undefined;
-    
-    // Extract office action ID from amendment ID (mock logic)
-    const officeActionId = amendmentId.replace('amendment-', '');
-    return createMockOfficeActionData(officeActionId) || undefined;
+  // Extract office action ID from amendment ID
+  const extractedOfficeActionId = useMemo(() => {
+    if (!isStudioView || !amendmentId) return null;
+    return amendmentId.replace('amendment-', '');
   }, [isStudioView, amendmentId]);
+
+  // Fetch office action details
+  const {
+    data: rawOfficeActionData,
+    isLoading: isLoadingOfficeAction,
+    error: officeActionError,
+  } = useOfficeAction(extractedOfficeActionId || '');
+
+  // Adapt office action data for UI components
+  const officeActionData = useMemo(() => {
+    return adaptOfficeActionData(rawOfficeActionData);
+  }, [rawOfficeActionData]);
 
   // Get selected rejection
   const selectedRejection = useMemo(() => {
@@ -130,14 +140,31 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
     // TODO: Implement text insertion into drafting workspace
   }, []);
 
-  const handleSaveDraft = useCallback((content: any) => {
-    logger.info('[AmendmentStudio] Draft saved', { 
-      amendmentId, 
-      claimCount: content.claimAmendments?.length || 0,
-      argumentCount: content.argumentSections?.length || 0 
-    });
-    // TODO: Implement draft saving
-  }, [amendmentId]);
+  const handleSaveDraft = useCallback(async (content: any) => {
+    if (!extractedOfficeActionId) {
+      logger.warn('[AmendmentStudio] Cannot save draft without office action ID');
+      return;
+    }
+
+    try {
+      await AmendmentApiService.saveAmendmentDraft(
+        projectId,
+        extractedOfficeActionId,
+        content
+      );
+      
+      logger.info('[AmendmentStudio] Draft saved successfully', { 
+        amendmentId, 
+        claimCount: content.claimAmendments?.length || 0,
+        argumentCount: content.argumentSections?.length || 0 
+      });
+    } catch (error) {
+      logger.error('[AmendmentStudio] Failed to save draft', {
+        amendmentId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [amendmentId, extractedOfficeActionId, projectId]);
 
   const handleExportResponse = useCallback(() => {
     logger.info('[AmendmentStudio] Export requested', { amendmentId });
@@ -224,9 +251,18 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
         {/* Right Panel - AI Assistant */}
         <div className="w-80 border-l bg-gray-50 flex flex-col">
           <AIAssistantPanel
-            selectedRejection={selectedRejection}
-            onAnalysisGenerated={handleAnalysisGenerated}
-            onInsertText={handleInsertText}
+            projectId={projectId}
+            officeAction={officeActionData ? {
+              id: officeActionData.id,
+              rejections: officeActionData.rejections.map(r => ({
+                id: r.id,
+                type: r.type,
+                claims: r.claims,
+                reasoning: r.examinerReasoning,
+              })),
+              priorArt: [], // TODO: Map prior art from officeActionData
+            } : undefined}
+            onAnalysisComplete={handleAnalysisGenerated}
           />
         </div>
       </div>
