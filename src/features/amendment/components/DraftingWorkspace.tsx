@@ -25,7 +25,8 @@ import {
   Copy,
   CheckCircle2,
   AlertCircle,
-  Clock
+  Clock,
+  Lightbulb
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -138,28 +139,44 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
   // Delete file mutation
   const deleteFileMutation = useDeleteAmendmentProjectFile();
   
-  // Claims state
-  const [claimAmendments, setClaimAmendments] = useState<ClaimAmendment[]>([
-    {
-      id: '1',
-      claimNumber: '1',
-      status: 'CURRENTLY_AMENDED',
-      originalText: 'A method comprising: providing a system for processing data; executing operations on the data; and generating output results.',
-      amendedText: 'A method comprising: providing a system for processing data in real-time with sub-100ms latency constraints; executing operations on the data using dedicated hardware acceleration; and generating output results with enhanced accuracy and improved reliability.',
-      reasoning: 'Added real-time processing limitation with specific latency constraint and hardware acceleration requirement to distinguish over Smith (US 8,123,456) + Johnson (US 7,987,654) combination. The specific sub-100ms latency limitation is not taught or suggested by the cited prior art.',
-    },
-  ]);
+  // Claims state - Initialize empty, to be populated from Office Action data
+  const [claimAmendments, setClaimAmendments] = useState<ClaimAmendment[]>([]);
 
-  // Arguments state
-  const [argumentSections, setArgumentSections] = useState<ArgumentSection[]>([
-    {
-      id: '1',
-      title: 'Response to § 103 Rejection',
-      content: 'Applicant respectfully traverses the rejection under 35 U.S.C. § 103 and submits that the claims are patentable for at least the following reasons:\n\nThe prior art fails to teach or suggest the combination of real-time processing with sub-100ms latency constraints as claimed.',
-      type: 'RESPONSE_TO_REJECTION',
-      rejectionId: 'rej-1',
-    },
-  ]);
+  // Arguments state - Initialize empty, to be populated based on actual rejections
+  const [argumentSections, setArgumentSections] = useState<ArgumentSection[]>([]);
+
+  // Initialize amendment structure from Office Action data
+  useEffect(() => {
+    if (selectedOfficeAction && selectedOfficeAction.rejections.length > 0) {
+      // Create argument sections for each rejection
+      const newArgumentSections = selectedOfficeAction.rejections.map((rejection: any, index: number) => ({
+        id: `arg-${rejection.id}`,
+        title: `Response to ${rejection.type} Rejection`,
+        content: `Applicant respectfully traverses the ${rejection.type} rejection and submits that the claims are patentable for at least the following reasons:\n\n[AI-generated arguments will appear here when you use the AI Assistant]`,
+        type: 'RESPONSE_TO_REJECTION' as const,
+        rejectionId: rejection.id,
+      }));
+
+      setArgumentSections(newArgumentSections);
+
+      // Create placeholder claim amendments for rejected claims
+      const rejectedClaims = new Set<string>();
+      selectedOfficeAction.rejections.forEach((rejection: any) => {
+        rejection.claims.forEach((claim: string) => rejectedClaims.add(claim));
+      });
+
+      const newClaimAmendments = Array.from(rejectedClaims).map(claimNumber => ({
+        id: `claim-${claimNumber}`,
+        claimNumber,
+        status: 'CURRENTLY_AMENDED' as const,
+        originalText: `[Original text for Claim ${claimNumber} - please add via project claims or AI Assistant]`,
+        amendedText: `[Amended text for Claim ${claimNumber} - use AI Assistant for suggestions]`,
+        reasoning: `[Amendment reasoning for Claim ${claimNumber} - use AI Assistant for suggestions]`,
+      }));
+
+      setClaimAmendments(newClaimAmendments);
+    }
+  }, [selectedOfficeAction]);
 
   // Document metadata
   const [documentTitle, setDocumentTitle] = useState('Amendment Response');
@@ -650,13 +667,32 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
 
               {claimAmendments.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
-                  <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <h3 className="font-medium mb-2">No claim amendments yet</h3>
-                  <p className="text-sm mb-4">Add your first claim amendment to get started</p>
-                  <Button onClick={addClaimAmendment}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add First Claim
-                  </Button>
+                  {selectedOfficeAction ? (
+                    <div className="max-w-md mx-auto">
+                      <Lightbulb className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="font-medium mb-2 text-gray-900">Ready to Generate Amendments</h3>
+                      <p className="text-sm mb-4">
+                        Your Office Action has been analyzed. Use the AI Assistant to generate claim amendments 
+                        based on your {selectedOfficeAction.summary.totalRejections} rejection(s).
+                      </p>
+                      <Badge variant="outline" className="mb-4">
+                        {selectedOfficeAction.summary.rejectionTypes.join(', ')} Rejection(s) Found
+                      </Badge>
+                      <p className="text-xs text-gray-400">
+                        Click "Suggest Amendments" in the AI Assistant panel →
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                      <h3 className="font-medium mb-2">No claim amendments yet</h3>
+                      <p className="text-sm mb-4">Add your first claim amendment to get started</p>
+                      <Button onClick={addClaimAmendment}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add First Claim
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">

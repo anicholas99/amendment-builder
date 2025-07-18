@@ -128,37 +128,23 @@ const QuickActions = ({ onAction }: { onAction: (action: string) => void }) => {
 
 // Analysis history component
 const AnalysisHistory = () => {
-  const historyItems = [
-    {
-      id: '1',
-      timestamp: '2 minutes ago',
-      action: 'Summarized Office Action',
-      result: 'Found 3 § 103 rejections affecting claims 1-5',
-      confidence: 95,
-      status: 'completed' as const,
-    },
-    {
-      id: '2',
-      timestamp: '5 minutes ago',
-      action: 'Prior Art Analysis',
-      result: 'Analyzed US Patent 8,123,456 - Low relevance to claim 3',
-      confidence: 87,
-      status: 'completed' as const,
-    },
-    {
-      id: '3',
-      timestamp: '10 minutes ago',
-      action: 'Claim Amendment Suggestions',
-      result: 'Suggested 4 potential amendments for claims 1-2',
-      confidence: 92,
-      status: 'completed' as const,
-    },
-  ];
+  // TODO: Replace with real analysis history from API
+  // For now, show empty state to encourage users to use AI assistant
+  const historyItems: any[] = [];
 
   return (
     <ScrollArea className="h-[400px]">
       <div className="space-y-3">
-        {historyItems.map((item) => (
+        {historyItems.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <h4 className="font-medium mb-2">No analysis history yet</h4>
+            <p className="text-sm">
+              Use the quick actions above to start analyzing your Office Action with AI
+            </p>
+          </div>
+        ) : (
+          historyItems.map((item) => (
           <Card key={item.id} className="p-3">
             <div className="flex items-start gap-3">
               <div className="flex-shrink-0 mt-1">
@@ -187,7 +173,7 @@ const AnalysisHistory = () => {
               </div>
             </div>
           </Card>
-        ))}
+        )))}
       </div>
     </ScrollArea>
   );
