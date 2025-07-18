@@ -124,7 +124,7 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
 
   // Rejection analysis hooks
   const analyzeRejections = useAnalyzeOfficeActionRejections(projectId, selectedOfficeActionId || '');
-  const { data: analysisData } = useRejectionAnalysis(selectedOfficeActionId) as {
+  const { data: analysisData } = useRejectionAnalysis(projectId, selectedOfficeActionId) as {
     data?: {
       analyses: any[];
       overallStrategy: any;
@@ -231,6 +231,11 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
                 {hasAnalysis && !showAnalysis && (
                   <Button onClick={() => setShowAnalysis(true)}>
                     View Analysis
+                  </Button>
+                )}
+                {hasAnalysis && showAnalysis && (
+                  <Button variant="outline" onClick={() => setShowAnalysis(false)}>
+                    Back to Drafting
                   </Button>
                 )}
               </div>

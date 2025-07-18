@@ -22,8 +22,8 @@ async function handler(
   const userId = req.user?.id;
   const tenantId = req.user?.tenantId;
 
-  if (req.method !== 'POST') {
-    return apiResponse.methodNotAllowed(res, ['POST']);
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return apiResponse.methodNotAllowed(res, ['GET', 'POST']);
   }
 
   // Validate parameters
@@ -40,38 +40,74 @@ async function handler(
   }
 
   try {
-    apiLogger.info('Analyzing Office Action rejections', {
-      projectId,
-      officeActionId,
-      userId,
-    });
+    if (req.method === 'GET') {
+      // GET: Fetch existing analysis
+      apiLogger.info('Fetching saved Office Action rejection analysis', {
+        projectId,
+        officeActionId,
+        userId,
+      });
 
-    // Parse request body
-    const { includeClaimCharts = true } = req.body as AnalyzeOfficeActionRequest;
+      const analysisResult = await RejectionAnalysisServerService.getSavedOfficeActionAnalysis(
+        officeActionId,
+        tenantId
+      );
 
-    // Call rejection analysis service
-    const analysisResult = await RejectionAnalysisServerService.analyzeOfficeActionRejections(
-      officeActionId,
-      tenantId
-    );
+      if (!analysisResult) {
+        return apiResponse.notFound(res, 'No analysis found for this Office Action');
+      }
 
-    apiLogger.info('Office Action rejections analyzed successfully', {
-      projectId,
-      officeActionId,
-      rejectionCount: analysisResult.analyses.length,
-      overallStrategy: analysisResult.overallStrategy.primaryStrategy,
-    });
+      apiLogger.info('Saved Office Action analysis retrieved successfully', {
+        projectId,
+        officeActionId,
+        rejectionCount: analysisResult.analyses.length,
+        overallStrategy: analysisResult.overallStrategy.primaryStrategy,
+      });
 
-    const response: AnalyzeOfficeActionResponse = {
-      success: true,
-      analyses: analysisResult.analyses,
-      overallStrategy: analysisResult.overallStrategy,
-    };
+      const response: AnalyzeOfficeActionResponse = {
+        success: true,
+        analyses: analysisResult.analyses,
+        overallStrategy: analysisResult.overallStrategy,
+      };
 
-    return apiResponse.ok(res, response);
+      return apiResponse.ok(res, response);
+
+    } else {
+      // POST: Run new analysis
+      apiLogger.info('Analyzing Office Action rejections', {
+        projectId,
+        officeActionId,
+        userId,
+      });
+
+      // Parse request body
+      const { includeClaimCharts = true } = req.body as AnalyzeOfficeActionRequest;
+
+      // Call rejection analysis service
+      const analysisResult = await RejectionAnalysisServerService.analyzeOfficeActionRejections(
+        officeActionId,
+        tenantId
+      );
+
+      apiLogger.info('Office Action rejections analyzed successfully', {
+        projectId,
+        officeActionId,
+        rejectionCount: analysisResult.analyses.length,
+        overallStrategy: analysisResult.overallStrategy.primaryStrategy,
+      });
+
+      const response: AnalyzeOfficeActionResponse = {
+        success: true,
+        analyses: analysisResult.analyses,
+        overallStrategy: analysisResult.overallStrategy,
+      };
+
+      return apiResponse.ok(res, response);
+    }
 
   } catch (error) {
-    apiLogger.error('Failed to analyze Office Action rejections', {
+    const operation = req.method === 'GET' ? 'fetch saved' : 'analyze';
+    apiLogger.error(`Failed to ${operation} Office Action rejections`, {
       projectId,
       officeActionId,
       error: error instanceof Error ? error.message : String(error),

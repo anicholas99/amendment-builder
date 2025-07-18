@@ -58,6 +58,84 @@ const AnalyzeOfficeActionResponseSchema = z.object({
 
 export class RejectionAnalysisApiService {
   /**
+   * Get saved rejection analysis for an Office Action
+   */
+  static async getSavedOfficeActionAnalysis(
+    projectId: string,
+    officeActionId: string
+  ): Promise<{
+    analyses: RejectionAnalysisResult[];
+    overallStrategy: StrategyRecommendation;
+  } | null> {
+    logger.info('[RejectionAnalysisApiService] Fetching saved Office Action analysis', {
+      projectId,
+      officeActionId,
+    });
+
+    try {
+      const response = await apiFetch(
+        `/api/projects/${projectId}/office-actions/${officeActionId}/analyze-rejections`,
+        {
+          method: 'GET',
+        }
+      );
+
+      const rawData = await response.json();
+      
+      // Unwrap the data if it's wrapped by apiResponse.ok()
+      const data = rawData.data || rawData;
+      
+      const validated = AnalyzeOfficeActionResponseSchema.parse(data);
+
+      logger.info('[RejectionAnalysisApiService] Saved analysis fetched successfully', {
+        projectId,
+        officeActionId,
+        rejectionCount: validated.analyses.length,
+        overallStrategy: validated.overallStrategy.primaryStrategy,
+      });
+
+      return {
+        analyses: validated.analyses,
+        overallStrategy: validated.overallStrategy,
+      };
+    } catch (error) {
+      // If it's a 404, that means no saved analysis exists
+      if (error instanceof ApplicationError && error.statusCode === 404) {
+        logger.info('[RejectionAnalysisApiService] No saved analysis found', {
+          projectId,
+          officeActionId,
+        });
+        return null;
+      }
+
+      if (error instanceof z.ZodError) {
+        logger.error('[RejectionAnalysisApiService] Validation error details', {
+          projectId,
+          officeActionId,
+          zodErrors: error.errors,
+          fullErrorMessage: error.message,
+        });
+        
+        throw new ApplicationError(
+          ErrorCode.VALIDATION_FAILED,
+          `Invalid response from server: ${error.message}`
+        );
+      }
+
+      logger.error('[RejectionAnalysisApiService] Failed to fetch saved analysis', {
+        projectId,
+        officeActionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      throw new ApplicationError(
+        ErrorCode.API_NETWORK_ERROR,
+        `Failed to fetch saved analysis: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
    * Analyze all rejections for an Office Action
    */
   static async analyzeOfficeActionRejections(

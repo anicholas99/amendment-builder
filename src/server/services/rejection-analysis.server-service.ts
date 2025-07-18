@@ -222,6 +222,102 @@ export class RejectionAnalysisServerService {
   }
 
   /**
+   * Fetches saved rejection analysis for an Office Action
+   */
+  static async getSavedOfficeActionAnalysis(
+    officeActionId: string,
+    tenantId: string
+  ): Promise<{
+    analyses: RejectionAnalysisResult[];
+    overallStrategy: StrategyRecommendation;
+  } | null> {
+    logger.info('[RejectionAnalysis] Fetching saved analysis for Office Action', {
+      officeActionId,
+    });
+
+    try {
+      // Get office action with rejections
+      const officeAction = await findOfficeActionWithRelationsById(officeActionId, tenantId);
+      if (!officeAction) {
+        throw new ApplicationError(
+          ErrorCode.DB_RECORD_NOT_FOUND,
+          `Office Action ${officeActionId} not found`
+        );
+      }
+
+      if (!officeAction.rejections || officeAction.rejections.length === 0) {
+        logger.info('[RejectionAnalysis] No rejections found for Office Action', {
+          officeActionId,
+        });
+        return null;
+      }
+
+      // Check if any rejections have saved analysis
+      const savedAnalyses: RejectionAnalysisResult[] = [];
+      let hasSavedAnalysis = false;
+
+      for (const rejection of officeAction.rejections) {
+        if (rejection.parsedElements && rejection.status) {
+          try {
+            const savedAnalysisData = JSON.parse(rejection.parsedElements);
+            
+            // Reconstruct the analysis result
+            const analysisResult: RejectionAnalysisResult = {
+              rejectionId: rejection.id,
+              strength: rejection.status as RejectionStrength,
+              confidenceScore: savedAnalysisData.confidenceScore || 0.8,
+              examinerReasoningGaps: savedAnalysisData.examinerReasoningGaps || [],
+              claimChart: savedAnalysisData.claimChart,
+              recommendedStrategy: savedAnalysisData.recommendedStrategy || 'COMBINATION',
+              strategyRationale: savedAnalysisData.strategyRationale || 'Analysis based on saved data',
+              argumentPoints: savedAnalysisData.argumentPoints || [],
+              amendmentSuggestions: savedAnalysisData.amendmentSuggestions || [],
+              analyzedAt: savedAnalysisData.analyzedAt ? new Date(savedAnalysisData.analyzedAt) : new Date(),
+            };
+
+            savedAnalyses.push(analysisResult);
+            hasSavedAnalysis = true;
+          } catch (error) {
+            logger.warn('[RejectionAnalysis] Failed to parse saved analysis data', {
+              rejectionId: rejection.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+      }
+
+      if (!hasSavedAnalysis) {
+        logger.info('[RejectionAnalysis] No saved analysis found for Office Action', {
+          officeActionId,
+        });
+        return null;
+      }
+
+      // Generate overall strategy from saved analyses
+      const overallStrategy = this.generateOverallStrategy(savedAnalyses);
+
+      logger.info('[RejectionAnalysis] Retrieved saved analysis successfully', {
+        officeActionId,
+        rejectionCount: savedAnalyses.length,
+        overallStrategy: overallStrategy.primaryStrategy,
+      });
+
+      return {
+        analyses: savedAnalyses,
+        overallStrategy,
+      };
+
+    } catch (error) {
+      logger.error('[RejectionAnalysis] Failed to fetch saved Office Action analysis', {
+        officeActionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      throw error;
+    }
+  }
+
+  /**
    * Analyzes all rejections for an Office Action
    */
   static async analyzeOfficeActionRejections(

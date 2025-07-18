@@ -8,6 +8,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/useToast';
 import { logger } from '@/utils/clientLogger';
+import { ApplicationError } from '@/lib/error';
 import { RejectionAnalysisApiService } from '@/services/api/rejectionAnalysisApiService';
 import type {
   RejectionAnalysisResult,
@@ -84,17 +85,39 @@ export function useAnalyzeOfficeActionRejections(
 }
 
 /**
- * Hook to get cached rejection analysis
+ * Hook to get saved rejection analysis (fetches from server if not cached)
  */
-export function useRejectionAnalysis(officeActionId: string | null) {
+export function useRejectionAnalysis(
+  projectId: string | null, 
+  officeActionId: string | null
+) {
   return useQuery({
     queryKey: rejectionAnalysisKeys.byOfficeAction(officeActionId || ''),
     queryFn: async () => {
-      // This hook only reads from cache, doesn't fetch
-      return null;
+      if (!projectId || !officeActionId) {
+        return null;
+      }
+
+      logger.info('[useRejectionAnalysis] Fetching saved analysis', {
+        projectId,
+        officeActionId,
+      });
+
+      return RejectionAnalysisApiService.getSavedOfficeActionAnalysis(
+        projectId,
+        officeActionId
+      );
     },
-    enabled: false, // Don't auto-fetch
-    staleTime: Infinity, // Data doesn't go stale
+    enabled: !!projectId && !!officeActionId, // Auto-fetch when both IDs are available
+    staleTime: 5 * 60 * 1000, // 5 minutes - analysis can be cached for a while
+    retry: (failureCount, error) => {
+      // Don't retry on 404 (no saved analysis)
+      if (error instanceof ApplicationError && error.statusCode === 404) {
+        return false;
+      }
+      // Retry other errors up to 2 times
+      return failureCount < 2;
+    },
   });
 }
 
