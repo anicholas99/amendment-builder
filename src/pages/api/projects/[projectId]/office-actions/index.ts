@@ -50,14 +50,15 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       success: true,
       data: officeActions.map(oa => ({
         id: oa.id,
+        projectId: oa.projectId,
         oaNumber: oa.oaNumber,
-        dateIssued: oa.dateIssued,
+        dateIssued: oa.dateIssued?.toISOString() || null,
         examinerId: oa.examinerId,
         artUnit: oa.artUnit,
         originalFileName: oa.originalFileName,
         status: oa.status,
-        createdAt: oa.createdAt,
-        updatedAt: oa.updatedAt,
+        createdAt: oa.createdAt.toISOString(),
+        updatedAt: oa.updatedAt.toISOString(),
       })),
       meta: {
         total: officeActions.length,
