@@ -20,6 +20,7 @@ import { logger } from '@/server/logger';
 import { env } from '@/config/env';
 import { fileGuard } from '@/lib/security/fileGuard';
 import { scanFile } from '@/lib/security/malwareScanner';
+import { TesseractOCRService } from './tesseract-ocr.server-service';
 
 // Re-import the existing constants for consistency
 const ACCEPTED_DOCUMENT_TYPES = [
@@ -140,16 +141,46 @@ export class EnhancedTextExtractionService {
   }
 
   /**
+   * Extract text using Tesseract OCR as fallback
+   */
+  private static async extractWithTesseractOCR(filePath: string): Promise<string> {
+    try {
+      logger.debug('[EnhancedTextExtraction] Using Tesseract OCR for text extraction');
+      
+      const result = await TesseractOCRService.extractTextFromPDF(filePath, {
+        language: 'eng',
+        confidence: 60, // Minimum confidence threshold
+      });
+      
+      logger.info('[EnhancedTextExtraction] Tesseract OCR extraction successful', {
+        textLength: result.text.length,
+        confidence: result.confidence,
+        pageCount: result.pageCount,
+        processingTime: result.processingTime,
+      });
+      
+      return result.text;
+    } catch (error) {
+      logger.error('[EnhancedTextExtraction] Tesseract OCR extraction failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ApplicationError(
+        ErrorCode.FILE_PROCESSING_ERROR,
+        `Tesseract OCR extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
    * Extract text using Azure Document Intelligence OCR
    */
   private static async extractWithOCR(filePath: string): Promise<string> {
     const client = this.getDocumentAnalysisClient();
     
     if (!client) {
-      throw new ApplicationError(
-        ErrorCode.INTERNAL_ERROR,
-        'Azure Document Intelligence not configured'
-      );
+      // Fall back to Tesseract OCR if Azure DI is not available
+      logger.info('[EnhancedTextExtraction] Azure DI not available, falling back to Tesseract OCR');
+      return this.extractWithTesseractOCR(filePath);
     }
 
     try {

@@ -130,7 +130,13 @@ export class OfficeActionParserService {
         maxTokens,
       });
       
-      // Truncate if necessary but preserve structure
+      // For really long documents (13+ pages), use intelligent segmentation
+      if (estimatedTokens > 50000) { // ~200+ pages worth
+        logger.info('[OfficeActionParser] Using segmentation for very long document');
+        return this.parseWithSegmentation(officeActionText, options);
+      }
+      
+      // For moderately long documents, truncate intelligently
       const truncatedText = this.truncateOfficeActionText(officeActionText, maxTokens);
       logger.info('[OfficeActionParser] Text truncated for processing', {
         originalLength: officeActionText.length,
@@ -374,5 +380,331 @@ export class OfficeActionParserService {
       averageClaimsPerRejection: rejections.length > 0 ? totalClaims / rejections.length : 0,
       averagePriorArtPerRejection: rejections.length > 0 ? totalPriorArt / rejections.length : 0,
     };
+  }
+
+  /**
+   * Parse extremely long Office Actions using intelligent segmentation
+   * Industry-standard approach for 13+ page documents that exceed token limits
+   */
+  private static async parseWithSegmentation(
+    officeActionText: string,
+    options: { maxTokens?: number; model?: string } = {}
+  ): Promise<ParsedOfficeActionResult> {
+    logger.info('[OfficeActionParser] Using segmentation for long document', {
+      textLength: officeActionText.length,
+      estimatedTokens: estimateTokens(officeActionText),
+    });
+
+    // Step 1: Identify rejection boundaries using regex patterns
+    const rejectionBoundaries = this.findRejectionBoundaries(officeActionText);
+    
+    // Step 2: Create segments based on rejections (industry standard)
+    const segments = this.createRejectionSegments(officeActionText, rejectionBoundaries);
+    
+    // Step 3: Process each segment with context
+    const segmentResults: any[] = [];
+    let globalContext = '';
+
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      
+      logger.debug('[OfficeActionParser] Processing segment', {
+        segmentNumber: i + 1,
+        totalSegments: segments.length,
+        segmentLength: segment.content.length,
+        tokenCount: estimateTokens(segment.content),
+      });
+
+      try {
+        // Build enhanced prompt with context
+        const segmentPrompt = this.buildSegmentPrompt(segment, i + 1, segments.length, globalContext);
+        
+        const aiResponse = await processWithOpenAI(
+          segmentPrompt.system,
+          segmentPrompt.user,
+          {
+            maxTokens: 4000,
+            temperature: 0.1,
+            response_format: { type: 'json_object' },
+          }
+        );
+
+        const segmentResult = this.parseAIResponse(aiResponse.content);
+        segmentResults.push(segmentResult);
+        
+        // Update global context for next segment
+        if (segmentResult.rejections?.length > 0) {
+          const lastRejection = segmentResult.rejections[segmentResult.rejections.length - 1];
+          globalContext = lastRejection.examinerReasoning?.substring(0, 300) || '';
+        }
+
+      } catch (error) {
+        logger.error('[OfficeActionParser] Segment processing failed', {
+          segmentNumber: i + 1,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        
+        // Continue with empty result for this segment
+        segmentResults.push({
+          metadata: {},
+          rejections: [],
+          allPriorArtReferences: [],
+        });
+      }
+    }
+
+    // Step 4: Merge all segment results intelligently
+    const mergedResult = this.mergeSegmentResults(segmentResults, officeActionText);
+    
+    // Step 5: Validate and enhance the merged result
+    const finalResult = this.validateAndEnhanceResult(mergedResult);
+
+    logger.info('[OfficeActionParser] Segmentation parsing completed', {
+      totalSegments: segments.length,
+      totalRejections: finalResult.summary.totalRejections,
+      totalPriorArt: finalResult.summary.uniquePriorArtCount,
+    });
+
+    return finalResult;
+  }
+
+  /**
+   * Find rejection section boundaries in Office Action text
+   */
+  private static findRejectionBoundaries(text: string): Array<{ start: number; end: number; type: string }> {
+    const boundaries: Array<{ start: number; end: number; type: string }> = [];
+    
+    // Common rejection patterns
+    const rejectionPatterns = [
+      /Claims?\s+\d+[\d\s,\-and]*\s+(?:is|are)\s+rejected/gi,
+      /§\s*10[123]\s+[Rr]ejection/gi,
+      /§\s*112\s+[Rr]ejection/gi,
+      /Claims?\s+\d+[\d\s,\-and]*\s+(?:is|are)\s+(?:anticipated|obvious)/gi,
+    ];
+
+    rejectionPatterns.forEach(pattern => {
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        boundaries.push({
+          start: match.index,
+          end: match.index + match[0].length,
+          type: 'rejection_start',
+        });
+      }
+    });
+
+    // Sort by position and calculate end positions
+    boundaries.sort((a, b) => a.start - b.start);
+    
+    for (let i = 0; i < boundaries.length; i++) {
+      const current = boundaries[i];
+      const next = boundaries[i + 1];
+      
+      // End of this rejection is start of next rejection or end of document
+      current.end = next ? next.start : text.length;
+    }
+
+    return boundaries;
+  }
+
+  /**
+   * Create processing segments based on rejection boundaries
+   */
+  private static createRejectionSegments(
+    text: string,
+    boundaries: Array<{ start: number; end: number; type: string }>
+  ): Array<{ content: string; start: number; end: number; type: string }> {
+    const segments: Array<{ content: string; start: number; end: number; type: string }> = [];
+    const maxSegmentTokens = 15000; // Conservative limit per segment
+
+    if (boundaries.length === 0) {
+      // No clear rejection structure, use simple chunking
+      return this.createSimpleChunks(text, maxSegmentTokens);
+    }
+
+    let lastEnd = 0;
+
+    // Add header segment if there's content before first rejection
+    if (boundaries[0].start > 0) {
+      const headerContent = text.substring(0, boundaries[0].start).trim();
+      if (headerContent) {
+        segments.push({
+          content: headerContent,
+          start: 0,
+          end: boundaries[0].start,
+          type: 'header',
+        });
+      }
+    }
+
+    // Process each rejection segment
+    boundaries.forEach((boundary, index) => {
+      const segmentContent = text.substring(boundary.start, boundary.end).trim();
+      const segmentTokens = estimateTokens(segmentContent);
+
+      if (segmentTokens > maxSegmentTokens) {
+        // Split large rejection into sub-segments
+        const subSegments = this.splitLargeRejection(segmentContent, boundary.start, maxSegmentTokens);
+        segments.push(...subSegments);
+      } else {
+        segments.push({
+          content: segmentContent,
+          start: boundary.start,
+          end: boundary.end,
+          type: 'rejection',
+        });
+      }
+
+      lastEnd = boundary.end;
+    });
+
+    return segments;
+  }
+
+  /**
+   * Split large rejections that exceed token limits
+   */
+  private static splitLargeRejection(
+    content: string,
+    startIndex: number,
+    maxTokens: number
+  ): Array<{ content: string; start: number; end: number; type: string }> {
+    const subSegments: Array<{ content: string; start: number; end: number; type: string }> = [];
+    const maxChars = maxTokens * 4; // Rough chars-to-tokens conversion
+    
+    let currentIndex = 0;
+    let partNumber = 1;
+
+    while (currentIndex < content.length) {
+      const segmentContent = content.substring(currentIndex, Math.min(currentIndex + maxChars, content.length));
+      
+      subSegments.push({
+        content: segmentContent,
+        start: startIndex + currentIndex,
+        end: startIndex + currentIndex + segmentContent.length,
+        type: `rejection_part_${partNumber}`,
+      });
+
+      currentIndex += segmentContent.length;
+      partNumber++;
+    }
+
+    return subSegments;
+  }
+
+  /**
+   * Create simple text chunks when structure detection fails
+   */
+  private static createSimpleChunks(
+    text: string,
+    maxTokens: number
+  ): Array<{ content: string; start: number; end: number; type: string }> {
+    const chunks: Array<{ content: string; start: number; end: number; type: string }> = [];
+    const maxChars = maxTokens * 4;
+    
+    let currentIndex = 0;
+    let chunkNumber = 1;
+
+    while (currentIndex < text.length) {
+      const chunkContent = text.substring(currentIndex, Math.min(currentIndex + maxChars, text.length));
+      
+      chunks.push({
+        content: chunkContent,
+        start: currentIndex,
+        end: currentIndex + chunkContent.length,
+        type: `chunk_${chunkNumber}`,
+      });
+
+      currentIndex += chunkContent.length;
+      chunkNumber++;
+    }
+
+    return chunks;
+  }
+
+  /**
+   * Build enhanced prompts for segment processing with context
+   */
+  private static buildSegmentPrompt(
+    segment: { content: string; start: number; end: number; type: string },
+    segmentNumber: number,
+    totalSegments: number,
+    context: string
+  ): { system: string; user: string } {
+    const systemPrompt = `You are an expert USPTO patent examiner assistant analyzing Office Action documents.
+
+SEGMENT ANALYSIS: You are analyzing segment ${segmentNumber} of ${totalSegments} total segments.
+${context ? `PREVIOUS CONTEXT: ${context}` : ''}
+
+Your task is to extract structured information from this segment:
+1. **Rejections**: Each distinct rejection with type (§102, §103, §101, §112, OTHER)
+2. **Claims**: Which specific claims are rejected  
+3. **Prior Art**: Patent/publication numbers cited
+4. **Examiner Reasoning**: The examiner's rationale
+5. **Document Metadata**: Application numbers, dates, examiner names
+
+CRITICAL: 
+- Maintain consistency with previous segments
+- Mark incomplete rejections that span segments
+- Extract patent numbers in standard format
+- Preserve exact examiner reasoning text
+
+Return valid JSON with the standard Office Action structure.`;
+
+    const userPrompt = `Analyze this Office Action segment (${segment.type}):
+
+${segment.content}
+
+Extract all rejections, prior art, and metadata from this segment.`;
+
+    return { system: systemPrompt, user: userPrompt };
+  }
+
+  /**
+   * Merge results from all processed segments
+   */
+  private static mergeSegmentResults(segmentResults: any[], fullText: string): any {
+    const mergedResult = {
+      metadata: {
+        applicationNumber: null,
+        mailingDate: null,
+        examinerName: null,
+      },
+      rejections: [] as any[],
+      allPriorArtReferences: [] as string[],
+    };
+
+    // Merge metadata (take first non-null value)
+    segmentResults.forEach(result => {
+      if (result.metadata) {
+        mergedResult.metadata.applicationNumber = 
+          mergedResult.metadata.applicationNumber || result.metadata.applicationNumber;
+        mergedResult.metadata.mailingDate = 
+          mergedResult.metadata.mailingDate || result.metadata.mailingDate;
+        mergedResult.metadata.examinerName = 
+          mergedResult.metadata.examinerName || result.metadata.examinerName;
+      }
+    });
+
+    // Merge rejections
+    segmentResults.forEach(result => {
+      if (result.rejections && Array.isArray(result.rejections)) {
+        mergedResult.rejections.push(...result.rejections);
+      }
+    });
+
+    // Merge prior art references and remove duplicates
+    const allPriorArt = new Set<string>();
+    segmentResults.forEach(result => {
+      if (result.allPriorArtReferences && Array.isArray(result.allPriorArtReferences)) {
+        result.allPriorArtReferences.forEach((ref: string) => allPriorArt.add(ref));
+      }
+      if (result.priorArtReferences && Array.isArray(result.priorArtReferences)) {
+        result.priorArtReferences.forEach((ref: string) => allPriorArt.add(ref));
+      }
+    });
+    mergedResult.allPriorArtReferences = Array.from(allPriorArt);
+
+    return mergedResult;
   }
 } 
