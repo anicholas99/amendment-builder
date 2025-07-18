@@ -251,9 +251,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     // Start background parsing process
     try {
       await AmendmentServerService.parseOfficeAction(
+        officeAction.id,
         extractedText,
-        tenantId,
-        userId
+        tenantId
       );
     } catch (parseError) {
       // Log parsing error but don't fail the upload

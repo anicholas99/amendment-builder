@@ -531,8 +531,8 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
     <div className={cn("h-full flex flex-col", className)}>
       {renderHeader()}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList className="grid w-full grid-cols-4 rounded-none border-b bg-gray-50">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+        <TabsList className="grid w-full grid-cols-4 rounded-none border-b bg-gray-50 flex-shrink-0">
           <TabsTrigger value="claims" className="flex items-center gap-2">
             <FileEdit className="h-4 w-4" />
             Claims ({claimAmendments.length})
@@ -660,47 +660,236 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
         </TabsContent>
 
         <TabsContent value="preview" className="flex-1 mt-0">
-          <ScrollArea className="h-full">
-            <div className="p-6 max-w-4xl mx-auto">
-              <div className="bg-white border rounded-lg p-8 shadow-sm font-mono text-sm leading-relaxed">
-                <div className="text-center mb-8">
-                  <h1 className="text-xl font-bold mb-2">{documentTitle}</h1>
-                  <p className="text-gray-600">USPTO {responseType} Response</p>
-                </div>
+          <ScrollArea className="h-full w-full" style={{
+            scrollbarWidth: 'thin',
+            msOverflowStyle: 'auto',
+            WebkitOverflowScrolling: 'touch',
+          }}>
+            <div className="p-6 bg-gray-50">
+              {/* Document container with proper page styling */}
+              <div className="max-w-[8.5in] mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
+                {/* Document content with proper margins */}
+                                 <div className="p-12 text-black" style={{ 
+                   fontFamily: 'Times, serif',
+                   fontSize: '12pt',
+                   lineHeight: '1.6'
+                 }}>
+                  {/* Document Header */}
+                  <div className="text-center mb-8 border-b-2 border-gray-800 pb-4">
+                    <div className="mb-4">
+                      <p className="text-sm font-bold">IN THE UNITED STATES PATENT AND TRADEMARK OFFICE</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-8 text-left text-sm mb-4">
+                      <div>
+                        <p><span className="font-bold">Applicant:</span> [APPLICANT NAME]</p>
+                        <p><span className="font-bold">Application No.:</span> [APPLICATION NUMBER]</p>
+                        <p><span className="font-bold">Filing Date:</span> [FILING DATE]</p>
+                      </div>
+                      <div>
+                        <p><span className="font-bold">Art Unit:</span> [ART UNIT]</p>
+                        <p><span className="font-bold">Examiner:</span> [EXAMINER NAME]</p>
+                        <p><span className="font-bold">Confirmation No.:</span> [CONFIRMATION NO.]</p>
+                      </div>
+                    </div>
+                    
+                    <div className="text-center">
+                      <p className="text-lg font-bold">{documentTitle.toUpperCase()}</p>
+                      <p className="text-sm mt-2">({responseType} Response to Office Action)</p>
+                    </div>
+                  </div>
 
-                {/* Claims section */}
-                {claimAmendments.length > 0 && (
+                  {/* Introduction */}
                   <div className="mb-8">
-                    <h2 className="text-lg font-bold mb-4">CLAIM AMENDMENTS</h2>
-                    {claimAmendments.map(claim => (
-                      <div key={claim.id} className="mb-6">
-                        <p className="font-bold mb-2">
-                          {claim.claimNumber}. {CLAIM_STATUS_CONFIG[claim.status].prefix}
-                        </p>
-                        <div className="pl-4 mb-4">
-                          {formatClaimText(claim.originalText, claim.amendedText)}
-                        </div>
-                      </div>
-                    ))}
+                    <p className="mb-4">
+                      <span className="font-bold">Commissioner for Patents</span><br/>
+                      <span className="font-bold">United States Patent and Trademark Office</span><br/>
+                      <span className="font-bold">Alexandria, VA 22314</span>
+                    </p>
+                    
+                    <p className="mb-4">
+                      <span className="font-bold">Sir:</span>
+                    </p>
+                    
+                    <p className="mb-4 text-justify">
+                      In response to the Office Action dated [OFFICE ACTION DATE], Applicant respectfully submits 
+                      the following amendment and remarks. This response is being filed within the statutory period 
+                      for response, and no extension of time is required.
+                    </p>
                   </div>
-                )}
 
-                {/* Arguments section */}
-                {argumentSections.length > 0 && (
-                  <div>
-                    <h2 className="text-lg font-bold mb-4">REMARKS</h2>
-                    {argumentSections.map((section, index) => (
-                      <div key={section.id} className="mb-6">
-                        <h3 className="font-bold mb-2">
-                          {String.fromCharCode(65 + index)}. {section.title}
-                        </h3>
-                        <div className="pl-4 whitespace-pre-wrap">
-                          {section.content}
+                  {/* Claims Section */}
+                  {claimAmendments.length > 0 && (
+                    <div className="mb-10">
+                      <h2 className="text-lg font-bold mb-6 text-center border-b border-gray-400 pb-2">
+                        CLAIM AMENDMENTS
+                      </h2>
+                      
+                      <p className="mb-4 text-justify">
+                        This listing of claims will replace all prior versions, and listings, of claims in the application:
+                      </p>
+                      
+                      {claimAmendments.map(claim => {
+                        const statusConfig = CLAIM_STATUS_CONFIG[claim.status];
+                        return (
+                          <div key={claim.id} className="mb-8">
+                            <p className="font-bold mb-3">
+                              {claim.claimNumber}. {statusConfig.prefix}
+                            </p>
+                            <div className="pl-8 mb-4 text-justify" style={{ textIndent: '0' }}>
+                              {formatClaimText(claim.originalText, claim.amendedText)}
+                            </div>
+                            
+                            {claim.reasoning && claim.status === 'CURRENTLY_AMENDED' && (
+                              <div className="pl-8 text-sm italic border-l-2 border-blue-300 bg-blue-50 p-3 mb-4">
+                                <p className="font-bold text-blue-800 mb-2">Amendment Basis:</p>
+                                <p className="text-blue-700">{claim.reasoning}</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Remarks Section */}
+                  {argumentSections.length > 0 && (
+                    <div className="mb-10">
+                      <h2 className="text-lg font-bold mb-6 text-center border-b border-gray-400 pb-2">
+                        REMARKS
+                      </h2>
+                      
+                      <div className="mb-6">
+                        <p className="text-justify">
+                          Applicant respectfully submits the following remarks in response to the Office Action. 
+                          The rejections are respectfully traversed for the reasons set forth below.
+                        </p>
+                      </div>
+                      
+                      {argumentSections.map((section, index) => (
+                        <div key={section.id} className="mb-8">
+                          <h3 className="font-bold mb-4 text-lg">
+                            {String.fromCharCode(65 + index)}. {section.title}
+                          </h3>
+                          <div className="pl-6 text-justify whitespace-pre-wrap leading-relaxed">
+                            {section.content}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Conclusion */}
+                  <div className="mb-10">
+                    <h2 className="text-lg font-bold mb-6 text-center border-b border-gray-400 pb-2">
+                      CONCLUSION
+                    </h2>
+                    <div className="text-justify space-y-4">
+                      <p>
+                        For the foregoing reasons, Applicant respectfully submits that the claims as amended 
+                        are patentable and requests that the Examiner reconsider the application and allow 
+                        the pending claims.
+                      </p>
+                      <p>
+                        If the Examiner believes that a telephone conference would expedite prosecution of 
+                        this application, the Examiner is invited to contact the undersigned.
+                      </p>
+                      <p>
+                        Any amendments or remarks not specifically addressed herein are not admitted as 
+                        being pertinent to the patentability of the claims.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Certificate of Electronic Filing */}
+                  <div className="mb-8">
+                    <h3 className="font-bold mb-4">CERTIFICATE OF ELECTRONIC FILING</h3>
+                    <p className="text-justify">
+                      I hereby certify that this correspondence is being electronically filed with the 
+                      United States Patent and Trademark Office on {new Date().toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}.
+                    </p>
+                  </div>
+
+                  {/* Signature Block */}
+                  <div className="mt-12">
+                    <div className="grid grid-cols-2 gap-8">
+                      <div>
+                        <p className="mb-8">Respectfully submitted,</p>
+                        <div className="border-b border-gray-400 mb-2" style={{ height: '40px' }}></div>
+                        <p className="text-sm">
+                          <span className="font-bold">[ATTORNEY NAME]</span><br/>
+                          Registration No. [REG. NO.]<br/>
+                          Attorney for Applicant<br/>
+                          [FIRM NAME]<br/>
+                          [ADDRESS]<br/>
+                          Tel: [PHONE]<br/>
+                          Email: [EMAIL]
+                        </p>
+                      </div>
+                      <div className="text-sm">
+                        <p className="mb-4">
+                          <span className="font-bold">Date:</span> {new Date().toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </p>
+                        <p className="mb-4">
+                          <span className="font-bold">Customer Number:</span> [CUSTOMER NO.]
+                        </p>
+                        <div className="mt-8 p-3 border border-gray-400">
+                          <p className="font-bold text-center mb-2">FEES</p>
+                          <p>Extension Fee: $____</p>
+                          <p>Other Fees: $____</p>
+                          <p className="font-bold border-t border-gray-400 pt-2 mt-2">
+                            Total Fee: $____
+                          </p>
                         </div>
                       </div>
-                    ))}
+                    </div>
                   </div>
-                )}
+
+                  {/* Document Statistics Footer */}
+                  <div className="mt-12 pt-6 border-t border-gray-300 text-xs text-gray-600">
+                    <div className="flex justify-between">
+                      <span>
+                        Document Generated: {new Date().toLocaleString()}
+                      </span>
+                      <span>
+                        Pages: 1 | Words: {
+                          claimAmendments.reduce((sum, claim) => sum + claim.amendedText.split(' ').length, 0) +
+                          argumentSections.reduce((sum, section) => sum + section.content.split(' ').length, 0) + 200
+                        }
+                      </span>
+                    </div>
+                    <div className="text-center mt-2">
+                      <span className="bg-gray-200 px-2 py-1 rounded">
+                        Amendment Builder - USPTO Compliant Format
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Export Actions */}
+              <div className="max-w-[8.5in] mx-auto mt-6 text-center">
+                <div className="bg-white rounded-lg p-4 shadow">
+                  <h3 className="font-bold mb-3">Export Options</h3>
+                  <div className="flex justify-center gap-4">
+                    <Button onClick={handleExport} className="bg-blue-600 hover:bg-blue-700">
+                      <Download className="h-4 w-4 mr-2" />
+                      Export to DOCX
+                    </Button>
+                    <Button variant="outline" onClick={() => window.print()}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Print Preview
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           </ScrollArea>
