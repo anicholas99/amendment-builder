@@ -42,33 +42,53 @@ const PANEL_CONFIG = {
 const adaptOfficeActionData = (processedOA: any) => {
   if (!processedOA) return undefined;
 
+
+
   // Calculate summary data
   const rejectionTypes = [...new Set(processedOA.rejections.map((r: any) => r.type))];
   const allClaimNumbers = new Set<string>();
   const allPriorArtRefs = new Set<string>();
 
   processedOA.rejections.forEach((r: any) => {
-    r.claimNumbers.forEach((claim: string) => allClaimNumbers.add(claim));
-    r.citedPriorArt.forEach((ref: string) => allPriorArtRefs.add(ref));
+    // Parse JSON strings if needed
+    const claimNumbers = typeof r.claimNumbers === 'string' 
+      ? JSON.parse(r.claimNumbers || '[]') 
+      : (r.claimNumbers || []);
+    const citedPriorArt = typeof r.citedPriorArt === 'string' 
+      ? JSON.parse(r.citedPriorArt || '[]') 
+      : (r.citedPriorArt || []);
+      
+    claimNumbers.forEach((claim: string) => allClaimNumbers.add(claim));
+    citedPriorArt.forEach((ref: string) => allPriorArtRefs.add(ref));
   });
 
   return {
     id: processedOA.id,
-    fileName: processedOA.fileName,
+    fileName: processedOA.originalFileName || processedOA.fileName,
     metadata: {
       applicationNumber: processedOA.metadata?.applicationNumber,
-      mailingDate: processedOA.dateIssued?.toISOString(),
-      examinerName: processedOA.examiner?.name,
-      artUnit: processedOA.examiner?.artUnit,
+      mailingDate: processedOA.dateIssued?.toISOString() || processedOA.metadata?.mailingDate,
+      examinerName: processedOA.metadata?.examinerName || processedOA.examiner?.name,
+      artUnit: processedOA.metadata?.artUnit || processedOA.examiner?.artUnit || processedOA.artUnit,
     },
-    rejections: processedOA.rejections.map((r: any) => ({
-      id: r.id,
-      type: r.type,
-      claims: r.claimNumbers,
-      priorArtReferences: r.citedPriorArt,
-      examinerReasoning: r.examinerText,
-      rawText: r.examinerText, // Use examiner text as raw text
-    })),
+    rejections: processedOA.rejections.map((r: any) => {
+      // Parse JSON strings if needed
+      const claimNumbers = typeof r.claimNumbers === 'string' 
+        ? JSON.parse(r.claimNumbers || '[]') 
+        : (r.claimNumbers || []);
+      const citedPriorArt = typeof r.citedPriorArt === 'string' 
+        ? JSON.parse(r.citedPriorArt || '[]') 
+        : (r.citedPriorArt || []);
+        
+      return {
+        id: r.id,
+        type: r.type,
+        claims: claimNumbers,
+        priorArtReferences: citedPriorArt,
+        examinerReasoning: r.examinerText,
+        rawText: r.examinerText, // Use examiner text as raw text
+      };
+    }),
     allPriorArtReferences: Array.from(allPriorArtRefs) as string[],
     summary: {
       totalRejections: processedOA.rejections.length,

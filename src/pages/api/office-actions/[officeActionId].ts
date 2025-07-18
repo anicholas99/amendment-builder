@@ -81,10 +81,31 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     // Get rejections for this office action
     const rejections = await findRejectionsByOfficeAction(officeActionId);
 
+    // Extract parsed metadata from parsedJson if available
+    let parsedMetadata = null;
+    if (officeAction.parsedJson) {
+      try {
+        const parsed = JSON.parse(officeAction.parsedJson);
+        parsedMetadata = parsed;
+      } catch (error) {
+        // If parsing fails, continue without parsed metadata
+        apiLogger.warn('Failed to parse Office Action JSON metadata', {
+          officeActionId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Determine final examiner name for logging
+    const finalExaminerName = parsedMetadata?.examiner?.name || officeAction.examinerId;
+    
     apiLogger.info('Office Action detail retrieved successfully', {
       officeActionId,
       rejectionCount: rejections.length,
       tenantId,
+      hasExaminerName: !!finalExaminerName,
+      examinerName: finalExaminerName,
+      examinerSource: parsedMetadata?.examiner?.name ? 'parsedJson' : 'database',
     });
 
     return apiResponse.ok(res, {
@@ -99,6 +120,26 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       parsedJson: officeAction.parsedJson,
       createdAt: officeAction.createdAt,
       updatedAt: officeAction.updatedAt,
+      // Include parsed metadata for UI consumption
+      metadata: parsedMetadata ? {
+        applicationNumber: parsedMetadata.applicationNumber,
+        mailingDate: parsedMetadata.dateIssued,
+        examinerName: parsedMetadata.examiner?.name || officeAction.examinerId,
+        artUnit: parsedMetadata.examiner?.artUnit || officeAction.artUnit,
+      } : {
+        examinerName: officeAction.examinerId,
+        artUnit: officeAction.artUnit,
+      },
+      // Include examiner object for backward compatibility
+      examiner: parsedMetadata?.examiner ? {
+        name: parsedMetadata.examiner.name || officeAction.examinerId,
+        id: officeAction.examinerId,
+        artUnit: parsedMetadata.examiner.artUnit || officeAction.artUnit,
+      } : (officeAction.examinerId ? {
+        name: officeAction.examinerId,
+        id: officeAction.examinerId,
+        artUnit: officeAction.artUnit,
+      } : null),
       rejections: rejections.map(r => ({
         id: r.id,
         type: r.type,

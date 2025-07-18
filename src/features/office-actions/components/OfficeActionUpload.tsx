@@ -8,6 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/useToastWrapper';
 import { logger } from '@/utils/clientLogger';
 import { useDragDropFileHandler } from '@/features/technology-details/hooks/useDragDropFileHandler';
+import { useQueryClient } from '@tanstack/react-query';
+import { amendmentQueryKeys } from '@/hooks/api/useAmendment';
 
 interface OfficeActionUploadProps {
   projectId: string;
@@ -30,6 +32,7 @@ export const OfficeActionUpload: React.FC<OfficeActionUploadProps> = ({
   disabled = false,
 }) => {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [metadata, setMetadata] = useState({
     oaNumber: '',
     dateIssued: '',

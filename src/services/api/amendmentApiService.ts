@@ -50,10 +50,22 @@ const OfficeActionDetailResponseSchema = z.object({
   parsedJson: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  // Include metadata and examiner fields from API response
+  metadata: z.object({
+    applicationNumber: z.string().nullable().optional(),
+    mailingDate: z.string().nullable().optional(),
+    examinerName: z.string().nullable().optional(),
+    artUnit: z.string().nullable().optional(),
+  }).nullable().optional(),
+  examiner: z.object({
+    name: z.string().nullable().optional(),
+    id: z.string().nullable().optional(),
+    artUnit: z.string().nullable().optional(),
+  }).nullable().optional(),
   rejections: z.array(z.object({
     id: z.string(),
     type: z.string(),
-    claimNumbers: z.string(), // JSON string
+    claimNumbers: z.string().nullable(), // JSON string that can be null
     citedPriorArt: z.string().nullable(),
     examinerText: z.string(),
     displayOrder: z.number(),
@@ -220,7 +232,7 @@ export class AmendmentApiService {
       const rejections: ProcessedRejection[] = (validated.rejections || []).map(r => ({
         id: r.id,
         type: r.type,
-        claimNumbers: JSON.parse(r.claimNumbers || '[]'),
+        claimNumbers: r.claimNumbers ? JSON.parse(r.claimNumbers) : [],
         citedPriorArt: r.citedPriorArt ? JSON.parse(r.citedPriorArt) : [],
         examinerText: r.examinerText,
         displayOrder: r.displayOrder,
@@ -234,11 +246,18 @@ export class AmendmentApiService {
         oaNumber: validated.oaNumber || undefined,
         dateIssued: validated.dateIssued ? new Date(validated.dateIssued) : undefined,
         examiner: {
-          id: validated.examinerId || undefined,
-          artUnit: validated.artUnit || undefined,
+          id: validated.examinerId || validated.examiner?.id || undefined,
+          name: validated.examiner?.name || validated.metadata?.examinerName || undefined,
+          artUnit: validated.artUnit || validated.examiner?.artUnit || validated.metadata?.artUnit || undefined,
         },
         rejections,
-        metadata,
+        metadata: {
+          // Create UI-compatible metadata structure
+          applicationNumber: validated.metadata?.applicationNumber || metadata?.applicationNumber || undefined,
+          mailingDate: validated.metadata?.mailingDate || metadata?.dateIssued || undefined,
+          examinerName: validated.metadata?.examinerName || validated.examiner?.name || metadata?.examiner?.name || undefined,
+          artUnit: validated.metadata?.artUnit || validated.examiner?.artUnit || metadata?.examiner?.artUnit || undefined,
+        } as any, // Type assertion to avoid conflicts with ParsedOfficeActionData
         createdAt: new Date(validated.createdAt),
         updatedAt: new Date(validated.updatedAt),
       };
