@@ -72,7 +72,7 @@ export class AmendmentExportService {
 
     try {
       const response = await apiFetch(
-        API_ROUTES.AMENDMENTS.RESPONSES.EXPORT(request.projectId, request.officeActionId),
+        `/api/projects/${request.projectId}/office-actions/${request.officeActionId}/export`,
         {
           method: 'POST',
           headers: {

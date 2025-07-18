@@ -490,7 +490,7 @@ export class AmendmentApiService {
         officeActionId,
       });
 
-      const response = await apiFetch(`/api/projects/${projectId}/documents/drafts`, {
+      const response = await apiFetch(`/api/projects/${projectId}/draft`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -547,7 +547,7 @@ export class AmendmentApiService {
       const draftType = `AMENDMENT_DRAFT_${officeActionId}`;
       
       const response = await apiFetch(
-        `/api/projects/${projectId}/documents/drafts?type=${draftType}`
+        `/api/projects/${projectId}/draft?type=${draftType}`
       );
 
       if (!response.ok) {
