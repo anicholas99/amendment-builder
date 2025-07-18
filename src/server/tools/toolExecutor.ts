@@ -44,6 +44,8 @@ import {
 import { calculateFilingFees } from './calculateFilingFees.tool';
 import { autoRenumberClaims } from './autoRenumberClaims.tool';
 import { check112Support } from './check112Support.tool';
+import { analyzeOfficeAction } from './analyzeOfficeAction.tool';
+import { getRejections } from './getRejections.tool';
 
 /**
  * Type definitions for tool signatures
@@ -171,6 +173,13 @@ interface ToolSignatures {
   >;
   autoRenumberClaims: ToolFunction;
   check112Support: ToolFunction<BaseToolArgs & { claimIds?: string[] }>;
+  // Office Action operations
+  analyzeOfficeAction: ToolFunction<
+    BaseToolArgs & { officeActionId?: string }
+  >;
+  getRejections: ToolFunction<
+    BaseToolArgs & { officeActionId?: string; rejectionType?: string }
+  >;
 }
 
 /**
@@ -220,6 +229,9 @@ const toolRegistry: ToolSignatures = {
   calculateFilingFees,
   autoRenumberClaims,
   check112Support,
+  // Office Action operations
+  analyzeOfficeAction,
+  getRejections,
   // Future tools can be added here:
   // detectRedundancy,
 } as const;
@@ -295,6 +307,11 @@ const toolDescriptions: Record<string, string> = {
     'Automatically renumber claims sequentially and update all dependency references - fixes gaps in claim numbering',
   check112Support:
     'Check if claim terms have proper written description support under 35 U.S.C. §112(b) - identifies unsupported terms',
+  // Office Action operations
+  analyzeOfficeAction:
+    'Analyze uploaded Office Action data including rejections, prior art, and examiner reasoning - use when user asks about office actions or rejections',
+  getRejections:
+    'Fetch rejections from a specific Office Action by ID, including type and reason',
 };
 
 export type ToolName = keyof typeof toolRegistry;
@@ -638,6 +655,21 @@ export async function executeTool<T = unknown>(
         args.projectId as string,
         args.tenantId as string,
         args.claimIds as string[] | undefined
+      );
+    } else if (toolName === 'analyzeOfficeAction') {
+      // officeActionId is optional
+      result = await tool(
+        args.projectId as string,
+        args.tenantId as string,
+        args.officeActionId as string | undefined
+      );
+    } else if (toolName === 'getRejections') {
+      // officeActionId and rejectionType are optional
+      result = await tool(
+        args.projectId as string,
+        args.tenantId as string,
+        args.officeActionId as string | undefined,
+        args.rejectionType as string | undefined
       );
     } else {
       // Standard tools that only need projectId and tenantId
