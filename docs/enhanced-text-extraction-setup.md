@@ -7,7 +7,7 @@ The enhanced text extraction system provides intelligent document processing wit
 The system uses a hybrid approach:
 
 1. **Text-based PDFs**: MarkItDown for clean Markdown extraction
-2. **Scanned PDFs**: Azure Document Intelligence OCR
+2. **Scanned PDFs**: Azure Computer Vision OCR
 3. **DOCX files**: Mammoth (existing)
 4. **TXT files**: Direct file reading
 
@@ -19,29 +19,29 @@ The system uses a hybrid approach:
 - **SOC 2 compliant**: Uses Azure services with enterprise-grade security
 - **Graceful degradation**: Falls back to basic extraction if enhanced methods fail
 
-## Azure Document Intelligence Setup
+## Azure Computer Vision Setup
 
 ### Prerequisites
 
 - Azure subscription
-- Azure Document Intelligence resource
+- Azure Computer Vision resource
 
-### Step 1: Create Azure Document Intelligence Resource
+### Step 1: Create Azure Computer Vision Resource
 
 1. Go to [Azure Portal](https://portal.azure.com)
-2. Navigate to **Create a resource** > **AI + Machine Learning** > **Document Intelligence**
+2. Navigate to **Create a resource** > **AI + Machine Learning** > **Computer Vision**
 3. Fill in the required information:
    - **Subscription**: Your Azure subscription
    - **Resource group**: Create new or use existing
    - **Region**: Choose a region close to your application
    - **Name**: Unique name for your service
-   - **Pricing tier**: Choose based on your needs (F0 for free tier, S0 for production)
+   - **Pricing tier**: Choose based on your needs (F0 for free tier, S1 for production)
 
 ### Step 2: Get Configuration Values
 
 After creating the resource:
 
-1. Go to your Document Intelligence resource
+1. Go to your Computer Vision resource
 2. Navigate to **Keys and Endpoint**
 3. Copy the following values:
    - **Endpoint**: The full URL (e.g., `https://your-service.cognitiveservices.azure.com/`)
@@ -52,10 +52,10 @@ After creating the resource:
 Add the following to your `.env.local` file:
 
 ```bash
-# Azure Document Intelligence (OCR)
-AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=https://your-service.cognitiveservices.azure.com/
-AZURE_DOCUMENT_INTELLIGENCE_API_KEY=your-api-key-here
-AZURE_DOCUMENT_INTELLIGENCE_API_VERSION=2024-07-31-preview
+# Azure Computer Vision (OCR)
+AZURE_COMPUTER_VISION_ENDPOINT=https://your-service.cognitiveservices.azure.com/
+AZURE_COMPUTER_VISION_API_KEY=your-api-key-here
+AZURE_COMPUTER_VISION_API_VERSION=2024-02-01
 ```
 
 ## Usage

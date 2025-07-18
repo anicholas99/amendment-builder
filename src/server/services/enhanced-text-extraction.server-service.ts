@@ -13,7 +13,7 @@
 
 import fs from 'fs/promises';
 import formidable from 'formidable';
-import { DocumentAnalysisClient, AzureKeyCredential } from '@azure/ai-form-recognizer';
+// Using Azure Computer Vision instead of Document Intelligence for OCR
 import mammoth from 'mammoth';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { logger } from '@/server/logger';
@@ -43,37 +43,19 @@ try {
  * Provides intelligent text extraction with OCR fallback capabilities
  */
 export class EnhancedTextExtractionService {
-  private static documentAnalysisClient: DocumentAnalysisClient | null = null;
-
   /**
-   * Get or create Azure Document Intelligence client
+   * Check if Azure Computer Vision is available
    */
-  private static getDocumentAnalysisClient(): DocumentAnalysisClient | null {
-    if (this.documentAnalysisClient) {
-      return this.documentAnalysisClient;
-    }
-
-    const endpoint = env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT;
-    const apiKey = env.AZURE_DOCUMENT_INTELLIGENCE_API_KEY;
+  private static isComputerVisionAvailable(): boolean {
+    const endpoint = env.AZURE_COMPUTER_VISION_ENDPOINT;
+    const apiKey = env.AZURE_COMPUTER_VISION_API_KEY;
 
     if (!endpoint || !apiKey) {
-      logger.warn('[EnhancedTextExtraction] Azure Document Intelligence not configured, OCR will be unavailable');
-      return null;
+      logger.warn('[EnhancedTextExtraction] Azure Computer Vision not configured, OCR will be unavailable');
+      return false;
     }
 
-    try {
-      this.documentAnalysisClient = new DocumentAnalysisClient(
-        endpoint,
-        new AzureKeyCredential(apiKey)
-      );
-      logger.info('[EnhancedTextExtraction] Azure Document Intelligence client initialized');
-      return this.documentAnalysisClient;
-    } catch (error) {
-      logger.error('[EnhancedTextExtraction] Failed to initialize Azure Document Intelligence client', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+    return true;
   }
 
   /**
@@ -172,25 +154,24 @@ export class EnhancedTextExtractionService {
   }
 
   /**
-   * Extract text using Azure Document Intelligence OCR
+   * Extract text using Azure Computer Vision OCR
    */
   private static async extractWithOCR(filePath: string): Promise<string> {
-    const client = this.getDocumentAnalysisClient();
-    
-    if (!client) {
-      // Fall back to Tesseract OCR if Azure DI is not available
-      logger.info('[EnhancedTextExtraction] Azure DI not available, falling back to Tesseract OCR');
+    if (!this.isComputerVisionAvailable()) {
+      // Fall back to Tesseract OCR if Azure Computer Vision is not available
+      logger.info('[EnhancedTextExtraction] Azure Computer Vision not available, falling back to Tesseract OCR');
       return this.extractWithTesseractOCR(filePath);
     }
 
     try {
-      logger.debug('[EnhancedTextExtraction] Using Azure Document Intelligence OCR');
+      logger.debug('[EnhancedTextExtraction] Using Azure Computer Vision OCR');
       
       const fileBuffer = await fs.readFile(filePath);
       
-      // Use the prebuilt-read model for general document OCR
-      const poller = await client.beginAnalyzeDocument('prebuilt-read', fileBuffer);
-      const result = await poller.pollUntilDone();
+      // Import and use Azure Computer Vision service
+      const { AzureComputerVisionOCRService } = await import('./azure-computer-vision-ocr.server-service');
+      
+      const result = await AzureComputerVisionOCRService.extractTextFromDocument(fileBuffer);
       
       if (!result.content) {
         throw new ApplicationError(
@@ -201,7 +182,8 @@ export class EnhancedTextExtractionService {
 
       logger.info('[EnhancedTextExtraction] OCR extraction successful', {
         textLength: result.content.length,
-        pageCount: result.pages?.length || 0,
+        pageCount: result.metadata.totalPages,
+        confidence: result.metadata.confidence,
       });
       
       return result.content;

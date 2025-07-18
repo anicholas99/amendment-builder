@@ -271,6 +271,13 @@ export const environment = {
         ? process.env.AZURE_OPENAI_API_VERSION || '2024-02-01'
         : '2024-02-01',
     },
+    computerVision: {
+      endpoint: isServer ? process.env.AZURE_COMPUTER_VISION_ENDPOINT || '' : '',
+      apiKey: isServer ? process.env.AZURE_COMPUTER_VISION_API_KEY || '' : '',
+      apiVersion: isServer
+        ? process.env.AZURE_COMPUTER_VISION_API_VERSION || '2024-02-01'
+        : '2024-02-01',
+    },
     documentIntelligence: {
       endpoint: isServer ? process.env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT || '' : '',
       apiKey: isServer ? process.env.AZURE_DOCUMENT_INTELLIGENCE_API_KEY || '' : '',

@@ -95,7 +95,12 @@ export const env = {
       environment.azure.storageConnectionString
     : '',
 
-  // Azure Document Intelligence
+  // Azure Computer Vision
+  AZURE_COMPUTER_VISION_ENDPOINT: environment.azure.computerVision.endpoint,
+  AZURE_COMPUTER_VISION_API_KEY: environment.azure.computerVision.apiKey,
+  AZURE_COMPUTER_VISION_API_VERSION: environment.azure.computerVision.apiVersion,
+
+  // Azure Document Intelligence (Legacy)
   AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT: environment.azure.documentIntelligence.endpoint,
   AZURE_DOCUMENT_INTELLIGENCE_API_KEY: environment.azure.documentIntelligence.apiKey,
   AZURE_DOCUMENT_INTELLIGENCE_API_VERSION: environment.azure.documentIntelligence.apiVersion,
