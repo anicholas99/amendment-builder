@@ -149,6 +149,71 @@ export async function upsertDraftDocument(
 }
 
 /**
+ * Create or update a draft document with amendment project support
+ * @param projectId The ID of the project
+ * @param type The document type
+ * @param content The document content
+ * @param amendmentProjectId Optional amendment project ID to link the document
+ * @returns The created/updated draft document
+ */
+export async function upsertDraftDocumentWithAmendmentProject(
+  projectId: string,
+  type: string,
+  content: string,
+  amendmentProjectId?: string
+): Promise<{
+  id: string;
+  projectId: string;
+  amendmentProjectId: string | null;
+  type: string;
+  content: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}> {
+  try {
+    logger.debug(
+      `Repository: Upserting draft document with amendment project for project: ${projectId}, type: ${type}, amendmentProjectId: ${amendmentProjectId}`
+    );
+
+    const document = await prisma!.draftDocument.upsert({
+      where: {
+        projectId_type: {
+          projectId,
+          type,
+        },
+      },
+      update: {
+        content,
+        amendmentProjectId,
+        updatedAt: new Date(),
+      },
+      create: {
+        projectId,
+        type,
+        content,
+        amendmentProjectId,
+      },
+    });
+
+    logger.info(
+      `Repository: Upserted draft document with amendment project for project: ${projectId}, type: ${type}, amendmentProjectId: ${amendmentProjectId}`
+    );
+    return document;
+  } catch (error) {
+    logger.error('Failed to upsert draft document with amendment project', { 
+      error, 
+      projectId, 
+      type, 
+      amendmentProjectId 
+    });
+    throw new ApplicationError(
+      ErrorCode.DB_QUERY_ERROR,
+      `Failed to upsert draft document with amendment project: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+/**
  * Batch update multiple draft documents
  * @param projectId The ID of the project
  * @param updates Array of document updates

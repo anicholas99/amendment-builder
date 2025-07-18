@@ -19,6 +19,7 @@ const apiLogger = createApiLogger('projects/draft');
 const updateDocumentSchema = z.object({
   type: z.string().min(1, 'Document type is required'),
   content: z.string(),
+  amendmentProjectId: z.string().optional(), // Add support for amendment project linking
 });
 
 // Schema for batch updates
@@ -158,19 +159,22 @@ async function handler(
         return;
       }
 
-      const { type, content } = validation.data;
+      const { type, content, amendmentProjectId } = validation.data;
 
       apiLogger.debug('Updating draft document', {
         projectId,
         userId,
         type,
+        amendmentProjectId,
         contentLength: content.length,
       });
 
-      const document = await upsertDraftDocument(
+      // Use the repository function that supports amendmentProjectId
+      const document = await upsertDraftDocumentWithAmendmentProject(
         String(projectId),
         type,
-        content
+        content,
+        amendmentProjectId
       );
 
       apiLogger.info('Draft document updated', {
@@ -178,6 +182,7 @@ async function handler(
         userId,
         documentId: document.id,
         type: document.type,
+        amendmentProjectId: document.amendmentProjectId,
       });
 
       res.status(200).json(document);

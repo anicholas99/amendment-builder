@@ -68,13 +68,12 @@ Generate a detailed, structured summary that attorneys can use for strategy. Inc
 7. **STRATEGIC IMPLICATIONS**: Response difficulty, timeline, recommended approach
 8. **SUMMARY TABLE**: Quick reference with rejection types, affected claims, issues
 
-Format with emojis for visual clarity:
-🟥 = Rejections (substantive)
-🟨 = Objections (formal)
-✅ = Withdrawn/Allowed
-❌ = Not present
-🔹 = Specific issues
-📋 = Summary table
+Format with clear section headers and structured organization:
+- Rejections (substantive issues)
+- Objections (formal issues)
+- Withdrawn/Allowed items
+- Prior art analysis
+- Strategic implications
 
 **DETAILED ANALYSIS INSTRUCTIONS**:
 

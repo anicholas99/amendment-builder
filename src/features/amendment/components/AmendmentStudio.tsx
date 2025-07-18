@@ -10,6 +10,7 @@ import { useRouter } from 'next/router';
 import { logger } from '@/utils/clientLogger';
 import { cn } from '@/lib/utils';
 import { Resizable, ResizeCallback } from 're-resizable';
+import { useQuery } from '@tanstack/react-query';
 
 // Import new components
 import { AmendmentProjectsList } from './AmendmentProjectsList';
@@ -25,6 +26,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useOfficeActions, useOfficeAction } from '@/hooks/api/useAmendment';
 import { useOfficeActionAnalyses, useStrategyRecommendation } from '@/hooks/api/useRejectionAnalysis';
 import { AmendmentApiService } from '@/services/api/amendmentApiService';
+import { DraftApiService } from '@/services/api/draftApiService';
 
 interface AmendmentStudioProps {
   projectId: string;
@@ -204,6 +206,67 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
     setAiPanelWidth((prev: number) => prev + d.width);
   }, []);
 
+  // Handle saving amendment drafts
+  const handleSaveAmendmentDraft = useCallback(async (content: any) => {
+    if (!selectedOfficeActionId || !content) return;
+
+    try {
+      logger.info('[AmendmentStudio] Saving amendment draft', {
+        projectId,
+        officeActionId: selectedOfficeActionId,
+        claimCount: content.claimAmendments?.length || 0,
+        argumentCount: content.argumentSections?.length || 0,
+      });
+
+      // Save claim amendments as separate draft document
+      if (content.claimAmendments && content.claimAmendments.length > 0) {
+        await DraftApiService.updateDraftDocument(
+          projectId,
+          'CLAIMS_AMENDMENTS',
+          JSON.stringify(content.claimAmendments)
+        );
+      }
+
+      // Save argument sections as separate draft document  
+      if (content.argumentSections && content.argumentSections.length > 0) {
+        await DraftApiService.updateDraftDocument(
+          projectId,
+          'ARGUMENTS_SECTION', 
+          JSON.stringify(content.argumentSections)
+        );
+      }
+
+      // Save overall amendment shell document
+      if (content.title && content.responseType) {
+        const amendmentShell = {
+          title: content.title,
+          responseType: content.responseType,
+          lastSaved: content.lastSaved,
+          officeActionId: selectedOfficeActionId,
+        };
+
+        await DraftApiService.updateDraftDocument(
+          projectId,
+          'AMENDMENT_SHELL',
+          JSON.stringify(amendmentShell)
+        );
+      }
+
+      logger.info('[AmendmentStudio] Amendment draft saved successfully', {
+        projectId,
+        officeActionId: selectedOfficeActionId,
+      });
+
+    } catch (error) {
+      logger.error('[AmendmentStudio] Failed to save amendment draft', {
+        error: error instanceof Error ? error.message : String(error),
+        projectId,
+        officeActionId: selectedOfficeActionId,
+      });
+      throw error; // Re-throw so DraftingWorkspace can handle the error
+    }
+  }, [projectId, selectedOfficeActionId]);
+
   if (showProjects) {
     return <AmendmentProjectsList projectId={projectId} />;
   }
@@ -281,6 +344,7 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
                 selectedOfficeAction={adaptedOfficeAction}
                 selectedOfficeActionId={selectedOfficeActionId}
                 amendmentProjectId={`amendment-${selectedOfficeActionId}`}
+                onSave={handleSaveAmendmentDraft}
               />
             )}
           </div>

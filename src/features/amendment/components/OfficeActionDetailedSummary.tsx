@@ -16,7 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { FileText, AlertTriangle, CheckCircle, XCircle, Target } from 'lucide-react';
+import { FileText, AlertTriangle, CheckCircle, XCircle, Target, ClipboardList, AlertOctagon, AlertCircle, Check, Minus } from 'lucide-react';
 import type { DetailedAnalysis } from '@/types/amendment';
 
 interface OfficeActionDetailedSummaryProps {
@@ -98,7 +98,8 @@ export const OfficeActionDetailedSummary: React.FC<OfficeActionDetailedSummaryPr
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                📋 Overview
+                <ClipboardList className="h-5 w-5" />
+                Overview
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -121,7 +122,8 @@ export const OfficeActionDetailedSummary: React.FC<OfficeActionDetailedSummaryPr
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  🟥 Rejections (Substantive Issues)
+                  <AlertOctagon className="h-5 w-5 text-red-600" />
+                  Rejections (Substantive Issues)
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -138,7 +140,7 @@ export const OfficeActionDetailedSummary: React.FC<OfficeActionDetailedSummaryPr
                     <div className="space-y-2">
                       {rejection.issues.map((issue, issueIndex) => (
                         <div key={issueIndex} className="flex items-start gap-2">
-                          <span className="text-red-600 mt-1">🔹</span>
+                          <Minus className="h-3 w-3 text-red-600 mt-1 flex-shrink-0" />
                           <span className="text-red-800 text-sm">{issue}</span>
                         </div>
                       ))}
@@ -154,7 +156,8 @@ export const OfficeActionDetailedSummary: React.FC<OfficeActionDetailedSummaryPr
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  🟨 Objections (Formal Issues)
+                  <AlertCircle className="h-5 w-5 text-yellow-600" />
+                  Objections (Formal Issues)
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -169,7 +172,7 @@ export const OfficeActionDetailedSummary: React.FC<OfficeActionDetailedSummaryPr
                     <div className="space-y-2">
                       {objection.issues.map((issue, issueIndex) => (
                         <div key={issueIndex} className="flex items-start gap-2">
-                          <span className="text-yellow-600 mt-1">🔹</span>
+                          <Minus className="h-3 w-3 text-yellow-600 mt-1 flex-shrink-0" />
                           <span className="text-yellow-800 text-sm">{issue}</span>
                         </div>
                       ))}
@@ -185,7 +188,8 @@ export const OfficeActionDetailedSummary: React.FC<OfficeActionDetailedSummaryPr
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  ✅ Withdrawn/Allowed
+                  <Check className="h-5 w-5 text-green-600" />
+                  Withdrawn/Allowed
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">

@@ -149,38 +149,114 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
   // Arguments state - Initialize empty, to be populated based on actual rejections
   const [argumentSections, setArgumentSections] = useState<ArgumentSection[]>([]);
 
-  // Initialize amendment structure from Office Action data
+  // Load existing amendment data from database
   useEffect(() => {
-    if (selectedOfficeAction && selectedOfficeAction.rejections.length > 0) {
-      // Create argument sections for each rejection
-      const newArgumentSections = selectedOfficeAction.rejections.map((rejection: any, index: number) => ({
-        id: `arg-${rejection.id}`,
-        title: `Response to ${rejection.type} Rejection`,
-        content: `Applicant respectfully traverses the ${rejection.type} rejection and submits that the claims are patentable for at least the following reasons:\n\n[AI-generated arguments will appear here when you use the AI Assistant]`,
-        type: 'RESPONSE_TO_REJECTION' as const,
-        rejectionId: rejection.id,
-      }));
+    const loadAmendmentDraft = async () => {
+      if (!projectId || !selectedOfficeAction) return;
 
-      setArgumentSections(newArgumentSections);
+      try {
+        console.log('🔍 Loading amendment draft for project:', projectId);
 
-      // Create placeholder claim amendments for rejected claims
-      const rejectedClaims = new Set<string>();
-      selectedOfficeAction.rejections.forEach((rejection: any) => {
-        rejection.claims.forEach((claim: string) => rejectedClaims.add(claim));
-      });
+        // Try to load existing amendment draft from the database
+        let draftData = null;
+        
+        // First try with amendmentProjectId if provided
+        if (amendmentProjectId) {
+          const draftResponse = await fetch(`/api/projects/${projectId}/draft-documents?amendmentProjectId=${amendmentProjectId}`);
+          if (draftResponse.ok) {
+            draftData = await draftResponse.json();
+            console.log('📄 Draft documents found with amendmentProjectId:', draftData.documents?.length || 0);
+          }
+        }
+        
+        // If no data found with amendmentProjectId, try loading all project drafts
+        if (!draftData || !draftData.documents || draftData.documents.length === 0) {
+          console.log('🔍 No docs found with amendmentProjectId, trying all project drafts...');
+          const allDraftsResponse = await fetch(`/api/projects/${projectId}/draft-documents`);
+          if (allDraftsResponse.ok) {
+            draftData = await allDraftsResponse.json();
+            console.log('📄 All draft documents found:', draftData.documents?.length || 0);
+            
+            // Log what types we found
+            if (draftData.documents) {
+              const types = draftData.documents.map((doc: any) => doc.type);
+              console.log('📋 Document types found:', types);
+            }
+          }
+        }
+        
+        if (draftData && draftData.documents) {
+          // Look for existing claim amendments
+          const claimsAmendmentDoc = draftData.documents?.find((doc: any) => doc.type === 'CLAIMS_AMENDMENTS');
+          if (claimsAmendmentDoc && claimsAmendmentDoc.content) {
+            try {
+              const existingClaimAmendments = JSON.parse(claimsAmendmentDoc.content);
+              setClaimAmendments(existingClaimAmendments);
+              console.log('✅ Loaded existing claim amendments from database:', existingClaimAmendments.length);
+            } catch (parseError) {
+              console.warn('Failed to parse existing claim amendments:', parseError);
+            }
+          }
 
-      const newClaimAmendments = Array.from(rejectedClaims).map(claimNumber => ({
-        id: `claim-${claimNumber}`,
-        claimNumber,
-        status: 'CURRENTLY_AMENDED' as const,
-        originalText: `[Original text for Claim ${claimNumber} - please add via project claims or AI Assistant]`,
-        amendedText: `[Amended text for Claim ${claimNumber} - use AI Assistant for suggestions]`,
-        reasoning: `[Amendment reasoning for Claim ${claimNumber} - use AI Assistant for suggestions]`,
-      }));
+          // Look for existing argument sections
+          const argumentsDoc = draftData.documents?.find((doc: any) => doc.type === 'ARGUMENTS_SECTION');
+          if (argumentsDoc && argumentsDoc.content) {
+            try {
+              const existingArguments = JSON.parse(argumentsDoc.content);
+              setArgumentSections(existingArguments);
+              console.log('✅ Loaded existing arguments from database:', existingArguments.length);
+            } catch (parseError) {
+              console.warn('Failed to parse existing arguments:', parseError);
+            }
+          }
 
-      setClaimAmendments(newClaimAmendments);
-    }
-  }, [selectedOfficeAction]);
+          // If we found existing data, we're done
+          if (claimsAmendmentDoc || argumentsDoc) {
+            console.log('✅ Successfully loaded existing amendment data');
+            return;
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to load existing amendment draft:', error);
+      }
+
+      // Fallback: Initialize from Office Action if no existing data found
+      if (selectedOfficeAction && selectedOfficeAction.rejections.length > 0) {
+        console.log('⚠️ No existing data found, creating placeholder amendments');
+        
+        // Create argument sections for each rejection
+        const newArgumentSections = selectedOfficeAction.rejections.map((rejection: any, index: number) => ({
+          id: `arg-${rejection.id}`,
+          title: `Response to ${rejection.type} Rejection`,
+          content: `Applicant respectfully traverses the ${rejection.type} rejection and submits that the claims are patentable for at least the following reasons:\n\n[AI-generated arguments will appear here when you use the AI Assistant]`,
+          type: 'RESPONSE_TO_REJECTION' as const,
+          rejectionId: rejection.id,
+        }));
+
+        setArgumentSections(newArgumentSections);
+
+        // Create placeholder claim amendments for rejected claims  
+        const rejectedClaims = new Set<string>();
+        selectedOfficeAction.rejections.forEach((rejection: any) => {
+          rejection.claims.forEach((claim: string) => rejectedClaims.add(claim));
+        });
+
+        const newClaimAmendments = Array.from(rejectedClaims).map(claimNumber => ({
+          id: `claim-${claimNumber}`,
+          claimNumber,
+          status: 'CURRENTLY_AMENDED' as const,
+          originalText: `[Original text for Claim ${claimNumber} - please add via project claims or AI Assistant]`,
+          amendedText: `[Amended text for Claim ${claimNumber} - use AI Assistant for suggestions]`,
+          reasoning: `[Amendment reasoning for Claim ${claimNumber} - use AI Assistant for suggestions]`,
+        }));
+
+        setClaimAmendments(newClaimAmendments);
+        console.log('⚠️ Created placeholder claim amendments - no existing data found');
+      }
+    };
+
+    loadAmendmentDraft();
+  }, [selectedOfficeAction, amendmentProjectId, projectId]);
 
   // Document metadata
   const [documentTitle, setDocumentTitle] = useState('Amendment Response');

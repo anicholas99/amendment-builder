@@ -19,6 +19,7 @@
     "db:seed": "ts-node -r tsconfig-paths/register src/lib/db/seed/seed.ts",
     "db:seed:force": "ts-node -r tsconfig-paths/register src/lib/db/seed/seed.ts --force",
     "db:seed:quiet": "ts-node -r tsconfig-paths/register src/lib/db/seed/seed.ts --quiet",
+    "db:seed:amendment": "ts-node -r tsconfig-paths/register scripts/seed-complete-amendment-workflow.ts",
     "db:reset": "prisma migrate reset --force && npm run db:seed",
     "find-unused": "ts-prune",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,scss}\"",
