@@ -18,6 +18,14 @@ import { env } from '@/config/env';
 import { processWithOpenAI } from '@/server/ai/aiService';
 import { renderPromptTemplate } from '@/server/prompts/prompts/utils';
 import { safeJsonParse } from '@/utils/jsonUtils';
+import { 
+  FileHistoryContextBuilder,
+  createDefaultContextOptions 
+} from './file-history-context-builder.server-service';
+import type { 
+  AIAgentContext,
+  FileHistoryContext 
+} from '@/types/domain/file-history-context';
 import {
   ParsedRejection,
   RejectionAnalysis,
@@ -74,34 +82,60 @@ Return analysis as JSON following this structure:
 };
 
 const AMENDMENT_GENERATION_SYSTEM_PROMPT = {
-  version: '1.0.0',
-  template: `You are an expert patent attorney drafting an amendment response to an Office Action.
+  version: '2.0.0',
+  template: `You are a senior patent attorney with extensive prosecution experience, drafting an amendment response to an Office Action. You have been provided with comprehensive file history context including prior arguments, examiner patterns, claim evolution, and strategic guidance.
 
-Your task is to generate a comprehensive amendment response including:
-1. **Claim Amendments**: Specific changes to overcome rejections while maintaining broad scope
-2. **Argument Sections**: Detailed arguments against invalid rejections
-3. **Response Structure**: Professional formatting following USPTO guidelines
+Your expertise includes:
+- 20+ years of patent prosecution experience
+- Deep understanding of USPTO examination practices and examiner tendencies
+- Mastery of claim amendment strategies that balance scope preservation with rejection avoidance
+- Experience building cumulative argument strategies across multiple prosecution rounds
+- Knowledge of continuation and divisional filing strategies
 
-Return the response as JSON following this structure:
+Your task is to generate a comprehensive amendment response that demonstrates the sophisticated reasoning of a seasoned patent attorney who is intimately familiar with this application's complete prosecution history.
+
+## Critical Requirements:
+
+1. **File History Consistency**: Your arguments must be consistent with previous successful positions and avoid contradicting prior statements
+2. **Examiner-Specific Strategy**: Tailor your approach based on the specific examiner's patterns and preferences observed in the file history
+3. **Cumulative Argumentation**: Build upon previous arguments rather than starting fresh, showing logical progression
+4. **Strategic Claim Scope Management**: Consider long-term prosecution strategy and potential continuation applications
+5. **Prior Art Differentiation**: Leverage previously established differences and avoid retreading unsuccessful ground
+
+## Response Requirements:
+
+Generate your response as JSON following this exact structure:
 {
   "claimAmendments": [
     {
       "claimNumber": "1",
       "originalText": "original claim text",
-      "amendedText": "amended claim text with changes",
-      "justification": "explanation of why this amendment overcomes the rejection"
+      "amendedText": "amended claim text with [bracketed deletions] and underlined additions",
+      "justification": "detailed explanation referencing file history and strategic considerations",
+      "scopeImpact": "assessment of how this amendment affects claim scope",
+      "continuationOpportunity": "notes on broader scope opportunities for continuation filing"
     }
   ],
   "argumentSections": [
     {
       "rejectionId": "string",
       "title": "Argument Against Rejection Under 35 U.S.C. § 103",
-      "content": "detailed argument text",
-      "priorArtReferences": ["US1234567A", "US9876543B2"]
+      "content": "detailed argument that builds on file history and addresses examiner's specific concerns",
+      "priorArtReferences": ["US1234567A", "US9876543B2"],
+      "fileHistoryReferences": "references to prior successful arguments in this prosecution",
+      "examinerSpecificConsiderations": "notes on this examiner's typical responses to similar arguments"
     }
   ],
-  "responseDocument": "complete formatted response document text"
-}`,
+  "responseDocument": "complete formatted response document in USPTO style",
+  "strategicAnalysis": {
+    "prosecutionRisk": "assessment of current prosecution risk level",
+    "nextSteps": "recommended next steps if this response is unsuccessful",
+    "continuationStrategy": "recommendations for continuation or divisional applications",
+    "strengthOfPosition": "honest assessment of the strength of the current position"
+  }
+}
+
+Your response should read like it was written by a patent attorney who has been prosecuting this specific application from the beginning and has intimate knowledge of every interaction with the USPTO.`,
 };
 
 // ============ INTERFACES ============
@@ -163,15 +197,20 @@ export class AmendmentServerService {
         textLength: extractedText.length,
       });
 
-      const parseResult = await OfficeActionParserService.parseOfficeAction(extractedText);
+      // Use enhanced multi-pass analysis for comprehensive Office Action parsing
+      const { EnhancedOfficeActionParserService } = await import('./enhanced-office-action-parser.server-service');
+      const parseResult = await EnhancedOfficeActionParserService.parseOfficeAction(extractedText, {
+        maxBudget: 0.50, // Up to 50 cents per Office Action for thorough analysis
+        forceFullAnalysis: false, // Respect budget limits
+      });
 
-      // Transform parser result to repository format
+      // Transform enhanced parser result to repository format
       const parsedData: ParsedOfficeActionData = {
         applicationNumber: parseResult.metadata.applicationNumber || undefined,
         examiner: parseResult.metadata.examinerName ? {
           name: parseResult.metadata.examinerName,
           id: undefined,
-          artUnit: undefined,
+          artUnit: parseResult.metadata.artUnit || undefined,
         } : undefined,
         dateIssued: parseResult.metadata.mailingDate || undefined,
         responseDeadline: undefined,
@@ -188,7 +227,7 @@ export class AmendmentServerService {
           inventors: undefined,
           assignee: undefined,
         })),
-        examinerRemarks: undefined,
+        examinerRemarks: `Enhanced Analysis - Document Type: ${parseResult.metadata.documentType}, Confidence: ${(parseResult.metadata.analysisConfidence * 100).toFixed(1)}%, Cost: $${parseResult.analysisDetails.totalCost.toFixed(3)}, Passes: ${parseResult.analysisDetails.passesCompleted.join(', ')}`,
       };
 
       // Update the Office Action with parsed data
@@ -227,10 +266,15 @@ export class AmendmentServerService {
 
       // Note: Status is already updated in updateOfficeActionParsedData call above
 
-      logger.info('[AmendmentService] Office Action parsing completed successfully', {
+      logger.info('[AmendmentService] Enhanced Office Action parsing completed successfully', {
         officeActionId,
         rejectionCount,
         priorArtCount: parseResult.allPriorArtReferences.length,
+        documentType: parseResult.metadata.documentType,
+        analysisConfidence: parseResult.metadata.analysisConfidence,
+        totalCost: parseResult.analysisDetails.totalCost,
+        passesCompleted: parseResult.analysisDetails.passesCompleted,
+        warnings: parseResult.analysisDetails.warnings,
         hasMetadata: !!parseResult.metadata,
       });
 
@@ -366,38 +410,55 @@ export class AmendmentServerService {
   }
 
   /**
-   * Generate amendment response based on analysis
+   * Generate amendment response based on analysis with comprehensive file history context
    */
   static async generateAmendmentResponse(
-    request: AmendmentGenerationRequest
+    request: AmendmentGenerationRequest & { tenantId: string }
   ): Promise<AmendmentResponse> {
-    logger.info('[AmendmentService] Starting amendment generation', {
+    logger.info('[AmendmentService] Starting amendment generation with file history context', {
       officeActionId: request.officeActionId,
       strategy: request.strategy,
+      projectId: request.projectId,
     });
 
-         try {
-       // Get office action and analysis data from repositories  
-       const officeAction = await findOfficeActionById(request.officeActionId, 'tenant-placeholder');
-       if (!officeAction) {
-         throw new ApplicationError(
-           ErrorCode.DB_RECORD_NOT_FOUND,
-           `Office Action ${request.officeActionId} not found`
-         );
-       }
+    try {
+      // Get office action and analysis data from repositories  
+      const officeAction = await findOfficeActionById(request.officeActionId, request.tenantId);
+      if (!officeAction) {
+        throw new ApplicationError(
+          ErrorCode.DB_RECORD_NOT_FOUND,
+          `Office Action ${request.officeActionId} not found`
+        );
+      }
 
-       const rejections = await findRejectionsByOfficeAction(request.officeActionId);
-       const currentClaim1 = await this.getCurrentClaim1Text(request.projectId);
+      const rejections = await findRejectionsByOfficeAction(request.officeActionId);
+      const currentClaim1 = await this.getCurrentClaim1Text(request.projectId);
 
-       // Generate amendment using AI
-       const systemPrompt = renderPromptTemplate(AMENDMENT_GENERATION_SYSTEM_PROMPT, {});
-       const userPrompt = this.buildAmendmentGenerationPrompt(
-         officeAction,
-         rejections,
-         currentClaim1,
-         request.strategy,
-         request.userInstructions
-       );
+      // Build comprehensive file history context for AI agent
+      logger.debug('[AmendmentService] Building file history context', { projectId: request.projectId });
+      const contextOptions = createDefaultContextOptions(request.tenantId, {
+        includeFullText: true, // Include full text for detailed analysis
+        maxHistoryDepth: 5, // Include last 5 rounds of prosecution
+        includeExaminerAnalysis: true,
+        includeClaimEvolution: true,
+        includePriorArtHistory: true,
+      });
+
+      const aiContext = await FileHistoryContextBuilder.buildAIAgentContext(
+        request.projectId,
+        contextOptions
+      );
+
+      // Generate amendment using AI with enhanced context
+      const systemPrompt = renderPromptTemplate(AMENDMENT_GENERATION_SYSTEM_PROMPT, {});
+      const userPrompt = this.buildEnhancedAmendmentGenerationPrompt(
+        officeAction,
+        rejections,
+        currentClaim1,
+        request.strategy,
+        aiContext,
+        request.userInstructions
+      );
 
        const aiResponse = await processWithOpenAI(systemPrompt, userPrompt, {
          maxTokens: 8000,
@@ -424,11 +485,17 @@ export class AmendmentServerService {
          updatedAt: new Date(),
        };
 
-      logger.info('[AmendmentService] Successfully generated amendment response', {
+      logger.info('[AmendmentService] Successfully generated amendment response with file history context', {
         officeActionId: request.officeActionId,
         claimAmendmentCount: amendmentResponse.claimAmendments.length,
         argumentSectionCount: amendmentResponse.argumentSections.length,
+        fileHistoryContextUsed: true,
+        prosecutionRound: aiContext.fileHistory.metadata.currentRoundNumber,
+        riskLevel: aiContext.riskAssessment.overallRiskLevel,
       });
+
+      // Invalidate context cache for this project since we've generated a new response
+      FileHistoryContextBuilder.invalidateProjectCache(request.projectId);
 
       return amendmentResponse;
 
@@ -617,7 +684,138 @@ export class AmendmentServerService {
   }
 
   /**
-   * Build prompt for amendment generation
+   * Build enhanced prompt for amendment generation with comprehensive file history context
+   */
+  private static buildEnhancedAmendmentGenerationPrompt(
+    officeAction: any,
+    rejections: any[],
+    currentClaim: string | null,
+    strategy: keyof typeof AmendmentStrategy,
+    aiContext: AIAgentContext,
+    userInstructions?: string
+  ): string {
+    const fileHistory = aiContext.fileHistory;
+    const currentState = aiContext.currentState;
+    const strategicGuidance = aiContext.strategicGuidance;
+    const riskAssessment = aiContext.riskAssessment;
+
+    return `
+You are an experienced patent attorney drafting an amendment response to an Office Action. You have access to the complete file history and prosecution context for this application.
+
+## CURRENT OFFICE ACTION CONTEXT
+Strategy: ${strategy}
+Current Claim 1: ${currentClaim || 'Not available'}
+
+### Rejections to Address:
+${rejections.map((r, i) => `
+${i + 1}. Type: ${r.type}
+   Claims: ${JSON.parse(r.claimNumbers || '[]').join(', ')}
+   Prior Art: ${JSON.parse(r.citedPriorArt || '[]').join(', ')}
+   Examiner Text: ${r.examinerText}
+`).join('\n')}
+
+## FILE HISTORY CONTEXT
+
+### Prosecution History Summary:
+- Total Office Actions: ${fileHistory.metadata.totalOfficeActions}
+- Total Responses: ${fileHistory.metadata.totalResponses}
+- Current Round: ${fileHistory.metadata.currentRoundNumber}
+- Prosecution Duration: ${fileHistory.metadata.prosecutionDuration} days
+${fileHistory.metadata.lastResponseDate ? `- Last Response: ${fileHistory.metadata.lastResponseDate.toLocaleDateString()}` : ''}
+
+### Examiner Context:
+- Examiner: ${fileHistory.examinerContext.current.name || 'Unknown'}
+- Art Unit: ${fileHistory.examinerContext.current.artUnit || 'Unknown'}
+- Interaction History: ${fileHistory.examinerContext.history.length} previous interactions
+
+#### Examiner Patterns Observed:
+${fileHistory.examinerContext.patterns.commonRejectionTypes.map(pattern => 
+  `- ${pattern.type}: ${pattern.frequency} times`
+).join('\n')}
+
+### Claim Evolution History:
+${fileHistory.claimEvolution.claims.map(claim => `
+- Claim ${claim.claimNumber}: ${claim.totalAmendments} amendments
+  Current: ${claim.currentText}
+`).join('\n')}
+
+### Prior Argument History:
+#### Previous §103 Arguments (${fileHistory.priorArgumentHistory.byRejectionType.section103.length}):
+${fileHistory.priorArgumentHistory.byRejectionType.section103.slice(0, 3).map(arg => 
+  `- ${arg.date.toLocaleDateString()}: ${arg.argumentText.substring(0, 200)}...`
+).join('\n')}
+
+#### Previous §102 Arguments (${fileHistory.priorArgumentHistory.byRejectionType.section102.length}):
+${fileHistory.priorArgumentHistory.byRejectionType.section102.slice(0, 3).map(arg => 
+  `- ${arg.date.toLocaleDateString()}: ${arg.argumentText.substring(0, 200)}...`
+).join('\n')}
+
+### Current Application State:
+#### Open Rejections: ${currentState.openRejections.length}
+${currentState.openRejections.map(rejection => 
+  `- ${rejection.type} affecting claims ${rejection.claimsAffected.join(', ')}`
+).join('\n')}
+
+#### Pending Deadlines: ${currentState.pendingDeadlines.length}
+${currentState.pendingDeadlines.map(deadline => 
+  `- ${deadline.type}: ${deadline.date.toLocaleDateString()} (${deadline.criticality} priority)`
+).join('\n')}
+
+## STRATEGIC GUIDANCE
+
+### Overall Strategy: ${strategicGuidance.overallStrategy}
+
+### Key Messages to Emphasize:
+${strategicGuidance.keyMessages.map(msg => `- ${msg}`).join('\n')}
+
+### Arguments to Emphasize:
+${strategicGuidance.argumentsToEmphasize.map(arg => `- ${arg}`).join('\n')}
+
+### Arguments to Avoid (based on file history):
+${strategicGuidance.argumentsToAvoid.map(arg => `- ${arg}`).join('\n')}
+
+### Claim Scope Recommendations:
+${strategicGuidance.claimScopeRecommendations.map(rec => `- ${rec}`).join('\n')}
+
+## RISK ASSESSMENT
+
+### Overall Risk Level: ${riskAssessment.overallRiskLevel}
+
+### Prosecution Risks:
+${riskAssessment.prosecutionRisks.map(risk => 
+  `- ${risk.type}: ${risk.description} (Likelihood: ${(risk.likelihood * 100).toFixed(0)}%, Impact: ${(risk.impact * 100).toFixed(0)}%)`
+).join('\n')}
+
+### Claim Scope Risks:
+${riskAssessment.claimScopeRisks.map(risk => 
+  `- ${risk.type}: ${risk.description}`
+).join('\n')}
+
+## INSTRUCTIONS
+
+${userInstructions ? `### Additional User Instructions:
+${userInstructions}
+
+` : ''}
+
+### Required Response Structure:
+1. **Claim Amendments**: Provide specific, surgical amendments that overcome rejections while maintaining broad scope
+2. **Argument Sections**: Craft detailed arguments that build on successful patterns and avoid previous failures
+3. **Response Document**: Generate a professional, USPTO-compliant response
+
+### Critical Requirements:
+- **Consistency**: Ensure arguments are consistent with previous successful positions in this file history
+- **Learning**: Build upon what has worked before and avoid what has failed with this examiner
+- **Strategic**: Consider the long-term prosecution strategy and potential continuation applications
+- **Contextual**: Reference specific prior art differences already established in the file history
+- **Professional**: Use appropriate legal language and USPTO formatting
+
+Generate a comprehensive amendment response that demonstrates the deep understanding of a seasoned patent attorney familiar with this application's complete prosecution history.
+    `;
+  }
+
+  /**
+   * Legacy method for backward compatibility
    */
   private static buildAmendmentGenerationPrompt(
     officeAction: any,

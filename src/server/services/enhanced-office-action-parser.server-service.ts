@@ -1,12 +1,14 @@
 /**
  * Enhanced Office Action Parser Service
  * 
- * Handles long Office Action documents using intelligent segmentation
- * instead of truncation. Processes 13+ page documents efficiently while
- * maintaining all critical information.
+ * Comprehensive multi-pass analysis system for Office Action documents.
+ * Uses up to $0.50 per document to ensure zero details are missed.
  * 
- * Extends the existing OfficeActionParserService with industry-standard
- * long document processing capabilities.
+ * Analysis Pipeline:
+ * 1. Document Structure & Metadata Analysis
+ * 2. Deep Rejection Analysis  
+ * 3. Prior Art & Citation Extraction
+ * 4. Cross-Validation & Completeness Check
  */
 
 import { logger } from '@/server/logger';
@@ -15,24 +17,21 @@ import { processWithOpenAI } from '@/server/ai/aiService';
 import { safeJsonParse } from '@/utils/jsonUtils';
 import { estimateTokens } from '@/utils/textUtils';
 import { renderPromptTemplate } from '@/server/prompts/prompts/utils';
-import { ParsedRejection, RejectionType } from '@/types/domain/amendment';
-import { 
-  DocumentSegment, 
-  SegmentationResult, 
-  ProcessedDocumentResult,
-  ProcessingOptions 
-} from '@/types/long-document-processing';
+import { ParsedRejection, RejectionType, RejectionTypeValue } from '@/types/domain/amendment';
 import { v4 as uuidv4 } from 'uuid';
 
 // ============ TYPES ============
 
-interface ParsedOfficeActionResult {
+interface EnhancedOfficeActionAnalysis {
   metadata: {
     applicationNumber: string | null;
     mailingDate: string | null;
     examinerName: string | null;
-    isLongDocument?: boolean;
-    segmentCount?: number;
+    artUnit: string | null;
+    confirmationNumber: string | null;
+    documentType: string; // "Non-Final Rejection", "Final Rejection", "Notice", etc.
+    totalPages: number;
+    analysisConfidence: number;
   };
   rejections: ParsedRejection[];
   allPriorArtReferences: string[];
@@ -41,107 +40,219 @@ interface ParsedOfficeActionResult {
     rejectionTypes: string[];
     totalClaimsRejected: number;
     uniquePriorArtCount: number;
+    hasObjections: boolean;
+    hasRestrictions: boolean;
+    hasElections: boolean;
   };
-  processingStats?: {
-    totalTokens: number;
-    processingTime: number;
-    segmentationUsed: boolean;
+  analysisDetails: {
+    totalTokensUsed: number;
+    totalCost: number;
+    passesCompleted: string[];
+    confidenceScores: Record<string, number>;
+    warnings: string[];
   };
 }
 
-// ============ PROMPT TEMPLATES ============
+interface AnalysisPass {
+  name: string;
+  prompt: any;
+  maxTokens: number;
+  temperature: number;
+}
 
-const ENHANCED_OFFICE_ACTION_PARSING_SYSTEM_PROMPT = {
+// ============ CONCISE PROMPT TEMPLATES ============
+
+const DOCUMENT_STRUCTURE_ANALYSIS_PROMPT = {
   version: '2.0.0',
-  template: `You are an expert USPTO patent examiner assistant that analyzes Office Action documents.
+  template: `You are a USPTO patent examiner analyzing an Office Action document.
 
-Your task is to parse an Office Action document segment and extract structured information about rejections, prior art references, and examiner reasoning.
+Extract metadata and document structure. Return valid JSON only.
 
-SEGMENT CONTEXT: You are analyzing {{#if segmentNumber}}segment {{segmentNumber}} of {{totalSegments}}{{else}}a complete document{{/if}}.
-{{#if previousContext}}
-PREVIOUS SEGMENTS CONTEXT: {{previousContext}}
-{{/if}}
-
-You must identify:
-1. **Rejections**: Each distinct rejection with its type (§102, §103, §101, §112, OTHER)
-2. **Claims**: Which specific claims are rejected in each rejection
-3. **Prior Art**: Patent/publication numbers cited in each rejection
-4. **Examiner Reasoning**: The examiner's rationale for each rejection
-5. **Document Metadata**: Application number, mailing date, examiner name if present
-
-CRITICAL REQUIREMENTS:
-- Maintain consistency with previous segments
-- Extract each rejection as a separate structured object
-- Accurately identify rejection types (§102 = anticipation, §103 = obviousness, §101 = subject matter, §112 = written description/enablement)
-- Parse claim numbers correctly (e.g., "Claims 1-5" should be ["1", "2", "3", "4", "5"])
-- Extract patent/publication numbers in standard format (e.g., "US20180053140A1")
-- Preserve exact examiner reasoning text for each rejection
-- If this is a partial segment, note any incomplete rejections that continue in next segment
-
-Return your analysis as valid JSON following this exact structure:
 {
+  "documentType": "Non-Final Office Action|Final Office Action|Notice of Allowance|Advisory Action|Other",
+  "confidence": 0.95,
   "metadata": {
     "applicationNumber": "string or null",
-    "mailingDate": "string or null", 
-    "examinerName": "string or null",
-    "segmentComplete": boolean
+    "mailingDate": "string or null",
+    "examinerName": "string or null", 
+    "artUnit": "string or null",
+    "confirmationNumber": "string or null",
+    "inventionTitle": "string or null"
   },
+  "structure": {
+    "hasRejections": boolean,
+    "hasObjections": boolean,
+    "hasRestrictions": boolean
+  }
+}
+
+OFFICE ACTION TEXT:
+{{officeActionText}}`,
+};
+
+const DEEP_REJECTION_ANALYSIS_PROMPT = {
+  version: '2.0.0', 
+  template: `You are a USPTO examiner extracting rejections from an Office Action.
+
+This may be either:
+1. A detailed Office Action with full rejection text, or  
+2. An Office Action Summary page with checkboxes showing rejected claims
+
+FOR DETAILED REJECTIONS: Find ALL rejections with complete examiner reasoning.
+FOR SUMMARY PAGES: Extract information from checkboxes and forms.
+
+REJECTION TYPE IDENTIFICATION:
+- Look for "35 U.S.C. § 102" or "Section 102" → type: "102"
+- Look for "35 U.S.C. § 103" or "Section 103" → type: "103" 
+- Look for "35 U.S.C. § 101" or "Section 101" → type: "101"
+- Look for "35 U.S.C. § 112" or "Section 112" → type: "112"
+- Look for patterns like "Claims X-Y are rejected under 35 U.S.C. § 112"
+- Check for subject matter eligibility issues → type: "101"
+- Check for obviousness rejections → type: "103"
+- Check for anticipation rejections → type: "102"
+- Check for written description, enablement, indefiniteness → type: "112"
+
+CLAIM PARSING:
+- "1-7,9 and 13-45" → ["1","2","3","4","5","6","7","9","13","14",...,"45"]
+- Parse ranges and individual claims correctly
+- Handle "and" and "," separators
+
+Return valid JSON only:
+
+{
   "rejections": [
     {
-      "id": "string (UUID)",
-      "type": "§102" | "§103" | "§101" | "§112" | "OTHER",
+      "id": "uuid",
+      "type": "102|103|101|112|OTHER",
       "claims": ["1", "2", "3"],
-      "priorArtReferences": ["US20180053140A1", "US9876543B2"],
-      "examinerReasoning": "string (exact examiner text)",
-      "rawText": "string (full rejection section text)",
-      "isComplete": boolean,
-      "continuesInNextSegment": boolean
+      "priorArtReferences": ["US1,234,567", "US20200123456A1"],
+      "examinerReasoning": "complete examiner text or summary page indication",
+      "rawText": "full rejection section text or checkbox text",
+      "confidence": 0.95,
+      "isFromSummary": true
     }
   ],
-  "priorArtReferences": ["US20180053140A1", "US9876543B2", "..."],
-  "incompleteElements": {
-    "hasIncompleteRejections": boolean,
-    "partialContent": "string if applicable"
+  "objections": [
+    {
+      "type": "claim_objection|specification_objection|drawing_objection",
+      "description": "objection text",
+      "claims": ["1", "2"]
+    }
+  ],
+  "summaryInfo": {
+    "isSummaryPage": true,
+    "pendingClaims": ["list of pending claims if shown"],
+    "rejectedClaims": ["list of rejected claims from checkboxes"],
+    "allowedClaims": ["list of allowed claims if any"]
   }
-}`,
+}
+
+OFFICE ACTION TEXT:
+{{officeActionText}}`,
 };
 
-const SEGMENT_MERGING_SYSTEM_PROMPT = {
-  version: '1.0.0',
-  template: `You are merging multiple Office Action analysis segments into a final comprehensive result.
+const PRIOR_ART_CITATION_ANALYSIS_PROMPT = {
+  version: '2.0.0',
+  template: `You are a patent specialist extracting ALL prior art references from an Office Action.
 
-Your task is to:
-1. Combine all rejections from segments, handling incomplete ones that span segments
-2. Merge all prior art references without duplicates
-3. Resolve any conflicts between segments
-4. Create final comprehensive summary
+Find every patent, publication, and non-patent literature reference. Handle OCR errors in patent numbers.
 
-CRITICAL: Ensure no rejections or prior art are lost during merging.
-Handle incomplete rejections that span multiple segments by combining their content.`,
+Return valid JSON only:
+
+{
+  "priorArtReferences": [
+    {
+      "id": "uuid",
+      "originalCitation": "text as it appears",
+      "normalizedCitation": "US1234567B2",
+      "type": "us_patent|us_publication|foreign_patent|npl",
+      "relevanceScore": 0.85
+    }
+  ],
+  "citationAnalysis": {
+    "totalReferences": number,
+    "patentReferences": number,
+    "nplReferences": number
+  }
+}
+
+OFFICE ACTION TEXT:
+{{officeActionText}}`,
 };
 
-// ============ SERVICE CLASS ============
+const CROSS_VALIDATION_ANALYSIS_PROMPT = {
+  version: '2.0.0',
+  template: `You are validating Office Action analysis for completeness.
+
+Previous analysis found:
+Metadata: {{metadata}}
+Rejections: {{rejections}}  
+Prior Art: {{priorArt}}
+
+Search the office action text for any missed rejections, citations, or important details.
+
+Return valid JSON only:
+
+{
+  "validationResults": {
+    "completenessScore": 0.95,
+    "confidenceScore": 0.92
+  },
+  "missedDetails": [
+    {
+      "type": "rejection|citation|metadata",
+      "description": "what was missed",
+      "importance": "critical|important|minor"
+    }
+  ]
+}
+
+OFFICE ACTION TEXT:
+{{officeActionText}}`,
+};
+
+// ============ ENHANCED PARSER SERVICE ============
 
 export class EnhancedOfficeActionParserService {
-  private static readonly LONG_DOCUMENT_THRESHOLD = 120000; // ~30k tokens
-  private static readonly MAX_TOKENS_PER_SEGMENT = 15000;
+  private static readonly MAX_BUDGET_DOLLARS = 0.50;
+  private static readonly GPT4_COST_PER_1K_INPUT_TOKENS = 0.03;
+  private static readonly GPT4_COST_PER_1K_OUTPUT_TOKENS = 0.06;
 
   /**
-   * Parse an Office Action document with intelligent long document handling
+   * Comprehensive multi-pass Office Action analysis
    */
   static async parseOfficeAction(
     officeActionText: string,
     options: {
-      maxTokens?: number;
-      model?: string;
-      forceSegmentation?: boolean;
+      maxBudget?: number;
+      forceFullAnalysis?: boolean;
     } = {}
-  ): Promise<ParsedOfficeActionResult> {
+  ): Promise<EnhancedOfficeActionAnalysis> {
     const startTime = Date.now();
-    
-    logger.info('[EnhancedOfficeActionParser] Starting Office Action parsing', {
+    const maxBudget = options.maxBudget || this.MAX_BUDGET_DOLLARS;
+    let totalCost = 0;
+    let totalTokensUsed = 0;
+    const passesCompleted: string[] = [];
+    const confidenceScores: Record<string, number> = {};
+    const warnings: string[] = [];
+
+    logger.info('[EnhancedOfficeActionParser] Starting comprehensive analysis', {
       textLength: officeActionText.length,
       estimatedTokens: estimateTokens(officeActionText),
+      maxBudget,
+    });
+
+    // DEBUG: Log the actual OCR text being analyzed
+    logger.info('[EnhancedOfficeActionParser] DEBUG: OCR Text Analysis', {
+      textLength: officeActionText.length,
+      textPreview: officeActionText.substring(0, 2000) + (officeActionText.length > 2000 ? '...[TRUNCATED]' : ''),
+      containsRejection: officeActionText.toLowerCase().includes('rejection'),
+      containsClaim: officeActionText.toLowerCase().includes('claim'),
+      containsPriorArt: officeActionText.toLowerCase().includes('prior art') || officeActionText.toLowerCase().includes('reference'),
+      containsSection102: officeActionText.includes('102') || officeActionText.includes('§ 102'),
+      containsSection103: officeActionText.includes('103') || officeActionText.includes('§ 103'),
+      containsUSPatent: officeActionText.toLowerCase().includes('us') && (officeActionText.includes('patent') || officeActionText.includes('pub')),
+      fullText: officeActionText // Log the complete text for debugging
     });
 
     if (!officeActionText?.trim()) {
@@ -151,551 +262,481 @@ export class EnhancedOfficeActionParserService {
       );
     }
 
-    const estimatedTokens = estimateTokens(officeActionText);
-    const maxTokens = options.maxTokens || 150000;
-    const isLongDocument = estimatedTokens > this.LONG_DOCUMENT_THRESHOLD || options.forceSegmentation;
-
     try {
-      let result: ParsedOfficeActionResult;
+      // Define analysis passes
+      const analysisPasses: AnalysisPass[] = [
+        {
+          name: 'Document Structure Analysis',
+          prompt: DOCUMENT_STRUCTURE_ANALYSIS_PROMPT,
+          maxTokens: 1500,
+          temperature: 0.1,
+        },
+        {
+          name: 'Deep Rejection Analysis', 
+          prompt: DEEP_REJECTION_ANALYSIS_PROMPT,
+          maxTokens: 3000,
+          temperature: 0.05,
+        },
+        {
+          name: 'Prior Art Citation Analysis',
+          prompt: PRIOR_ART_CITATION_ANALYSIS_PROMPT,
+          maxTokens: 2000,
+          temperature: 0.1,
+        },
+      ];
 
-      if (isLongDocument) {
-        logger.info('[EnhancedOfficeActionParser] Using long document processing', {
-          estimatedTokens,
-          threshold: this.LONG_DOCUMENT_THRESHOLD,
-        });
-        
-        result = await this.parseLongDocument(officeActionText, options);
-      } else {
-        logger.info('[EnhancedOfficeActionParser] Using standard processing');
-        
-        result = await this.parseStandardDocument(officeActionText, options);
-      }
+      // Execute analysis passes
+      let structureResults: any = null;
+      let rejectionResults: any = null;
+      let priorArtResults: any = null;
 
-      // Add processing statistics
-      result.processingStats = {
-        totalTokens: estimatedTokens,
-        processingTime: Date.now() - startTime,
-        segmentationUsed: isLongDocument,
-      };
-
-      logger.info('[EnhancedOfficeActionParser] Successfully parsed Office Action', {
-        totalRejections: result.summary.totalRejections,
-        rejectionTypes: result.summary.rejectionTypes,
-        priorArtCount: result.summary.uniquePriorArtCount,
-        isLongDocument,
-        segmentCount: result.metadata.segmentCount,
-        processingTime: result.processingStats.processingTime,
-      });
-
-      return result;
-
-    } catch (error) {
-      logger.error('[EnhancedOfficeActionParser] Failed to parse Office Action', {
-        error: error instanceof Error ? error.message : String(error),
-        textLength: officeActionText.length,
-        isLongDocument,
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Parse long documents using intelligent segmentation
-   */
-  private static async parseLongDocument(
-    officeActionText: string,
-    options: any
-  ): Promise<ParsedOfficeActionResult> {
-    // Step 1: Segment the document intelligently
-    const segmentationResult = await this.segmentOfficeAction(officeActionText);
-    
-    logger.info('[EnhancedOfficeActionParser] Document segmented', {
-      segmentCount: segmentationResult.segments.length,
-      averageTokensPerSegment: Math.round(segmentationResult.totalTokens / segmentationResult.segments.length),
-    });
-
-    // Step 2: Process each segment with context
-    const segmentAnalyses: any[] = [];
-    let previousContext = '';
-
-    for (let i = 0; i < segmentationResult.segments.length; i++) {
-      const segment = segmentationResult.segments[i];
-      
-      logger.debug('[EnhancedOfficeActionParser] Processing segment', {
-        segmentNumber: i + 1,
-        segmentType: segment.type,
-        tokenCount: segment.tokenCount,
-      });
-
-      try {
-        const segmentAnalysis = await this.analyzeSegment(
-          segment,
-          i + 1,
-          segmentationResult.segments.length,
-          previousContext
-        );
-
-        segmentAnalyses.push(segmentAnalysis);
-        
-        // Update context for next segment (last 500 chars of reasoning)
-        if (segmentAnalysis.rejections?.length > 0) {
-          const lastRejection = segmentAnalysis.rejections[segmentAnalysis.rejections.length - 1];
-          previousContext = lastRejection.examinerReasoning?.substring(-500) || '';
+      for (const pass of analysisPasses) {
+        // Check budget before each pass
+        const estimatedCost = this.estimatePassCost(officeActionText, pass.maxTokens);
+        if (totalCost + estimatedCost > maxBudget && !options.forceFullAnalysis) {
+          warnings.push(`Budget limit reached, skipping ${pass.name}`);
+          logger.warn('[EnhancedOfficeActionParser] Budget limit reached', {
+            passName: pass.name,
+            totalCost,
+            estimatedCost,
+            maxBudget,
+          });
+          break;
         }
 
-      } catch (error) {
-        logger.error('[EnhancedOfficeActionParser] Segment analysis failed', {
-          segmentNumber: i + 1,
-          error: error instanceof Error ? error.message : String(error),
+        logger.info('[EnhancedOfficeActionParser] Executing analysis pass', {
+          passName: pass.name,
+          estimatedCost,
+          budgetRemaining: maxBudget - totalCost,
         });
-        
-        // Create placeholder analysis for failed segment
-        segmentAnalyses.push({
-          metadata: { segmentComplete: false },
-          rejections: [],
-          priorArtReferences: [],
-          incompleteElements: { hasIncompleteRejections: false },
-          error: error instanceof Error ? error.message : String(error),
-        });
+
+        try {
+          const passResult = await this.executeAnalysisPass(
+            officeActionText,
+            pass,
+            structureResults,
+            rejectionResults,
+            priorArtResults
+          );
+
+          // Track costs and tokens
+          totalCost += passResult.cost;
+          totalTokensUsed += passResult.tokensUsed;
+          passesCompleted.push(pass.name);
+          confidenceScores[pass.name] = passResult.confidence;
+
+          // Store results for next passes
+          if (pass.name === 'Document Structure Analysis') {
+            structureResults = passResult.data;
+          } else if (pass.name === 'Deep Rejection Analysis') {
+            rejectionResults = passResult.data;
+          } else if (pass.name === 'Prior Art Citation Analysis') {
+            priorArtResults = passResult.data;
+          }
+
+        } catch (error) {
+          logger.error('[EnhancedOfficeActionParser] Analysis pass failed', {
+            passName: pass.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          warnings.push(`${pass.name} failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
       }
+
+      // Cross-validation pass (if budget allows)
+      let validationResults: any = null;
+      const validationCost = this.estimatePassCost(officeActionText, 1000);
+      if (totalCost + validationCost <= maxBudget && (rejectionResults || priorArtResults)) {
+        try {
+          logger.info('[EnhancedOfficeActionParser] Executing cross-validation pass');
+          
+          const validationPass = await this.executeCrossValidation(
+            officeActionText,
+            structureResults,
+            rejectionResults,
+            priorArtResults
+          );
+
+          totalCost += validationPass.cost;
+          totalTokensUsed += validationPass.tokensUsed;
+          passesCompleted.push('Cross-Validation');
+          confidenceScores['Cross-Validation'] = validationPass.confidence;
+          validationResults = validationPass.data;
+
+        } catch (error) {
+          logger.error('[EnhancedOfficeActionParser] Cross-validation failed', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          warnings.push(`Cross-validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      // Combine and structure final results
+      const finalResults = this.combineAnalysisResults(
+        officeActionText,
+        structureResults,
+        rejectionResults,
+        priorArtResults,
+        validationResults
+      );
+
+      const processingTime = Date.now() - startTime;
+
+      logger.info('[EnhancedOfficeActionParser] Analysis completed', {
+        totalCost,
+        totalTokensUsed,
+        passesCompleted,
+        processingTime,
+        totalRejections: finalResults.rejections.length,
+        priorArtCount: finalResults.allPriorArtReferences.length,
+      });
+
+      return {
+        ...finalResults,
+        analysisDetails: {
+          totalTokensUsed,
+          totalCost,
+          passesCompleted,
+          confidenceScores,
+          warnings,
+        },
+      };
+
+    } catch (error) {
+      logger.error('[EnhancedOfficeActionParser] Analysis failed', {
+        error: error instanceof Error ? error.message : String(error),
+        totalCost,
+        passesCompleted,
+      });
+
+      if (error instanceof ApplicationError) {
+        throw error;
+      }
+
+      throw new ApplicationError(
+        ErrorCode.AI_SERVICE_ERROR,
+        `Office Action analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
-
-    // Step 3: Merge all segment analyses
-    const mergedResult = await this.mergeSegmentAnalyses(
-      segmentAnalyses,
-      segmentationResult.documentMetadata
-    );
-
-    // Add long document metadata
-    mergedResult.metadata.isLongDocument = true;
-    mergedResult.metadata.segmentCount = segmentationResult.segments.length;
-
-    return mergedResult;
   }
 
   /**
-   * Parse standard (short) documents using existing method
+   * Execute a single analysis pass with debugging
    */
-  private static async parseStandardDocument(
+  private static async executeAnalysisPass(
     officeActionText: string,
-    options: any
-  ): Promise<ParsedOfficeActionResult> {
-    // Check token limits and truncate if necessary (existing logic)
-    const estimatedTokens = estimateTokens(officeActionText);
-    const maxTokens = options.maxTokens || 150000;
+    pass: AnalysisPass,
+    structureResults?: any,
+    rejectionResults?: any,
+    priorArtResults?: any
+  ): Promise<{
+    data: any;
+    cost: number;
+    tokensUsed: number;
+    confidence: number;
+  }> {
+    const userPrompt = renderPromptTemplate(pass.prompt, {
+      officeActionText,
+      metadata: structureResults ? JSON.stringify(structureResults.metadata, null, 2) : 'Not yet analyzed',
+      rejections: rejectionResults ? JSON.stringify(rejectionResults.rejections, null, 2) : 'Not yet analyzed',
+      priorArt: priorArtResults ? JSON.stringify(priorArtResults.priorArtReferences, null, 2) : 'Not yet analyzed',
+    });
 
-    if (estimatedTokens > maxTokens) {
-      logger.warn('[EnhancedOfficeActionParser] Document exceeds token limit, truncating', {
-        estimatedTokens,
-        maxTokens,
+    const inputTokens = estimateTokens(userPrompt);
+    
+    // DEBUG: Log the text being analyzed for Deep Rejection Analysis
+    if (pass.name === 'Deep Rejection Analysis') {
+      logger.info('[EnhancedOfficeActionParser] DEBUG: Starting Deep Rejection Analysis', {
+        passName: pass.name,
+        textLength: officeActionText.length,
+        textPreview: officeActionText.substring(0, 500) + '...',
+        promptLength: userPrompt.length
       });
-      
-      officeActionText = this.truncateOfficeActionText(officeActionText, maxTokens);
     }
-
-    // Use existing parsing logic
-    const systemPrompt = renderPromptTemplate({
-      version: '1.0.0',
-      template: `You are an expert USPTO patent examiner assistant that analyzes Office Action documents.
-
-Your task is to parse an Office Action document and extract structured information about rejections, prior art references, and examiner reasoning.
-
-Return analysis as valid JSON with rejections, metadata, and prior art references.`,
-    }, {});
-
-    const userPrompt = `Please parse the following Office Action document:
-
-${officeActionText}`;
-
+    
     const aiResponse = await processWithOpenAI(
-      systemPrompt,
+      'You are an expert USPTO patent examiner. Analyze the provided Office Action text carefully and return only valid JSON as requested.',
       userPrompt,
       {
-        maxTokens: 4000,
-        temperature: 0.1,
+        maxTokens: pass.maxTokens,
+        temperature: pass.temperature,
         response_format: { type: 'json_object' },
       }
     );
+
+    const outputTokens = estimateTokens(aiResponse.content);
+    const cost = this.calculateCost(inputTokens, outputTokens);
+    const tokensUsed = inputTokens + outputTokens;
+
+    // DEBUG: Log AI response for Deep Rejection Analysis
+    if (pass.name === 'Deep Rejection Analysis') {
+      logger.info('[EnhancedOfficeActionParser] DEBUG: Deep Rejection Analysis AI Response', {
+        passName: pass.name,
+        responseLength: aiResponse.content.length,
+        responsePreview: aiResponse.content.substring(0, 1000),
+        fullResponse: aiResponse.content
+      });
+    }
 
     const parsedResult = safeJsonParse(aiResponse.content);
     if (!parsedResult) {
       throw new ApplicationError(
         ErrorCode.AI_INVALID_RESPONSE,
-        'Failed to parse Office Action using standard method'
+        `Failed to parse ${pass.name} response`
       );
     }
 
-    return this.validateAndEnhanceResult(parsedResult);
-  }
-
-  /**
-   * Intelligently segment Office Action document
-   */
-  private static async segmentOfficeAction(
-    officeActionText: string
-  ): Promise<SegmentationResult> {
-    // Office Actions have predictable structure:
-    // 1. Header/metadata
-    // 2. Rejections (multiple sections)
-    // 3. Prior art references
-    // 4. Examiner reasoning
-
-    const segments: DocumentSegment[] = [];
-    let currentIndex = 0;
-
-    // Try to identify rejection sections first
-    const rejectionMarkers = [
-      /Claims?\s+\d+[\d\s,\-and]*\s+(?:is|are)\s+rejected/gi,
-      /§\s*10[123]\s+rejection/gi,
-      /§\s*112\s+rejection/gi,
-      /Claim\s+\d+\s+is\s+(?:anticipated|obvious)/gi,
-    ];
-
-    const rejectionMatches: Array<{ start: number; end: number; type: string }> = [];
-
-    rejectionMarkers.forEach((marker, index) => {
-      let match;
-      while ((match = marker.exec(officeActionText)) !== null) {
-        rejectionMatches.push({
-          start: match.index,
-          end: match.index + match[0].length,
-          type: 'rejection',
-        });
-      }
-    });
-
-    // Sort by position
-    rejectionMatches.sort((a, b) => a.start - b.start);
-
-    if (rejectionMatches.length === 0) {
-      // No clear structure found, use simple chunking
-      return this.createSimpleSegments(officeActionText);
+    // DEBUG: Log parsed result for Deep Rejection Analysis
+    if (pass.name === 'Deep Rejection Analysis') {
+      logger.info('[EnhancedOfficeActionParser] DEBUG: Deep Rejection Analysis Parsed Result', {
+        passName: pass.name,
+        hasRejections: !!parsedResult.rejections,
+        rejectionCount: parsedResult.rejections?.length || 0,
+        rejections: parsedResult.rejections || [],
+        fullParsedResult: parsedResult
+      });
     }
 
-    // Create segments based on rejection boundaries
-    let lastEnd = 0;
-
-    for (let i = 0; i < rejectionMatches.length; i++) {
-      const match = rejectionMatches[i];
-      
-      // Find the end of this rejection (start of next rejection or end of document)
-      const nextMatch = rejectionMatches[i + 1];
-      const segmentEnd = nextMatch ? nextMatch.start : officeActionText.length;
-
-      const segmentText = officeActionText.substring(match.start, segmentEnd);
-      const tokenCount = estimateTokens(segmentText);
-
-      // If segment is too large, split it
-      if (tokenCount > this.MAX_TOKENS_PER_SEGMENT) {
-        const subSegments = this.splitLargeSegment(segmentText, match.start);
-        segments.push(...subSegments);
-      } else {
-        segments.push({
-          id: uuidv4(),
-          type: 'rejection',
-          content: segmentText.trim(),
-          startIndex: match.start,
-          endIndex: segmentEnd,
-          tokenCount,
-          metadata: { rejectionNumber: i + 1 },
-        });
-      }
-
-      lastEnd = segmentEnd;
-    }
-
-    // Handle any remaining content at the end
-    if (lastEnd < officeActionText.length) {
-      const remainingText = officeActionText.substring(lastEnd);
-      if (remainingText.trim()) {
-        segments.push({
-          id: uuidv4(),
-          type: 'other',
-          content: remainingText.trim(),
-          startIndex: lastEnd,
-          endIndex: officeActionText.length,
-          tokenCount: estimateTokens(remainingText),
-        });
-      }
-    }
+    const confidence = parsedResult.confidence || parsedResult.validationResults?.confidenceScore || 0.8;
 
     return {
-      segments,
-      totalTokens: estimateTokens(officeActionText),
-      documentMetadata: this.extractBasicMetadata(officeActionText),
+      data: parsedResult,
+      cost,
+      tokensUsed,
+      confidence,
     };
   }
 
   /**
-   * Analyze individual segment with context
+   * Execute cross-validation analysis
    */
-  private static async analyzeSegment(
-    segment: DocumentSegment,
-    segmentNumber: number,
-    totalSegments: number,
-    previousContext: string
-  ): Promise<any> {
-    const systemPrompt = renderPromptTemplate(ENHANCED_OFFICE_ACTION_PARSING_SYSTEM_PROMPT, {
-      segmentNumber,
-      totalSegments,
-      previousContext: previousContext || null,
-    });
-
-    const userPrompt = `Analyze this Office Action segment:
-
-${segment.content}`;
-
-    const aiResponse = await processWithOpenAI(
-      systemPrompt,
-      userPrompt,
+  private static async executeCrossValidation(
+    officeActionText: string,
+    structureResults: any,
+    rejectionResults: any,
+    priorArtResults: any
+  ): Promise<{
+    data: any;
+    cost: number;
+    tokensUsed: number;
+    confidence: number;
+  }> {
+    return this.executeAnalysisPass(
+      officeActionText,
       {
-        maxTokens: 4000,
+        name: 'Cross-Validation Analysis',
+        prompt: CROSS_VALIDATION_ANALYSIS_PROMPT,
+        maxTokens: 1000,
         temperature: 0.1,
-        response_format: { type: 'json_object' },
-      }
+      },
+      structureResults,
+      rejectionResults,
+      priorArtResults
     );
-
-    const result = safeJsonParse(aiResponse.content);
-    if (!result) {
-      throw new ApplicationError(
-        ErrorCode.AI_INVALID_RESPONSE,
-        `Failed to parse segment ${segmentNumber} analysis`
-      );
-    }
-
-    return result;
   }
 
   /**
-   * Merge analyses from all segments
+   * Combine results from all analysis passes
    */
-  private static async mergeSegmentAnalyses(
-    segmentAnalyses: any[],
-    documentMetadata: any
-  ): Promise<ParsedOfficeActionResult> {
-    if (segmentAnalyses.length === 1) {
-      return this.validateAndEnhanceResult(segmentAnalyses[0]);
-    }
-
-    // Merge using AI for complex cases
-    const mergePrompt = `Merge these Office Action segment analyses into a comprehensive result:
-
-${JSON.stringify(segmentAnalyses, null, 2)}
-
-Document metadata: ${JSON.stringify(documentMetadata, null, 2)}
-
-Combine all rejections, resolve incomplete ones that span segments, and merge prior art references.`;
-
-    const systemPrompt = renderPromptTemplate(SEGMENT_MERGING_SYSTEM_PROMPT, {});
-
-    const aiResponse = await processWithOpenAI(
-      systemPrompt,
-      mergePrompt,
-      {
-        maxTokens: 6000,
-        temperature: 0.1,
-        response_format: { type: 'json_object' },
-      }
-    );
-
-    const mergedResult = safeJsonParse(aiResponse.content);
-    if (!mergedResult) {
-      // Fallback to simple merging
-      return this.simpleMergeSegments(segmentAnalyses, documentMetadata);
-    }
-
-    return this.validateAndEnhanceResult(mergedResult);
-  }
-
-  /**
-   * Simple fallback merging when AI merging fails
-   */
-  private static simpleMergeSegments(
-    segmentAnalyses: any[],
-    documentMetadata: any
-  ): ParsedOfficeActionResult {
-    const allRejections: ParsedRejection[] = [];
-    const allPriorArt: string[] = [];
-    let applicationNumber = null;
-    let mailingDate = null;
-    let examinerName = null;
-
-    segmentAnalyses.forEach(analysis => {
-      if (analysis.rejections) {
-        allRejections.push(...analysis.rejections);
-      }
-      if (analysis.priorArtReferences) {
-        allPriorArt.push(...analysis.priorArtReferences);
-      }
-      if (analysis.metadata) {
-        applicationNumber = applicationNumber || analysis.metadata.applicationNumber;
-        mailingDate = mailingDate || analysis.metadata.mailingDate;
-        examinerName = examinerName || analysis.metadata.examinerName;
-      }
-    });
-
-    // Remove duplicate prior art
-    const uniquePriorArt = [...new Set(allPriorArt)];
-
-    return {
+  private static combineAnalysisResults(
+    officeActionText: string,
+    structureResults: any,
+    rejectionResults: any,
+    priorArtResults: any,
+    validationResults: any
+  ): Omit<EnhancedOfficeActionAnalysis, 'analysisDetails'> {
+    // Default structure if analysis failed
+    const defaultResults = {
       metadata: {
-        applicationNumber,
-        mailingDate,
-        examinerName,
+        applicationNumber: null,
+        mailingDate: null,
+        examinerName: null,
+        artUnit: null,
+        confirmationNumber: null,
+        documentType: 'Unknown',
+        totalPages: 1,
+        analysisConfidence: 0.5,
       },
-      rejections: allRejections,
-      allPriorArtReferences: uniquePriorArt,
+      rejections: [],
+      allPriorArtReferences: [],
       summary: {
-        totalRejections: allRejections.length,
-        rejectionTypes: [...new Set(allRejections.map(r => r.type))],
-        totalClaimsRejected: [...new Set(allRejections.flatMap(r => r.claims || []))].length,
-        uniquePriorArtCount: uniquePriorArt.length,
-      },
-    };
-  }
-
-  /**
-   * Create simple segments when structure detection fails
-   */
-  private static createSimpleSegments(officeActionText: string): SegmentationResult {
-    const segments: DocumentSegment[] = [];
-    const maxCharsPerSegment = this.MAX_TOKENS_PER_SEGMENT * 4;
-    
-    let currentIndex = 0;
-    let segmentNumber = 1;
-
-    while (currentIndex < officeActionText.length) {
-      const segmentText = officeActionText.substring(
-        currentIndex,
-        Math.min(currentIndex + maxCharsPerSegment, officeActionText.length)
-      );
-      
-      segments.push({
-        id: uuidv4(),
-        type: 'other',
-        content: segmentText,
-        startIndex: currentIndex,
-        endIndex: currentIndex + segmentText.length,
-        tokenCount: estimateTokens(segmentText),
-        metadata: { segmentNumber },
-      });
-
-      currentIndex += segmentText.length;
-      segmentNumber++;
-    }
-
-    return {
-      segments,
-      totalTokens: estimateTokens(officeActionText),
-      documentMetadata: this.extractBasicMetadata(officeActionText),
-    };
-  }
-
-  /**
-   * Split large segments that exceed token limits
-   */
-  private static splitLargeSegment(
-    segmentText: string,
-    startIndex: number
-  ): DocumentSegment[] {
-    const subSegments: DocumentSegment[] = [];
-    const maxCharsPerSubSegment = this.MAX_TOKENS_PER_SEGMENT * 4;
-    
-    let currentIndex = 0;
-    let subSegmentNumber = 1;
-
-    while (currentIndex < segmentText.length) {
-      const subSegmentText = segmentText.substring(
-        currentIndex,
-        Math.min(currentIndex + maxCharsPerSubSegment, segmentText.length)
-      );
-      
-      subSegments.push({
-        id: uuidv4(),
-        type: 'rejection',
-        content: subSegmentText,
-        startIndex: startIndex + currentIndex,
-        endIndex: startIndex + currentIndex + subSegmentText.length,
-        tokenCount: estimateTokens(subSegmentText),
-        metadata: { 
-          isSubSegment: true,
-          subSegmentNumber,
-          parentSegmentStart: startIndex,
-        },
-      });
-
-      currentIndex += subSegmentText.length;
-      subSegmentNumber++;
-    }
-
-    return subSegments;
-  }
-
-  /**
-   * Extract basic metadata from document text
-   */
-  private static extractBasicMetadata(documentText: string): any {
-    const metadata: any = {};
-
-    // Extract application number
-    const appNumberMatch = documentText.match(/Application\s+No\.?\s*:?\s*([0-9\/,\-\s]+)/i);
-    if (appNumberMatch) {
-      metadata.applicationNumber = appNumberMatch[1].trim();
-    }
-
-    // Extract mailing date
-    const dateMatch = documentText.match(/(?:Mailing\s+Date|Date\s+Mailed)\s*:?\s*([A-Z][a-z]+\s+\d{1,2},\s*\d{4})/i);
-    if (dateMatch) {
-      metadata.mailingDate = dateMatch[1].trim();
-    }
-
-    // Extract examiner name
-    const examinerMatch = documentText.match(/(?:Primary\s+)?Examiner\s*:?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]*)*)/i);
-    if (examinerMatch) {
-      metadata.examinerName = examinerMatch[1].trim();
-    }
-
-    return metadata;
-  }
-
-  /**
-   * Truncate text intelligently (fallback for existing compatibility)
-   */
-  private static truncateOfficeActionText(text: string, maxTokens: number): string {
-    const maxChars = maxTokens * 4;
-    if (text.length <= maxChars) {
-      return text;
-    }
-
-    // Try to truncate at a natural boundary
-    const truncated = text.substring(0, maxChars);
-    const lastParagraph = truncated.lastIndexOf('\n\n');
-    
-    if (lastParagraph > maxChars * 0.8) {
-      return truncated.substring(0, lastParagraph);
-    }
-
-    return truncated;
-  }
-
-  /**
-   * Validate and enhance parsing result
-   */
-  private static validateAndEnhanceResult(rawResult: any): ParsedOfficeActionResult {
-    // Add validation logic and enhancement here
-    // This would include the existing validation from OfficeActionParserService
-    
-    return {
-      metadata: rawResult.metadata || {},
-      rejections: rawResult.rejections || [],
-      allPriorArtReferences: rawResult.allPriorArtReferences || rawResult.priorArtReferences || [],
-      summary: rawResult.summary || {
-        totalRejections: rawResult.rejections?.length || 0,
+        totalRejections: 0,
         rejectionTypes: [],
         totalClaimsRejected: 0,
         uniquePriorArtCount: 0,
+        hasObjections: false,
+        hasRestrictions: false,
+        hasElections: false,
       },
     };
+
+    // Combine metadata
+    const metadata = {
+      ...defaultResults.metadata,
+      ...(structureResults?.metadata || {}),
+      documentType: structureResults?.documentType || defaultResults.metadata.documentType,
+      analysisConfidence: structureResults?.confidence || defaultResults.metadata.analysisConfidence,
+    };
+
+    // Combine rejections
+    const rejections: ParsedRejection[] = [];
+    if (rejectionResults?.rejections) {
+      for (const rejection of rejectionResults.rejections) {
+        rejections.push({
+          id: rejection.id || uuidv4(),
+          type: rejection.type as RejectionTypeValue, // Type will be validated by the parsing logic
+          claims: Array.isArray(rejection.claims) ? rejection.claims : [],
+          priorArtReferences: Array.isArray(rejection.priorArtReferences) ? rejection.priorArtReferences : [],
+          examinerReasoning: rejection.examinerReasoning || '',
+          rawText: rejection.rawText || '',
+          startIndex: rejection.startIndex || 0,
+          endIndex: rejection.endIndex || 0,
+        });
+      }
+    }
+
+    // Handle summary page data if no detailed rejections were found
+    if (rejections.length === 0 && rejectionResults?.summaryInfo?.rejectedClaims?.length > 0) {
+      logger.info('[EnhancedOfficeActionParser] Creating rejection from summary page data', {
+        rejectedClaims: rejectionResults.summaryInfo.rejectedClaims,
+        isSummaryPage: rejectionResults.summaryInfo.isSummaryPage
+      });
+
+      // Intelligently detect rejection type from OCR text
+      let rejectionType: RejectionTypeValue = RejectionType.OTHER; // Default fallback
+      const textLower = officeActionText.toLowerCase();
+      
+      if (textLower.includes('§ 112') || textLower.includes('section 112') || textLower.includes('35 u.s.c. § 112')) {
+        rejectionType = RejectionType.SECTION_112;
+      } else if (textLower.includes('§ 103') || textLower.includes('section 103') || textLower.includes('35 u.s.c. § 103')) {
+        rejectionType = RejectionType.SECTION_103;
+      } else if (textLower.includes('§ 102') || textLower.includes('section 102') || textLower.includes('35 u.s.c. § 102')) {
+        rejectionType = RejectionType.SECTION_102;
+      } else if (textLower.includes('§ 101') || textLower.includes('section 101') || textLower.includes('35 u.s.c. § 101')) {
+        rejectionType = RejectionType.SECTION_101;
+      }
+
+      logger.info('[EnhancedOfficeActionParser] Detected rejection type from text', {
+        detectedType: rejectionType,
+        containsSection112: textLower.includes('§ 112') || textLower.includes('section 112'),
+        containsSection103: textLower.includes('§ 103') || textLower.includes('section 103'),
+        containsSection102: textLower.includes('§ 102') || textLower.includes('section 102'),
+        containsSection101: textLower.includes('§ 101') || textLower.includes('section 101')
+      });
+
+      // Create a rejection from summary page checkbox data
+      rejections.push({
+        id: uuidv4(),
+        type: rejectionType,
+        claims: this.parseClaimRange(rejectionResults.summaryInfo.rejectedClaims.join(', ')),
+        priorArtReferences: [],
+        examinerReasoning: `Claims rejected as indicated on Office Action Summary page. Detailed rejection reasoning would be found on subsequent pages of the Office Action document.`,
+        rawText: `Disposition of Claims: Claim(s) ${rejectionResults.summaryInfo.rejectedClaims.join(', ')} is/are rejected.`,
+        startIndex: 0,
+        endIndex: 0,
+      });
+    }
+
+    // Combine prior art references
+    const allPriorArtReferences: string[] = [];
+    
+    // From rejection analysis
+    if (rejectionResults?.rejections) {
+      for (const rejection of rejectionResults.rejections) {
+        if (rejection.priorArtReferences) {
+          allPriorArtReferences.push(...rejection.priorArtReferences);
+        }
+      }
+    }
+
+    // From prior art analysis
+    if (priorArtResults?.priorArtReferences) {
+      for (const ref of priorArtResults.priorArtReferences) {
+        if (ref.normalizedCitation) {
+          allPriorArtReferences.push(ref.normalizedCitation);
+        }
+      }
+    }
+
+    // Remove duplicates
+    const uniquePriorArt = [...new Set(allPriorArtReferences)].filter(Boolean);
+
+    // Calculate summary
+    const rejectionTypes = [...new Set(rejections.map(r => r.type))];
+    const totalClaimsRejected = [...new Set(rejections.flatMap(r => r.claims))].length;
+
+    const summary = {
+      totalRejections: rejections.length,
+      rejectionTypes,
+      totalClaimsRejected,
+      uniquePriorArtCount: uniquePriorArt.length,
+      hasObjections: rejectionResults?.objections?.length > 0 || false,
+      hasRestrictions: structureResults?.structure?.hasRestrictions || false,
+      hasElections: structureResults?.structure?.hasElections || false,
+    };
+
+    return {
+      metadata,
+      rejections,
+      allPriorArtReferences: uniquePriorArt,
+      summary,
+    };
+  }
+
+  /**
+   * Estimate cost for a single pass
+   */
+  private static estimatePassCost(text: string, maxOutputTokens: number): number {
+    const inputTokens = estimateTokens(text) + 500; // Add prompt overhead
+    const outputTokens = maxOutputTokens;
+    return this.calculateCost(inputTokens, outputTokens);
+  }
+
+  /**
+   * Calculate cost based on token usage
+   */
+  private static calculateCost(inputTokens: number, outputTokens: number): number {
+    const inputCost = (inputTokens / 1000) * this.GPT4_COST_PER_1K_INPUT_TOKENS;
+    const outputCost = (outputTokens / 1000) * this.GPT4_COST_PER_1K_OUTPUT_TOKENS;
+    return inputCost + outputCost;
+  }
+
+  /**
+   * Parse claim range strings like "1-7,9 and 13-45" into individual claim numbers
+   */
+  private static parseClaimRange(claimString: string): string[] {
+    if (!claimString) return [];
+    
+    const claims: string[] = [];
+    
+    // Clean up the string and split by common separators
+    const parts = claimString
+      .replace(/\band\b/g, ',') // Replace "and" with comma
+      .split(/[,\s]+/) // Split by comma or whitespace
+      .filter(part => part.trim()); // Remove empty parts
+    
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      
+      // Check if it's a range (e.g., "1-7" or "13-45")
+      if (trimmed.includes('-')) {
+        const [start, end] = trimmed.split('-').map(n => parseInt(n.trim(), 10));
+        if (!isNaN(start) && !isNaN(end) && start <= end) {
+          for (let i = start; i <= end; i++) {
+            claims.push(i.toString());
+          }
+        }
+      } else {
+        // Single claim number
+        const num = parseInt(trimmed, 10);
+        if (!isNaN(num)) {
+          claims.push(num.toString());
+        }
+      }
+    }
+    
+    // Remove duplicates and sort numerically
+    return [...new Set(claims)].sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
   }
 } 
