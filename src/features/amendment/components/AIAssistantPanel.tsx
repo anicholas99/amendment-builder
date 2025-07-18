@@ -11,6 +11,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { 
   Brain, 
   History, 
@@ -21,7 +26,9 @@ import {
   Clock,
   TrendingUp,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -259,6 +266,23 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
   onAnalysisComplete,
 }) => {
   const [activeTab, setActiveTab] = useState('analyze');
+  
+  // Quick Actions expanded state with localStorage persistence
+  const [quickActionsExpanded, setQuickActionsExpanded] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('aiAssistant-quickActionsExpanded');
+      return saved !== null ? JSON.parse(saved) : true;
+    }
+    return true;
+  });
+
+  // Persist quick actions expanded state
+  const handleQuickActionsToggle = (expanded: boolean) => {
+    setQuickActionsExpanded(expanded);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('aiAssistant-quickActionsExpanded', JSON.stringify(expanded));
+    }
+  };
 
   // Use provided project data or null
   const chatProjectData = useMemo((): ProjectData | null => {
@@ -321,11 +345,38 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         <div className="flex-1 overflow-hidden">
           <TabsContent value="analyze" className="h-full m-0 p-0">
             <div className="h-full flex flex-col">
-              {/* Quick Actions */}
-              <div className="flex-shrink-0 p-4 border-b bg-muted/30">
-                <h3 className="font-medium text-sm mb-3">Quick Actions</h3>
-                <QuickActions onAction={handleQuickAction} />
-              </div>
+              {/* Quick Actions - Collapsible */}
+              <Collapsible
+                open={quickActionsExpanded}
+                onOpenChange={handleQuickActionsToggle}
+                className="flex-shrink-0"
+              >
+                <div className="border-b bg-muted/30">
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-between p-4 h-auto hover:bg-muted/50"
+                    >
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-sm">Quick Actions</h3>
+                        {!quickActionsExpanded && (
+                          <Badge variant="secondary" className="text-xs">
+                            4 actions
+                          </Badge>
+                        )}
+                      </div>
+                      {quickActionsExpanded ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="px-4 pb-4">
+                    <QuickActions onAction={handleQuickAction} />
+                  </CollapsibleContent>
+                </div>
+              </Collapsible>
 
               {/* Chat Interface */}
               <div className="flex-1 overflow-hidden min-h-0">
