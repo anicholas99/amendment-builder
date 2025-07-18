@@ -38,6 +38,11 @@ const AmendmentStudioPage: React.FC<AmendmentStudioPageProps> = ({
 
   // ============ COMPUTED VALUES ============
   
+  // Strip "amendment-" prefix if present to get the actual office action ID
+  const officeActionId = amendmentId 
+    ? String(amendmentId).replace(/^amendment-/, '') 
+    : undefined;
+  
   const pageTitle = projectName 
     ? `Amendment Studio - ${projectName}` 
     : 'Amendment Studio';
@@ -57,7 +62,7 @@ const AmendmentStudioPage: React.FC<AmendmentStudioPageProps> = ({
       <AppLayout>
         <AmendmentStudio 
           projectId={projectId}
-          officeActionId={amendmentId as string}
+          officeActionId={officeActionId}
         />
       </AppLayout>
     </>
@@ -97,7 +102,7 @@ export const getServerSideProps: GetServerSideProps<AmendmentStudioPageProps> = 
 
     // TODO: Validate amendment/office action exists
     // const amendmentId = queryAmendmentId as string;
-    // const officeActionId = amendmentId.replace('amendment-', '');
+    // const officeActionId = amendmentId.replace(/^amendment-/, '');
     // const officeAction = await getOfficeActionById(officeActionId, user.tenantId);
     // if (!officeAction) {
     //   return { notFound: true };

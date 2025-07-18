@@ -276,6 +276,64 @@ export async function updateRejection(
 }
 
 /**
+ * Updates rejection with analysis results
+ */
+export async function updateRejectionAnalysis(
+  rejectionId: string,
+  data: {
+    strength?: string;
+    analysisData?: any;
+  }
+): Promise<any> {
+  if (!prisma) {
+    throw new ApplicationError(
+      ErrorCode.DB_CONNECTION_ERROR,
+      'Database client is not initialized.'
+    );
+  }
+
+  try {
+    logger.debug('[RejectionRepository] Updating rejection analysis', {
+      rejectionId,
+      strength: data.strength,
+    });
+
+    const updated = await prisma.rejection.update({
+      where: { id: rejectionId },
+      data: {
+        status: data.strength,
+        parsedElements: data.analysisData ? JSON.stringify(data.analysisData) : undefined,
+        updatedAt: new Date(),
+      },
+    });
+
+    logger.info('[RejectionRepository] Successfully updated rejection analysis', {
+      rejectionId,
+      strength: data.strength,
+    });
+
+    return updated;
+  } catch (error) {
+    logger.error('[RejectionRepository] Failed to update rejection analysis', {
+      error: error instanceof Error ? error.message : String(error),
+      rejectionId,
+    });
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      throw new ApplicationError(
+        ErrorCode.DB_RECORD_NOT_FOUND,
+        `Rejection ${rejectionId} not found`
+      );
+    }
+
+    throw new ApplicationError(
+      ErrorCode.DB_QUERY_ERROR,
+      `Failed to update rejection analysis: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
  * Deletes a rejection
  */
 export async function deleteRejection(id: string): Promise<void> {

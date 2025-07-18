@@ -366,6 +366,10 @@ export const API_ROUTES = {
         `/api/projects/${projectId}/office-actions/${officeActionId}/analyze`,
       BY_ID: (projectId: string, officeActionId: string, rejectionId: string) =>
         `/api/projects/${projectId}/office-actions/${officeActionId}/rejections/${rejectionId}`,
+      ANALYZE_ALL: (projectId: string, officeActionId: string) =>
+        `/api/projects/${projectId}/office-actions/${officeActionId}/analyze-rejections`,
+      ANALYZE_SINGLE: (projectId: string, officeActionId: string, rejectionId: string) =>
+        `/api/projects/${projectId}/office-actions/${officeActionId}/rejections/${rejectionId}/analyze`,
     },
     RESPONSES: {
       GENERATE: (projectId: string, officeActionId: string) =>
