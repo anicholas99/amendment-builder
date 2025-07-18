@@ -57,6 +57,7 @@ import {
 
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/useToastWrapper';
+import { AmendmentFileHistory } from './AmendmentFileHistory';
 
 // Types
 interface ClaimAmendment {
@@ -513,7 +514,7 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
       {renderHeader()}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList className="grid w-full grid-cols-3 rounded-none border-b bg-gray-50">
+        <TabsList className="grid w-full grid-cols-4 rounded-none border-b bg-gray-50">
           <TabsTrigger value="claims" className="flex items-center gap-2">
             <FileEdit className="h-4 w-4" />
             Claims ({claimAmendments.length})
@@ -521,6 +522,10 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
           <TabsTrigger value="arguments" className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
             Arguments ({argumentSections.length})
+          </TabsTrigger>
+          <TabsTrigger value="files" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            File History
           </TabsTrigger>
           <TabsTrigger value="preview" className="flex items-center gap-2">
             <Eye className="h-4 w-4" />
@@ -586,6 +591,28 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
               )}
             </div>
           </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="files" className="flex-1 mt-0">
+          <div className="h-full p-6">
+            <AmendmentFileHistory
+              amendmentProjectId="mock-amendment-id" // TODO: Get from props
+              files={[]} // TODO: Fetch from API
+              isLoading={false}
+              onDownload={(file) => {
+                console.log('Download file:', file);
+                // TODO: Implement download
+              }}
+              onPreview={(file) => {
+                console.log('Preview file:', file);
+                // TODO: Implement preview
+              }}
+              onDelete={(file) => {
+                console.log('Delete file:', file);
+                // TODO: Implement delete
+              }}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="preview" className="flex-1 mt-0">

@@ -106,6 +106,68 @@ export interface AmendmentProjectWithRelations extends AmendmentProject {
   tenant: Tenant;
   user: User;
   draftDocuments: DraftDocument[];
+  amendmentFiles: AmendmentProjectFile[]; // New: file history
+}
+
+// New: Amendment Project File model type
+export interface AmendmentProjectFile {
+  id: string;
+  amendmentProjectId: string;
+  tenantId: string;
+  fileType: string;
+  fileName: string;
+  originalName: string;
+  blobName?: string | null;
+  storageUrl?: string | null;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  version: number;
+  status: string;
+  tags?: string | null; // JSON array stored as string
+  description?: string | null;
+  extractedText?: string | null;
+  extractedMetadata?: string | null;
+  uploadedBy: string;
+  linkedDraftId?: string | null;
+  parentFileId?: string | null;
+  exportedAt?: Date | null;
+  filedAt?: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt?: Date | null;
+}
+
+// AmendmentProjectFile with relations
+export interface AmendmentProjectFileWithRelations extends AmendmentProjectFile {
+  amendmentProject: AmendmentProject;
+  tenant: Tenant;
+  uploader: User;
+  linkedDraft?: DraftDocument | null;
+  parentFile?: AmendmentProjectFile | null;
+  childFiles: AmendmentProjectFile[];
+}
+
+// New: File type constants
+export enum AmendmentFileType {
+  OFFICE_ACTION = 'office_action',
+  DRAFT_RESPONSE = 'draft_response',
+  FILED_RESPONSE = 'filed_response',
+  PRIOR_ART = 'prior_art',
+  REFERENCE_DOC = 'reference_doc',
+  EXPORT_VERSION = 'export_version',
+  AMENDED_CLAIMS = 'amended_claims',
+  ARGUMENT_SECTION = 'argument_section',
+  FINAL_PACKAGE = 'final_package'
+}
+
+// New: File status constants
+export enum AmendmentFileStatus {
+  ACTIVE = 'ACTIVE',
+  SUPERSEDED = 'SUPERSEDED',
+  ARCHIVED = 'ARCHIVED',
+  FILED = 'FILED',
+  EXPORTED = 'EXPORTED',
+  DRAFT = 'DRAFT'
 }
 
 // Data transfer objects for API requests (following existing DTO patterns)
