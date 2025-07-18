@@ -311,6 +311,7 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
         {/* Center Panel - Drafting Workspace (Flexible) */}
         <div className="flex-1 bg-white flex flex-col min-w-0">
           <DraftingWorkspace
+            projectId={projectId}
             selectedOfficeAction={officeActionData}
             selectedOfficeActionId={selectedOfficeActionId}
             amendmentProjectId={amendmentId}

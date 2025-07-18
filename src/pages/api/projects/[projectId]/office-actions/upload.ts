@@ -211,8 +211,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         }
       }
 
-      // Upload file to secure storage
-      uploadResult = await StorageServerService.uploadPatentDocument(
+      // Upload file to secure storage - use office action specific method
+      uploadResult = await StorageServerService.uploadOfficeActionDocument(
         uploadedFile,
         {
           userId,

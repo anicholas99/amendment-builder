@@ -426,6 +426,51 @@ export class ToolRegistry {
         },
         required: [],
       },
+
+      // Prior Art Operations
+      searchPriorArt: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search query for prior art (e.g., claim text or keywords)',
+          },
+          limit: {
+            type: 'number',
+            description: 'Maximum number of results to return (default: 10)',
+            minimum: 1,
+            maximum: 20,
+          },
+        },
+        required: ['query'],
+      },
+      validateAmendedClaims: {
+        type: 'object',
+        properties: {
+          amendedClaimText: {
+            type: 'string',
+            description: 'The full text of the amended claim to validate for new prior art risks',
+          },
+          maxReferences: {
+            type: 'number',
+            description: 'Maximum number of prior art references to analyze (default: 5)',
+            minimum: 1,
+            maximum: 10,
+          },
+          excludeKnownPriorArt: {
+            type: 'array',
+            description: 'Array of patent numbers to exclude from search (e.g., already cited prior art)',
+            items: { type: 'string' },
+          },
+          riskThreshold: {
+            type: 'number',
+            description: 'Risk threshold score 0-100 for recommendations (default: 70)',
+            minimum: 0,
+            maximum: 100,
+          },
+        },
+        required: ['amendedClaimText'],
+      },
     };
 
     return (

@@ -64,6 +64,7 @@ import {
   useAmendmentProjectFiles, 
   useDeleteAmendmentProjectFile 
 } from '@/hooks/api/useAmendmentProjectFiles';
+import { AmendmentExportService } from '@/services/api/amendmentExportService';
 
 // Types
 interface ClaimAmendment {
@@ -84,6 +85,7 @@ interface ArgumentSection {
 }
 
 interface DraftingWorkspaceProps {
+  projectId: string;
   selectedOfficeAction?: any;
   selectedOfficeActionId?: string | null;
   amendmentProjectId?: string;
@@ -117,6 +119,7 @@ const CLAIM_STATUS_CONFIG = {
 } as const;
 
 export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
+  projectId,
   selectedOfficeAction,
   selectedOfficeActionId,
   amendmentProjectId,
@@ -218,14 +221,77 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
   };
 
   // Handle export
-  const handleExport = () => {
+  const handleExport = async () => {
     handleSave(); // Save before export
-    onExport?.();
     
-    toast.success({
-      title: 'Export Initiated',
-      description: 'Generating USPTO-compliant document...',
-    });
+    if (!selectedOfficeAction) {
+      toast.error({
+        title: 'Export Failed',
+        description: 'No office action selected for export',
+      });
+      return;
+    }
+
+    try {
+      // Prepare export request
+      const exportRequest = {
+        projectId,
+        officeActionId: selectedOfficeAction.id,
+        content: {
+          title: documentTitle,
+          responseType,
+          claimAmendments,
+          argumentSections,
+        },
+        options: {
+          format: 'docx' as const,
+          includeMetadata: true,
+        },
+      };
+
+      toast.info({
+        title: 'Generating Document',
+        description: 'Creating USPTO-compliant amendment response...',
+      });
+
+      // Export and download using the new service
+      await AmendmentExportService.exportAndDownload(exportRequest, {
+        customFilename: AmendmentExportService.generateExportFilename(
+          {
+            applicationNumber: selectedOfficeAction.applicationNumber,
+            mailingDate: selectedOfficeAction.mailingDate,
+            examinerName: selectedOfficeAction.examinerName,
+          },
+          'docx'
+        ),
+                 onExportStart: () => {
+           toast.info({
+             title: 'Exporting Document',
+             description: 'Generating USPTO-compliant DOCX file...',
+           });
+         },
+        onExportComplete: () => {
+          toast.success({
+            title: 'Export Complete',
+            description: 'Amendment response downloaded successfully',
+          });
+          // Call the original onExport callback if provided
+          onExport?.();
+        },
+        onExportError: (error) => {
+          toast.error({
+            title: 'Export Failed',
+            description: error.message || 'Failed to generate document',
+          });
+        },
+      });
+
+    } catch (error) {
+      toast.error({
+        title: 'Export Failed',
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
+    }
   };
 
   // Claim amendment handlers

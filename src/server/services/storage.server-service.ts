@@ -41,6 +41,7 @@ const INVENTION_CONTAINER_NAME = env.AZURE_STORAGE_INVENTION_CONTAINER_NAME;
 // Private containers for secure storage
 const FIGURES_CONTAINER = 'figures-private';
 const PATENT_FILES_CONTAINER = 'patent-files-private';
+const OFFICE_ACTIONS_CONTAINER = 'office-actions-private';
 
 let blobServiceClient: BlobServiceClient;
 
@@ -626,6 +627,144 @@ export class StorageServerService {
       };
     } catch (error) {
       logger.error('[StorageServerService] Patent upload failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ApplicationError(
+        ErrorCode.STORAGE_UPLOAD_FAILED,
+        `Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    } finally {
+      // Cleanup temp file
+      try {
+        await fs.unlink(file.filepath);
+        logger.debug('[StorageServerService] Cleaned up temp file');
+      } catch (cleanupError) {
+        logger.warn('[StorageServerService] Failed to cleanup temp file', {
+          error: cleanupError,
+        });
+      }
+    }
+  }
+
+  /**
+   * Upload office action document to secure storage
+   * @param file Formidable file object
+   * @param fields Upload context with user and tenant info
+   * @returns Upload result with blob info
+   */
+  static async uploadOfficeActionDocument(
+    file: formidable.File,
+    fields: {
+      userId: string;
+      tenantId: string;
+    }
+  ): Promise<{
+    blobName: string;
+    fileName: string;
+    mimeType: string;
+    size: number;
+  }> {
+    logger.debug('[StorageServerService] Starting office action document upload...');
+
+    if (!file) {
+      throw new ApplicationError(
+        ErrorCode.VALIDATION_REQUIRED_FIELD,
+        'No file provided'
+      );
+    }
+
+    const originalFilename = file.originalFilename || 'unnamed-office-action';
+
+    // Validate file
+    let guardResult;
+    try {
+      guardResult = await fileGuard(file, {
+        acceptedTypes: ACCEPTED_DOCUMENT_TYPES,
+        maxSize: MAX_FILE_SIZE,
+        allowedExtensions: ['.pdf', '.docx', '.doc'],
+        sanitizeFilename: true,
+      });
+    } catch (guardError) {
+      logger.warn('[StorageServerService] Office action file validation failed', {
+        filename: originalFilename,
+        error:
+          guardError instanceof Error ? guardError.message : String(guardError),
+      });
+      throw new ApplicationError(
+        ErrorCode.VALIDATION_INVALID_FORMAT,
+        guardError instanceof Error ? guardError.message : 'Invalid file format'
+      );
+    }
+
+    // Malware scan
+    try {
+      const scanResult = await scanFile(file, false);
+      logger.info('[StorageServerService] Malware scan completed', {
+        filename: guardResult.sanitizedFilename,
+        clean: scanResult.clean,
+      });
+    } catch (scanError) {
+      logger.error('[StorageServerService] Malware scan failed', {
+        filename: guardResult.sanitizedFilename,
+        error: scanError,
+      });
+    }
+
+    const connectionString = environment.azure.storageConnectionString;
+    if (!connectionString) {
+      throw new ApplicationError(
+        ErrorCode.CONFIG_MISSING,
+        'Azure Storage connection string not configured'
+      );
+    }
+
+    try {
+      // Generate secure blob name with tenant isolation
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const blobName = `${fields.tenantId}/${fields.userId}/${uuidv4()}-${timestamp}-${guardResult.sanitizedFilename}`;
+
+      const blobServiceClient =
+        BlobServiceClient.fromConnectionString(connectionString);
+      const containerClient = blobServiceClient.getContainerClient(
+        OFFICE_ACTIONS_CONTAINER  // Upload to office-actions-private container
+      );
+
+      // Ensure private container exists
+      await containerClient.createIfNotExists(); // Private by default
+
+      const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+      // Upload to private blob storage
+      await blockBlobClient.uploadFile(file.filepath, {
+        blobHTTPHeaders: {
+          blobContentType: file.mimetype || 'application/pdf',
+        },
+        metadata: {
+          originalName: originalFilename,
+          uploadedBy: fields.userId,
+          tenantId: fields.tenantId,
+          uploadedAt: new Date().toISOString(),
+          documentType: 'office-action',
+        },
+      });
+
+      logger.info(
+        '[StorageServerService] Office action document uploaded successfully',
+        {
+          blobName,
+          container: OFFICE_ACTIONS_CONTAINER,
+          size: file.size,
+        }
+      );
+
+      return {
+        blobName,
+        fileName: originalFilename,
+        mimeType: file.mimetype || 'application/pdf',
+        size: file.size,
+      };
+    } catch (error) {
+      logger.error('[StorageServerService] Office action upload failed', {
         error: error instanceof Error ? error.message : String(error),
       });
       throw new ApplicationError(

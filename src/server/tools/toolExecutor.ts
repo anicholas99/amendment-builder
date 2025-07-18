@@ -46,6 +46,7 @@ import { autoRenumberClaims } from './autoRenumberClaims.tool';
 import { check112Support } from './check112Support.tool';
 import { analyzeOfficeAction } from './analyzeOfficeAction.tool';
 import { getRejections } from './getRejections.tool';
+import { validateAmendedClaims } from './validateAmendedClaims.tool';
 
 /**
  * Type definitions for tool signatures
@@ -160,6 +161,14 @@ interface ToolSignatures {
   searchPriorArt: ToolFunction<
     BaseToolArgs & { query: string; limit?: number }
   >;
+  validateAmendedClaims: ToolFunction<
+    BaseToolArgs & { 
+      amendedClaimText: string; 
+      maxReferences?: number;
+      excludeKnownPriorArt?: string[];
+      riskThreshold?: number;
+    }
+  >;
   // Claim analysis operations
   suggestClaimDependencies: ToolFunction;
   checkClaimEligibility101: ToolFunction<
@@ -222,6 +231,7 @@ const toolRegistry: ToolSignatures = {
   getCombinedExaminerAnalysis,
   // Prior art operations
   searchPriorArt,
+  validateAmendedClaims,
   // Claim analysis operations
   suggestClaimDependencies,
   checkClaimEligibility101,
@@ -294,6 +304,8 @@ const toolDescriptions: Record<string, string> = {
   // Prior art operations
   searchPriorArt:
     'Search for prior art references directly - use when user wants to find patents related to a query',
+  validateAmendedClaims:
+    'Validate amended claims by searching for new prior art risks - use when user wants to check if their amended claims are still vulnerable to rejection',
   // Claim analysis operations
   suggestClaimDependencies:
     'Analyze claims and suggest proper dependency structure - use when user wants help organizing claim dependencies',
@@ -614,6 +626,23 @@ export async function executeTool<T = unknown>(
         args.tenantId as string,
         args.query as string,
         args.limit as number | undefined
+      );
+    } else if (toolName === 'validateAmendedClaims') {
+      if (!args.amendedClaimText) {
+        return {
+          success: false,
+          error: 'validateAmendedClaims requires amendedClaimText parameter',
+        };
+      }
+      result = await tool(
+        args.projectId as string,
+        args.tenantId as string,
+        args.amendedClaimText as string,
+        {
+          maxReferences: args.maxReferences as number | undefined,
+          excludeKnownPriorArt: args.excludeKnownPriorArt as string[] | undefined,
+          riskThreshold: args.riskThreshold as number | undefined,
+        }
       );
     } else if (toolName === 'batchEnhancePatentSections') {
       if (
