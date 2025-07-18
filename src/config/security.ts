@@ -56,15 +56,15 @@ export const SECURITY_HEADERS = {
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     img-src 'self' data: blob:;
     font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com;
-    connect-src 'self' https://api.openai.com ${environment.auth?.domain || ''};
-    frame-src 'none';
+    connect-src 'self' ws: wss: https://api.openai.com ${environment.auth?.domain || ''};
+    frame-src 'self';
     object-src 'none';
   `
     .replace(/\s+/g, ' ')
     .trim(),
 
   // Other security headers
-  X_FRAME_OPTIONS: 'DENY',
+  X_FRAME_OPTIONS: 'SAMEORIGIN',
   X_CONTENT_TYPE_OPTIONS: 'nosniff',
   REFERRER_POLICY: 'strict-origin-when-cross-origin',
   PERMISSIONS_POLICY: 'camera=(), microphone=(), geolocation=()',

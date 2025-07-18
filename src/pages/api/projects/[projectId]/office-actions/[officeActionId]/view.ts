@@ -33,7 +33,8 @@ const querySchema = z.object({
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   apiLogger.logRequest(req);
 
-  if (req.method !== 'GET') {
+  // Allow both GET (stream the file) and HEAD (just return headers for availability check)
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
     throw new ApplicationError(
       ErrorCode.VALIDATION_FAILED,
       `Method ${req.method} not allowed`
@@ -131,16 +132,20 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     const stream = downloadResponse.readableStreamBody as NodeJS.ReadableStream;
 
-    // Set headers for inline viewing
+    // Common headers for both GET and HEAD
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
-    
     // Cache headers for better performance
     res.setHeader('Cache-Control', 'private, max-age=3600'); // 1 hour cache
     res.setHeader('X-Frame-Options', 'SAMEORIGIN'); // Security: prevent embedding in other sites
 
-    // Stream the document
-    stream.pipe(res);
+    if (req.method === 'HEAD') {
+      // For HEAD requests, end the response after sending headers
+      res.status(200).end();
+    } else {
+      // Stream the document for GET requests
+      stream.pipe(res);
+    }
 
     apiLogger.info('Office Action document served successfully', {
       officeActionId,

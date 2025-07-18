@@ -47,7 +47,8 @@ export const useChatHistoryQuery = (
  */
 export const useSendChatMessageMutation = (
   projectId: string,
-  pageContext: PageContext
+  pageContext: PageContext,
+  selectedOfficeActionId?: string | undefined
 ) => {
   const queryClient = useQueryClient();
   const queryKey = chatKeys.history(projectId, pageContext);
@@ -90,24 +91,23 @@ export const useSendChatMessageMutation = (
         lastAction,
         sessionId,
         attachedDocumentIds,
+        selectedOfficeActionId,
         allMessages: allMessages.map(m => ({
           role: m.role,
           content: m.content.substring(0, 50),
         })),
       });
 
-      // Call the chat stream endpoint with all messages
+      // Send message to chat service with office action context
       const response = await chatService.postMessage(
         projectId,
         content,
-        allMessages.map(m => ({
-          role: m.role,
-          content: m.content,
-        })),
+        allMessages,
         pageContext,
         lastAction,
         sessionId,
-        attachedDocumentIds
+        attachedDocumentIds,
+        selectedOfficeActionId
       );
 
       // Clear the last action after using it

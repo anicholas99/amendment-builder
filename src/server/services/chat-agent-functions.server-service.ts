@@ -22,9 +22,9 @@ export interface ChatAgentMessage {
 }
 
 export interface GenerateChatResponseParams {
-  projectId?: string;
+  projectId: string | undefined;
   messages: ChatAgentMessage[];
-  tenantId?: string;
+  tenantId: string | undefined;
   pageContext?: 'technology' | 'claim-refinement' | 'patent';
   sessionId?: string;
   lastAction?: {
@@ -38,6 +38,7 @@ export interface GenerateChatResponseParams {
     claimNumbers?: number[];
     details?: string;
   };
+  officeActionId?: string | undefined;
 }
 
 /**
@@ -93,6 +94,7 @@ export class ChatAgentFunctionsService {
     pageContext = 'technology',
     sessionId,
     lastAction,
+    officeActionId,
   }: GenerateChatResponseParams): AsyncGenerator<{
     token?: string;
     done?: boolean;
@@ -114,7 +116,8 @@ export class ChatAgentFunctionsService {
         projectId,
         tenantId,
         sessionId,
-        pageContext
+        pageContext,
+        officeActionId
       );
 
       // Generate system prompt

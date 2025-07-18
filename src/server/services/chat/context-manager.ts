@@ -3,6 +3,7 @@ import {
   getInventionContextForChat,
   type InventionChatContext,
 } from '@/repositories/chatRepository';
+import { getOfficeActionContextForChat, OfficeActionChatContext } from '@/repositories/officeActionRepository';
 import { getAvailableTools } from '@/server/tools/toolExecutor';
 
 export type PageContext = 'technology' | 'claim-refinement' | 'patent';
@@ -175,7 +176,8 @@ export class ContextManager {
     projectId: string | undefined,
     tenantId: string | undefined,
     sessionId?: string,
-    pageContext?: PageContext
+    pageContext?: PageContext,
+    officeActionId?: string | undefined
   ): Promise<InventionChatContext | null> {
     if (!projectId || !tenantId) {
       return null;
@@ -183,6 +185,27 @@ export class ContextManager {
 
     try {
       const baseContext = await getInventionContextForChat(projectId, tenantId);
+
+      // Load office action context if provided
+      let officeActionContext: OfficeActionChatContext | null = null;
+      if (officeActionId) {
+        try {
+          officeActionContext = await getOfficeActionContextForChat(officeActionId, tenantId);
+          logger.debug('[ContextManager] Loaded office action context', {
+            officeActionId,
+            projectId,
+            fileName: officeActionContext?.officeAction.fileName,
+            rejectionCount: officeActionContext?.rejections.length,
+          });
+        } catch (error) {
+          logger.warn('[ContextManager] Failed to load office action context', {
+            officeActionId,
+            projectId,
+            error,
+          });
+          // Continue without office action context rather than failing entirely
+        }
+      }
 
       // Load uploaded patent files if available
       if (baseContext && baseContext.invention) {
@@ -302,12 +325,18 @@ export class ContextManager {
         (baseContext as any).projectDocuments = projectDocuments;
         (baseContext as any).savedPriorArt = savedPriorArt;
         (baseContext as any).sessionReferences = sessionFiles;
+
+        // Add office action context to the base context
+        if (officeActionContext) {
+          (baseContext as any).officeActionContext = officeActionContext;
+        }
       }
 
       return baseContext;
     } catch (error) {
       logger.error('[ContextManager] Failed to load project context', {
         projectId,
+        officeActionId,
         error,
       });
       return null;
@@ -696,6 +725,62 @@ You are operating within an amendment builder application focused exclusively on
   private static formatInventionContext(context: InventionChatContext): string {
     let contextStr = `\n\n## Current Project Context (You Have Access To All This Data)\n\n`;
     contextStr += `**Project:** ${context.project.name} (Status: ${context.project.status})\n\n`;
+
+    // Add office action context if available
+    const contextWithOfficeAction = context as any;
+    if (contextWithOfficeAction.officeActionContext) {
+      const oaContext = contextWithOfficeAction.officeActionContext as OfficeActionChatContext;
+      
+      contextStr += `### 🔍 Currently Viewing Office Action:\n`;
+      contextStr += `**File:** ${oaContext.officeAction.fileName || 'Unnamed Office Action'}\n`;
+      if (oaContext.officeAction.oaNumber) {
+        contextStr += `**OA Number:** ${oaContext.officeAction.oaNumber}\n`;
+      }
+      if (oaContext.officeAction.dateIssued) {
+        const issueDate = new Date(oaContext.officeAction.dateIssued).toLocaleDateString();
+        contextStr += `**Date Issued:** ${issueDate}\n`;
+      }
+      if (oaContext.officeAction.examinerId) {
+        contextStr += `**Examiner:** ${oaContext.officeAction.examinerId}\n`;
+      }
+      if (oaContext.officeAction.artUnit) {
+        contextStr += `**Art Unit:** ${oaContext.officeAction.artUnit}\n`;
+      }
+      
+      contextStr += `\n**Rejection Summary:**\n`;
+      contextStr += `- Total Rejections: ${oaContext.summary.totalRejections}\n`;
+      contextStr += `- Rejection Types: ${oaContext.summary.rejectionTypes.join(', ')}\n`;
+      contextStr += `- Claims Rejected: ${oaContext.summary.totalClaimsRejected}\n`;
+      contextStr += `- Prior Art References: ${oaContext.summary.uniquePriorArtCount}\n`;
+
+      if (oaContext.rejections.length > 0) {
+        contextStr += `\n**Detailed Rejections:**\n`;
+        oaContext.rejections.forEach((rejection, index) => {
+          contextStr += `${index + 1}. **${rejection.type} Rejection** (${rejection.claimNumbers.join(', ')})\n`;
+          if (rejection.citedPriorArt.length > 0) {
+            contextStr += `   - Prior Art: ${rejection.citedPriorArt.join(', ')}\n`;
+          }
+          if (rejection.examinerText) {
+            const shortText = rejection.examinerText.length > 150 
+              ? rejection.examinerText.substring(0, 150) + '...' 
+              : rejection.examinerText;
+            contextStr += `   - Reasoning: ${shortText}\n`;
+          }
+        });
+      }
+
+      if (oaContext.officeAction.examinerRemarks) {
+        contextStr += `\n**Examiner Summary:**\n`;
+        contextStr += `${oaContext.officeAction.examinerRemarks}\n`;
+      }
+
+      contextStr += `\n**💡 You are now office action aware! You can:**\n`;
+      contextStr += `- Analyze specific rejections and suggest responses\n`;
+      contextStr += `- Propose claim amendments to overcome rejections\n`;
+      contextStr += `- Draft arguments against weak rejections\n`;
+      contextStr += `- Explain prior art relevance and distinctions\n`;
+      contextStr += `- Generate comprehensive amendment responses\n\n`;
+    }
 
     // Add patent document status if available
     if ((context as any).draftDocuments) {

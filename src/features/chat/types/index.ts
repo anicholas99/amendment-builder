@@ -66,6 +66,7 @@ export interface ChatInterfaceProps {
   setPreviousContent: (content: string | null) => void;
   pageContext?: PageContext;
   projectId: string;
+  selectedOfficeActionId?: string | undefined;
 }
 
 export interface MessagesContainerProps {

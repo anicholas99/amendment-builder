@@ -31,7 +31,8 @@ class ChatClientService {
     pageContext?: 'technology' | 'claim-refinement' | 'patent',
     lastAction?: LastAction,
     sessionId?: string,
-    attachedDocumentIds?: string[]
+    attachedDocumentIds?: string[],
+    selectedOfficeActionId?: string | undefined
   ): Promise<ReadableStream<Uint8Array>> {
     try {
       // The messages array should already include the new message
@@ -48,6 +49,7 @@ class ChatClientService {
           lastAction,
           sessionId,
           attachedDocumentIds,
+          selectedOfficeActionId,
         }),
       });
 

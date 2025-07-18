@@ -60,6 +60,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/useToastWrapper';
 import { AmendmentFileHistory } from './AmendmentFileHistory';
 import ClaimDiffViewer from './ClaimDiffViewer';
+import LegitimateClaimViewer from './LegitimateClaimViewer';
 import { 
   useAmendmentProjectFiles, 
   useDeleteAmendmentProjectFile 
@@ -900,22 +901,18 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
                     </p>
                     
                     {claimAmendments.map(claim => {
-                      const statusConfig = CLAIM_STATUS_CONFIG[claim.status];
                       return (
                         <div key={claim.id} className="mb-8">
-                          <ClaimDiffViewer
+                          <LegitimateClaimViewer
                             claimNumber={claim.claimNumber}
-                            originalText={claim.originalText}
                             amendedText={claim.amendedText}
                             status={claim.status}
-                            showSideBySide={false}
-                            className="border-0 shadow-none bg-transparent"
                           />
                           
                           {claim.reasoning && claim.status === 'CURRENTLY_AMENDED' && (
-                            <div className="pl-8 text-sm italic border-l-2 border-blue-300 bg-blue-50 p-3 mb-4">
-                              <p className="font-bold text-blue-800 mb-2">Amendment Basis:</p>
-                              <p className="text-blue-700">{claim.reasoning}</p>
+                            <div className="pl-8 mb-6">
+                              <p className="text-sm font-bold mb-2">Amendment Basis:</p>
+                              <p className="text-sm text-justify leading-relaxed">{claim.reasoning}</p>
                             </div>
                           )}
                         </div>
@@ -1025,23 +1022,17 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
                   </div>
                 </div>
 
-                {/* Document Statistics Footer */}
+                {/* Document Footer */}
                 <div className="mt-12 pt-6 border-t border-gray-300 text-xs text-gray-600">
-                  <div className="flex justify-between">
-                    <span>
-                      Document Generated: {new Date().toLocaleString()}
-                    </span>
-                    <span>
-                      Pages: 1 | Words: {
+                  <div className="text-center">
+                    <p>
+                      Document Generated: {new Date().toLocaleDateString()} | 
+                      Page 1 of 1 | 
+                      Word Count: {
                         claimAmendments.reduce((sum, claim) => sum + claim.amendedText.split(' ').length, 0) +
                         argumentSections.reduce((sum, section) => sum + section.content.split(' ').length, 0) + 200
                       }
-                    </span>
-                  </div>
-                  <div className="text-center mt-2">
-                    <span className="bg-gray-200 px-2 py-1 rounded">
-                      Amendment Builder - USPTO Compliant Format
-                    </span>
+                    </p>
                   </div>
                 </div>
               </div>

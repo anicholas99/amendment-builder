@@ -298,6 +298,7 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
       >
         <AIAssistantPanel
           projectId={projectId}
+          selectedOfficeActionId={selectedOfficeActionId}
           officeAction={adaptedOfficeAction ? {
             id: adaptedOfficeAction.id,
             rejections: adaptedOfficeAction.rejections.map((r: any) => ({

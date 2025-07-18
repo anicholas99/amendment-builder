@@ -14,7 +14,7 @@ const securityHeaders = [
   },
   {
     key: 'X-Frame-Options',
-    value: 'DENY',
+    value: 'SAMEORIGIN',
   },
   {
     key: 'X-Content-Type-Options',
@@ -38,31 +38,31 @@ const securityHeaders = [
     {
       key: 'Content-Security-Policy',
       value: process.env.NODE_ENV === 'production' 
-        ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';"
-        : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com http://localhost:*; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';",
+        ? "default-src 'self' blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss: https://*.auth0.com; frame-src 'self' blob:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self';"
+        : "default-src 'self' blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss: https://*.auth0.com http://localhost:*; frame-src 'self' blob:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self';",
     }
   ] : process.env.CSP_MODE === 'report-only' ? [
     // Report-Only mode for testing strict CSP
     {
       key: 'Content-Security-Policy-Report-Only',
       value: process.env.NODE_ENV === 'production' 
-        ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; report-uri /api/csp-report;"
-        : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com http://localhost:*; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; report-uri /api/csp-report;",
+        ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss: https://*.auth0.com; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; report-uri /api/csp-report;"
+        : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss: https://*.auth0.com http://localhost:*; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; report-uri /api/csp-report;",
     },
     // Keep existing permissive CSP while testing
     {
       key: 'Content-Security-Policy',
       value: process.env.NODE_ENV === 'production' 
-        ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss://; frame-ancestors 'none';"
-        : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss://;",
+        ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss: https://*.auth0.com; frame-src 'self'; frame-ancestors 'self';"
+        : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss: https://*.auth0.com http://localhost:*; frame-src 'self'; frame-ancestors 'self';",
     }
   ] : [
     // Default: Improved CSP - strict for scripts, permissive for styles
     {
       key: 'Content-Security-Policy',
       value: process.env.NODE_ENV === 'production' 
-        ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';"
-        : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss:// https://*.auth0.com http://localhost:*; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';",
+        ? "default-src 'self' blob:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss: https://*.auth0.com; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self';"
+        : "default-src 'self' blob:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https: http://127.0.0.1:10000 http://localhost:10000; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https://aiapi.qa.cardinal-holdings.com wss: https://*.auth0.com http://localhost:*; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self';",
     }
   ])
 ];

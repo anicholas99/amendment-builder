@@ -54,12 +54,14 @@ export function securityMiddleware(request: NextRequest) {
     SECURITY_HEADERS.PERMISSIONS_POLICY
   );
 
-  // Only set CSP and HSTS in production
+  // Always set CSP so dev environment pages allow expected framing
+  response.headers.set(
+    'Content-Security-Policy',
+    SECURITY_HEADERS.CONTENT_SECURITY_POLICY
+  );
+
+  // Only set HSTS in production
   if (environment.isProduction) {
-    response.headers.set(
-      'Content-Security-Policy',
-      SECURITY_HEADERS.CONTENT_SECURITY_POLICY
-    );
     response.headers.set(
       'Strict-Transport-Security',
       SECURITY_HEADERS.STRICT_TRANSPORT_SECURITY

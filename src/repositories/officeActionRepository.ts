@@ -476,3 +476,209 @@ export async function deleteOfficeAction(
     );
   }
 } 
+
+/**
+ * Gets the office action context for the chat agent, including:
+ * - Office Action metadata and details
+ * - All rejections with parsed data
+ * - Prior art references from rejections
+ * - Examiner information
+ *
+ * This ensures the chat agent has full context about the specific office action being viewed.
+ * SECURITY: Always validates tenant access before returning data.
+ *
+ * @param officeActionId - The office action ID to get context for
+ * @param tenantId - The tenant ID for security validation
+ * @returns Complete office action context or null if not found/unauthorized
+ */
+export async function getOfficeActionContextForChat(
+  officeActionId: string,
+  tenantId: string
+): Promise<OfficeActionChatContext | null> {
+  if (!prisma) {
+    throw new ApplicationError(
+      ErrorCode.DB_CONNECTION_ERROR,
+      'Database client is not initialized.'
+    );
+  }
+
+  try {
+    const officeAction = await prisma.officeAction.findFirst({
+      where: {
+        id: officeActionId,
+        tenantId: tenantId,
+        deletedAt: null,
+      },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        rejections: {
+          orderBy: { displayOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!officeAction) {
+      return null;
+    }
+
+    // Parse the office action data if available
+    let parsedOfficeActionData = null;
+    if (officeAction.parsedJson) {
+      try {
+        parsedOfficeActionData = JSON.parse(officeAction.parsedJson);
+      } catch (error) {
+        logger.warn('[OfficeActionRepository] Failed to parse office action JSON', {
+          officeActionId,
+          error,
+        });
+      }
+    }
+
+    // Process rejections and extract structured data
+    const processedRejections = officeAction.rejections.map(rejection => {
+      let claimNumbers: string[] = [];
+      let citedPriorArt: string[] = [];
+
+      // Parse JSON strings if they exist
+      if (rejection.claimNumbers) {
+        try {
+          claimNumbers = typeof rejection.claimNumbers === 'string' 
+            ? JSON.parse(rejection.claimNumbers) 
+            : rejection.claimNumbers;
+        } catch (error) {
+          logger.warn('[OfficeActionRepository] Failed to parse claim numbers', {
+            rejectionId: rejection.id,
+            error,
+          });
+        }
+      }
+
+      if (rejection.citedPriorArt) {
+        try {
+          citedPriorArt = typeof rejection.citedPriorArt === 'string' 
+            ? JSON.parse(rejection.citedPriorArt) 
+            : rejection.citedPriorArt;
+        } catch (error) {
+          logger.warn('[OfficeActionRepository] Failed to parse cited prior art', {
+            rejectionId: rejection.id,
+            error,
+          });
+        }
+      }
+
+      return {
+        id: rejection.id,
+        type: rejection.type,
+        claimNumbers,
+        citedPriorArt,
+        examinerText: rejection.examinerText,
+        status: rejection.status,
+        displayOrder: rejection.displayOrder,
+      };
+    });
+
+    // Extract all unique prior art references
+    const allPriorArtReferences = Array.from(
+      new Set(
+        processedRejections.flatMap(r => r.citedPriorArt)
+      )
+    );
+
+    // Transform the data into a structured format for the chat agent
+    const context: OfficeActionChatContext = {
+      officeAction: {
+        id: officeAction.id,
+        fileName: officeAction.originalFileName,
+        oaNumber: officeAction.oaNumber,
+        dateIssued: officeAction.dateIssued,
+        examinerId: officeAction.examinerId,
+        artUnit: officeAction.artUnit,
+        extractedText: officeAction.extractedText,
+        examinerRemarks: officeAction.examinerRemarks,
+        status: officeAction.status,
+        createdAt: officeAction.createdAt,
+        updatedAt: officeAction.updatedAt,
+      },
+      project: {
+        id: officeAction.project.id,
+        name: officeAction.project.name,
+      },
+      rejections: processedRejections,
+      priorArtReferences: allPriorArtReferences,
+      parsedData: parsedOfficeActionData,
+      summary: {
+        totalRejections: processedRejections.length,
+        rejectionTypes: Array.from(new Set(processedRejections.map(r => r.type))),
+        totalClaimsRejected: Array.from(new Set(processedRejections.flatMap(r => r.claimNumbers))).length,
+        uniquePriorArtCount: allPriorArtReferences.length,
+      },
+    };
+
+    logger.debug('[OfficeActionRepository] Office action context loaded for chat', {
+      officeActionId,
+      fileName: officeAction.originalFileName,
+      rejectionCount: processedRejections.length,
+      priorArtCount: allPriorArtReferences.length,
+    });
+
+    return context;
+  } catch (error) {
+    logger.error('[OfficeActionRepository] Failed to get office action context for chat', {
+      error,
+      officeActionId,
+      tenantId,
+    });
+    
+    if (error instanceof ApplicationError) {
+      throw error;
+    }
+    
+    throw new ApplicationError(
+      ErrorCode.DB_QUERY_ERROR,
+      `Failed to get office action context: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+// Type definition for the office action context
+export interface OfficeActionChatContext {
+  officeAction: {
+    id: string;
+    fileName: string | null;
+    oaNumber: string | null;
+    dateIssued: Date | null;
+    examinerId: string | null;
+    artUnit: string | null;
+    extractedText: string | null;
+    examinerRemarks: string | null;
+    status: string;
+    createdAt: Date;
+    updatedAt: Date;
+  };
+  project: {
+    id: string;
+    name: string;
+  };
+  rejections: Array<{
+    id: string;
+    type: string;
+    claimNumbers: string[];
+    citedPriorArt: string[];
+    examinerText: string;
+    status: string;
+    displayOrder: number;
+  }>;
+  priorArtReferences: string[];
+  parsedData: any;
+  summary: {
+    totalRejections: number;
+    rejectionTypes: string[];
+    totalClaimsRejected: number;
+    uniquePriorArtCount: number;
+  };
+} 

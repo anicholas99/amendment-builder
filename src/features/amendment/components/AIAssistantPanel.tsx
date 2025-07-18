@@ -41,6 +41,7 @@ import type { ProjectData } from '@/features/chat/types';
 interface AIAssistantPanelProps {
   projectId: string;
   projectData?: ProjectData;
+  selectedOfficeActionId?: string | null;
   officeAction?: {
     id: string;
     rejections: Array<{
@@ -248,6 +249,7 @@ const StrategyRecommendations = () => {
 export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
   projectId,
   projectData,
+  selectedOfficeActionId,
   officeAction,
   onAnalysisComplete,
 }) => {
@@ -365,7 +367,7 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
               </Collapsible>
 
               {/* Chat Interface */}
-              <div className="flex-1 overflow-hidden min-h-0">
+              <div className="flex-1 overflow-hidden">
                 <div className="h-full w-full overflow-hidden chat-interface-container">
                   <div className="enhanced-chat-interface">
                     <EnhancedChatInterface
@@ -374,6 +376,7 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                       onContentUpdate={handleContentUpdate}
                       pageContext="patent" // Use patent context for amendment workflow
                       setPreviousContent={() => {}} // Not used in this context
+                      selectedOfficeActionId={selectedOfficeActionId || undefined}
                     />
                   </div>
                 </div>

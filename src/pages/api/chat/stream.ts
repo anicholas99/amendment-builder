@@ -65,6 +65,7 @@ const bodySchema = z.object({
       details: z.string().optional(),
     })
     .optional(),
+  selectedOfficeActionId: z.string().optional(),
 });
 
 type StreamBody = z.infer<typeof bodySchema>;
@@ -80,7 +81,7 @@ async function handler(
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  const { projectId, messages, pageContext, lastAction, sessionId } = req.body;
+  const { projectId, messages, pageContext, lastAction, sessionId, selectedOfficeActionId } = req.body;
   const userMessage = messages[messages.length - 1];
   // Get tenantId from the authenticated user (withTenantGuard validates but doesn't set req.tenantId)
   const tenantId = req.user?.tenantId;
@@ -94,6 +95,7 @@ async function handler(
     userId: req.user?.id,
     messageCount: messages.length,
     pageContext,
+    selectedOfficeActionId,
   });
 
   try {
@@ -120,6 +122,7 @@ async function handler(
       pageContext,
       lastAction,
       sessionId,
+      officeActionId: selectedOfficeActionId,
     });
 
     let fullResponse = '';

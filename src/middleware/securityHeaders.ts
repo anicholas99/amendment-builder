@@ -40,12 +40,12 @@ const DEFAULT_CSP_DIRECTIVES = {
   'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
   'img-src': ["'self'", 'data:', 'blob:', 'https:'],
   'font-src': ["'self'", 'https://fonts.gstatic.com'],
-  'connect-src': ["'self'", 'https://api.auth0.com', 'wss://localhost:*'], // Auth0 and dev websockets
+  'connect-src': ["'self'", 'https://api.auth0.com', 'ws:', 'wss:', 'http://localhost:*', 'https://localhost:*'], // Allow websocket and dev endpoints
   'media-src': ["'self'"],
   'object-src': ["'none'"],
   'child-src': ["'self'"],
-  'frame-src': ["'self'", 'https://auth0.com'],
-  'frame-ancestors': ["'none'"],
+  'frame-src': ["'self'", 'blob:'],
+  'frame-ancestors': ["'self'"],
   'form-action': ["'self'"],
   'base-uri': ["'self'"],
   'manifest-src': ["'self'"],

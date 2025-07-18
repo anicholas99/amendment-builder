@@ -456,7 +456,6 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                     transformOrigin: 'top left',
                   }}
                   title={title || 'Document'}
-                  sandbox="allow-same-origin allow-scripts"
                 />
               </div>
             )}

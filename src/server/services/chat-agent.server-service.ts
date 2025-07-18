@@ -11,9 +11,9 @@ export interface ChatAgentMessage {
 }
 
 export interface GenerateChatResponseParams {
-  projectId?: string;
+  projectId: string | undefined;
   messages: ChatAgentMessage[];
-  tenantId?: string;
+  tenantId: string | undefined;
   pageContext?: 'technology' | 'claim-refinement' | 'patent';
   lastAction?: {
     type:
@@ -26,6 +26,7 @@ export interface GenerateChatResponseParams {
     claimNumbers?: number[];
     details?: string;
   };
+  officeActionId?: string | undefined;
 }
 
 /**
@@ -56,6 +57,7 @@ export class ChatAgentService {
     tenantId,
     pageContext = 'technology',
     lastAction,
+    officeActionId,
   }: GenerateChatResponseParams): AsyncGenerator<{
     token?: string;
     done?: boolean;
@@ -65,7 +67,10 @@ export class ChatAgentService {
       // Load project context
       const inventionContext = await ContextManager.loadProjectContext(
         projectId,
-        tenantId
+        tenantId,
+        undefined, // sessionId
+        pageContext,
+        officeActionId
       );
 
       // Generate system prompt

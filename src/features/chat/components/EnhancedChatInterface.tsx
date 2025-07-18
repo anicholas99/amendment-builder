@@ -210,6 +210,7 @@ const EnhancedChatInterface: React.FC<ChatInterfaceProps> = ({
   setPreviousContent: _setPreviousContent,
   pageContext = 'technology',
   projectId,
+  selectedOfficeActionId,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -271,7 +272,8 @@ const EnhancedChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const sendMessageMutation = useSendChatMessageMutation(
     projectId,
-    pageContext
+    pageContext,
+    selectedOfficeActionId
   );
 
   // Get messages with initial message if empty
