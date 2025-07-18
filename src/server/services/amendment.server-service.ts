@@ -402,7 +402,6 @@ export class AmendmentServerService {
        const aiResponse = await processWithOpenAI(systemPrompt, userPrompt, {
          maxTokens: 8000,
          temperature: 0.3,
-         model: 'gpt-4o',
        });
 
        const amendmentData = safeJsonParse(aiResponse.content, {}) as {
@@ -567,7 +566,6 @@ export class AmendmentServerService {
     const aiResponse = await processWithOpenAI(systemPrompt, userPrompt, {
       maxTokens: 2000,
       temperature: 0.2,
-      model: 'gpt-4o',
     });
 
          const analysisData = safeJsonParse(aiResponse.content, {}) as {

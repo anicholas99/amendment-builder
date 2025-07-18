@@ -49,7 +49,6 @@ export class OfficeActionParserService {
           },
           { role: 'user', content: prompt },
         ],
-        model: 'gpt-4',
         temperature: 0.1,
         max_tokens: 4000,
         response_format: { type: 'json_object' },

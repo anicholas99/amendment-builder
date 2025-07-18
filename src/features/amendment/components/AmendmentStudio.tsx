@@ -31,9 +31,9 @@ interface AmendmentStudioProps {
 const PANEL_CONFIG = {
   LEFT_PANEL_WIDTH: 320, // 80 * 4 = 320px (w-80)
   AI_PANEL: {
-    DEFAULT_WIDTH: 600, // Start at maximum width for better AI assistant experience
+    DEFAULT_WIDTH: 700, // Increased default width for better AI assistant experience
     MIN_WIDTH: 280,
-    MAX_WIDTH: 600,
+    MAX_WIDTH: 1200, // Increased max width for more flexible sizing
   },
   PANEL_GAP: 0, // No gap needed as borders are handled by panels
 } as const;
@@ -322,15 +322,17 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
           onResizeStop={handleAiPanelResize}
           handleStyles={{
             left: {
-              width: '8px',
-              left: '-4px',
+              width: '12px',
+              left: '-6px',
               cursor: 'col-resize',
               zIndex: 10,
               background: 'transparent',
+              borderLeft: '1px solid transparent',
+              transition: 'all 0.2s ease',
             },
           }}
           handleClasses={{
-            left: 'ai-panel-resize-handle',
+            left: 'ai-panel-resize-handle hover:border-l-blue-400 hover:bg-blue-50/50',
           }}
           className="border-l bg-gray-50 flex flex-col flex-shrink-0"
         >

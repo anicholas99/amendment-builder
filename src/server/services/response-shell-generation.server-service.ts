@@ -332,7 +332,6 @@ ${index + 1}. ${rejection.type} Rejection (Claims ${rejection.claimNumbers?.join
       {
         maxTokens: 8000,
         temperature: 0.2, // Lower temperature for consistent formatting
-        model: 'gpt-4o',
       }
     );
 

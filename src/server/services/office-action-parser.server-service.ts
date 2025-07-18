@@ -158,7 +158,6 @@ export class OfficeActionParserService {
         {
           maxTokens: 4000,
           temperature: 0.1, // Low temperature for consistent parsing
-          model: options.model || 'gpt-4o', // Use gpt-4o for better structured output
         }
       );
 
