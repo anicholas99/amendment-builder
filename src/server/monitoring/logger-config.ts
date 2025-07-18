@@ -138,7 +138,8 @@ export function sanitizeLogData<T>(data: T): T {
 
   const sensitiveKeys = [
     'password',
-    'token',
+    'authtoken',
+    'accesstoken',
     'apiKey',
     'secret',
     'authorization',

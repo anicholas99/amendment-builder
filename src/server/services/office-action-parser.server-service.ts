@@ -131,7 +131,7 @@ export class OfficeActionParserService {
       });
       
       // For really long documents (13+ pages), use intelligent segmentation
-      if (estimatedTokens > 50000) { // ~200+ pages worth
+      if (estimatedTokens > 4000) { // ~4+ pages worth - lowered for testing
         logger.info('[OfficeActionParser] Using segmentation for very long document');
         return this.parseWithSegmentation(officeActionText, options);
       }
@@ -162,7 +162,7 @@ export class OfficeActionParserService {
         systemPrompt,
         userPrompt,
         {
-          maxTokens: 4000,
+          maxTokens: 8000, // Increased for complex documents with multiple rejections
           temperature: 0.1, // Low temperature for consistent parsing
         }
       );
@@ -234,6 +234,18 @@ export class OfficeActionParserService {
 
       const parsed = safeJsonParse(cleanedResponse, null);
       if (!parsed) {
+        // Try to recover from truncated JSON
+        logger.warn('[OfficeActionParser] JSON parse failed, attempting recovery', {
+          responseLength: cleanedResponse.length,
+          lastChars: cleanedResponse.slice(-100),
+        });
+        
+        const recoveredParsed = this.attemptJsonRecovery(cleanedResponse);
+        if (recoveredParsed) {
+          logger.info('[OfficeActionParser] Successfully recovered truncated JSON');
+          return recoveredParsed as ParsedOfficeActionResult;
+        }
+        
         throw new Error('Failed to parse AI response as JSON');
       }
 
@@ -249,6 +261,44 @@ export class OfficeActionParserService {
         ErrorCode.AI_INVALID_RESPONSE,
         'AI returned invalid JSON response for Office Action parsing'
       );
+    }
+  }
+
+  /**
+   * Attempt to recover truncated JSON by adding missing closing braces/brackets
+   */
+  private static attemptJsonRecovery(truncatedJson: string): any {
+    try {
+      // Common truncation recovery strategies
+      const recoveryAttempts = [
+        // Add missing closing braces and brackets
+        truncatedJson + '}',
+        truncatedJson + ']}',
+        truncatedJson + '}]}',
+        truncatedJson + '"}}',
+        truncatedJson + '"}]}',
+        // Try removing last incomplete line and closing
+        truncatedJson.split('\n').slice(0, -1).join('\n') + '}',
+        truncatedJson.split('\n').slice(0, -1).join('\n') + ']}',
+      ];
+
+      for (const attempt of recoveryAttempts) {
+        const parsed = safeJsonParse(attempt.trim(), null);
+        if (parsed && typeof parsed === 'object') {
+          logger.debug('[OfficeActionParser] JSON recovery successful', {
+            strategy: attempt.slice(truncatedJson.length),
+            resultKeys: Object.keys(parsed),
+          });
+          return parsed;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      logger.debug('[OfficeActionParser] JSON recovery failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
     }
   }
 
