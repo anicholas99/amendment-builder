@@ -235,6 +235,7 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
             selectedRejectionId={selectedRejectionId}
             onRejectionSelect={handleRejectionSelect}
             onPriorArtSelect={handlePriorArtSelect}
+            projectId={projectId}
           />
         </div>
 
