@@ -434,7 +434,7 @@ export const OfficeActionNavigator: React.FC<OfficeActionNavigatorProps> = ({
               
               <CollapsibleContent className="mt-3 space-y-2">
                 {filteredRejections.map((rejection) => {
-                  const config = REJECTION_TYPE_CONFIG[rejection.type];
+                  const config = REJECTION_TYPE_CONFIG[rejection.type as keyof typeof REJECTION_TYPE_CONFIG] || REJECTION_TYPE_CONFIG['OTHER'];
                   const IconComponent = config.icon;
                   const isSelected = selectedRejectionId === rejection.id;
                   

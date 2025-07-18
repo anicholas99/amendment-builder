@@ -196,7 +196,10 @@ export class AmendmentApiService {
 
     try {
       const response = await apiFetch(`/api/office-actions/${officeActionId}`);
-      const data = await response.json();
+      const rawData = await response.json();
+      
+      // Unwrap the data if it's wrapped by apiResponse.ok()
+      const data = rawData.data || rawData;
       
       const validated = OfficeActionDetailResponseSchema.parse(data);
       
