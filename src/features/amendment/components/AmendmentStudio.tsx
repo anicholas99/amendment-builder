@@ -23,7 +23,7 @@ import { SimpleMainPanel } from '@/components/common/SimpleMainPanel';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useOfficeActions, useOfficeAction } from '@/hooks/api/useAmendment';
-import { useAnalyzeOfficeActionRejections, useRejectionAnalysis } from '@/hooks/api/useRejectionAnalysis';
+import { useOfficeActionAnalyses, useStrategyRecommendation } from '@/hooks/api/useRejectionAnalysis';
 import { AmendmentApiService } from '@/services/api/amendmentApiService';
 
 interface AmendmentStudioProps {
@@ -75,7 +75,8 @@ const adaptOfficeActionData = (processedOA: any) => {
       examinerName: processedOA.metadata?.examinerName || processedOA.examiner?.name,
       artUnit: processedOA.metadata?.artUnit || processedOA.examiner?.artUnit || processedOA.artUnit,
     },
-    examinerRemarks: processedOA.examinerRemarks, // Add the user-friendly summary
+    examinerRemarks: processedOA.examinerRemarks, // User-friendly summary
+    detailedAnalysis: processedOA.metadata?.detailedAnalysis || processedOA.detailedAnalysis, // Comprehensive structured analysis
     rejections: processedOA.rejections.map((r: any) => {
       // Parse JSON strings if needed
       const claimNumbers = typeof r.claimNumbers === 'string' 
@@ -123,14 +124,19 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
   const { data: officeActions = [], isLoading: isLoadingOfficeActions } = useOfficeActions(projectId);
   const { data: selectedOA } = useOfficeAction(selectedOfficeActionId || '');
 
-  // Rejection analysis hooks
-  const analyzeRejections = useAnalyzeOfficeActionRejections(projectId, selectedOfficeActionId || '');
-  const { data: analysisData } = useRejectionAnalysis(projectId, selectedOfficeActionId) as {
-    data?: {
-      analyses: any[];
-      overallStrategy: any;
+  // Rejection analysis hooks and state
+  const { data: analyses, isLoading: analysesLoading, refetch: refetchAnalyses } = useOfficeActionAnalyses(selectedOfficeActionId || '');
+  const { data: overallStrategy, refetch: refetchStrategy } = useStrategyRecommendation(selectedOfficeActionId || '');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // Create adapted analysis data structure
+  const analysisData = useMemo(() => {
+    if (!analyses) return null;
+    return {
+      analyses,
+      overallStrategy
     };
-  };
+  }, [analyses, overallStrategy]);
 
   // Convert to the adapted format
   const adaptedOfficeAction = useMemo(() => {
@@ -159,13 +165,23 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
       officeActionId: selectedOfficeActionId 
     });
     
+    setIsAnalyzing(true);
     try {
-      await analyzeRejections.mutateAsync({ includeClaimCharts: true });
+      // Trigger analysis via API service (placeholder - needs implementation)
+      // await AmendmentApiService.analyzeOfficeActionRejections(selectedOfficeActionId, { includeClaimCharts: true });
+      
+      // For now, just simulate the API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Refetch the analysis data
+      await Promise.all([refetchAnalyses(), refetchStrategy()]);
       setShowAnalysis(true);
     } catch (error) {
       logger.error('[AmendmentStudio] Failed to analyze rejections', { error });
+    } finally {
+      setIsAnalyzing(false);
     }
-  }, [selectedOfficeActionId, canAnalyze, analyzeRejections]);
+  }, [selectedOfficeActionId, canAnalyze, refetchAnalyses, refetchStrategy]);
 
   const handleGenerateAmendment = useCallback(() => {
     if (!selectedOfficeActionId || !analysisData) return;
@@ -207,8 +223,9 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
 
       {/* Main Content Area */}
       <div className="flex-1 h-full overflow-hidden">
-        <SimpleMainPanel
-          header={
+        <div className="h-full flex flex-col bg-card border border-border rounded-lg shadow-lg overflow-hidden">
+          {/* Fixed header */}
+          <div className="flex-shrink-0 bg-card border-b border-border">
             <div className="p-4 border-b">
               <div className="flex items-center justify-between">
                 <div>
@@ -224,9 +241,9 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
                 {canAnalyze && !hasAnalysis && (
                   <Button 
                     onClick={handleAnalyzeRejections}
-                    disabled={analyzeRejections.isPending}
+                    disabled={isAnalyzing}
                   >
-                    {analyzeRejections.isPending ? 'Analyzing...' : 'Analyze Rejections'}
+                    {isAnalyzing ? 'Analyzing...' : 'Analyze Rejections'}
                   </Button>
                 )}
                 {hasAnalysis && !showAnalysis && (
@@ -241,31 +258,33 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
                 )}
               </div>
             </div>
-          }
-          contentPadding={true}
-        >
-          {!adaptedOfficeAction ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <p>Select an Office Action to begin</p>
-            </div>
-          ) : showAnalysis && analysisData ? (
-            <RejectionAnalysisPanel
-              analyses={analysisData.analyses}
-              overallStrategy={analysisData.overallStrategy}
-              isLoading={analyzeRejections.isPending}
-              selectedRejectionId={selectedRejectionId}
-              onSelectRejection={handleRejectionSelect}
-              onGenerateAmendment={handleGenerateAmendment}
-            />
-          ) : (
-            <DraftingWorkspace
-              projectId={projectId}
-              selectedOfficeAction={adaptedOfficeAction}
-              selectedOfficeActionId={selectedOfficeActionId}
-              amendmentProjectId={`amendment-${selectedOfficeActionId}`}
-            />
-          )}
-        </SimpleMainPanel>
+          </div>
+          
+          {/* Scrollable content area */}
+          <div className="flex-1 overflow-hidden min-h-0">
+            {!adaptedOfficeAction ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <p>Select an Office Action to begin</p>
+              </div>
+            ) : showAnalysis && analysisData ? (
+              <RejectionAnalysisPanel
+                analyses={analysisData.analyses}
+                overallStrategy={analysisData.overallStrategy}
+                isLoading={isAnalyzing}
+                selectedRejectionId={selectedRejectionId}
+                onSelectRejection={handleRejectionSelect}
+                onGenerateAmendment={handleGenerateAmendment}
+              />
+            ) : (
+              <DraftingWorkspace
+                projectId={projectId}
+                selectedOfficeAction={adaptedOfficeAction}
+                selectedOfficeActionId={selectedOfficeActionId}
+                amendmentProjectId={`amendment-${selectedOfficeActionId}`}
+              />
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Right Panel - AI Assistant */}

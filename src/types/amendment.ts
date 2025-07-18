@@ -32,6 +32,42 @@ export interface OfficeActionWithRelations extends OfficeAction {
   amendmentProjects: AmendmentProject[];
 }
 
+// Enhanced summary structures
+export interface DetailedRejectionBreakdown {
+  type: string;
+  title: string;
+  claims: string[];
+  issues: string[];
+}
+
+export interface DetailedObjection {
+  type: string;
+  claims: string[];
+  issues: string[];
+}
+
+export interface WithdrawnItem {
+  type: string;
+  claims: string[];
+  reason: string;
+}
+
+export interface StrategicImplications {
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  timeToRespond: string;
+  recommendedApproach: string;
+  positives: string[];
+  concerns: string[];
+}
+
+export interface DetailedAnalysis {
+  overview: string;
+  rejectionBreakdown: DetailedRejectionBreakdown[];
+  objections: DetailedObjection[];
+  withdrawn: WithdrawnItem[];
+  strategicImplications: StrategicImplications;
+}
+
 // Parsed Office Action data structure
 export interface ParsedOfficeActionData {
   applicationNumber?: string;
@@ -45,6 +81,7 @@ export interface ParsedOfficeActionData {
   rejections: ParsedRejection[];
   citedReferences: CitedReference[];
   examinerRemarks?: string;
+  detailedAnalysis?: DetailedAnalysis;
 }
 
 export interface ParsedRejection {

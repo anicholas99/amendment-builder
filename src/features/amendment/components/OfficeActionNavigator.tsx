@@ -53,6 +53,8 @@ import {
 
 import { cn } from '@/lib/utils';
 import { DocumentViewer } from '@/components/common/DocumentViewer';
+import { OfficeActionDetailedSummary } from './OfficeActionDetailedSummary';
+import type { DetailedAnalysis } from '@/types/amendment';
 
 // Types
 interface Rejection {
@@ -74,6 +76,7 @@ interface OfficeActionData {
     artUnit?: string;
   };
   examinerRemarks?: string; // User-friendly summary of the Office Action
+  detailedAnalysis?: DetailedAnalysis; // Comprehensive structured analysis
   rejections: Rejection[];
   allPriorArtReferences: string[];
   summary: {
@@ -359,19 +362,6 @@ export const OfficeActionNavigator: React.FC<OfficeActionNavigatorProps> = ({
               <CollapsibleContent className="mt-3">
                 <Card>
                   <CardContent className="pt-3">
-                    {/* Display user-friendly summary if available */}
-                    {officeAction.examinerRemarks && (
-                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                        <div className="flex items-start gap-2">
-                          <FileText className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <h4 className="text-sm font-medium text-blue-900 mb-1">Summary</h4>
-                            <p className="text-sm text-blue-800">{officeAction.examinerRemarks}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
                         <div className="font-medium text-gray-900">
@@ -409,7 +399,7 @@ export const OfficeActionNavigator: React.FC<OfficeActionNavigatorProps> = ({
                     )}
 
                     {/* View Office Action button */}
-                    <div className="mt-3 pt-3 border-t">
+                    <div className="mt-3 pt-3 border-t space-y-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -419,6 +409,13 @@ export const OfficeActionNavigator: React.FC<OfficeActionNavigatorProps> = ({
                         <Eye className="h-4 w-4 mr-2" />
                         View Office Action
                       </Button>
+                      
+                      {/* Detailed Summary */}
+                      <OfficeActionDetailedSummary
+                        examinerRemarks={officeAction.examinerRemarks}
+                        detailedAnalysis={officeAction.detailedAnalysis}
+                        metadata={officeAction.metadata}
+                      />
                     </div>
                   </CardContent>
                 </Card>

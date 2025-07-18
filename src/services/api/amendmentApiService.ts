@@ -117,6 +117,7 @@ export interface ProcessedOfficeAction {
     artUnit?: string;
   };
   examinerRemarks?: string; // AI-generated user-friendly summary
+  detailedAnalysis?: any; // Comprehensive structured analysis
   rejections: ProcessedRejection[];
   metadata?: ParsedOfficeActionData;
   createdAt: Date;
@@ -253,6 +254,7 @@ export class AmendmentApiService {
           artUnit: validated.artUnit || validated.examiner?.artUnit || validated.metadata?.artUnit || undefined,
         },
         examinerRemarks: validated.examinerRemarks || undefined, // Include AI-generated summary
+        detailedAnalysis: metadata?.detailedAnalysis || undefined, // Include detailed analysis from parsed JSON
         rejections,
         metadata: {
           // Create UI-compatible metadata structure

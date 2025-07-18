@@ -10,6 +10,7 @@ import { ApplicationError, ErrorCode } from '@/lib/error';
 import { processWithOpenAI } from '@/server/ai/aiService';
 import { safeJsonParse } from '@/utils/jsonUtils';
 import { ParsedRejection, RejectionTypeValue } from '@/types/domain/amendment';
+import { DetailedAnalysis } from '@/types/amendment';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface SimpleOfficeActionAnalysis {
@@ -28,7 +29,8 @@ export interface SimpleOfficeActionAnalysis {
     rejectionTypes: string[];
     totalClaimsRejected: number;
     uniquePriorArtCount: number;
-    userFriendlySummary: string; // NEW: Human-readable summary for UI
+    userFriendlySummary: string; // Human-readable summary for UI
+    detailedAnalysis?: DetailedAnalysis; // Comprehensive structured analysis
   };
 }
 
@@ -54,13 +56,55 @@ const COMPREHENSIVE_OFFICE_ACTION_PROMPT = `You are a USPTO patent examiner anal
 - Foreign patents: "EP1234567", "WO2020123456"
 - Non-patent literature: papers, books, websites
 
-**USER-FRIENDLY SUMMARY**:
-Generate a clear, concise summary for the user that includes:
-- Document type (Non-Final, Final, etc.)
-- Main rejection types and claim coverage
-- Key prior art references
-- Any critical deadlines or examiner requirements
-- Overall assessment of the Office Action severity
+**COMPREHENSIVE LEGAL SUMMARY**:
+Generate a detailed, structured summary that attorneys can use for strategy. Include:
+
+1. **OVERVIEW**: Document type, main rejection pattern, overall tone
+2. **REJECTIONS BY TYPE**: Break down each § 102/103/101/112 with specific issues
+3. **DETAILED ISSUES**: Specific problems (antecedent basis, claim clarity, etc.)
+4. **OBJECTIONS**: Formal issues that require amendment but aren't rejections
+5. **WITHDRAWN/ALLOWED**: What the examiner conceded or withdrew
+6. **PRIOR ART ANALYSIS**: Key references and how they're being used
+7. **STRATEGIC IMPLICATIONS**: Response difficulty, timeline, recommended approach
+8. **SUMMARY TABLE**: Quick reference with rejection types, affected claims, issues
+
+Format with emojis for visual clarity:
+🟥 = Rejections (substantive)
+🟨 = Objections (formal)
+✅ = Withdrawn/Allowed
+❌ = Not present
+🔹 = Specific issues
+📋 = Summary table
+
+**DETAILED ANALYSIS INSTRUCTIONS**:
+
+For § 112 rejections, identify:
+- Antecedent basis issues ("the X" without prior "a X")
+- Ambiguous phrasing or confusing claim language
+- Written description/enablement problems
+- Indefiniteness issues
+
+For § 102/103 rejections, identify:
+- Specific prior art combinations
+- Key claim elements being mapped
+- Examiner's obviousness rationale
+- Missing elements or gaps in prior art
+
+For objections vs rejections:
+- Objections = formal issues (grammar, formatting) - easily fixed
+- Rejections = substantive issues - require argument or amendment
+
+For withdrawn items:
+- What was previously rejected but now withdrawn
+- Examiner's stated reason for withdrawal
+- Positive implications for response strategy
+
+For strategic implications:
+- Response difficulty (Easy/Medium/Hard)
+- Timeline and deadlines
+- Recommended approach (Argue/Amend/Combination)
+- Positive aspects to highlight
+- Main concerns to address
 
 **RETURN VALID JSON ONLY**:
 
@@ -90,7 +134,43 @@ Generate a clear, concise summary for the user that includes:
     "rejectionTypes": ["§103"],
     "totalClaimsRejected": 3,
     "uniquePriorArtCount": 2,
-    "userFriendlySummary": "This is a Non-Final Office Action with 1 obviousness rejection affecting claims 1-3. The examiner cited 2 prior art references. You have until [deadline] to respond. The main issue is that the examiner believes the combination of Smith and Jones renders the claimed invention obvious."
+    "userFriendlySummary": "This Office Action contains rejections under 35 U.S.C. § 112 for indefiniteness affecting multiple claims. The Examiner identified insufficient antecedent basis and ambiguous phrasing issues. Several formal objections require amendments but are not substantive rejections. Previous § 101 rejections have been withdrawn.",
+    "detailedAnalysis": {
+      "overview": "Non-Final Office Action with primary § 112 indefiniteness issues",
+      "rejectionBreakdown": [
+        {
+          "type": "§112",
+          "title": "Written Description / Enablement / Indefiniteness", 
+          "claims": ["1", "4", "5", "17", "22"],
+          "issues": [
+            "Insufficient antecedent basis for 'the delivery', 'the user', 'the driver entity'",
+            "Ambiguous phrasing in claim 20: 'sending a purchase notification the promotional product'",
+            "Unclear distinction between 'a first business' and 'a second business'"
+          ]
+        }
+      ],
+      "objections": [
+        {
+          "type": "Formal/Grammatical",
+          "claims": ["1", "13", "20"],
+          "issues": ["Use of 'the' instead of 'a'", "Missing geographical qualifier", "Formatting corrections needed"]
+        }
+      ],
+      "withdrawn": [
+        {
+          "type": "§101",
+          "claims": ["1-7", "13-45"],
+          "reason": "Applicant's arguments were found persuasive"
+        }
+      ],
+      "strategicImplications": {
+        "difficulty": "Medium",
+        "timeToRespond": "3 months (non-final)",
+        "recommendedApproach": "Focus on claim amendments to address antecedent basis issues. Formal objections are easily correctable.",
+        "positives": ["§101 withdrawal shows examiner is reasonable", "No prior art rejections to overcome"],
+        "concerns": ["Multiple indefiniteness issues require careful claim reconstruction"]
+      }
+    }
   }
 }
 
@@ -301,7 +381,17 @@ export class SimpleOfficeActionParserService {
         summaryText += ` Mailed: ${analysis.metadata.mailingDate}.`;
       }
 
-      analysis.summary.userFriendlySummary = summaryText;
+      // Use AI-generated summary if available, otherwise use our generated summary
+      analysis.summary.userFriendlySummary = rawResponse.summary?.userFriendlySummary || summaryText;
+      
+      // Preserve detailed analysis from AI response
+      // Check both locations where AI might put the detailed analysis
+      if (rawResponse.summary?.detailedAnalysis) {
+        analysis.summary.detailedAnalysis = rawResponse.summary.detailedAnalysis;
+      } else if (rawResponse.detailedAnalysis) {
+        // AI might put it at the top level instead of in summary
+        analysis.summary.detailedAnalysis = rawResponse.detailedAnalysis;
+      }
     }
 
     return analysis;

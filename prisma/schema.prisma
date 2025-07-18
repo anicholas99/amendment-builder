@@ -93,6 +93,7 @@ model Project {
   aiAuditLogs                  AIAuditLog[]
   officeActions                OfficeAction[]
   amendmentProjects            AmendmentProject[]
+  patentApplication            PatentApplication?
 
   @@index([tenantId])
   @@index([userId])
@@ -783,6 +784,10 @@ model OfficeAction {
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   rejections        Rejection[]
   amendmentProjects AmendmentProject[]
+  claimVersions     PatentClaimVersion[]
+  summary           OfficeActionSummary?
+  strategyRecommendations StrategyRecommendation[]
+  rejectionAnalyses RejectionAnalysisResult[]
 
   @@index([projectId])
   @@index([tenantId])
@@ -805,6 +810,7 @@ model Rejection {
   updatedAt      DateTime @updatedAt
 
   officeAction OfficeAction @relation(fields: [officeActionId], references: [id], onDelete: Cascade)
+  analysisResult RejectionAnalysisResult?
 
   @@index([officeActionId])
   @@index([type])
@@ -886,4 +892,150 @@ model AmendmentProjectFile {
   @@index([amendmentProjectId, createdAt])
   @@index([parentFileId]) // For version chains
   @@map("amendment_project_files")
+}
+
+// ============ NEW MODELS FOR STRUCTURED AMENDMENT INTELLIGENCE ============
+
+/// Background job queue for async processing
+model JobQueue {
+  id            String   @id @default(uuid())
+  type          String   // 'OFFICE_ACTION_ORCHESTRATION', etc.
+  payload       String   @db.NVarChar(Max) // JSON payload
+  status        String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  attempts      Int      @default(0)
+  maxAttempts   Int      @default(3)
+  lastError     String?  @db.NVarChar(Max)
+  scheduledAt   DateTime @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  
+  @@index([type, status, scheduledAt])
+  @@index([status, createdAt])
+  @@map("job_queue")
+}
+
+/// Core patent application entity for grounding all prosecution data
+model PatentApplication {
+  id                 String   @id @default(uuid())
+  projectId          String   @unique
+  applicationNumber  String?
+  filingDate         DateTime?
+  title              String?
+  inventors          String?  @db.NVarChar(Max) // JSON array
+  assignee           String?
+  artUnit            String?
+  examinerName       String?
+  examinerId         String?
+  status             String   @default("PENDING") // PENDING, ALLOWED, ABANDONED, ISSUED
+  metadata           String?  @db.NVarChar(Max) // JSON for additional data
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  project            Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  claimVersions      PatentClaimVersion[]
+  strategyRecommendations StrategyRecommendation[]
+
+  @@index([projectId])
+  @@index([applicationNumber])
+  @@map("patent_applications")
+}
+
+/// Tracks claim versions at each OA response point
+model PatentClaimVersion {
+  id                  String    @id @default(uuid())
+  applicationId       String
+  officeActionId      String?   // Null for initial filing
+  versionNumber       Int
+  status              String    @default("ACTIVE") // ACTIVE, SUPERSEDED, CANCELLED
+  effectiveDate       DateTime
+  source              String    // INITIAL_FILING, AMENDMENT, PRELIMINARY_AMENDMENT
+  claimsJson          String    @db.NVarChar(Max) // Full claim set as JSON
+  claim1Hash          String?   // For quick comparison
+  elementAnalysisJson String?   @db.NVarChar(Max) // Parsed elements
+  createdAt           DateTime  @default(now())
+  
+  application         PatentApplication @relation(fields: [applicationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  officeAction        OfficeAction?     @relation(fields: [officeActionId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@unique([applicationId, versionNumber])
+  @@index([applicationId])
+  @@index([officeActionId])
+  @@index([claim1Hash])
+  @@map("patent_claim_versions")
+}
+
+/// AI-generated rejection analysis results
+model RejectionAnalysisResult {
+  id                String   @id @default(uuid())
+  rejectionId       String   @unique
+  officeActionId    String
+  analysisType      String   // STRENGTH_ASSESSMENT, CLAIM_CHARTING, STRATEGY_RECOMMENDATION
+  strengthScore     Float?   // 0-1 score of rejection strength
+  priorArtMapping   String?  @db.NVarChar(Max) // JSON: element -> prior art mapping
+  suggestedStrategy String?  // ARGUE, AMEND, COMBINATION
+  reasoning         String?  @db.NVarChar(Max)
+  confidenceScore   Float?
+  modelVersion      String?
+  agentVersion      String?  // Track which version of the agent/prompt was used
+  model             String?  // Track which AI model was used (gpt-4, gpt-3.5, etc)
+  createdAt         DateTime @default(now())
+  
+  rejection         Rejection    @relation(fields: [rejectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  officeAction      OfficeAction @relation(fields: [officeActionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([rejectionId])
+  @@index([officeActionId])
+  @@map("rejection_analysis_results")
+}
+
+/// Structured OA summary for quick access and UI display
+model OfficeActionSummary {
+  id                    String   @id @default(uuid())
+  officeActionId        String   @unique
+  summaryText           String   @db.NVarChar(Max) // Human-readable summary
+  keyIssues             String   @db.NVarChar(Max) // JSON array of key issues
+  rejectionBreakdown    String   @db.NVarChar(Max) // JSON: type -> count mapping
+  totalClaimsRejected   Int
+  allowedClaims         String?  @db.NVarChar(Max) // JSON array
+  strategyHint          String?  // Quick strategy guidance
+  claimImpactMap        String?  @db.NVarChar(Max) // JSON: claim -> impact
+  examinerTone          String?  // FAVORABLE, NEUTRAL, HOSTILE
+  responseComplexity    String?  // LOW, MEDIUM, HIGH
+  // Add numeric columns for efficient querying
+  num102Rejections      Int      @default(0)
+  num103Rejections      Int      @default(0)
+  num101Rejections      Int      @default(0)
+  num112Rejections      Int      @default(0)
+  numOtherRejections    Int      @default(0)
+  createdAt             DateTime @default(now())
+  
+  officeAction          OfficeAction @relation(fields: [officeActionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([officeActionId])
+  @@index([num102Rejections, num103Rejections, num101Rejections, num112Rejections])
+  @@map("office_action_summaries")
+}
+
+/// Overall strategy recommendations for responding to an OA
+model StrategyRecommendation {
+  id                 String   @id @default(uuid())
+  officeActionId     String
+  applicationId      String
+  overallStrategy    String   // ARGUE_ALL, AMEND_NARROW, MIXED_APPROACH, FILE_CONTINUATION
+  priorityActions    String   @db.NVarChar(Max) // JSON array of actions
+  estimatedDifficulty String  // EASY, MEDIUM, HARD
+  successProbability Float?   // 0-1 estimated probability
+  keyArguments       String?  @db.NVarChar(Max) // JSON: suggested arguments
+  amendmentFocus     String?  @db.NVarChar(Max) // JSON: elements to amend
+  alternativeOptions String?  @db.NVarChar(Max) // JSON: other paths
+  reasoning          String   @db.NVarChar(Max)
+  createdAt          DateTime @default(now())
+  
+  officeAction       OfficeAction      @relation(fields: [officeActionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  application        PatentApplication @relation(fields: [applicationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([officeActionId])
+  @@index([applicationId])
+  @@map("strategy_recommendations")
 }

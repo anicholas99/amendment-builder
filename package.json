@@ -61,7 +61,9 @@
     "security:fix-types": "npx ts-migrate",
     "security:check-all": "npm run security:type-check && npm run security:lint",
     "db:apply-indexes": "ts-node -r tsconfig-paths/register scripts/apply-performance-indexes.ts",
-    "db:indexes": "ts-node -r tsconfig-paths/register scripts/apply-performance-indexes.ts"
+    "db:indexes": "ts-node -r tsconfig-paths/register scripts/apply-performance-indexes.ts",
+    "worker": "ts-node -r tsconfig-paths/register src/server/workers/job-processor.ts",
+    "worker:dev": "nodemon --watch src/server/workers --exec ts-node -r tsconfig-paths/register src/server/workers/job-processor.ts"
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "^3.7.0",

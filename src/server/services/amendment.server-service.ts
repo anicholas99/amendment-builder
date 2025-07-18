@@ -228,6 +228,8 @@ export class AmendmentServerService {
         ),
         // Store the AI-generated user-friendly summary in examinerRemarks
         examinerRemarks: parseResult.summary.userFriendlySummary || undefined,
+        // Store detailed analysis if available
+        detailedAnalysis: parseResult.summary.detailedAnalysis || undefined,
       };
 
       // Update the Office Action with parsed data
@@ -240,40 +242,61 @@ export class AmendmentServerService {
 
       // Create rejection records if any rejections were found
       let rejectionCount = 0;
-      if (parseResult.rejections && parseResult.rejections.length > 0) {
-        logger.debug('[AmendmentService] Creating rejection records', {
-          officeActionId,
-          rejectionCount: parseResult.rejections.length,
-        });
-
-        const rejectionCreateData = parseResult.rejections.map(rejection => ({
+      if (parsedData.rejections?.length > 0) {
+        const rejectionCreateData = parsedData.rejections.map((rejection, index) => ({
           officeActionId,
           type: rejection.type,
-          claimNumbers: rejection.claims,
-          citedPriorArt: rejection.priorArtReferences,
-          examinerText: rejection.examinerReasoning,
-          parsedElements: {
-            rawText: rejection.rawText,
-            startIndex: rejection.startIndex,
-            endIndex: rejection.endIndex,
-          },
-          displayOrder: parseResult.rejections.indexOf(rejection),
+          claimNumbers: rejection.claimNumbers,
+          citedPriorArt: rejection.citedReferences || [],
+          examinerText: rejection.reasoning,
+          parsedElements: rejection.elements ? { elements: rejection.elements } : undefined,
+          displayOrder: index,
         }));
-
+        
         await createRejections(rejectionCreateData);
-        rejectionCount = parseResult.rejections.length;
+        rejectionCount = parsedData.rejections.length;
       }
 
-      // Note: Status is already updated in updateOfficeActionParsedData call above
-
-      logger.info('[AmendmentService] Simple Office Action parsing completed successfully', {
+      logger.info('[AmendmentService] Office Action parsing completed', {
         officeActionId,
         rejectionCount,
-        priorArtCount: parseResult.summary.uniquePriorArtCount,
-        documentType: parseResult.metadata.documentType,
-        analysisConfidence: parseResult.metadata.analysisConfidence,
-        hasMetadata: !!parseResult.metadata,
+        hasDetailedAnalysis: !!parsedData.detailedAnalysis,
       });
+
+      // Trigger comprehensive orchestration pipeline if enabled
+      try {
+        const enableOrchestration = process.env.ENABLE_OA_ORCHESTRATION === 'true';
+        if (enableOrchestration && rejectionCount > 0) {
+          logger.info('[AmendmentService] Queuing orchestration job', {
+            officeActionId,
+            projectId: await this.getProjectIdForOfficeAction(officeActionId),
+          });
+          
+          // Queue orchestration job instead of running directly
+          const { OfficeActionOrchestrationJob } = await import('../jobs/office-action-orchestration.job');
+          const projectId = await this.getProjectIdForOfficeAction(officeActionId);
+          
+          const jobId = await OfficeActionOrchestrationJob.enqueue({
+            officeActionId,
+            projectId,
+            tenantId,
+          });
+          
+          logger.info('[AmendmentService] Orchestration job queued', {
+            officeActionId,
+            jobId,
+          });
+          
+          // Update OA status to indicate processing
+          await updateOfficeActionStatus(officeActionId, tenantId, 'PROCESSING');
+        }
+      } catch (orchestrationError) {
+        // Don't fail the parsing if orchestration fails
+        logger.error('[AmendmentService] Failed to queue orchestration job', {
+          officeActionId,
+          error: orchestrationError instanceof Error ? orchestrationError.message : String(orchestrationError),
+        });
+      }
 
       return {
         success: true,
@@ -839,5 +862,24 @@ Generate a comprehensive amendment response that demonstrates the deep understan
       
       Generate a comprehensive amendment response following USPTO guidelines.
     `;
+  }
+
+  /**
+   * Get project ID for an office action
+   */
+  private static async getProjectIdForOfficeAction(officeActionId: string): Promise<string> {
+    const officeAction = await prisma?.officeAction.findUnique({
+      where: { id: officeActionId },
+      select: { projectId: true },
+    });
+    
+    if (!officeAction) {
+      throw new ApplicationError(
+        ErrorCode.DB_RECORD_NOT_FOUND,
+        'Office Action not found'
+      );
+    }
+    
+    return officeAction.projectId;
   }
 } 
