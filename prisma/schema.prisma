@@ -818,19 +818,24 @@ model Rejection {
 }
 
 model AmendmentProject {
-  id             String    @id @default(uuid())
-  officeActionId String
-  projectId      String // Link to original patent project
-  tenantId       String
-  userId         String
-  name           String // "Response to Non-Final OA - Dec 2024"
-  status         String    @default("DRAFT") // DRAFT, IN_REVIEW, READY_TO_FILE, FILED
-  dueDate        DateTime? // USPTO response deadline
-  filedDate      DateTime?
-  responseType   String? // "AMENDMENT", "CONTINUATION", "RCE"
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  deletedAt      DateTime?
+  id                       String    @id @default(uuid())
+  officeActionId           String
+  projectId                String // Link to original patent project
+  tenantId                 String
+  userId                   String
+  name                     String // "Response to Non-Final OA - Dec 2024"
+  status                   String    @default("DRAFT") // DRAFT, IN_REVIEW, READY_TO_FILE, FILED
+  dueDate                  DateTime? // USPTO response deadline
+  filedDate                DateTime?
+  responseType             String? // "AMENDMENT", "CONTINUATION", "RCE"
+  validationOverridden     Boolean   @default(false) // True if user proceeded despite warnings
+  validationOverrideReason String? // Optional reason for override
+  validationOverrideAt     DateTime? // When override occurred
+  validationOverrideBy     String? // User who performed override
+  validationSummary        String?   @db.NVarChar(Max) // JSON snapshot of validation state
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  deletedAt                DateTime?
 
   officeAction   OfficeAction           @relation(fields: [officeActionId], references: [id], onDelete: Cascade)
   project        Project                @relation(fields: [projectId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -845,6 +850,7 @@ model AmendmentProject {
   @@index([userId])
   @@index([tenantId, userId])
   @@index([status, dueDate])
+  @@index([validationOverridden])
   @@map("amendment_projects")
 }
 
@@ -1038,4 +1044,24 @@ model StrategyRecommendation {
   @@index([officeActionId])
   @@index([applicationId])
   @@map("strategy_recommendations")
+}
+
+model ClaimValidation {
+  id              String   @id @default(uuid())
+  claimId         String
+  projectId       String
+  tenantId        String
+  validationState String   // PENDING, PASSED_LOW, PASSED_MED, PASSED_HIGH, FAILED, NOT_STARTED
+  riskLevel       String?  // LOW, MEDIUM, HIGH, NONE
+  message         String?  @db.NVarChar(1000)
+  details         String?  @db.NVarChar(Max) // JSON with detailed results
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([claimId])
+  @@index([projectId])
+  @@index([tenantId])
+  @@index([validationState])
+  @@index([projectId, validationState], name: "IX_claim_validations_project_state")
+  @@map("claim_validations")
 }

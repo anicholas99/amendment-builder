@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useClaimChangesSummary } from '@/hooks/api/useProsecutionOverview';
+import { ClaimValidationDisplay } from './ClaimValidationDisplay';
 
 interface ClaimChangesSummaryProps {
   projectId: string;
@@ -81,15 +82,21 @@ export const ClaimChangesSummary: React.FC<ClaimChangesSummaryProps> = ({
             <FileText className="h-4 w-4" />
             <span>Claim Changes</span>
           </CardTitle>
-          {hasChanges && (
-            <Badge 
-              className={cn(
-                totalChanges > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
-              )}
-            >
-              Δ{totalChanges}
-            </Badge>
-          )}
+          <div className="flex items-center space-x-2">
+            {hasChanges && (
+              <Badge 
+                className={cn(
+                  totalChanges > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                )}
+              >
+                Δ{totalChanges}
+              </Badge>
+            )}
+            <ClaimValidationDisplay 
+              projectId={projectId} 
+              compact={true} 
+            />
+          </div>
         </div>
         {lastAmendmentDate && (
           <p className="text-xs text-gray-500">
@@ -163,8 +170,15 @@ export const ClaimChangesSummary: React.FC<ClaimChangesSummaryProps> = ({
             {/* Validation Status & Actions - only if not emphasized */}
             {!emphasized && (
               <div className="space-y-3">
-                {/* Validation Status */}
-                {pendingValidation && (
+                {/* Integrated Validation Display */}
+                <ClaimValidationDisplay 
+                  projectId={projectId}
+                  compact={false}
+                  showDetails={true}
+                />
+
+                {/* Legacy Validation Status - Remove once new system is live */}
+                {false && pendingValidation && (
                   <div className="flex items-center space-x-2 p-2 bg-yellow-50 rounded-lg">
                     <Clock className="h-4 w-4 text-yellow-600" />
                     <div className="flex-1">
