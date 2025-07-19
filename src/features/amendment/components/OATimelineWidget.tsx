@@ -17,17 +17,21 @@ import {
   AlertCircle,
   ArrowRight,
   Calendar,
-  Eye
+  Eye,
+  Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useProsecutionTimeline } from '@/hooks/api/useProsecutionOverview';
+import { useEnhancedProsecutionTimeline } from '@/hooks/api/useEnhancedProsecution';
 
 interface OATimelineWidgetProps {
   projectId: string;
+  applicationNumber?: string | null;
   onEventClick?: (eventId: string, eventType: string) => void;
   className?: string;
+  useEnhanced?: boolean; // Toggle between legacy and enhanced timeline
 }
 
 const EVENT_CONFIG = {
@@ -77,10 +81,22 @@ const EVENT_CONFIG = {
 
 export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
   projectId,
+  applicationNumber,
   onEventClick,
   className,
+  useEnhanced = true, // Default to enhanced if application number is available
 }) => {
-  const { data: timeline, isLoading } = useProsecutionTimeline(projectId);
+  // Use enhanced timeline if enabled and application number is available
+  const { data: enhancedTimeline, isLoading: enhancedLoading } = useEnhancedProsecutionTimeline(
+    projectId,
+    applicationNumber
+  );
+  
+  // Fallback to legacy timeline
+  const { data: legacyTimeline, isLoading: legacyLoading } = useProsecutionTimeline(projectId);
+  
+  const timeline = useEnhanced && applicationNumber ? enhancedTimeline : legacyTimeline;
+  const isLoading = useEnhanced && applicationNumber ? enhancedLoading : legacyLoading;
 
   if (isLoading) {
     return (
@@ -133,12 +149,21 @@ export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
   return (
     <div className={cn('bg-white rounded-lg border border-gray-200', className)}>
       <div className="p-4 border-b border-gray-100">
-        <h3 className="text-sm font-medium text-gray-900">Prosecution Timeline</h3>
-        <p className="text-xs text-gray-500 mt-1">
-          {timeline.length} events over {timeline[timeline.length - 1]?.daysFromPrevious ? 
-            Math.round(timeline.reduce((sum, event) => sum + (event.daysFromPrevious || 0), 0)) : 
-            'unknown'} days
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-medium text-gray-900">Prosecution Timeline</h3>
+            <p className="text-xs text-gray-500 mt-1">
+              {timeline.length} events over {timeline[timeline.length - 1]?.daysFromPrevious ? 
+                Math.round(timeline.reduce((sum, event) => sum + (event.daysFromPrevious || 0), 0)) : 
+                'unknown'} days
+            </p>
+          </div>
+          {useEnhanced && applicationNumber && enhancedTimeline && (
+            <Badge variant="secondary" className="text-xs">
+              USPTO Data
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="p-4">

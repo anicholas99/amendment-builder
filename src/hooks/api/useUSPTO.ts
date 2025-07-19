@@ -6,7 +6,7 @@ import {
 } from '@tanstack/react-query';
 import { useToast } from '@/hooks/useToastWrapper';
 import { logger } from '@/utils/clientLogger';
-import { USPTOService, FetchOfficeActionsOptions } from '@/client/services/uspto.client-service';
+import { USPTOService, FetchOfficeActionsOptions, ProsecutionDocument } from '@/client/services/uspto.client-service';
 import { usptoQueryKeys } from '@/lib/queryKeys';
 import { STALE_TIME } from '@/constants/time';
 
@@ -156,3 +156,116 @@ export const useRefreshUSPTOData = () => {
     },
   });
 };
+
+/**
+ * Hook to fetch complete prosecution history from USPTO
+ */
+export const useUSPTOProsecutionHistory = (
+  applicationNumber: string | null,
+  options?: {
+    includeTimeline?: boolean;
+    enabled?: boolean;
+  }
+) => {
+  return useQuery({
+    queryKey: usptoQueryKeys.prosecutionHistory(applicationNumber || '', options?.includeTimeline),
+    queryFn: () => {
+      if (!applicationNumber) {
+        throw new Error('Application number is required');
+      }
+      return USPTOService.fetchProsecutionHistory(applicationNumber, options?.includeTimeline);
+    },
+    enabled: !!applicationNumber && (options?.enabled !== false),
+    staleTime: STALE_TIME.LONG,
+    retry: 2,
+  });
+};
+
+/**
+ * Hook to download a USPTO document (supports new API format)
+ */
+export const useDownloadUSPTODocument = () => {
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: (document: ProsecutionDocument | string) => {
+      if (typeof document === 'string') {
+        // Legacy support for document ID
+        return USPTOService.downloadOfficeAction(document);
+      }
+      // New format with full document object
+      return USPTOService.downloadOfficeAction(document);
+    },
+    onSuccess: (data, document) => {
+      logger.info('USPTO document download initiated', { 
+        documentId: typeof document === 'string' ? document : document.documentId,
+        filename: data.filename,
+      });
+      
+      // Open download URL in new tab
+      if (data.downloadUrl) {
+        window.open(data.downloadUrl, '_blank');
+      }
+      
+      toast.success('Document download started');
+    },
+    onError: (error) => {
+      logger.error('Failed to download USPTO document', { error });
+      toast.error('Failed to download document');
+    },
+  });
+};
+
+/**
+ * Hook to get USPTO timeline data formatted for existing UI
+ */
+export const useUSPTOTimelineForProject = (applicationNumber: string | null) => {
+  const { data: prosecutionHistory } = useUSPTOProsecutionHistory(applicationNumber, {
+    includeTimeline: true,
+  });
+
+  return useQuery({
+    queryKey: ['uspto', 'timeline-formatted', applicationNumber],
+    queryFn: () => {
+      if (!prosecutionHistory?.timeline) {
+        return [];
+      }
+
+      // Transform USPTO timeline to match existing format
+      return prosecutionHistory.timeline.map((event, index, array) => ({
+        id: event.documentId,
+        type: mapUSPTOEventType(event.type),
+        date: new Date(event.date),
+        title: event.title,
+        description: undefined,
+        status: index === array.length - 1 ? 'ACTIVE' : 'COMPLETED',
+        daysFromPrevious: index > 0 ? calculateDaysBetween(
+          array[index - 1].date,
+          event.date
+        ) : undefined,
+      }));
+    },
+    enabled: !!prosecutionHistory?.timeline,
+    staleTime: STALE_TIME.LONG,
+  });
+};
+
+// Helper functions
+function mapUSPTOEventType(usptoType: string): 'FILING' | 'OFFICE_ACTION' | 'RESPONSE' | 'NOTICE_OF_ALLOWANCE' | 'FINAL_REJECTION' | 'RCE' {
+  const typeMap: Record<string, any> = {
+    'office-action': 'OFFICE_ACTION',
+    'response': 'RESPONSE',
+    'claims': 'RESPONSE',
+    'notice': 'NOTICE_OF_ALLOWANCE',
+    'other': 'FILING',
+  };
+  
+  return typeMap[usptoType] || 'OFFICE_ACTION';
+}
+
+function calculateDaysBetween(date1: string, date2: string): number {
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  const diffTime = Math.abs(d2.getTime() - d1.getTime());
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}

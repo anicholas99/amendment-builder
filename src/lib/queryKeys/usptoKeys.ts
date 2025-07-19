@@ -29,4 +29,8 @@ export const usptoQueryKeys = {
   // Processing job status
   processingJob: (jobId: string) =>
     ['uspto', 'processing', jobId] as const,
+
+  // Prosecution history with optional timeline
+  prosecutionHistory: (applicationNumber: string, includeTimeline?: boolean) =>
+    ['uspto', applicationNumber, 'prosecution-history', { includeTimeline }] as const,
 };
