@@ -58,12 +58,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       statistics: history.statistics,
     });
 
+    // Return the history data directly with timeline if requested
     return apiResponse.ok(res, {
-      success: true,
-      data: {
-        ...history,
-        timeline,
-      },
+      ...history,
+      timeline,
     });
   } catch (error) {
     apiLogger.errorSafe('Failed to fetch USPTO prosecution history', error as Error);

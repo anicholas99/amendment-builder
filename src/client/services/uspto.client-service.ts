@@ -61,12 +61,12 @@ const OfficeActionStatusResponseSchema = z.object({
 });
 
 const ProsecutionDocumentSchema = z.object({
-  documentId: z.string(),
+  documentId: z.string().optional(), // May be missing in some documents
   documentIdentifier: z.string().optional(),
   documentCode: z.string(),
-  description: z.string(),
+  description: z.string().optional(), // May be missing
   documentCodeDescriptionText: z.string().optional(),
-  mailDate: z.string(),
+  mailDate: z.string().optional(), // May be missing
   officialDate: z.string().optional(),
   pageCount: z.number().optional(),
   applicationNumber: z.string().optional(),
@@ -82,21 +82,20 @@ const ProsecutionDocumentSchema = z.object({
 });
 
 const ProsecutionHistoryResponseSchema = z.object({
-  success: z.boolean(),
   data: z.object({
     applicationNumber: z.string(),
     applicationData: z.object({
-      title: z.string(),
+      title: z.string().optional(),
       filingDate: z.string().optional(),
       patentNumber: z.string().optional(),
       issueDate: z.string().optional(),
       examinerName: z.string().optional(),
       artUnit: z.string().optional(),
-      status: z.string(),
+      status: z.string().optional(),
       inventorName: z.array(z.string()).optional(),
       applicantName: z.string().optional(),
       attorneyDocketNumber: z.string().optional(),
-    }).optional(),
+    }).optional().nullable(),
     documents: z.array(ProsecutionDocumentSchema),
     statistics: z.object({
       totalDocuments: z.number(),
@@ -414,6 +413,17 @@ export class USPTOService {
 
       const response = await apiFetch(url);
       const data = await response.json();
+
+      // Log the actual response for debugging
+      logger.debug('USPTO API raw response', {
+        hasData: 'data' in data,
+        dataKeys: data.data ? Object.keys(data.data) : [],
+        documentCount: data.data?.documents?.length || 0,
+        hasApplicationNumber: !!data.data?.applicationNumber,
+        hasStatistics: !!data.data?.statistics,
+        hasApplicationData: !!data.data?.applicationData,
+        applicationDataKeys: data.data?.applicationData ? Object.keys(data.data.applicationData) : [],
+      });
 
       const validated = validateApiResponse(
         data,

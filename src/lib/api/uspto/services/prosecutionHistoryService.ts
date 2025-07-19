@@ -201,11 +201,11 @@ export const fetchProsecutionHistory = async (
         ...doc,
         // Map new API fields to expected fields
         description: doc.documentCodeDescriptionText || doc.description || doc.documentCode,
-        documentId: doc.documentIdentifier || doc.documentId || '',
-        mailDate: doc.officialDate || doc.mailDate || '',
+        documentId: doc.documentIdentifier || doc.documentId || doc.documentCode, // Use documentCode as fallback
+        mailDate: doc.officialDate || doc.mailDate || new Date().toISOString(), // Default to now if no date
         ...categorization,
         isDownloadable: !!doc.downloadOptionBag && doc.downloadOptionBag.length > 0,
-      };
+      } as ProsecutionDocument;
     });
 
     // Sort by mail date (most recent first)
@@ -270,7 +270,7 @@ export const fetchProsecutionHistory = async (
 
     return {
       applicationNumber,
-      applicationData,
+      applicationData: applicationData || null, // Ensure null instead of undefined
       documents: prosecutionDocuments,
       statistics,
     };
