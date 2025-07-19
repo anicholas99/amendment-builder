@@ -2,6 +2,8 @@
 export { OfficeActionUpload } from './OfficeActionUpload';
 export { OfficeActionsList } from './OfficeActionsList';
 export { RejectionViewer } from './RejectionViewer';
+export { USPTOOfficeActionFetcher } from './USPTOOfficeActionFetcher';
+export { EnhancedOfficeActionUpload } from './EnhancedOfficeActionUpload';
 
 // Re-export types for convenience
 export type {

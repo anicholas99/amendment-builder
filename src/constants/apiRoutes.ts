@@ -397,6 +397,17 @@ export const API_ROUTES = {
       HISTORY: (fileId: string) => `/api/amendment-project-files/${fileId}/history`,
     },
   },
+
+  // ============ USPTO INTEGRATION ============
+  USPTO: {
+    OFFICE_ACTIONS: (applicationNumber: string) => 
+      `/api/uspto/applications/${applicationNumber}/office-actions`,
+    DOWNLOAD_DOCUMENT: (documentId: string) => 
+      `/api/uspto/documents/${documentId}/download`,
+    CHECK_STATUS: (applicationNumber: string) => 
+      `/api/uspto/applications/${applicationNumber}/status`,
+    PROCESS_DOCUMENT: '/api/uspto/documents/process',
+  },
 } as const;
 
 /**

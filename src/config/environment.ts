@@ -314,6 +314,12 @@ export const environment = {
     password: isServer ? process.env.PATBASE_PASS || '' : '',
   },
 
+  // USPTO ODP API settings
+  uspto: {
+    apiKey: isServer ? process.env.USPTO_ODP_API_KEY || '' : '',
+    apiUrl: isServer ? process.env.USPTO_ODP_API_URL || 'https://api.uspto.gov/api/v1' : 'https://api.uspto.gov/api/v1',
+  },
+
   // AI Provider settings
   ai: {
     provider: isServer

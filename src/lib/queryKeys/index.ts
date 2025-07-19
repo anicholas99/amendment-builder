@@ -22,6 +22,7 @@ export { tenantQueryKeys } from './tenantKeys';
 export { userKeys } from './userKeys';
 export { versionKeys } from './versionKeys';
 export { aiAuditKeys } from './aiAuditKeys';
+export { usptoQueryKeys } from './usptoKeys';
 
 // Import all key factories for use in helper functions
 import { projectKeys } from './projectKeys';
