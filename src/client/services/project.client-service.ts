@@ -586,4 +586,38 @@ export const ProjectApiService = {
     const json = (await response.json()) as PriorArtAnalysisResponse;
     return json;
   },
+
+  async updatePatentApplication(
+    projectId: string,
+    data: { applicationNumber: string }
+  ): Promise<{ success: boolean; patentApplication?: any }> {
+    if (!projectId) {
+      throw new Error('Project ID is required');
+    }
+    const response = await apiFetch(
+      `/api/projects/${projectId}/patent-application`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      }
+    );
+    const json = await response.json();
+    return json;
+  },
+
+  async getPatentApplication(
+    projectId: string
+  ): Promise<{ success: boolean; patentApplication?: any }> {
+    if (!projectId) {
+      throw new Error('Project ID is required');
+    }
+    const response = await apiFetch(
+      `/api/projects/${projectId}/patent-application`
+    );
+    const json = await response.json();
+    return json;
+  },
 };

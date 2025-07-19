@@ -18,6 +18,7 @@ export const useProjectActions = () => {
   const { activeProjectId, setActiveProject } = useProjectData();
   const deleteProjectMutation = useDeleteProjectMutation();
   const renameProjectMutation = useUpdateProjectMutation();
+  const updateProjectMutation = useUpdateProjectMutation();
 
   /**
    * Rename a project
@@ -65,10 +66,31 @@ export const useProjectActions = () => {
     [activeProjectId, setActiveProject, router, deleteProjectMutation]
   );
 
+  /**
+   * Update a project with new data
+   */
+  const updateProject = useCallback(
+    async (projectId: string, data: any): Promise<boolean> => {
+      try {
+        await updateProjectMutation.mutateAsync({
+          projectId,
+          data,
+        });
+        return true;
+      } catch (error) {
+        logger.error('Error updating project:', error);
+        return false;
+      }
+    },
+    [updateProjectMutation]
+  );
+
   return {
     renameProject,
+    updateProject,
     deleteProjectWithConfirmation,
     isRenaming: renameProjectMutation.isPending,
     isDeleting: deleteProjectMutation.isPending,
+    isUpdating: updateProjectMutation.isPending,
   };
 };

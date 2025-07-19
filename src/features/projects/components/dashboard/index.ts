@@ -5,3 +5,4 @@ export { ProjectSearchFilter } from './ProjectSearchFilter';
 export { EmptyProjectState } from './EmptyProjectState';
 export { RenameProjectModal } from './RenameProjectModal';
 export { DeleteProjectDialog } from './DeleteProjectDialog';
+export { USPTOApplicationModal } from './USPTOApplicationModal';

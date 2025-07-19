@@ -235,6 +235,7 @@ export default function Projects() {
                                     ? project.createdAt.toISOString()
                                     : project.createdAt,
                                 lastUpdated: project.lastUpdated,
+                                applicationNumber: (project as any).patentApplication?.applicationNumber,
                                 inventionData: {}, // No longer using structuredData
                               }}
                               handleSelectProject={handleSelectProject}

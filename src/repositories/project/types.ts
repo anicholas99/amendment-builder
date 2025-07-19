@@ -54,6 +54,15 @@ export const basicProjectSelect = Prisma.validator<Prisma.ProjectSelect>()({
   createdAt: true,
   updatedAt: true,
   textInput: false, // Exclude large fields from list view
+  patentApplication: {
+    select: {
+      id: true,
+      applicationNumber: true,
+      filingDate: true,
+      title: true,
+      status: true,
+    },
+  },
   invention: {
     select: {
       id: true,
@@ -145,6 +154,15 @@ export const projectSelectWithDetails =
     }, // Include normalized invention data with proper field selection
     // documents: true, // REMOVED
     savedPriorArtItems: true, // Keep this if needed when loading a single project
+    patentApplication: {
+      select: {
+        id: true,
+        applicationNumber: true,
+        filingDate: true,
+        title: true,
+        status: true,
+      },
+    },
     // applicationVersions: {} // We'll add logic here later when fetching a single project
   });
 

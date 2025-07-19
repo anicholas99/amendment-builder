@@ -7,6 +7,7 @@ import {
   FiCheck,
   FiX,
 } from 'react-icons/fi';
+import { FileText } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'next/router';
 import { extractTenantFromQuery } from '@/utils/routerTenant';
@@ -17,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useProjectActions } from '../../hooks/useProjectActions';
 import { useToast } from '@/hooks/useToastWrapper';
+import { USPTOApplicationModal } from './USPTOApplicationModal';
 
 interface ProjectCardProps {
   project: {
@@ -24,6 +26,7 @@ interface ProjectCardProps {
     name: string;
     createdAt?: string | number;
     lastUpdated?: string | number;
+    applicationNumber?: string;
     inventionData?: {
       technologyDetails?: unknown;
       claims?: unknown[];
@@ -61,6 +64,7 @@ export const ProjectCard = React.memo<ProjectCardProps>(
     const [editValue, setEditValue] = useState(project.name);
     const [isHovered, setIsHovered] = useState(false);
     const [isCardPressed, setIsCardPressed] = useState(false);
+    const [showUSPTOModal, setShowUSPTOModal] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const { renameProject } = useProjectActions();
     const toast = useToast();
@@ -155,6 +159,14 @@ export const ProjectCard = React.memo<ProjectCardProps>(
       [project.id, handleDocumentSelect]
     );
 
+    const handleUSPTOClick = useCallback(
+      (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setShowUSPTOModal(true);
+      },
+      []
+    );
+
     // Handle card press states to control animation
     const handleCardMouseDown = useCallback(
       (e: React.MouseEvent) => {
@@ -181,7 +193,8 @@ export const ProjectCard = React.memo<ProjectCardProps>(
     }, []);
 
     return (
-      <Card
+      <>
+        <Card
         className={cn(
           // Clean card styling
           'relative z-0 transition-all duration-200 ease-out',
@@ -370,8 +383,29 @@ export const ProjectCard = React.memo<ProjectCardProps>(
               </Badge>
             </div>
 
-            {/* Delete button */}
-            <div className="flex justify-end mt-auto">
+            {/* Action buttons */}
+            <div className="flex justify-between items-center mt-auto">
+              {/* USPTO Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleUSPTOClick}
+                onMouseDown={e => e.stopPropagation()}
+                className={cn(
+                  'flex items-center gap-1.5 h-8 px-3',
+                  'border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300',
+                  'dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20',
+                  'transition-all duration-200',
+                  project.applicationNumber && 'border-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
+                )}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">
+                  {project.applicationNumber ? 'USPTO Linked' : 'Link USPTO'}
+                </span>
+              </Button>
+
+              {/* Delete button */}
               <Button
                 variant="ghost"
                 size="sm"
@@ -389,8 +423,19 @@ export const ProjectCard = React.memo<ProjectCardProps>(
           </div>
         </CardContent>
       </Card>
-    );
-  }
-);
+
+      {/* USPTO Application Modal */}
+      {showUSPTOModal && (
+        <USPTOApplicationModal
+          isOpen={showUSPTOModal}
+          onClose={() => setShowUSPTOModal(false)}
+          projectId={project.id}
+          projectName={project.name}
+          currentApplicationNumber={project.applicationNumber}
+        />
+      )}
+    </>
+  );
+});
 
 ProjectCard.displayName = 'ProjectCard';
