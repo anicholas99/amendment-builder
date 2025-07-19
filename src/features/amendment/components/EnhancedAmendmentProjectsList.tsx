@@ -66,6 +66,9 @@ import { EnhancedStatusBoard } from './EnhancedStatusBoard';
 import { ExaminerAnalyticsPanel } from './ExaminerAnalyticsPanel';
 import { ClaimChangesSummary } from './ClaimChangesSummary';
 import { AlertsRibbon } from './AlertsRibbon';
+import { FocusedActionBanner } from './FocusedActionBanner';
+import { CompactProgressBar } from './CompactProgressBar';
+import { CurrentOACard } from './CurrentOACard';
 
 // Import existing components
 import { OfficeActionUpload } from '@/features/office-actions/components/OfficeActionUpload';
@@ -263,13 +266,25 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
             {/* Prosecution Header */}
             <ProsecutionHeader projectId={projectId} />
             
-            {/* Alerts Ribbon */}
-            <div className="px-6 pb-4">
-              <AlertsRibbon 
-                projectId={projectId} 
-                onAlertClick={handleAlertClick}
+            {/* Single Focused Action Banner */}
+            {prosecutionOverview?.alerts && prosecutionOverview.alerts.length > 0 && (
+              <FocusedActionBanner
+                alerts={prosecutionOverview.alerts}
+                onAction={(alertId) => {
+                  const alert = prosecutionOverview.alerts.find(a => a.id === alertId);
+                  if (alert?.type === 'VALIDATION') {
+                    // Navigate to validation
+                    logger.info('[EnhancedAmendmentProjectsList] Navigate to validation');
+                  } else if (alert?.type === 'DEADLINE') {
+                    // Open draft
+                    const currentAmendment = amendmentProjects[0];
+                    if (currentAmendment) {
+                      handleProjectClick(currentAmendment.id);
+                    }
+                  }
+                }}
               />
-            </div>
+            )}
           </div>
         }
         contentPadding={false}
@@ -296,45 +311,87 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
             </Button>
           </div>
 
-          {/* Dashboard View */}
+          {/* Dashboard View - Focused Layout */}
           {viewMode === 'dashboard' && (
             <div className="space-y-6">
-              {/* Timeline Widget */}
+              {/* Current OA Card - Top Priority */}
+              <CurrentOACard
+                officeAction={prosecutionOverview?.currentOfficeAction}
+                claimValidationNeeded={prosecutionOverview?.claimChanges?.pendingValidation ? 
+                  prosecutionOverview.claimChanges.totalAmendedClaims : 0}
+                onViewDraft={() => {
+                  const currentAmendment = amendmentProjects[0];
+                  if (currentAmendment) {
+                    handleProjectClick(currentAmendment.id);
+                  }
+                }}
+                onValidateClaims={() => {
+                  logger.info('[EnhancedAmendmentProjectsList] Navigate to claim validation');
+                }}
+                onRunAnalysis={() => {
+                  logger.info('[EnhancedAmendmentProjectsList] Run AI analysis');
+                }}
+              />
+
+              {/* Compact Progress Bar */}
+              <CompactProgressBar
+                segments={[
+                  { 
+                    label: 'Draft', 
+                    count: prosecutionOverview?.responseStatus?.draft || 0,
+                    color: 'bg-gray-500 text-white',
+                  },
+                  { 
+                    label: 'Needs Validation', 
+                    count: prosecutionOverview?.responseStatus?.inReview || 0,
+                    color: 'bg-yellow-500 text-white',
+                    isActive: true,
+                  },
+                  { 
+                    label: 'Ready', 
+                    count: prosecutionOverview?.responseStatus?.readyToFile || 0,
+                    color: 'bg-green-500 text-white',
+                  },
+                  { 
+                    label: 'Filed', 
+                    count: prosecutionOverview?.responseStatus?.filed || 0,
+                    color: 'bg-blue-500 text-white',
+                  },
+                ]}
+              />
+
+              {/* Main Content Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left - Claim Changes & Validation */}
+                <ClaimChangesSummary
+                  projectId={projectId}
+                  onViewDiff={handleClaimDiffView}
+                  emphasized={true}
+                />
+
+                {/* Right - Examiner Analytics (conditional) */}
+                {prosecutionOverview?.examinerAnalytics ? (
+                  <ExaminerAnalyticsPanel 
+                    projectId={projectId} 
+                    compact={true}
+                  />
+                ) : (
+                  <Card className="bg-gray-50">
+                    <CardContent className="py-8 text-center">
+                      <p className="text-sm text-gray-600">
+                        Examiner analytics unavailable
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Timeline - Thin Bar at Bottom */}
               <OATimelineWidget
                 projectId={projectId}
                 onEventClick={handleTimelineEventClick}
+                compact={true}
               />
-
-              {/* Main Dashboard Grid */}
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                {/* Left Column - Status & Current OA */}
-                <div className="xl:col-span-2 space-y-6">
-                  <EnhancedStatusBoard
-                    projectId={projectId}
-                    onStatusClick={handleStatusClick}
-                    onCurrentOAClick={() => {
-                      const currentAmendment = amendmentProjects[0];
-                      if (currentAmendment) {
-                        handleProjectClick(currentAmendment.id);
-                      }
-                    }}
-                    onNextActionClick={(action) => {
-                      if (action === 'upload') {
-                        handleCreateNew();
-                      }
-                    }}
-                  />
-                </div>
-
-                {/* Right Column - Analytics & Insights */}
-                <div className="space-y-6">
-                  <ExaminerAnalyticsPanel projectId={projectId} />
-                  <ClaimChangesSummary
-                    projectId={projectId}
-                    onViewDiff={handleClaimDiffView}
-                  />
-                </div>
-              </div>
             </div>
           )}
 
