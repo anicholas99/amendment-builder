@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 
 // Import new components
 import { AmendmentProjectsList } from './AmendmentProjectsList';
+import { EnhancedAmendmentProjectsList } from './EnhancedAmendmentProjectsList';
 import { OfficeActionNavigator } from './OfficeActionNavigator';
 import { AIAssistantPanel } from './AIAssistantPanel';
 import { DraftingWorkspace } from './DraftingWorkspace';
@@ -293,6 +294,13 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
   }, [projectId, selectedOfficeActionId]);
 
   if (showProjects) {
+    // Use enhanced UI by default, with fallback to legacy
+    const useEnhancedUI = process.env.NEXT_PUBLIC_ENHANCED_AMENDMENT_UI !== 'false';
+    
+    if (useEnhancedUI) {
+      return <EnhancedAmendmentProjectsList projectId={projectId} />;
+    }
+    
     return <AmendmentProjectsList projectId={projectId} />;
   }
 

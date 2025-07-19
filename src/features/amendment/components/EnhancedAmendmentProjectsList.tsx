@@ -38,6 +38,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { SimpleMainPanel } from '@/components/common/SimpleMainPanel';
 import { LoadingState } from '@/components/common/LoadingState';
+import ErrorBoundary from '@/components/common/ErrorBoundary';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,6 +73,9 @@ import { useOfficeActions } from '@/hooks/api/useAmendment';
 import { useProsecutionOverview } from '@/hooks/api/useProsecutionOverview';
 import { logger } from '@/utils/clientLogger';
 import { cn } from '@/lib/utils';
+
+// Import legacy component as fallback
+import { AmendmentProjectsList } from './AmendmentProjectsList';
 
 // Keep existing types for backward compatibility
 interface AmendmentProject {
@@ -229,32 +233,30 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
     logger.info('[EnhancedAmendmentProjectsList] Navigate to claim diff view');
   };
 
-  // Legacy mode fallback
-  if (legacyMode) {
-    // Return original component structure (simplified for brevity)
-    return (
-      <SimpleMainPanel
-        header={
-          <div className="p-6 border-b bg-white">
-            <h1 className="text-2xl font-bold text-gray-900">Amendment Responses</h1>
-            <p className="text-gray-600 mt-1">Legacy view - switch to enhanced view for full features</p>
-          </div>
-        }
-        contentPadding={false}
-      >
-        <div className="p-6">
-          <div className="text-center text-gray-500">
-            <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-            <p>Legacy mode - enhanced features disabled</p>
-          </div>
-        </div>
-      </SimpleMainPanel>
-    );
+  // Error handling - fallback to legacy UI on errors
+  if (error) {
+    logger.error('[EnhancedAmendmentProjectsList] Error loading data, falling back to legacy UI', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return <AmendmentProjectsList projectId={projectId} />;
   }
 
-  // Enhanced mode
+  // Legacy mode fallback
+  if (legacyMode) {
+    return <AmendmentProjectsList projectId={projectId} />;
+  }
+
+  // Enhanced mode with error boundary
   return (
-    <>
+    <ErrorBoundary 
+      fallback={<AmendmentProjectsList projectId={projectId} />}
+      onError={(error) => {
+        logger.error('[EnhancedAmendmentProjectsList] Rendering error, falling back to legacy UI', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }}
+    >
+      <>
       <SimpleMainPanel
         header={
           <div className="space-y-0">
@@ -453,5 +455,6 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
         </div>
       )}
     </>
+    </ErrorBoundary>
   );
 }; 

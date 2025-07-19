@@ -541,4 +541,205 @@ export class ProjectService {
       return null;
     }
   }
+
+  /**
+   * Get prosecution overview data for enhanced Amendment UI
+   * Aggregates prosecution timeline, examiner info, and strategic insights
+   */
+  async getProsecutionOverview(
+    projectId: string,
+    userId: string,
+    tenantId: string
+  ): Promise<any> {
+    logger.info('Getting prosecution overview', { projectId, userId, tenantId });
+
+    try {
+      // Verify project access
+      const project = await this.getProjectById(projectId, userId, tenantId);
+      if (!project) {
+        throw new ApplicationError(ErrorCode.PROJECT_NOT_FOUND);
+      }
+
+      // TODO: Implement actual data aggregation from office actions, draft documents, etc.
+      // This is a mock implementation - replace with real data queries
+      const prosecutionOverview = {
+        applicationMetadata: {
+          applicationNumber: project.invention?.applicationNumber || '16/999,999',
+          title: project.invention?.title || project.name,
+          filingDate: project.invention?.filingDate || project.createdAt,
+          artUnit: '3689',
+          examiner: 'Patel, S.',
+          prosecutionStatus: 'PENDING_RESPONSE' as const,
+        },
+        prosecutionTimeline: [
+          {
+            id: '1',
+            type: 'FILING' as const,
+            date: project.createdAt.toISOString(),
+            title: 'Application Filed',
+            status: 'completed',
+          },
+          {
+            id: '2',
+            type: 'OFFICE_ACTION' as const,
+            date: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+            title: 'Non-Final Office Action',
+            status: 'completed',
+            daysFromPrevious: 90,
+          },
+          {
+            id: '3',
+            type: 'RESPONSE' as const,
+            date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+            title: 'Response Filed',
+            status: 'completed',
+            daysFromPrevious: 60,
+          },
+          {
+            id: '4',
+            type: 'OFFICE_ACTION' as const,
+            date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+            title: 'Non-Final Office Action',
+            status: 'current',
+            daysFromPrevious: 23,
+          },
+        ],
+        currentOfficeAction: {
+          id: '4',
+          type: 'NON_FINAL' as const,
+          dateIssued: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+          daysToRespond: 37,
+          responseDeadline: new Date(Date.now() + 37 * 24 * 60 * 60 * 1000).toISOString(),
+          rejectionSummary: {
+            total: 3,
+            byType: { '102': 1, '103': 2 },
+            claimsAffected: ['1-4'],
+            riskLevel: 'MEDIUM' as const,
+          },
+          aiStrategy: {
+            primaryApproach: 'COMBINATION' as const,
+            confidence: 0.78,
+            reasoning: 'Prior art can be distinguished for claim 1; claims 2-4 require amendments',
+          },
+        },
+        responseStatus: {
+          draft: 2,
+          inReview: 1,
+          readyToFile: 0,
+          filed: 5,
+        },
+        claimChanges: {
+          totalAmendedClaims: 3,
+          newClaims: 0,
+          cancelledClaims: 1,
+          lastAmendmentDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          pendingValidation: true,
+          highRiskAmendments: 1,
+        },
+        alerts: [
+          {
+            id: '1',
+            type: 'DEADLINE' as const,
+            severity: 'MEDIUM' as const,
+            title: 'Response Deadline Approaching',
+            message: '37 days remaining to respond to Office Action',
+            actionRequired: true,
+            dueDate: new Date(Date.now() + 37 * 24 * 60 * 60 * 1000).toISOString(),
+          },
+          {
+            id: '2',
+            type: 'VALIDATION' as const,
+            severity: 'HIGH' as const,
+            title: 'Claim Amendments Pending Validation',
+            message: 'Claims 2-3 have been amended but not yet validated',
+            actionRequired: true,
+          },
+        ],
+        prosecutionStatistics: {
+          totalOfficeActions: 2,
+          totalResponses: 1,
+          prosecutionDuration: 180,
+          averageResponseTime: 60,
+          nextMilestone: 'Response Due',
+        },
+        examinerAnalytics: {
+          examiner: {
+            name: 'Patel, S.',
+            artUnit: '3689',
+          },
+          statistics: {
+            allowanceRate: 0.48,
+            averageOAsToAllowance: 2.3,
+            appealSuccessRate: 0.62,
+            averageResponseTime: 45,
+            finalRejectionRate: 0.31,
+          },
+          patterns: {
+            commonRejectionTypes: [
+              { type: '103', frequency: 85, percentage: 0.45 },
+              { type: '102', frequency: 65, percentage: 0.34 },
+              { type: '112', frequency: 40, percentage: 0.21 },
+            ],
+            priorArtPreferences: [
+              { source: 'USPTO Patents', frequency: 120 },
+              { source: 'NPL', frequency: 45 },
+            ],
+            argumentSuccessRates: [
+              { argument: 'Teaching Away', successRate: 0.68 },
+              { argument: 'Commercial Success', successRate: 0.42 },
+            ],
+          },
+        },
+      };
+
+      return prosecutionOverview;
+    } catch (error) {
+      if (error instanceof ApplicationError) throw error;
+      logger.error('Failed to get prosecution overview', {
+        error,
+        projectId,
+        userId,
+        tenantId,
+      });
+      throw new ApplicationError(
+        ErrorCode.INTERNAL_ERROR,
+        'Failed to get prosecution overview'
+      );
+    }
+  }
+
+  /**
+   * Get prosecution timeline for a project
+   */
+  async getProsecutionTimeline(
+    projectId: string,
+    userId: string,
+    tenantId: string
+  ): Promise<any[]> {
+    logger.info('Getting prosecution timeline', { projectId, userId, tenantId });
+
+    try {
+      // Verify project access
+      const project = await this.getProjectById(projectId, userId, tenantId);
+      if (!project) {
+        throw new ApplicationError(ErrorCode.PROJECT_NOT_FOUND);
+      }
+
+      // This would be populated from actual office action and response data
+      const overview = await this.getProsecutionOverview(projectId, userId, tenantId);
+      return overview.prosecutionTimeline;
+    } catch (error) {
+      if (error instanceof ApplicationError) throw error;
+      logger.error('Failed to get prosecution timeline', {
+        error,
+        projectId,
+        userId,
+        tenantId,
+      });
+      throw new ApplicationError(
+        ErrorCode.INTERNAL_ERROR,
+        'Failed to get prosecution timeline'
+      );
+    }
+  }
 }
