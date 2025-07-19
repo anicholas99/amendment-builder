@@ -3,9 +3,9 @@ import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { AuthenticatedRequest } from '@/types/middleware';
 import {
   findDraftDocumentsByProject,
-  upsertDraftDocument,
   batchUpdateDraftDocuments,
   deleteDraftDocumentsByProject,
+  upsertDraftDocumentWithAmendmentProject,
 } from '@/repositories/project';
 import { CustomApiRequest } from '@/types/api';
 import { z } from 'zod';

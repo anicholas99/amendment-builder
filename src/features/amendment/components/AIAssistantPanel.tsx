@@ -182,65 +182,51 @@ const AnalysisHistory = () => {
 
 // Strategy recommendations component
 const StrategyRecommendations = () => {
-  const strategies = [
-    {
-      id: '1',
-      title: 'Focus on Method Claims',
-      description: 'Claims 6-8 have stronger arguments against the cited prior art',
-      priority: 'high' as const,
-      effort: 'Medium',
-      success: '85%',
-    },
-    {
-      id: '2',
-      title: 'Amend Independent Claims',
-      description: 'Add limitations from dependent claims to overcome rejections',
-      priority: 'high' as const,
-      effort: 'High',
-      success: '75%',
-    },
-    {
-      id: '3',
-      title: 'Interview Strategy',
-      description: 'Consider examiner interview for claims 1-3',
-      priority: 'medium' as const,
-      effort: 'Low',
-      success: '60%',
-    },
-  ];
+  // TODO: Fetch real strategy recommendations from the backend once available
+  const strategies: any[] = [];
 
   return (
     <ScrollArea className="h-[400px]">
       <div className="space-y-3">
-        {strategies.map((strategy) => (
-          <Card key={strategy.id} className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0">
-                {strategy.priority === 'high' ? (
-                  <AlertCircle className="h-5 w-5 text-red-500" />
-                ) : (
-                  <TrendingUp className="h-5 w-5 text-blue-500" />
-                )}
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold text-sm mb-1">{strategy.title}</h4>
-                <p className="text-sm text-muted-foreground mb-3">
-                  {strategy.description}
-                </p>
-                <div className="flex items-center gap-4">
-                                     <div className="flex items-center gap-1">
-                     <span className="text-xs text-muted-foreground">Effort:</span>
-                     <Badge variant="outline">{strategy.effort}</Badge>
-                   </div>
-                   <div className="flex items-center gap-1">
-                     <span className="text-xs text-muted-foreground">Success:</span>
-                     <Badge variant="secondary">{strategy.success}</Badge>
-                   </div>
+        {strategies.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <h4 className="font-medium mb-2">No strategy recommendations yet</h4>
+            <p className="text-sm">
+              Run an AI analysis to generate strategic guidance for your response.
+            </p>
+          </div>
+        ) : (
+          strategies.map((strategy) => (
+            <Card key={strategy.id} className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0">
+                  {strategy.priority === 'high' ? (
+                    <AlertCircle className="h-5 w-5 text-red-500" />
+                  ) : (
+                    <TrendingUp className="h-5 w-5 text-blue-500" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-sm mb-1">{strategy.title}</h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {strategy.description}
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground">Effort:</span>
+                      <Badge variant="outline">{strategy.effort}</Badge>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground">Success:</span>
+                      <Badge variant="secondary">{strategy.success}</Badge>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          ))
+        )}
       </div>
     </ScrollArea>
   );

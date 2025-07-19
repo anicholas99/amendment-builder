@@ -54,6 +54,7 @@ export {
   findDraftDocumentsByProject,
   findDraftDocumentByType,
   upsertDraftDocument,
+  upsertDraftDocumentWithAmendmentProject,
   batchUpdateDraftDocuments,
   deleteDraftDocumentsByProject,
   copyDraftDocumentsToVersion,
