@@ -126,6 +126,31 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
   const { data: officeActions = [], isLoading: isLoadingOfficeActions } = useOfficeActions(projectId);
   const { data: selectedOA } = useOfficeAction(selectedOfficeActionId || '');
 
+  // Get the real amendment project for this office action
+  const { data: realAmendmentProject } = useQuery({
+    queryKey: ['amendmentProject', selectedOfficeActionId],
+    queryFn: async () => {
+      if (!selectedOfficeActionId) return null;
+      
+      // Find the real amendment project in the database
+      const response = await fetch(`/api/projects/${projectId}/draft-documents`);
+      if (!response.ok) return null;
+      
+      const draftData = await response.json();
+      
+      // Look for a draft document that has an amendmentProjectId
+      const draftWithAmendmentProject = draftData.documents?.find((doc: any) => doc.amendmentProjectId);
+      
+      if (draftWithAmendmentProject) {
+        console.log('🔍 Found real amendment project ID:', draftWithAmendmentProject.amendmentProjectId);
+        return { id: draftWithAmendmentProject.amendmentProjectId };
+      }
+      
+      return null;
+    },
+    enabled: !!selectedOfficeActionId,
+  });
+
   // Rejection analysis hooks and state
   const { data: analyses, isLoading: analysesLoading, refetch: refetchAnalyses } = useOfficeActionAnalyses(selectedOfficeActionId || '');
   const { data: overallStrategy, refetch: refetchStrategy } = useStrategyRecommendation(selectedOfficeActionId || '');
@@ -343,7 +368,7 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
                 projectId={projectId}
                 selectedOfficeAction={adaptedOfficeAction}
                 selectedOfficeActionId={selectedOfficeActionId}
-                amendmentProjectId={`amendment-${selectedOfficeActionId}`}
+                amendmentProjectId={realAmendmentProject?.id || null}
                 onSave={handleSaveAmendmentDraft}
               />
             )}

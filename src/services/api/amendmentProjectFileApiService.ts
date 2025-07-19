@@ -31,25 +31,33 @@ const AmendmentProjectFileSchema = z.object({
   sizeBytes: z.number().nullable(),
   version: z.number(),
   status: z.string(),
-  tags: z.string().nullable(),
+  tags: z.union([z.string(), z.array(z.string()), z.null()]), // Flexible for different formats
   description: z.string().nullable(),
   extractedText: z.string().nullable(),
-  extractedMetadata: z.string().nullable(),
+  extractedMetadata: z.any().nullable(), // Can be string, object, or null
   uploadedBy: z.string(),
   linkedDraftId: z.string().nullable(),
   parentFileId: z.string().nullable(),
-  exportedAt: z.string().nullable(),
-  filedAt: z.string().nullable(),
+  exportedAt: z.union([z.string(), z.null()]),
+  filedAt: z.union([z.string(), z.null()]),
   createdAt: z.string(),
   updatedAt: z.string(),
-  deletedAt: z.string().nullable(),
-});
+  deletedAt: z.union([z.string(), z.null()]),
+}).passthrough(); // Allow extra fields we don't know about
 
 const AmendmentProjectFileListResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
     files: z.array(AmendmentProjectFileSchema),
     total: z.number(),
+    pagination: z.object({
+      page: z.number(),
+      limit: z.number(),
+      total: z.number(),
+      totalPages: z.number(),
+      hasNextPage: z.boolean(),
+      hasPrevPage: z.boolean(),
+    }).optional(),
     stats: z.object({
       totalFiles: z.number(),
       byType: z.record(z.number()),
@@ -117,17 +125,45 @@ export class AmendmentProjectFileApiService {
       );
 
       if (!response.ok) {
-        throw new ApplicationError(
-          ErrorCode.API_REQUEST_FAILED,
-          `Failed to fetch amendment project files: ${response.status}`
-        );
+              throw new ApplicationError(
+        ErrorCode.API_NETWORK_ERROR,
+        `Failed to fetch amendment project files: ${response.status}`
+      );
       }
 
       const data = await response.json();
-      const validated = AmendmentProjectFileListResponseSchema.parse(data);
+      // The server may wrap the actual payload in a top-level `data` property when
+      // using `apiResponse.ok()`. Detect and unwrap that layer so that the shape
+      // matches the schema we validate against.
+      const payload = data?.data ?? data;
+
+      console.log('🔍 [DEBUG] Unwrapped API payload:', payload);
+      console.log('🔍 [DEBUG] Files array length:', payload?.data?.files?.length);
+      console.log('🔍 [DEBUG] First file sample:', payload?.data?.files?.[0]);
+
+      let validated: any;
+      try {
+        validated = AmendmentProjectFileListResponseSchema.parse(payload);
+        console.log('✅ [DEBUG] Validation passed!');
+      } catch (validationError: any) {
+        console.error('🚨 [DEBUG] Validation failed:', validationError);
+        console.error('🚨 [DEBUG] Validation issues:', validationError.issues);
+
+        // Fall back to best-effort parsing so that the UI can still function.
+        console.warn('⚠️ [DEBUG] Using raw payload due to validation failure');
+        validated = {
+          success: payload?.success ?? true,
+          data: {
+            files: payload?.data?.files || [],
+            total: payload?.data?.total || 0,
+            pagination: payload?.data?.pagination,
+            stats: payload?.data?.stats,
+          },
+        };
+      }
 
       // Transform date strings to Date objects
-      const files = validated.data.files.map(file => ({
+      const files = validated.data.files.map((file: any) => ({
         ...file,
         createdAt: new Date(file.createdAt),
         updatedAt: new Date(file.updatedAt),
@@ -156,7 +192,7 @@ export class AmendmentProjectFileApiService {
       if (error instanceof ApplicationError) throw error;
 
       throw new ApplicationError(
-        ErrorCode.API_REQUEST_FAILED,
+        ErrorCode.API_NETWORK_ERROR,
         `Failed to fetch amendment project files: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }

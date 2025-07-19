@@ -475,7 +475,116 @@ ${AMENDMENT_WORKFLOW_DATA.amendmentResponse.argumentSections.map(arg => arg.cont
 
       console.log(`📄 Created ${amendmentDrafts.length} amendment draft documents`);
 
-      // 10. Create amended claim version
+      // 10. Create amendment project files for realistic file history
+      const amendmentFiles = [
+        {
+          fileType: 'office_action',
+          fileName: 'Final-Office-Action-Dec-2024.pdf',
+          originalName: 'Final Office Action - December 3, 2024.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 245760, // ~240KB
+          version: 1,
+          status: 'ACTIVE',
+          description: 'Final Office Action dated December 3, 2024 with 102/103 rejections',
+          tags: JSON.stringify(['final-oa', 'rejections', 'anderson-reference']),
+          createdAt: new Date('2024-12-03T10:00:00Z')
+        },
+        {
+          fileType: 'prior_art',
+          fileName: 'Anderson-US6789012-Prior-Art.pdf',
+          originalName: 'Anderson et al. - US 6,789,012 - Machine Learning System.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 156743, // ~153KB
+          version: 1,
+          status: 'ACTIVE',
+          description: 'Anderson reference (US 6,789,012) cited in rejection - machine learning patent',
+          tags: JSON.stringify(['prior-art', 'anderson', 'cited-reference']),
+          createdAt: new Date('2024-12-04T14:30:00Z')
+        },
+        {
+          fileType: 'draft_response',
+          fileName: 'Amendment-Response-Draft-v1.docx',
+          originalName: 'Amendment Response to Final OA - Draft Version 1.docx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          sizeBytes: 89432, // ~87KB
+          version: 1,
+          status: 'SUPERSEDED',
+          description: 'Initial draft of amendment response - claims amendments and arguments',
+          tags: JSON.stringify(['draft', 'v1', 'claims-amendments']),
+          createdAt: new Date('2024-12-05T09:15:00Z')
+        },
+        {
+          fileType: 'reference_doc',
+          fileName: 'Williams-Analysis-Notes.pdf',
+          originalName: 'Williams Patent Analysis and Distinguishing Arguments.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 67234, // ~66KB
+          version: 1,
+          status: 'ACTIVE',
+          description: 'Internal analysis of Williams reference and distinguishing arguments',
+          tags: JSON.stringify(['analysis', 'williams', 'distinguishing-art']),
+          createdAt: new Date('2024-12-06T16:45:00Z')
+        },
+        {
+          fileType: 'draft_response',
+          fileName: 'Amendment-Response-Draft-v2.docx',
+          originalName: 'Amendment Response to Final OA - Draft Version 2 REVISED.docx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          sizeBytes: 94567, // ~92KB
+          version: 2,
+          status: 'ACTIVE',
+          description: 'Revised draft with strengthened arguments and refined claim amendments',
+          tags: JSON.stringify(['draft', 'v2', 'revised', 'ready-for-review']),
+          createdAt: new Date('2024-12-07T11:20:00Z')
+        },
+        {
+          fileType: 'export_version',
+          fileName: 'Amendment-Response-Export-v2.docx',
+          originalName: 'Amendment Response - Export for USPTO Filing.docx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          sizeBytes: 94567, // Same as v2 draft
+          version: 1,
+          status: 'ACTIVE',
+          description: 'USPTO-formatted export of amendment response ready for filing',
+          tags: JSON.stringify(['export', 'uspto-format', 'ready-to-file']),
+          exportedAt: new Date('2024-12-07T15:30:00Z'),
+          createdAt: new Date('2024-12-07T15:30:00Z')
+        }
+      ];
+
+      // Create the files with proper version chain linking
+      let previousDraftFileId = null;
+      for (const fileData of amendmentFiles) {
+        const amendmentFile = await tx.amendmentProjectFile.create({
+          data: {
+            amendmentProjectId: amendmentProject.id,
+            tenantId: tenant.id,
+            fileType: fileData.fileType,
+            fileName: fileData.fileName,
+            originalName: fileData.originalName,
+            mimeType: fileData.mimeType,
+            sizeBytes: fileData.sizeBytes,
+            version: fileData.version,
+            status: fileData.status,
+            description: fileData.description,
+            tags: fileData.tags,
+            uploadedBy: user.id,
+            exportedAt: fileData.exportedAt || null,
+            parentFileId: (fileData.fileType === 'draft_response' && fileData.version === 2) ? previousDraftFileId : null,
+            createdAt: fileData.createdAt,
+            updatedAt: fileData.createdAt,
+          },
+        });
+
+        // Track the first draft file ID for version chaining
+        if (fileData.fileType === 'draft_response' && fileData.version === 1) {
+          previousDraftFileId = amendmentFile.id;
+        }
+      }
+
+      console.log(`📁 Created ${amendmentFiles.length} amendment project files for file history`);
+
+      // 11. Create amended claim version
       const amendedClaimVersion = await tx.patentClaimVersion.create({
         data: {
           applicationId: patentApplication.id,
@@ -491,7 +600,7 @@ ${AMENDMENT_WORKFLOW_DATA.amendmentResponse.argumentSections.map(arg => arg.cont
 
       console.log(`📝 Created amended claim version`);
 
-      // 11. Create saved prior art
+      // 12. Create saved prior art
       for (const priorArtData of AMENDMENT_WORKFLOW_DATA.savedPriorArt) {
         await tx.savedPriorArt.create({
           data: {

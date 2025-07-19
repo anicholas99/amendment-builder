@@ -17,13 +17,13 @@ import { AmendmentFileType, AmendmentFileStatus } from '@/types/amendment';
 
 const apiLogger = createApiLogger('amendment-project-files');
 
-// Query validation schema for amendment project ID
-const querySchema = z.object({
+// Path parameter validation schema (validated manually in handler)
+const pathParamsSchema = z.object({
   amendmentProjectId: z.string().uuid('Amendment project ID must be a valid UUID'),
 });
 
-// Query parameters for GET requests
-const getQuerySchema = querySchema.extend({
+// Query parameters for GET requests (excludes path parameters)
+const getQuerySchema = z.object({
   fileType: z.nativeEnum(AmendmentFileType).optional(),
   status: z.nativeEnum(AmendmentFileStatus).optional(),
   search: z.string().max(255).optional(),
@@ -79,7 +79,7 @@ const resolveTenantId = async (req: NextApiRequest): Promise<string | null> => {
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   apiLogger.logRequest(req);
 
-  const { amendmentProjectId } = querySchema.parse(req.query);
+  const { amendmentProjectId } = pathParamsSchema.parse(req.query);
   const { id: userId, tenantId } = req.user!;
 
   // TypeScript safety check - middleware guarantees this
@@ -243,7 +243,7 @@ export default SecurePresets.tenantProtected(
   handler,
   {
     validate: {
-      query: getQuerySchema,
+      query: getQuerySchema, // Only validate actual query params, not path params
       body: createFileSchema,
       bodyMethods: ['POST'],
     },
