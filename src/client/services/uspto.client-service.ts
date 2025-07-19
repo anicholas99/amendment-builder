@@ -60,11 +60,73 @@ const OfficeActionStatusResponseSchema = z.object({
   }),
 });
 
+const ProsecutionDocumentSchema = z.object({
+  documentId: z.string(),
+  documentIdentifier: z.string().optional(),
+  documentCode: z.string(),
+  description: z.string(),
+  documentCodeDescriptionText: z.string().optional(),
+  mailDate: z.string(),
+  officialDate: z.string().optional(),
+  pageCount: z.number().optional(),
+  applicationNumber: z.string().optional(),
+  patentNumber: z.string().optional(),
+  category: z.enum(['office-action', 'response', 'claims', 'citations', 'examiner-notes', 'interview', 'notice', 'other']),
+  importance: z.enum(['core', 'optional', 'low']),
+  isDownloadable: z.boolean(),
+  purpose: z.string().optional(),
+  downloadOptionBag: z.array(z.object({
+    mimeTypeIdentifier: z.string(),
+    downloadUrl: z.string()
+  })).optional(),
+});
+
+const ProsecutionHistoryResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    applicationNumber: z.string(),
+    applicationData: z.object({
+      title: z.string(),
+      filingDate: z.string().optional(),
+      patentNumber: z.string().optional(),
+      issueDate: z.string().optional(),
+      examinerName: z.string().optional(),
+      artUnit: z.string().optional(),
+      status: z.string(),
+      inventorName: z.array(z.string()).optional(),
+      applicantName: z.string().optional(),
+      attorneyDocketNumber: z.string().optional(),
+    }).optional(),
+    documents: z.array(ProsecutionDocumentSchema),
+    statistics: z.object({
+      totalDocuments: z.number(),
+      coreDocuments: z.number(),
+      officeActions: z.number(),
+      responses: z.number(),
+      claims: z.number(),
+      citations: z.number(),
+      examinerNotes: z.number(),
+      interviews: z.number(),
+      notices: z.number(),
+      other: z.number(),
+    }),
+    timeline: z.array(z.object({
+      date: z.string(),
+      type: z.enum(['office-action', 'response', 'claims', 'citations', 'examiner-notes', 'interview', 'notice', 'other']),
+      title: z.string(),
+      documentCode: z.string(),
+      documentId: z.string(),
+    })).optional(),
+  }),
+});
+
 // Types
 export type USPTODocument = z.infer<typeof USPTODocumentSchema>;
 export type ApplicationOfficeActionsResponse = z.infer<typeof ApplicationOfficeActionsResponseSchema>;
 export type OfficeActionDownloadResponse = z.infer<typeof OfficeActionDownloadResponseSchema>;
 export type OfficeActionStatusResponse = z.infer<typeof OfficeActionStatusResponseSchema>;
+export type ProsecutionDocument = z.infer<typeof ProsecutionDocumentSchema>;
+export type ProsecutionHistoryResponse = z.infer<typeof ProsecutionHistoryResponseSchema>;
 
 export interface FetchOfficeActionsOptions {
   includeDocumentContent?: boolean;
@@ -155,11 +217,30 @@ export class USPTOService {
   }
 
   /**
-   * Download a specific Office Action document
+   * Get download URL for a document
+   * Note: With the new API, documents have direct download URLs
    */
   static async downloadOfficeAction(
-    documentId: string
+    document: ProsecutionDocument | { documentId: string, downloadOptionBag?: any[] }
   ): Promise<OfficeActionDownloadResponse['data']> {
+    // For new API, extract download URL from document
+    if ('downloadOptionBag' in document && document.downloadOptionBag && document.downloadOptionBag.length > 0) {
+      const pdfOption = document.downloadOptionBag.find(
+        opt => opt.mimeTypeIdentifier.toLowerCase().includes('pdf')
+      ) || document.downloadOptionBag[0];
+      
+      return {
+        documentId: 'documentId' in document ? document.documentId : 'documentIdentifier' in document ? document.documentIdentifier : '',
+        filename: `document_${document.documentId || 'unknown'}.pdf`,
+        contentType: pdfOption.mimeTypeIdentifier,
+        size: 0, // Size not provided by new API
+        downloadUrl: pdfOption.downloadUrl,
+      };
+    }
+
+    // Fallback to old API endpoint if no download options
+    const documentId = 'documentId' in document ? document.documentId : '';
+    
     if (!documentId) {
       throw new ApplicationError(
         ErrorCode.VALIDATION_REQUIRED_FIELD,
@@ -298,6 +379,65 @@ export class USPTOService {
         : new ApplicationError(
             ErrorCode.API_NETWORK_ERROR,
             'Failed to process Office Action PDF'
+          );
+    }
+  }
+
+  /**
+   * Fetch complete prosecution history for an application
+   */
+  static async fetchProsecutionHistory(
+    applicationNumber: string,
+    includeTimeline = false
+  ): Promise<ProsecutionHistoryResponse['data']> {
+    if (!applicationNumber) {
+      throw new ApplicationError(
+        ErrorCode.VALIDATION_REQUIRED_FIELD,
+        'Application number is required'
+      );
+    }
+
+    try {
+      logger.debug('Fetching USPTO prosecution history', { 
+        applicationNumber,
+        includeTimeline 
+      });
+
+      const queryParams = new URLSearchParams();
+      if (includeTimeline) {
+        queryParams.append('includeTimeline', 'true');
+      }
+
+      const url = `${API_ROUTES.USPTO.PROSECUTION_HISTORY(applicationNumber)}${
+        queryParams.toString() ? `?${queryParams.toString()}` : ''
+      }`;
+
+      const response = await apiFetch(url);
+      const data = await response.json();
+
+      const validated = validateApiResponse(
+        data,
+        ProsecutionHistoryResponseSchema
+      );
+
+      logger.debug('USPTO prosecution history fetched successfully', {
+        applicationNumber,
+        documentCount: validated.data.documents.length,
+        statistics: validated.data.statistics,
+      });
+
+      return validated.data;
+    } catch (error) {
+      logger.error('Error fetching USPTO prosecution history', { 
+        error, 
+        applicationNumber 
+      });
+      
+      throw error instanceof ApplicationError
+        ? error
+        : new ApplicationError(
+            ErrorCode.API_NETWORK_ERROR,
+            'Failed to fetch prosecution history from USPTO'
           );
     }
   }

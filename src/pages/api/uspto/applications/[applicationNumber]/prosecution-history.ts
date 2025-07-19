@@ -5,18 +5,22 @@ import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { SecurePresets } from '@/server/api/securePresets';
 import { AuthenticatedRequest } from '@/types/middleware';
 import { apiResponse } from '@/utils/api/responses';
-import { hasOfficeActions } from '@/lib/api/uspto/services/officeActionService';
+import { fetchProsecutionHistory, getProsecutionTimeline } from '@/lib/api/uspto/services/prosecutionHistoryService';
 
-const apiLogger = createApiLogger('uspto-status-check');
+const apiLogger = createApiLogger('uspto-prosecution-history');
 
 // Query schema
 const querySchema = z.object({
   applicationNumber: z.string().min(1, 'Application number is required'),
+  includeTimeline: z
+    .string()
+    .optional()
+    .transform(val => val === 'true'),
 });
 
 /**
- * USPTO Application Status API Handler
- * Checks if an application has Office Actions
+ * USPTO Prosecution History API Handler
+ * Fetches complete prosecution history for a patent application
  */
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   apiLogger.logRequest(req);
@@ -29,33 +33,40 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 
   try {
-    const { applicationNumber } = querySchema.parse(req.query);
+    const { applicationNumber, includeTimeline } = querySchema.parse(req.query);
     const { userId, tenantId } = req.user!;
 
-    apiLogger.info('Checking USPTO application status', {
+    apiLogger.info('Fetching USPTO prosecution history', {
       applicationNumber,
+      includeTimeline,
       userId,
       tenantId,
     });
 
-    // Check if the application has Office Actions
-    const hasOAs = await hasOfficeActions(applicationNumber);
+    // Fetch prosecution history from USPTO
+    const history = await fetchProsecutionHistory(applicationNumber);
 
-    apiLogger.info('USPTO application status checked', {
+    // Generate timeline if requested
+    let timeline;
+    if (includeTimeline) {
+      timeline = getProsecutionTimeline(history);
+    }
+
+    apiLogger.info('USPTO prosecution history fetched successfully', {
       applicationNumber,
-      hasOfficeActions: hasOAs,
+      documentCount: history.documents.length,
+      statistics: history.statistics,
     });
 
     return apiResponse.ok(res, {
       success: true,
       data: {
-        applicationNumber,
-        hasOfficeActions: hasOAs,
-        lastChecked: new Date().toISOString(),
+        ...history,
+        timeline,
       },
     });
   } catch (error) {
-    apiLogger.errorSafe('Failed to check USPTO application status', error as Error);
+    apiLogger.errorSafe('Failed to fetch USPTO prosecution history', error as Error);
     
     if (error instanceof ApplicationError) {
       throw error;
@@ -63,15 +74,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     
     throw new ApplicationError(
       ErrorCode.API_NETWORK_ERROR,
-      'Failed to check application status'
+      'Failed to fetch prosecution history from USPTO'
     );
   }
 }
 
-// SECURITY: Requires authentication
+// SECURITY: This endpoint requires authentication
+// Public USPTO data, so no tenant context needed
 export default SecurePresets.userPrivate(handler, {
   validate: {
     query: querySchema,
   },
-  rateLimit: 'api', // Use standard API rate limit for status checks
+  rateLimit: 'search',
 });

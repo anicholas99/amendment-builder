@@ -113,7 +113,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 // SECURITY: Requires authentication for tracking and rate limiting
-export default SecurePresets.authenticated(handler, {
+export default SecurePresets.userPrivate(handler, {
   validate: {
     query: querySchema,
   },

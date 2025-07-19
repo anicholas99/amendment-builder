@@ -13,7 +13,7 @@ import {
   useProcessUSPTODocument,
 } from '@/hooks/api/useUSPTO';
 import { OFFICE_ACTION_CODES } from '@/lib/api/uspto/types';
-import { formatDate } from '@/utils/formatters';
+import { format } from 'date-fns';
 import { MinimalSpinner } from '@/components/common/MinimalSpinner';
 
 interface USPTOOfficeActionFetcherProps {
@@ -42,6 +42,15 @@ export const USPTOOfficeActionFetcher: React.FC<USPTOOfficeActionFetcherProps> =
       return `${clean.slice(0, 2)}/${clean.slice(2, 5)},${clean.slice(5)}`;
     }
     return appNum;
+  };
+
+  // Format date helper
+  const formatDate = (dateString: string) => {
+    try {
+      return format(new Date(dateString), 'MMM dd, yyyy');
+    } catch {
+      return dateString;
+    }
   };
 
   // USPTO data fetching

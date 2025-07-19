@@ -13,7 +13,8 @@ import {
   USPTODocumentsResponse,
   USPTOApplicationData,
   USPTOError,
-  USPTOSearchParams
+  USPTOSearchParams,
+  USPTODocument
 } from './types';
 
 // Constants
@@ -33,15 +34,26 @@ const buildHeaders = (): HeadersInit => {
   const apiKey = environment.uspto.apiKey;
   
   if (!apiKey) {
+    logger.error('USPTO API key not found in environment', {
+      hasKey: !!environment.uspto.apiKey,
+      envKeys: Object.keys(environment.uspto || {}),
+    });
     throw new ApplicationError(
       ErrorCode.CONFIGURATION_ERROR,
       'USPTO API key is not configured'
     );
   }
 
+  // Log that we have the key (but not the key itself for security)
+  logger.debug('USPTO API headers built', {
+    hasApiKey: !!apiKey,
+    keyLength: apiKey.length,
+    keyPrefix: apiKey.substring(0, 4) + '...',
+  });
+
   return {
     'Accept': 'application/json',
-    'X-API-KEY': apiKey,
+    'X-API-KEY': apiKey, // USPTO requires uppercase header for AWS API Gateway
     'User-Agent': 'AmendmentBuilder/1.0',
   };
 };
@@ -69,6 +81,7 @@ const handleApiError = async (response: Response, url: string): Promise<never> =
     status: response.status,
     statusText: response.statusText,
     error: errorBody,
+    headers: Object.fromEntries(response.headers.entries()),
   });
 
   // Map status codes to application errors
@@ -108,7 +121,10 @@ export const callUSPTOApi = async <T>(
   endpoint: string,
   options: USPTOApiOptions = {}
 ): Promise<T> => {
-  const baseUrl = environment.uspto.apiUrl;
+  // Temporarily hardcode the correct URL until environment is fixed
+  // TODO: Fix environment variable USPTO_ODP_API_URL to use https://api.uspto.gov/api/v1
+  // Currently it seems to be set to https://api.uspto.gov/patent/v1 which is incorrect
+  const baseUrl = 'https://api.uspto.gov/api/v1';
   const url = `${baseUrl}${endpoint}`;
   const timeout = options.timeout || DEFAULT_TIMEOUT;
   const maxRetries = options.maxRetries ?? MAX_RETRIES;
@@ -122,9 +138,17 @@ export const callUSPTOApi = async <T>(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
+      const headers = buildHeaders();
+      
+      logger.debug('Making USPTO API request', {
+        url,
+        method: 'GET',
+        hasApiKey: !!headers['X-API-KEY'],
+      });
+      
       const response = await fetch(url, {
         method: 'GET',
-        headers: buildHeaders(),
+        headers,
         signal: controller.signal,
       });
 
@@ -188,7 +212,7 @@ export const callUSPTOApi = async <T>(
 export const getApplicationDocuments = async (
   applicationNumber: string,
   options?: USPTOApiOptions
-): Promise<USPTODocumentsResponse> => {
+): Promise<USPTODocument[]> => {
   if (!applicationNumber) {
     throw new ApplicationError(
       ErrorCode.INVALID_INPUT,
@@ -199,59 +223,50 @@ export const getApplicationDocuments = async (
   // Remove any formatting from application number (e.g., 13/937,148 -> 13937148)
   const cleanAppNumber = applicationNumber.replace(/[^\d]/g, '');
   
-  const endpoint = `/patent/filewrapper/documents/${cleanAppNumber}`;
-  return callUSPTOApi<USPTODocumentsResponse>(endpoint, options);
+  // Use the correct endpoint that actually works
+  const endpoint = `/patent/applications/${cleanAppNumber}/documents`;
+  
+  logger.debug('Fetching USPTO documents', {
+    endpoint,
+    applicationNumber: cleanAppNumber,
+  });
+  
+  const response = await callUSPTOApi<USPTODocumentsResponse>(endpoint, options);
+  
+  // Extract documents from the response
+  const documents = response.documentBag || [];
+  
+  logger.info('USPTO documents fetched', {
+    applicationNumber: cleanAppNumber,
+    documentCount: documents.length,
+    totalCount: response.count,
+  });
+  
+  return documents;
 };
 
 /**
- * Download a document PDF
+ * Get document download URL
+ * Note: The new API returns download URLs that can be accessed directly
  */
-export const downloadDocument = async (
-  documentId: string,
-  options?: USPTOApiOptions
-): Promise<ArrayBuffer> => {
-  if (!documentId) {
-    throw new ApplicationError(
-      ErrorCode.INVALID_INPUT,
-      'Document ID is required'
-    );
+export const getDocumentDownloadUrl = (
+  document: USPTODocument
+): string | null => {
+  if (!document.downloadOptionBag || document.downloadOptionBag.length === 0) {
+    return null;
   }
 
-  const baseUrl = environment.uspto.apiUrl;
-  const url = `${baseUrl}/patent/filewrapper/documents/download/${documentId}`;
-  const timeout = options?.timeout || DEFAULT_TIMEOUT;
-
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: buildHeaders(),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      await handleApiError(response, url);
-    }
-
-    const buffer = await response.arrayBuffer();
-    
-    logger.debug('USPTO document download successful', {
-      documentId,
-      size: buffer.byteLength,
-    });
-
-    return buffer;
-  } catch (error) {
-    logger.error('USPTO document download failed', {
-      documentId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
+  // Prefer PDF format
+  const pdfOption = document.downloadOptionBag.find(
+    option => option.mimeTypeIdentifier.toLowerCase().includes('pdf')
+  );
+  
+  if (pdfOption) {
+    return pdfOption.downloadUrl;
   }
+
+  // Fall back to first available option
+  return document.downloadOptionBag[0].downloadUrl;
 };
 
 /**

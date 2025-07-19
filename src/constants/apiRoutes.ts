@@ -402,6 +402,8 @@ export const API_ROUTES = {
   USPTO: {
     OFFICE_ACTIONS: (applicationNumber: string) => 
       `/api/uspto/applications/${applicationNumber}/office-actions`,
+    PROSECUTION_HISTORY: (applicationNumber: string) => 
+      `/api/uspto/applications/${applicationNumber}/prosecution-history`,
     DOWNLOAD_DOCUMENT: (documentId: string) => 
       `/api/uspto/documents/${documentId}/download`,
     CHECK_STATUS: (applicationNumber: string) => 

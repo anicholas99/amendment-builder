@@ -102,7 +102,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
 // SECURITY: This endpoint requires authentication but not tenant context
 // as it's fetching public USPTO data
-export default SecurePresets.authenticated(handler, {
+export default SecurePresets.userPrivate(handler, {
   validate: {
     query: querySchema,
   },

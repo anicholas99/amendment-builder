@@ -5,19 +5,29 @@
  * Reference: https://api.uspto.gov
  */
 
+export interface USPTODownloadOption {
+  mimeTypeIdentifier: string;
+  downloadUrl: string;
+}
+
 export interface USPTODocument {
+  applicationNumberText?: string;
   documentCode: string;
-  description: string;
-  documentId: string;
-  mailDate: string;
+  documentCodeDescriptionText: string;
+  documentIdentifier: string;
+  officialDate?: string;
+  directionCategory?: string;
+  downloadOptionBag?: USPTODownloadOption[];
   pageCount?: number;
-  applicationNumber?: string;
-  patentNumber?: string;
+  // Legacy fields for compatibility
+  description?: string;
+  documentId?: string;
+  mailDate?: string;
 }
 
 export interface USPTODocumentsResponse {
-  documents: USPTODocument[];
-  totalCount?: number;
+  count: number;
+  documentBag: USPTODocument[];
 }
 
 export interface USPTOApplicationData {
