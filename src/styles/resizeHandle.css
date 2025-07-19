@@ -110,3 +110,21 @@
   word-break: break-word;
   contain: layout style;
 }
+
+/* --- Chat Overflow Fixes --- */
+.ai-assistant-panel pre,
+.ai-assistant-panel code {
+  white-space: pre-wrap !important; /* allow wrapping inside code blocks */
+  word-break: break-word !important;
+  overflow-x: auto !important; /* horizontal scroll if still needed */
+  max-width: 100% !important;
+}
+
+.ai-assistant-panel a {
+  word-break: break-all !important; /* break long URLs */
+}
+
+.ai-assistant-panel * {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}

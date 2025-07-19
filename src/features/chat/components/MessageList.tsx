@@ -87,7 +87,7 @@ const MessageItem = forwardRef<
 
           <div
             className={cn(
-              'max-w-[90%] md:max-w-[95%] px-3 md:px-4 py-2.5 md:py-3 text-sm',
+              'flex-1 min-w-0 px-3 md:px-4 py-2.5 md:py-3 text-sm max-w-[calc(100%-3rem)]',
               // Background and colors
               isAssistant
                 ? 'bg-muted text-foreground border border-border/50'
