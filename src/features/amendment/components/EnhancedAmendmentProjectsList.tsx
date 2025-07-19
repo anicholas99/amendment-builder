@@ -36,9 +36,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { SimpleMainPanel } from '@/components/common/SimpleMainPanel';
 import { LoadingState } from '@/components/common/LoadingState';
-import ErrorBoundary from '@/components/common/ErrorBoundary';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -251,235 +249,223 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
 
   // Enhanced mode with error boundary
   return (
-    <ErrorBoundary 
-      fallback={<AmendmentProjectsList projectId={projectId} />}
-      onError={(error) => {
-        logger.error('[EnhancedAmendmentProjectsList] Rendering error, falling back to legacy UI', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }}
-    >
-      <>
-      <SimpleMainPanel
-        header={
-          <div className="space-y-0">
-            {/* Prosecution Header */}
-            <ProsecutionHeader projectId={projectId} />
-            
-            {/* Single Focused Action Banner */}
-            {prosecutionOverview?.alerts && prosecutionOverview.alerts.length > 0 && (
-              <FocusedActionBanner
-                alerts={prosecutionOverview.alerts}
-                onAction={(alertId) => {
-                  const alert = prosecutionOverview.alerts.find(a => a.id === alertId);
-                  if (alert?.type === 'VALIDATION') {
-                    // Navigate to validation
-                    logger.info('[EnhancedAmendmentProjectsList] Navigate to validation');
-                  } else if (alert?.type === 'DEADLINE') {
-                    // Open draft
+    <>
+      {/* Use full height container instead of SimpleMainPanel */}
+      <div className="h-full flex flex-col bg-card border border-border shadow-lg overflow-hidden">
+        {/* Fixed header */}
+        <div className="flex-shrink-0 bg-card border-b border-border p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Amendment Builder</h1>
+              <p className="text-sm text-gray-600 mt-1">
+                Manage amendment responses and prosecution workflow
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowUploadModal(true)}
+                className="flex items-center gap-2"
+              >
+                <Upload className="h-4 w-4" />
+                Upload OA
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Scrollable content area */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+          <div className="p-6 space-y-6">
+            {/* View Toggle & Actions */}
+            <div className="flex items-center justify-between">
+              <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'dashboard' | 'list')}>
+                <TabsList>
+                  <TabsTrigger value="dashboard">
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Dashboard
+                  </TabsTrigger>
+                  <TabsTrigger value="list">
+                    <FileText className="h-4 w-4 mr-2" />
+                    List View
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              
+              <Button onClick={handleCreateNew} className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="h-4 w-4 mr-2" />
+                New Response
+              </Button>
+            </div>
+
+            {/* Dashboard View - Focused Layout */}
+            {viewMode === 'dashboard' && (
+              <div className="space-y-6">
+                {/* Current OA Card - Top Priority */}
+                <CurrentOACard
+                  officeAction={prosecutionOverview?.currentOfficeAction}
+                  claimValidationNeeded={prosecutionOverview?.claimChanges?.pendingValidation ? 
+                    prosecutionOverview.claimChanges.totalAmendedClaims : 0}
+                  onViewDraft={() => {
                     const currentAmendment = amendmentProjects[0];
                     if (currentAmendment) {
                       handleProjectClick(currentAmendment.id);
                     }
-                  }
-                }}
-              />
-            )}
-          </div>
-        }
-        contentPadding={false}
-      >
-        <div className="p-6 space-y-6">
-          {/* View Toggle & Actions */}
-          <div className="flex items-center justify-between">
-            <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'dashboard' | 'list')}>
-              <TabsList>
-                <TabsTrigger value="dashboard">
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  Dashboard
-                </TabsTrigger>
-                <TabsTrigger value="list">
-                  <FileText className="h-4 w-4 mr-2" />
-                  List View
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            
-            <Button onClick={handleCreateNew} className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="h-4 w-4 mr-2" />
-              New Response
-            </Button>
-          </div>
-
-          {/* Dashboard View - Focused Layout */}
-          {viewMode === 'dashboard' && (
-            <div className="space-y-6">
-              {/* Current OA Card - Top Priority */}
-              <CurrentOACard
-                officeAction={prosecutionOverview?.currentOfficeAction}
-                claimValidationNeeded={prosecutionOverview?.claimChanges?.pendingValidation ? 
-                  prosecutionOverview.claimChanges.totalAmendedClaims : 0}
-                onViewDraft={() => {
-                  const currentAmendment = amendmentProjects[0];
-                  if (currentAmendment) {
-                    handleProjectClick(currentAmendment.id);
-                  }
-                }}
-                onValidateClaims={() => {
-                  logger.info('[EnhancedAmendmentProjectsList] Navigate to claim validation');
-                }}
-                onRunAnalysis={() => {
-                  logger.info('[EnhancedAmendmentProjectsList] Run AI analysis');
-                }}
-              />
-
-              {/* Compact Progress Bar */}
-              <CompactProgressBar
-                segments={[
-                  { 
-                    label: 'Draft', 
-                    count: prosecutionOverview?.responseStatus?.draft || 0,
-                    color: 'bg-gray-500 text-white',
-                  },
-                  { 
-                    label: 'Needs Validation', 
-                    count: prosecutionOverview?.responseStatus?.inReview || 0,
-                    color: 'bg-yellow-500 text-white',
-                    isActive: true,
-                  },
-                  { 
-                    label: 'Ready', 
-                    count: prosecutionOverview?.responseStatus?.readyToFile || 0,
-                    color: 'bg-green-500 text-white',
-                  },
-                  { 
-                    label: 'Filed', 
-                    count: prosecutionOverview?.responseStatus?.filed || 0,
-                    color: 'bg-blue-500 text-white',
-                  },
-                ]}
-              />
-
-              {/* Main Content Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Left - Claim Changes & Validation */}
-                <ClaimChangesSummary
-                  projectId={projectId}
-                  onViewDiff={handleClaimDiffView}
-                  emphasized={true}
+                  }}
+                  onValidateClaims={() => {
+                    logger.info('[EnhancedAmendmentProjectsList] Navigate to claim validation');
+                  }}
+                  onRunAnalysis={() => {
+                    logger.info('[EnhancedAmendmentProjectsList] Run AI analysis');
+                  }}
                 />
 
-                {/* Right - Examiner Analytics (conditional) */}
-                {prosecutionOverview?.examinerAnalytics ? (
-                  <ExaminerAnalyticsPanel 
-                    projectId={projectId} 
-                    compact={true}
-                  />
-                ) : (
-                  <Card className="bg-gray-50">
-                    <CardContent className="py-8 text-center">
-                      <p className="text-sm text-gray-600">
-                        Examiner analytics unavailable
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+                {/* Compact Progress Bar */}
+                <CompactProgressBar
+                  segments={[
+                    { 
+                      label: 'Draft', 
+                      count: prosecutionOverview?.responseStatus?.draft || 0,
+                      color: 'bg-gray-500 text-white',
+                    },
+                    { 
+                      label: 'Needs Validation', 
+                      count: prosecutionOverview?.responseStatus?.inReview || 0,
+                      color: 'bg-yellow-500 text-white',
+                      isActive: true,
+                    },
+                    { 
+                      label: 'Ready', 
+                      count: prosecutionOverview?.responseStatus?.readyToFile || 0,
+                      color: 'bg-green-500 text-white',
+                    },
+                    { 
+                      label: 'Filed', 
+                      count: prosecutionOverview?.responseStatus?.filed || 0,
+                      color: 'bg-blue-500 text-white',
+                    },
+                  ]}
+                />
 
-              {/* Timeline - Thin Bar at Bottom */}
-              <OATimelineWidget
-                projectId={projectId}
-                onEventClick={handleTimelineEventClick}
-                compact={true}
-              />
-            </div>
-          )}
-
-          {/* List View */}
-          {viewMode === 'list' && (
-            <div className="space-y-6">
-              {/* Search and Filters */}
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Search amendment responses..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-[200px]">
-                    <Filter className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="Filter by status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="DRAFT">Draft</SelectItem>
-                    <SelectItem value="IN_REVIEW">In Review</SelectItem>
-                    <SelectItem value="READY_TO_FILE">Ready to File</SelectItem>
-                    <SelectItem value="FILED">Filed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Projects List */}
-              {isLoading ? (
-                <LoadingState message="Loading amendment responses..." />
-              ) : filteredProjects.length === 0 ? (
-                <div className="text-center py-12">
-                  <Upload className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-medium text-gray-900 mb-2">No amendment responses yet</h3>
-                  <p className="text-gray-600 mb-6">
-                    Upload an Office Action to start creating your first amendment response
-                  </p>
-                  <Button onClick={handleCreateNew} size="lg">
-                    <Plus className="h-5 w-5 mr-2" />
-                    Create First Response
-                  </Button>
-                </div>
-              ) : (
+                {/* Main Content Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {filteredProjects.map((project) => (
-                    <Card 
-                      key={project.id}
-                      className="cursor-pointer transition-all hover:shadow-lg border-l-4 border-l-blue-500"
-                      onClick={() => handleProjectClick(project.id)}
-                    >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center justify-between">
-                          <h3 className="font-medium text-gray-900">{project.name}</h3>
-                          <Badge>
-                            {project.status.replace('_', ' ')}
-                          </Badge>
-                        </div>
-                        {project.dueDate && (
-                          <p className="text-sm text-gray-600">
-                            Due {formatDistanceToNow(project.dueDate, { addSuffix: true })}
-                          </p>
-                        )}
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">
-                            {project.officeAction.rejectionCount || 0} rejection{project.officeAction.rejectionCount !== 1 ? 's' : ''}
-                          </span>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4 mr-1" />
-                            Open
-                          </Button>
-                        </div>
+                  {/* Left - Claim Changes & Validation */}
+                  <ClaimChangesSummary
+                    projectId={projectId}
+                    onViewDiff={handleClaimDiffView}
+                    emphasized={true}
+                  />
+
+                  {/* Right - Examiner Analytics (conditional) */}
+                  {prosecutionOverview?.examinerAnalytics ? (
+                    <ExaminerAnalyticsPanel 
+                      projectId={projectId}
+                    />
+                  ) : (
+                    <Card className="bg-gray-50">
+                      <CardContent className="py-8 text-center">
+                        <p className="text-sm text-gray-600">
+                          Examiner analytics unavailable
+                        </p>
                       </CardContent>
                     </Card>
-                  ))}
+                  )}
                 </div>
-              )}
-            </div>
-          )}
+
+                {/* Timeline - Thin Bar at Bottom */}
+                <OATimelineWidget
+                  projectId={projectId}
+                  onEventClick={handleTimelineEventClick}
+                />
+              </div>
+            )}
+
+            {/* List View */}
+            {viewMode === 'list' && (
+              <div className="space-y-6">
+                {/* Search and Filters */}
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Search amendment responses..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full sm:w-[200px]">
+                      <Filter className="h-4 w-4 mr-2" />
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="DRAFT">Draft</SelectItem>
+                      <SelectItem value="IN_REVIEW">In Review</SelectItem>
+                      <SelectItem value="READY_TO_FILE">Ready to File</SelectItem>
+                      <SelectItem value="FILED">Filed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Projects List */}
+                {isLoading ? (
+                  <LoadingState message="Loading amendment responses..." />
+                ) : filteredProjects.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Upload className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-medium text-gray-900 mb-2">No amendment responses yet</h3>
+                    <p className="text-gray-600 mb-6">
+                      Upload an Office Action to start creating your first amendment response
+                    </p>
+                    <Button onClick={handleCreateNew} size="lg">
+                      <Plus className="h-5 w-5 mr-2" />
+                      Create First Response
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {filteredProjects.map((project) => (
+                      <Card 
+                        key={project.id}
+                        className="cursor-pointer transition-all hover:shadow-lg border-l-4 border-l-blue-500"
+                        onClick={() => handleProjectClick(project.id)}
+                      >
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <h3 className="font-medium text-gray-900">{project.name}</h3>
+                            <Badge>
+                              {project.status.replace('_', ' ')}
+                            </Badge>
+                          </div>
+                          {project.dueDate && (
+                            <p className="text-sm text-gray-600">
+                              Due {formatDistanceToNow(project.dueDate, { addSuffix: true })}
+                            </p>
+                          )}
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600">
+                              {project.officeAction.rejectionCount || 0} rejection{project.officeAction.rejectionCount !== 1 ? 's' : ''}
+                            </span>
+                            <Button variant="ghost" size="sm">
+                              <Eye className="h-4 w-4 mr-1" />
+                              Open
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </SimpleMainPanel>
+      </div>
 
       {/* Upload Modal */}
       {showUploadModal && (
@@ -512,6 +498,5 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
         </div>
       )}
     </>
-    </ErrorBoundary>
   );
 }; 

@@ -52,7 +52,8 @@
       "Bash(# Check a sample of medium priority files\nfiles=(\n  \"/mnt/c/Users/anthony.nicholas/patent-drafter-ai/src/components/AuthGuard.tsx\"\n  \"/mnt/c/Users/anthony.nicholas/patent-drafter-ai/src/hooks/api/useFigures.ts\"\n  \"/mnt/c/Users/anthony.nicholas/patent-drafter-ai/src/hooks/api/useClaimOperations.ts\"\n  \"/mnt/c/Users/anthony.nicholas/patent-drafter-ai/src/features/search/components/PriorArtPanel.tsx\"\n  \"/mnt/c/Users/anthony.nicholas/patent-drafter-ai/src/features/search/components/SearchTabContainer.tsx\"\n  \"/mnt/c/Users/anthony.nicholas/patent-drafter-ai/src/pages/api/projects/[projectId]/chat/stream.ts\"\n  \"/mnt/c/Users/anthony.nicholas/patent-drafter-ai/src/pages/api/projects/[projectId]/claims/index.ts\"\n  \"/mnt/c/Users/anthony.nicholas/patent-drafter-ai/src/lib/ai/tools/claimTools.ts\"\n  \"/mnt/c/Users/anthony.nicholas/patent-drafter-ai/src/lib/ai/tools/figureTools.ts\"\n  \"/mnt/c/Users/anthony.nicholas/patent-drafter-ai/src/lib/ai/tools/patentTools.ts\"\n)\n\nfor file in \"${files[@]}\"; do\n  if [ -f \"$file\" ]; then\n    lines=$(wc -l < \"$file\")\n    echo \"$file: $lines lines\"\n  else\n    echo \"$file: DOES NOT EXIST\"\n  fi\ndone)",
       "Bash(cp:*)",
       "Bash(python3:*)",
-      "Bash(./node_modules/.bin/eslint:*)"
+      "Bash(./node_modules/.bin/eslint:*)",
+      "Bash(awk:*)"
     ],
     "deny": []
   }

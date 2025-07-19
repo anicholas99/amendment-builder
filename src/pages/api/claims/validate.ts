@@ -71,48 +71,32 @@ async function handler(
     // Trigger async validation (non-blocking)
     setImmediate(async () => {
       try {
-        // Simulate validation logic - replace with actual AI validation
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // Use real validation service
+        const { ClaimValidationService } = await import('@/server/services/claimValidation.server-service');
+        const validationService = new ClaimValidationService();
         
-        // Mock validation result - replace with actual logic
-        const mockRisk = Math.random();
-        let state: ValidationState;
-        let riskLevel: RiskLevel;
-        let message: string;
-
-        if (mockRisk < 0.6) {
-          state = ValidationState.PASSED_LOW;
-          riskLevel = RiskLevel.LOW;
-          message = 'Claim validated successfully with low risk';
-        } else if (mockRisk < 0.85) {
-          state = ValidationState.PASSED_MED;
-          riskLevel = RiskLevel.MEDIUM;
-          message = 'Claim validated with medium risk - review recommended';
-        } else {
-          state = ValidationState.PASSED_HIGH;
-          riskLevel = RiskLevel.HIGH;
-          message = 'High risk detected - manual review strongly recommended';
-        }
+        const result = await validationService.validateClaim({
+          claimId,
+          claimText,
+          projectId,
+          tenantId,
+        });
 
         // Update validation result
         await prisma.claimValidation.update({
           where: { id: validation.id },
           data: {
-            validationState: state,
-            riskLevel,
-            message,
-            details: JSON.stringify({
-              issuesFound: mockRisk > 0.6 ? Math.floor(mockRisk * 5) : 0,
-              suggestions: mockRisk > 0.6 ? ['Consider narrowing scope', 'Add dependent claims'] : [],
-              confidence: 0.85,
-            }),
+            validationState: result.state,
+            riskLevel: result.riskLevel,
+            message: result.message,
+            details: JSON.stringify(result.details),
           },
         });
 
         logger.info('[ValidationAPI] Claim validation completed', {
           claimId,
-          state,
-          riskLevel,
+          state: result.state,
+          riskLevel: result.riskLevel,
         });
       } catch (error) {
         // Update to failed state on error
