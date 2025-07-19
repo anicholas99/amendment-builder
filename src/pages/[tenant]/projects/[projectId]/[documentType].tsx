@@ -13,24 +13,25 @@ import { useViewTransition } from '@/hooks/navigation/useViewTransition';
 import type { DocumentType } from '@/types/project';
 
 // Lazy load all views to optimize initial bundle size
-const TechnologyDetailsViewClean = lazy(
-  () =>
-    import(
-      '../../../../features/technology-details/components/TechnologyDetailsViewClean'
-    )
-);
-const ClaimRefinementViewClean = lazy(
-  () =>
-    import(
-      '../../../../features/claim-refinement/components/ClaimRefinementViewCleanLazy'
-    )
-);
-const PatentApplicationViewClean = lazy(
-  () =>
-    import(
-      '../../../../features/patent-application/components/PatentApplicationViewClean'
-    )
-);
+// DEPRECATED: These views are no longer used - redirecting to Amendment Studio
+// const TechnologyDetailsViewClean = lazy(
+//   () =>
+//     import(
+//       '../../../../features/technology-details/components/TechnologyDetailsViewClean'
+//     )
+// );
+// const ClaimRefinementViewClean = lazy(
+//   () =>
+//     import(
+//       '../../../../features/claim-refinement/components/ClaimRefinementViewCleanLazy'
+//     )
+// );
+// const PatentApplicationViewClean = lazy(
+//   () =>
+//     import(
+//       '../../../../features/patent-application/components/PatentApplicationViewClean'
+//     )
+// );
 const AmendmentStudio = lazy(
   () =>
     import(
@@ -177,17 +178,21 @@ export default function DocumentTypePage() {
   // Set the view type based on the document type
   const documentType = routerDocumentType || 'technology';
 
-  // Update view type in effect to avoid render-time state updates
+  // Check if this is a deprecated route and redirect immediately
   useEffect(() => {
-    if (
-      documentType === 'technology' ||
-      documentType === 'claim-refinement' ||
-      documentType === 'patent' ||
-      documentType === 'amendments'
-    ) {
+    const deprecatedRoutes = ['technology', 'claim-refinement', 'patent'];
+    
+    if (deprecatedRoutes.includes(documentType) && routerProjectId && router.query.tenant) {
+      // Always redirect deprecated routes to Amendment Studio
+      router.replace(`/${router.query.tenant}/projects/${routerProjectId}/amendments/studio`);
+      return;
+    }
+    
+    // Only set view type for non-deprecated routes
+    if (documentType === 'amendments') {
       setViewType(documentType as DocumentType);
     }
-  }, [documentType]);
+  }, [documentType, routerProjectId, router]);
 
   // Only show loading for missing project ID (shouldn't happen in normal flow)
   if (!routerProjectId) {
@@ -206,24 +211,6 @@ export default function DocumentTypePage() {
     const componentKey = `${routerProjectId}-${documentType}`;
 
     switch (documentType) {
-      case 'technology':
-        return (
-          <Suspense fallback={<ViewLoadingFallback />}>
-            <TechnologyDetailsViewClean key={componentKey} />
-          </Suspense>
-        );
-      case 'claim-refinement':
-        return (
-          <Suspense fallback={<ViewLoadingFallback />}>
-            <ClaimRefinementViewClean key={componentKey} />
-          </Suspense>
-        );
-      case 'patent':
-        return (
-          <Suspense fallback={<ViewLoadingFallback />}>
-            <PatentApplicationViewClean key={componentKey} />
-          </Suspense>
-        );
       case 'amendments':
         return (
           <Suspense fallback={<ViewLoadingFallback />}>
@@ -231,6 +218,7 @@ export default function DocumentTypePage() {
           </Suspense>
         );
       default:
+        // This should rarely happen due to the redirect logic above
         return (
           <div className="flex items-center justify-center h-full min-h-screen">
             <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />

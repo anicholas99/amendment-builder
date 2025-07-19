@@ -170,12 +170,12 @@ export function useStartAsyncSearch() {
         }
       );
 
-      // Navigate to claim refinement view where search results are displayed
+      // Navigate to amendments studio where search results are displayed
       if (data.searchId) {
         const tenant = router.query.tenant as string;
         if (tenant && variables.projectId) {
           router.push(
-            `/${tenant}/projects/${variables.projectId}/claim-refinement`
+            `/${tenant}/projects/${variables.projectId}/amendments/studio`
           );
         }
       }

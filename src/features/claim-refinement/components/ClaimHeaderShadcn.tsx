@@ -79,10 +79,10 @@ const ClaimHeaderShadcn: React.FC<ClaimHeaderShadcnProps> = ({
             )}
             {projectId && tenant && (
               <div className="flex gap-2 items-center">
-                {/* Back to Technology Details */}
+                {/* Navigation to Amendment Studio */}
                 <NavigationButton
-                  href={`/${tenant}/projects/${projectId}/technology`}
-                  viewType="technology"
+                  href={`/${tenant}/projects/${projectId}/amendments/studio`}
+                  viewType="amendments"
                   projectId={projectId as string}
                   variant="ghost"
                   size="xs"
@@ -91,24 +91,8 @@ const ClaimHeaderShadcn: React.FC<ClaimHeaderShadcnProps> = ({
                     fontSize: '12px',
                   }}
                 >
-                  <FiChevronLeft className="h-3.5 w-3.5" />
-                  Technology Details
-                </NavigationButton>
-
-                {/* Forward to Patent Application */}
-                <NavigationButton
-                  href={`/${tenant}/projects/${projectId}/patent`}
-                  viewType="patent"
-                  projectId={projectId as string}
-                  variant="ghost"
-                  size="xs"
-                  style={{
-                    color: isDarkMode ? '#9CA3AF' : '#6B7280',
-                    fontSize: '12px',
-                  }}
-                >
-                  Patent Application
                   <FiChevronRight className="h-3.5 w-3.5" />
+                  Amendment Studio
                 </NavigationButton>
               </div>
             )}

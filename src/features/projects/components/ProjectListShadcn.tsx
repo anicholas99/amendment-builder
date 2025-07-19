@@ -309,10 +309,10 @@ const ProjectListShadcn: React.FC<ProjectListShadcnProps> = ({
             `/${tenant}/projects/${state.modal.targetProjectId}/${state.modal.targetDocumentType}`
           );
         } else {
-          // Default to technology view when opening project without specifying a doc type
+          // Default to amendments studio when opening project without specifying a doc type
           const { tenant } = extractTenantFromQuery(router.query);
           router.push(
-            `/${tenant}/projects/${state.modal.targetProjectId}/technology`
+            `/${tenant}/projects/${state.modal.targetProjectId}/amendments/studio`
           );
         }
       }

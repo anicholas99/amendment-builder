@@ -21,8 +21,8 @@ const PatentHeader: React.FC<PatentHeaderProps> = ({ hideTitle = false }) => {
   const backButton =
     projectId && tenant ? (
       <NavigationButton
-        href={`/${tenant}/projects/${projectId}/claim-refinement`}
-        viewType="claims"
+        href={`/${tenant}/projects/${projectId}/amendments/studio`}
+        viewType="amendments"
         projectId={projectId as string}
         variant="ghost"
         size="xs"
@@ -32,7 +32,7 @@ const PatentHeader: React.FC<PatentHeaderProps> = ({ hideTitle = false }) => {
         }}
       >
         <FiChevronLeft className="h-3.5 w-3.5 mr-1" />
-        Claim Refinement
+        Amendment Studio
       </NavigationButton>
     ) : null;
 

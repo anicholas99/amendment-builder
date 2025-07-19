@@ -80,8 +80,8 @@ const TechnologyHeader: React.FC<TechnologyHeaderProps> = ({
           )}
           {projectId && tenant && (
             <NavigationButton
-              href={`/${tenant}/projects/${projectId}/claim-refinement`}
-              viewType="claims"
+              href={`/${tenant}/projects/${projectId}/amendments/studio`}
+              viewType="amendments"
               projectId={projectId as string}
               variant="ghost"
               size="xs"
@@ -90,7 +90,7 @@ const TechnologyHeader: React.FC<TechnologyHeaderProps> = ({
                 fontSize: '12px',
               }}
             >
-              Claim Refinement
+              Amendment Studio
               <FiChevronRight className="h-3.5 w-3.5" />
             </NavigationButton>
           )}

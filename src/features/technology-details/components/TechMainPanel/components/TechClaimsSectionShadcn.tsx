@@ -40,11 +40,11 @@ export const TechClaimsSectionShadcn: React.FC<TechSectionProps> = React.memo(
      */
     const claimRefinementHref = React.useMemo(() => {
       if (tenant && projectId) {
-        return `/${tenant}/projects/${projectId}/claim-refinement`;
+        return `/${tenant}/projects/${projectId}/amendments/studio`;
       }
       // Fallback: replace trailing documentType segment (e.g. "technology")
-      // with "claim-refinement".
-      return router.asPath.replace(/\/[^/]+$/, '/claim-refinement');
+      // with "amendments/studio".
+      return router.asPath.replace(/\/[^/]+$/, '/amendments/studio');
     }, [tenant, projectId, router.asPath]);
 
     if (!hasSectionData(analyzedInvention?.claims)) {

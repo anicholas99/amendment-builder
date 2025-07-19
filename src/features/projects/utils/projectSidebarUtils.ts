@@ -151,9 +151,10 @@ export const getCurrentDocumentType = (
   pathname: string
 ): DocumentType | null => {
   if (pathname.includes('amendments')) return 'amendments';
-  if (pathname.includes('claim-refinement')) return 'claim-refinement';
-  if (pathname.includes('technology')) return 'technology';
-  if (pathname.includes('patent')) return 'patent';
+  // Legacy routes - these should redirect to amendments
+  if (pathname.includes('claim-refinement')) return 'amendments';
+  if (pathname.includes('technology')) return 'amendments';
+  if (pathname.includes('patent')) return 'amendments';
   return null;
 };
 
