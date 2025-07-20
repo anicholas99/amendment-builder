@@ -18,7 +18,7 @@ async function handler(
   const { projectId } = req.query;
   
   if (typeof projectId !== 'string') {
-    throw new ApplicationError('Invalid project ID', 400, ErrorCode.INVALID_INPUT);
+    throw new ApplicationError(ErrorCode.INVALID_INPUT, 'Invalid project ID', 400);
   }
 
   try {

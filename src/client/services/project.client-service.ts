@@ -620,4 +620,25 @@ export const ProjectApiService = {
     const json = await response.json();
     return json;
   },
+
+  async syncUSPTOData(
+    projectId: string,
+    applicationNumber: string
+  ): Promise<{ success: boolean; message?: string; stats?: any }> {
+    if (!projectId) {
+      throw new Error('Project ID is required');
+    }
+    const response = await apiFetch(
+      `/api/projects/${projectId}/sync-uspto`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ applicationNumber }),
+      }
+    );
+    const json = await response.json();
+    return json;
+  },
 };
