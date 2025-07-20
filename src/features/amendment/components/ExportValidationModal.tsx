@@ -5,7 +5,7 @@
  * Non-blocking - attorneys maintain full control over their workflow.
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { 
   AlertTriangle, 
   CheckCircle2, 
@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
+import { isFeatureEnabled } from '@/config/featureFlags';
 import type { AmendmentValidationSummary } from '@/features/amendment/types/validation';
 import { VALIDATION_BADGE_CONFIG, RiskLevel } from '@/features/amendment/types/validation';
 
@@ -48,6 +49,7 @@ export const ExportValidationModal: React.FC<ExportValidationModalProps> = ({
   exportType = 'EXPORT',
 }) => {
   const hasIssues = validationSummary.hasUnvalidatedClaims || validationSummary.hasHighRiskClaims;
+  const isMinimalistUI = isFeatureEnabled('ENABLE_MINIMALIST_AMENDMENT_UI');
   
   const actionText = {
     EXPORT: 'Export',
@@ -55,6 +57,71 @@ export const ExportValidationModal: React.FC<ExportValidationModalProps> = ({
     FILE: 'File',
   }[exportType];
 
+  // Minimalist UI - simplified modal with red banner
+  if (isMinimalistUI && hasIssues) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-md p-0 overflow-hidden">
+          {/* Red warning banner */}
+          <div className="bg-red-50 border-b border-red-200 p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-medium text-red-900">Validation Required</h3>
+                <p className="text-sm text-red-700 mt-1">
+                  {validationSummary.hasHighRiskClaims && 
+                    `${validationSummary.highRiskClaims} high-risk claims need review. `}
+                  {validationSummary.hasUnvalidatedClaims && 
+                    `${validationSummary.unvalidatedClaims} claims pending validation.`}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Simple action buttons */}
+          <div className="p-4">
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={onRunValidation}
+                disabled={isValidating}
+                className="flex-1"
+              >
+                {isValidating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Validating...
+                  </>
+                ) : (
+                  'Run Validation'
+                )}
+              </Button>
+              <div className="text-center">
+                <Button
+                  variant="ghost"
+                  onClick={onProceed}
+                  className="text-red-600 hover:text-red-700"
+                >
+                  {actionText} Anyway
+                </Button>
+                <p className="text-xs text-gray-500 mt-1">Override logged</p>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Minimalist UI - no issues, immediate export
+  if (isMinimalistUI && !hasIssues) {
+    // Auto-proceed
+    useEffect(() => {
+      onProceed();
+    }, [onProceed]);
+    return null;
+  }
+
+  // Original full modal
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md">

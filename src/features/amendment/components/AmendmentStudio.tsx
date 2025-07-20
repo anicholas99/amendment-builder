@@ -21,6 +21,7 @@ import { OfficeActionNavigator } from './OfficeActionNavigator';
 import { AIAssistantPanel } from './AIAssistantPanel';
 import { DraftingWorkspace } from './DraftingWorkspace';
 import { RejectionAnalysisPanel } from './RejectionAnalysisPanel';
+import { FloatingInsights } from './FloatingInsights';
 
 // Import existing components
 import { SimpleMainPanel } from '@/components/common/SimpleMainPanel';
@@ -127,9 +128,9 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
   );
   const [selectedRejectionId, setSelectedRejectionId] = useState<string | null>(null);
   const [showProjects, setShowProjects] = useState(!officeActionId);
-  const [isAIPanelCollapsed, setIsAIPanelCollapsed] = useState(isMinimalistUI); // Collapsed by default if minimalist UI
+  const [isAIPanelCollapsed, setIsAIPanelCollapsed] = useState(false); // Always open by default
   const [aiPanelWidth, setAiPanelWidth] = useState<number>(
-    isMinimalistUI ? PANEL_CONFIG.AI_PANEL.COLLAPSED_WIDTH : PANEL_CONFIG.AI_PANEL.DEFAULT_WIDTH
+    PANEL_CONFIG.AI_PANEL.DEFAULT_WIDTH // Always start with full width
   );
 
   // Data fetching
@@ -455,6 +456,23 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
           }}
         />
       </Resizable>
+
+      {/* Floating Insights - only shown in minimalist UI */}
+      {isMinimalistUI && adaptedOfficeAction && (
+        <FloatingInsights
+          projectId={projectId}
+          officeActionId={selectedOfficeActionId || undefined}
+          examinerData={
+            adaptedOfficeAction.metadata?.examinerName
+              ? {
+                  name: adaptedOfficeAction.metadata.examinerName,
+                  allowanceRate: 0.35, // TODO: Get from actual data
+                  artUnitAvgAllowance: 0.28, // TODO: Get from actual data
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }; 

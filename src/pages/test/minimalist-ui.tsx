@@ -85,9 +85,21 @@ const MinimalistUITest: NextPage = () => {
                 </span>
               </div>
               <div className="flex items-center gap-3">
-                <AlertCircle className="h-5 w-5 text-gray-400" />
-                <span className="text-sm text-muted-foreground">
-                  Risk badges on claims (pending)
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <span className="text-sm">
+                  Risk badges (LOW/MED/HIGH) on claims
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <span className="text-sm">
+                  Simplified export modal with red banner
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <span className="text-sm">
+                  Floating Insights icon for advanced features
                 </span>
               </div>
             </div>
