@@ -74,9 +74,11 @@ import { useOfficeActions } from '@/hooks/api/useAmendment';
 import { useProsecutionOverview } from '@/hooks/api/useProsecutionOverview';
 import { logger } from '@/utils/clientLogger';
 import { cn } from '@/lib/utils';
+import { isFeatureEnabled } from '@/config/featureFlags';
 
 // Import legacy component as fallback
 import { AmendmentProjectsList } from './AmendmentProjectsList';
+import { AmendmentProjectCard } from './AmendmentProjectCard';
 
 // Keep existing types for backward compatibility
 interface AmendmentProject {
@@ -126,6 +128,7 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
   } = useOfficeActions(projectId);
 
   const { data: prosecutionOverview } = useProsecutionOverview(projectId);
+  const isMinimalistUI = isFeatureEnabled('ENABLE_MINIMALIST_AMENDMENT_UI');
 
   // Create amendment projects from office actions (existing logic)
   const amendmentProjects: AmendmentProject[] = useMemo(() => {
@@ -425,7 +428,50 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
                       Create First Response
                     </Button>
                   </div>
+                ) : isMinimalistUI ? (
+                  // Minimalist UI - Attorney-focused cards
+                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {filteredProjects.map((project) => {
+                      // Convert to attorney-focused data structure
+                      const prosecutionData = {
+                        id: project.id,
+                        applicationNumber: prosecutionOverview?.applicationNumber || 'XX/XXX,XXX',
+                        title: project.name,
+                        currentOA: prosecutionOverview?.currentOfficeAction ? {
+                          type: prosecutionOverview.currentOfficeAction.type as 'NON_FINAL' | 'FINAL' | 'ADVISORY',
+                          mailedDate: new Date(prosecutionOverview.currentOfficeAction.mailedDate),
+                          round: prosecutionOverview.currentOfficeAction.round || 1,
+                        } : undefined,
+                        nextDeadline: project.dueDate ? {
+                          date: project.dueDate,
+                          type: 'RESPONSE_DUE' as const,
+                          isStatutory: true,
+                        } : undefined,
+                        examiner: prosecutionOverview?.examinerAnalytics ? {
+                          name: prosecutionOverview.examinerAnalytics.examinerName,
+                          artUnit: prosecutionOverview.examinerAnalytics.artUnit,
+                          allowanceRate: prosecutionOverview.examinerAnalytics.allowanceRate,
+                          artUnitAvgAllowance: prosecutionOverview.examinerAnalytics.artUnitAvgAllowance,
+                        } : undefined,
+                        draftStatus: project.status === 'DRAFT' ? 'IN_PROGRESS' : 
+                                    project.status === 'READY_TO_FILE' ? 'READY' : 'NO_DRAFT',
+                        fileCount: 0, // TODO: Get actual file count
+                        milestones: [], // TODO: Get from prosecution overview
+                      };
+
+                      return (
+                        <AmendmentProjectCard
+                          key={project.id}
+                          project={prosecutionData}
+                          onOpenDraft={() => handleProjectClick(project.id)}
+                          onViewFiles={(id) => logger.info('View files', { id })}
+                          onViewTimeline={(id) => logger.info('View timeline', { id })}
+                        />
+                      );
+                    })}
+                  </div>
                 ) : (
+                  // Legacy UI - Original cards
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {filteredProjects.map((project) => (
                       <Card 

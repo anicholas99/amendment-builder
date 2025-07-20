@@ -18,13 +18,15 @@ import {
   ArrowRight,
   Calendar,
   Eye,
-  Download
+  Download,
+  ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useProsecutionTimeline } from '@/hooks/api/useProsecutionOverview';
 import { useEnhancedProsecutionTimeline } from '@/hooks/api/useEnhancedProsecution';
+import { isFeatureEnabled } from '@/config/featureFlags';
 
 interface OATimelineWidgetProps {
   projectId: string;
@@ -97,6 +99,7 @@ export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
   
   const timeline = useEnhanced && applicationNumber ? enhancedTimeline : legacyTimeline;
   const isLoading = useEnhanced && applicationNumber ? enhancedLoading : legacyLoading;
+  const isMinimalistUI = isFeatureEnabled('ENABLE_MINIMALIST_AMENDMENT_UI');
 
   if (isLoading) {
     return (
@@ -145,6 +148,55 @@ export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
     }
     return acc;
   }, [] as Array<{ filing: any; officeAction: any; response: any }>);
+
+  // Minimalist rendering - just milestone nodes in a strip
+  if (isMinimalistUI) {
+    // Filter to show only key milestones
+    const milestones = timeline.filter(event => 
+      ['FILING', 'OFFICE_ACTION', 'FINAL_REJECTION', 'RESPONSE', 'RCE', 'NOTICE_OF_ALLOWANCE'].includes(event.type)
+    );
+
+    return (
+      <div className={cn('flex items-center gap-1 p-2 bg-muted/30 rounded-md', className)}>
+        {milestones.map((event, index) => {
+          const isLast = index === milestones.length - 1;
+          const config = EVENT_CONFIG[event.type] || EVENT_CONFIG.OFFICE_ACTION;
+          const Icon = config.icon;
+          const isCurrent = event.status === 'ACTIVE' || event.status === 'PENDING';
+          
+          return (
+            <React.Fragment key={event.id}>
+              <button
+                onClick={() => onEventClick?.(event.id, event.type)}
+                className={cn(
+                  'relative p-1.5 rounded',
+                  'hover:bg-accent transition-colors',
+                  'group'
+                )}
+                title={`${event.title} - ${format(event.date, 'MMM d, yyyy')}`}
+              >
+                <Icon className={cn('h-4 w-4', config.textColor)} />
+                {isCurrent && (
+                  <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-blue-500 rounded-full"></div>
+                )}
+              </button>
+              {!isLast && <div className="w-3 h-0.5 bg-border" />}
+            </React.Fragment>
+          );
+        })}
+        {onEventClick && milestones.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 ml-auto"
+            onClick={() => onEventClick('timeline', 'VIEW_ALL')}
+          >
+            <ChevronRight className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={cn('bg-white rounded-lg border border-gray-200', className)}>

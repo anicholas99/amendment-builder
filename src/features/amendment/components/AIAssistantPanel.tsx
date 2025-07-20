@@ -42,6 +42,7 @@ interface AIAssistantPanelProps {
   projectId: string;
   projectData?: ProjectData;
   selectedOfficeActionId?: string | null;
+  isCollapsed?: boolean;
   officeAction?: {
     id: string;
     rejections: Array<{
@@ -58,6 +59,7 @@ interface AIAssistantPanelProps {
     }>;
   };
   onAnalysisComplete?: (analysis: any) => void;
+  onQuickAction?: (action: string) => void;
 }
 
 // Quick action buttons for common AI tasks
@@ -236,8 +238,10 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
   projectId,
   projectData,
   selectedOfficeActionId,
+  isCollapsed = false,
   officeAction,
   onAnalysisComplete,
+  onQuickAction,
 }) => {
   const [activeTab, setActiveTab] = useState('analyze');
   
@@ -265,6 +269,9 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
   // Handle quick action clicks - these will send messages to the chat
   const handleQuickAction = (action: string) => {
+    // Call the parent's quick action handler if provided
+    onQuickAction?.(action);
+    
     // The chat interface will handle sending these messages
     // They'll be processed by your existing chat system with tool invocations
     const actionMessages = {
@@ -283,6 +290,49 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
   const handleContentUpdate = (content: any) => {
     onAnalysisComplete?.(content);
   };
+
+  // Collapsed view - just show icons for quick actions
+  if (isCollapsed) {
+    return (
+      <div className="h-full flex flex-col bg-background border-l ai-assistant-panel-collapsed">
+        {/* Collapsed Header */}
+        <div className="flex-shrink-0 p-2 border-b">
+          <Brain className="h-5 w-5 text-primary mx-auto" />
+        </div>
+        
+        {/* Quick Action Icons */}
+        <div className="flex-1 py-2 space-y-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleQuickAction('summarize')}
+            className="w-full h-10 hover:bg-blue-50"
+            title="Summarize Office Action"
+          >
+            <FileText className="h-4 w-4 text-blue-600" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleQuickAction('suggest-amendments')}
+            className="w-full h-10 hover:bg-green-50"
+            title="Suggest Amendments"
+          >
+            <Lightbulb className="h-4 w-4 text-green-600" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleQuickAction('draft-arguments')}
+            className="w-full h-10 hover:bg-purple-50"
+            title="Draft Arguments"
+          >
+            <Sparkles className="h-4 w-4 text-purple-600" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col bg-background border-l ai-assistant-panel">

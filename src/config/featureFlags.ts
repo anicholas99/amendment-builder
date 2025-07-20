@@ -8,6 +8,10 @@
 export const FEATURE_FLAGS = {
   // Add new feature flags here as needed
   // Example: ENABLE_NEW_SEARCH_UI: process.env.NEXT_PUBLIC_ENABLE_NEW_SEARCH_UI === 'true',
+  
+  // Enable minimalist UI for amendment studio (attorney-focused design)
+  // Default to true - set NEXT_PUBLIC_MINIMALIST_AMENDMENT_UI=false to disable
+  ENABLE_MINIMALIST_AMENDMENT_UI: process.env.NEXT_PUBLIC_MINIMALIST_AMENDMENT_UI !== 'false',
 } as const;
 
 /**

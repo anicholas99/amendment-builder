@@ -11,6 +11,8 @@ import { logger } from '@/utils/clientLogger';
 import { cn } from '@/lib/utils';
 import { Resizable, ResizeCallback } from 're-resizable';
 import { useQuery } from '@tanstack/react-query';
+import { isFeatureEnabled } from '@/config/featureFlags';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 // Import new components
 import { AmendmentProjectsList } from './AmendmentProjectsList';
@@ -28,6 +30,7 @@ import { useOfficeActions, useOfficeAction } from '@/hooks/api/useAmendment';
 import { useOfficeActionAnalyses, useStrategyRecommendation } from '@/hooks/api/useRejectionAnalysis';
 import { AmendmentApiService } from '@/services/api/amendmentApiService';
 import { DraftApiService } from '@/services/api/draftApiService';
+import { AmendmentWorkspaceTabs } from './AmendmentWorkspaceTabs';
 
 interface AmendmentStudioProps {
   projectId: string;
@@ -38,7 +41,8 @@ interface AmendmentStudioProps {
 const PANEL_CONFIG = {
   LEFT_PANEL_WIDTH: 320, // 80 * 4 = 320px (w-80)
   AI_PANEL: {
-    DEFAULT_WIDTH: 700, // Increased default width for better AI assistant experience
+    DEFAULT_WIDTH: 700, // Full width when expanded
+    COLLAPSED_WIDTH: 60, // Just enough for icon and minimal UI
     MIN_WIDTH: 280,
     MAX_WIDTH: 1200, // Increased max width for more flexible sizing
   },
@@ -114,14 +118,19 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
 }) => {
   const router = useRouter();
   
+  // Feature flag for minimalist UI
+  const isMinimalistUI = isFeatureEnabled('ENABLE_MINIMALIST_AMENDMENT_UI');
+  
   // State management
   const [selectedOfficeActionId, setSelectedOfficeActionId] = useState<string | null>(
     officeActionId || null
   );
   const [selectedRejectionId, setSelectedRejectionId] = useState<string | null>(null);
   const [showProjects, setShowProjects] = useState(!officeActionId);
-  const [aiPanelWidth, setAiPanelWidth] = useState<number>(PANEL_CONFIG.AI_PANEL.DEFAULT_WIDTH);
-  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [isAIPanelCollapsed, setIsAIPanelCollapsed] = useState(isMinimalistUI); // Collapsed by default if minimalist UI
+  const [aiPanelWidth, setAiPanelWidth] = useState<number>(
+    isMinimalistUI ? PANEL_CONFIG.AI_PANEL.COLLAPSED_WIDTH : PANEL_CONFIG.AI_PANEL.DEFAULT_WIDTH
+  );
 
   // Data fetching
   const { data: officeActions = [], isLoading: isLoadingOfficeActions } = useOfficeActions(projectId);
@@ -183,7 +192,6 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
     setSelectedOfficeActionId(oaId);
     setShowProjects(false);
     setSelectedRejectionId(null);
-    setShowAnalysis(false);
   }, []);
 
   const handleAnalyzeRejections = useCallback(async () => {
@@ -203,7 +211,6 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
       
       // Refetch the analysis data
       await Promise.all([refetchAnalyses(), refetchStrategy()]);
-      setShowAnalysis(true);
     } catch (error) {
       logger.error('[AmendmentStudio] Failed to analyze rejections', { error });
     } finally {
@@ -230,7 +237,20 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
 
   const handleAIPanelResize: ResizeCallback = useCallback((e, direction, ref, d) => {
     setAiPanelWidth((prev: number) => prev + d.width);
-  }, []);
+    // If panel is resized beyond collapsed width, mark it as expanded
+    if (isAIPanelCollapsed && (aiPanelWidth + d.width) > PANEL_CONFIG.AI_PANEL.COLLAPSED_WIDTH * 2) {
+      setIsAIPanelCollapsed(false);
+    }
+  }, [isAIPanelCollapsed, aiPanelWidth]);
+
+  const toggleAIPanel = useCallback(() => {
+    setIsAIPanelCollapsed(prev => !prev);
+    setAiPanelWidth(
+      isAIPanelCollapsed 
+        ? PANEL_CONFIG.AI_PANEL.DEFAULT_WIDTH 
+        : PANEL_CONFIG.AI_PANEL.COLLAPSED_WIDTH
+    );
+  }, [isAIPanelCollapsed]);
 
   // Handle saving amendment drafts
   const handleSaveAmendmentDraft = useCallback(async (content: any) => {
@@ -320,64 +340,61 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
       {/* Main Content Area */}
       <div className="flex-1 h-full overflow-hidden">
         <div className="h-full flex flex-col bg-card border border-border rounded-lg shadow-lg overflow-hidden">
-          {/* Fixed header */}
-          <div className="flex-shrink-0 bg-card border-b border-border">
-            <div className="p-4 border-b">
+          {/* Fixed header - simplified for minimalist UI */}
+          {isMinimalistUI ? (
+            <div className="flex-shrink-0 bg-card border-b border-border px-4 py-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h1 className="text-xl font-semibold">
+                  <h1 className="text-lg font-semibold">
                     {adaptedOfficeAction?.fileName || 'Amendment Studio'}
                   </h1>
                   {adaptedOfficeAction?.metadata?.applicationNumber && (
-                    <p className="text-sm text-muted-foreground">
-                      Application: {adaptedOfficeAction.metadata.applicationNumber}
-                    </p>
+                    <span className="text-sm text-muted-foreground ml-2">
+                      • {adaptedOfficeAction.metadata.applicationNumber}
+                    </span>
                   )}
                 </div>
-                {canAnalyze && !hasAnalysis && (
-                  <Button 
-                    onClick={handleAnalyzeRejections}
-                    disabled={isAnalyzing}
-                  >
-                    {isAnalyzing ? 'Analyzing...' : 'Analyze Rejections'}
-                  </Button>
-                )}
-                {hasAnalysis && !showAnalysis && (
-                  <Button onClick={() => setShowAnalysis(true)}>
-                    View Analysis
-                  </Button>
-                )}
-                {hasAnalysis && showAnalysis && (
-                  <Button variant="outline" onClick={() => setShowAnalysis(false)}>
-                    Back to Drafting
-                  </Button>
-                )}
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex-shrink-0 bg-card border-b border-border">
+              <div className="p-4 border-b">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-xl font-semibold">
+                      {adaptedOfficeAction?.fileName || 'Amendment Studio'}
+                    </h1>
+                    {adaptedOfficeAction?.metadata?.applicationNumber && (
+                      <p className="text-sm text-muted-foreground">
+                        Application: {adaptedOfficeAction.metadata.applicationNumber}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           
-          {/* Scrollable content area */}
+          {/* Main workspace with tabs */}
           <div className="flex-1 overflow-hidden min-h-0">
             {!adaptedOfficeAction ? (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 <p>Select an Office Action to begin</p>
               </div>
-            ) : showAnalysis && analysisData ? (
-              <RejectionAnalysisPanel
-                analyses={analysisData.analyses}
-                overallStrategy={analysisData.overallStrategy}
-                isLoading={isAnalyzing}
-                selectedRejectionId={selectedRejectionId}
-                onSelectRejection={handleRejectionSelect}
-                onGenerateAmendment={handleGenerateAmendment}
-              />
             ) : (
-              <DraftingWorkspace
+              <AmendmentWorkspaceTabs
                 projectId={projectId}
                 selectedOfficeAction={adaptedOfficeAction}
                 selectedOfficeActionId={selectedOfficeActionId}
                 amendmentProjectId={realAmendmentProject?.id || null}
+                analyses={analysisData?.analyses}
+                overallStrategy={analysisData?.overallStrategy}
+                isAnalyzing={isAnalyzing}
+                selectedRejectionId={selectedRejectionId}
+                onSelectRejection={handleRejectionSelect}
+                onGenerateAmendment={handleGenerateAmendment}
                 onSave={handleSaveAmendmentDraft}
+                onAnalyzeRejections={handleAnalyzeRejections}
               />
             )}
           </div>
@@ -388,14 +405,30 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
       <Resizable
         size={{ width: aiPanelWidth, height: '100%' }}
         onResizeStop={handleAIPanelResize}
-        minWidth={PANEL_CONFIG.AI_PANEL.MIN_WIDTH}
+        minWidth={isAIPanelCollapsed ? PANEL_CONFIG.AI_PANEL.COLLAPSED_WIDTH : PANEL_CONFIG.AI_PANEL.MIN_WIDTH}
         maxWidth={PANEL_CONFIG.AI_PANEL.MAX_WIDTH}
-        enable={{ left: true }}
-        className="border-l"
+        enable={{ left: !isAIPanelCollapsed }} // Disable resize when collapsed
+        className="border-l relative"
       >
+        {/* Collapse/Expand toggle button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleAIPanel}
+          className={cn(
+            "absolute -left-3 top-1/2 -translate-y-1/2 z-10",
+            "h-6 w-6 rounded-full border bg-background shadow-sm",
+            "hover:bg-accent hover:shadow-md transition-all"
+          )}
+          aria-label={isAIPanelCollapsed ? "Expand AI Assistant" : "Collapse AI Assistant"}
+        >
+          {isAIPanelCollapsed ? <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        </Button>
+        
         <AIAssistantPanel
           projectId={projectId}
           selectedOfficeActionId={selectedOfficeActionId}
+          isCollapsed={isAIPanelCollapsed}
           officeAction={adaptedOfficeAction ? {
             id: adaptedOfficeAction.id,
             rejections: adaptedOfficeAction.rejections.map((r: any) => ({
@@ -413,6 +446,12 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
           } : undefined}
           onAnalysisComplete={(analysis: any) => {
             logger.info('[AmendmentStudio] Analysis complete', { analysis });
+          }}
+          onQuickAction={(action: string) => {
+            // When a quick action is clicked, expand the panel
+            if (isAIPanelCollapsed) {
+              toggleAIPanel();
+            }
           }}
         />
       </Resizable>
