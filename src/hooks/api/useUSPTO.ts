@@ -235,6 +235,7 @@ export const useUSPTOTimelineForProject = (applicationNumber: string | null) => 
       return prosecutionHistory.timeline.map((event, index, array) => ({
         id: event.documentId,
         type: mapUSPTOEventType(event.type),
+        documentCode: event.documentCode, // Include document code for proper filtering
         date: new Date(event.date),
         title: event.title,
         description: undefined,

@@ -298,6 +298,18 @@ export const ProjectCard = React.memo<ProjectCardProps>(
 
         <CardContent className="p-4 pt-0">
           <div className="flex flex-col h-full">
+            {/* Application Number (if available) */}
+            {project.applicationNumber && (
+              <div className="mb-2">
+                <Badge
+                  variant="outline"
+                  className="text-xs font-medium border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300"
+                >
+                  App. No. {project.applicationNumber}
+                </Badge>
+              </div>
+            )}
+
             {/* Date info */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3 text-xs text-muted-foreground">
               <div className="flex items-center">

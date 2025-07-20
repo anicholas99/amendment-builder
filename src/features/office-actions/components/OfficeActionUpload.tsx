@@ -38,6 +38,7 @@ export const OfficeActionUpload: React.FC<OfficeActionUploadProps> = ({
     dateIssued: '',
     examinerId: '',
     artUnit: '',
+    applicationNumber: '',
   });
   const [testOfficeActionText, setTestOfficeActionText] = useState(`OFFICE ACTION
 
@@ -163,6 +164,7 @@ Primary Examiner, Art Unit 3685`);
           dateIssued: '',
           examinerId: '',
           artUnit: '',
+          applicationNumber: '',
         });
 
         // Notify parent component
@@ -368,6 +370,18 @@ Primary Examiner, Art Unit 3685`);
             </p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="applicationNumber" className="text-xs">Application Number</Label>
+                <Input
+                  id="applicationNumber"
+                  placeholder="e.g., 16/123,456"
+                  value={metadata.applicationNumber}
+                  onChange={(e) => handleMetadataChange('applicationNumber', e.target.value)}
+                  disabled={isDisabled}
+                  className="h-8 text-xs"
+                />
+              </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="oaNumber" className="text-xs">Office Action Number</Label>
                 <Input

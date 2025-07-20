@@ -80,6 +80,7 @@ export async function createOfficeAction(
         dateIssued: data.dateIssued ? new Date(data.dateIssued) : null,
         examinerId: data.examinerId,
         artUnit: data.artUnit,
+        applicationNumber: data.applicationNumber,
         blobName: data.blobName,
         originalFileName: data.originalFileName,
         mimeType: data.mimeType,

@@ -768,6 +768,7 @@ model OfficeAction {
   dateIssued       DateTime?
   examinerId       String?
   artUnit          String?
+  applicationNumber String? // USPTO application number (e.g., 16/123,456)
   blobName         String? // S3 storage key (follows ProjectFigure pattern)
   originalFileName String?
   mimeType         String?

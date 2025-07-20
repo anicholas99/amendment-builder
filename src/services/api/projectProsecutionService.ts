@@ -15,7 +15,8 @@ import { z } from 'zod';
 
 const ProsecutionTimelineEventSchema = z.object({
   id: z.string(),
-  type: z.enum(['FILING', 'OFFICE_ACTION', 'RESPONSE', 'NOTICE_OF_ALLOWANCE', 'FINAL_REJECTION', 'RCE']),
+  type: z.enum(['FILING', 'OFFICE_ACTION', 'RESPONSE', 'NOTICE_OF_ALLOWANCE', 'FINAL_REJECTION', 'RCE', 'APPLICATION_FILED', 'IDS_FILED', 'EXTENSION', 'CONTINUATION_FILED', 'NOTICE', 'OTHER']),
+  documentCode: z.string().optional(),
   date: z.string().datetime(),
   title: z.string(),
   description: z.string().optional(),
@@ -137,7 +138,8 @@ export interface ProsecutionOverview {
   };
   prosecutionTimeline: Array<{
     id: string;
-    type: 'FILING' | 'OFFICE_ACTION' | 'RESPONSE' | 'NOTICE_OF_ALLOWANCE' | 'FINAL_REJECTION' | 'RCE';
+    type: 'FILING' | 'OFFICE_ACTION' | 'RESPONSE' | 'NOTICE_OF_ALLOWANCE' | 'FINAL_REJECTION' | 'RCE' | 'APPLICATION_FILED' | 'IDS_FILED' | 'EXTENSION' | 'CONTINUATION_FILED' | 'NOTICE' | 'OTHER';
+    documentCode?: string;
     date: Date;
     title: string;
     description?: string;
@@ -257,6 +259,7 @@ export class ProjectProsecutionService {
         prosecutionTimeline: validated.prosecutionTimeline.map(event => ({
           id: event.id,
           type: event.type,
+          documentCode: event.documentCode,
           date: new Date(event.date),
           title: event.title,
           description: event.description,
@@ -366,6 +369,7 @@ export class ProjectProsecutionService {
       return validated.map(event => ({
         id: event.id,
         type: event.type,
+        documentCode: event.documentCode,
         date: new Date(event.date),
         title: event.title,
         description: event.description,

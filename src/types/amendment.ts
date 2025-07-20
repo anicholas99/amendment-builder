@@ -11,6 +11,7 @@ export interface OfficeAction {
   dateIssued?: Date | null;
   examinerId?: string | null;
   artUnit?: string | null;
+  applicationNumber?: string | null;
   blobName?: string | null;
   originalFileName?: string | null;
   mimeType?: string | null;
@@ -216,6 +217,7 @@ export interface CreateOfficeActionRequest {
   dateIssued?: string;
   examinerId?: string;
   artUnit?: string;
+  applicationNumber?: string;
 }
 
 export interface CreateAmendmentProjectRequest {

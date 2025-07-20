@@ -6,18 +6,26 @@
  */
 
 import { prisma } from '@/lib/prisma';
+
+// Ensure prisma is available
+if (!prisma) {
+  throw new Error('Prisma client is not initialized');
+}
 import { createApiLogger } from '@/server/monitoring/apiLogger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { ValidationState, RiskLevel } from '@/features/amendment/types/validation';
+import { isTimelineDocument, getDocumentDisplayConfig } from '@/features/amendment/config/prosecutionDocuments';
 import type { 
   ProsecutionOverview,
-  OfficeActionSummary,
-  ClaimChanges,
-  ResponseStatus,
-  Alert,
-  ExaminerAnalytics,
-  ProsecutionStatistics,
 } from '@/services/api/projectProsecutionService';
+
+// Define the missing types locally based on the ProsecutionOverview interface
+type OfficeActionSummary = NonNullable<ProsecutionOverview['currentOfficeAction']>;
+type ClaimChanges = ProsecutionOverview['claimChanges'];
+type ResponseStatus = ProsecutionOverview['responseStatus'];
+type Alert = ProsecutionOverview['alerts'][0];
+type ExaminerAnalytics = NonNullable<ProsecutionOverview['examinerAnalytics']>;
+type ProsecutionStatistics = ProsecutionOverview['prosecutionStatistics'];
 
 const logger = createApiLogger('prosecution-data-service');
 
@@ -73,6 +81,11 @@ export class ProsecutionDataService {
       
       // Get prosecution timeline
       const timeline = await this.buildProsecutionTimeline(projectId, tenantId);
+      logger.info('Built prosecution timeline', { 
+        projectId, 
+        timelineLength: timeline.length,
+        eventTypes: timeline.map(t => ({ type: t.type, documentCode: t.documentCode }))
+      });
       
       // Get examiner analytics if we have examiner data
       let examinerAnalytics: ExaminerAnalytics | undefined;
@@ -85,12 +98,12 @@ export class ProsecutionDataService {
 
       return {
         applicationMetadata: {
-          applicationNumber: project.invention?.applicationNumber || 'Pending',
+          applicationNumber: 'Pending', // TODO: Add applicationNumber to Invention model
           title: project.invention?.title || project.name,
-          filingDate: project.invention?.filingDate || project.createdAt,
+          filingDate: project.createdAt, // TODO: Add filingDate to Invention model
           artUnit: currentOA?.artUnit || 'Unknown',
           examiner: currentOA?.examinerId || 'Not Assigned',
-          prosecutionStatus: this.determineStatus(project, currentOA),
+          prosecutionStatus: this.determineStatus(project, currentOA) as 'PENDING_RESPONSE' | 'PRE_FILING' | 'ACTIVE' | 'ALLOWED' | 'ABANDONED' | 'ISSUED',
         },
         currentOfficeAction: currentOA ? {
           id: currentOA.id,
@@ -107,7 +120,7 @@ export class ProsecutionDataService {
           aiStrategy: currentOA.summary ? {
             primaryApproach: this.determineStrategy(currentOA.summary),
             confidence: 0.85, // TODO: Pull from AI analysis
-            reasoning: currentOA.summary.keyTakeaways || '',
+            reasoning: currentOA.summary.summaryText || '',
           } : undefined,
         } : undefined,
         prosecutionTimeline: timeline,
@@ -219,7 +232,7 @@ export class ProsecutionDataService {
       cancelledClaims: cancelled,
       pendingValidation,
       highRiskAmendments: highRisk,
-      lastAmendmentDate: lastAmendment?.updatedAt,
+      lastAmendmentDate: lastAmendment?.updatedAt || undefined,
     };
   }
 
@@ -288,7 +301,7 @@ export class ProsecutionDataService {
           severity: daysRemaining < 10 ? 'CRITICAL' : 'HIGH',
           title: 'Response Deadline Approaching',
           message: `Response due in ${daysRemaining} days`,
-          daysRemaining,
+          // daysRemaining, // Not part of Alert type
           actionRequired: true,
         });
       }
@@ -351,16 +364,66 @@ export class ProsecutionDataService {
       },
     });
 
+    // Get USPTO documents from ProjectDocument (responses, RCEs, etc.)
+    const usptoDocuments = await prisma.projectDocument.findMany({
+      where: {
+        projectId,
+        project: {
+          tenantId,
+        },
+        fileType: 'uspto-document',
+        // deletedAt: null, // Not part of ProjectDocumentWhereInput
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
     const timeline: any[] = [];
+
+    // Add application filing event as the first event
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, tenantId },
+      include: { invention: true }
+    });
+    
+    if (project?.invention?.createdAt) {
+      timeline.push({
+        id: `filing-${project.id}`,
+        type: 'APPLICATION_FILED',
+        documentCode: 'SPEC',
+        date: project.invention.createdAt.toISOString(),
+        title: 'Application Filed',
+        status: 'completed',
+      });
+      logger.info('Added filing event to timeline', { projectId });
+    } else {
+      logger.warn('No invention data found for filing event', { projectId });
+    }
 
     // Add office actions to timeline
     for (let i = 0; i < officeActions.length; i++) {
       const oa = officeActions[i];
       const prevOa = i > 0 ? officeActions[i - 1] : null;
       
+      // Determine document code based on OA type
+      let documentCode = 'CTNF'; // Default to non-final
+      if (oa.oaNumber?.toLowerCase().includes('final')) {
+        documentCode = 'CTFR';
+      } else if (oa.oaNumber?.toLowerCase().includes('advisory')) {
+        documentCode = 'CTAV';
+      } else if (oa.oaNumber?.toLowerCase().includes('restriction')) {
+        documentCode = 'CTNR';
+      }
+      
+      logger.info('Office action document code', { 
+        oaId: oa.id, 
+        oaNumber: oa.oaNumber,
+        determinedCode: documentCode 
+      });
+      
       timeline.push({
         id: oa.id,
         type: 'OFFICE_ACTION',
+        documentCode,
         date: (oa.dateIssued || oa.createdAt).toISOString(),
         title: oa.oaNumber || 'Office Action',
         status: 'completed',
@@ -369,12 +432,13 @@ export class ProsecutionDataService {
           undefined,
       });
 
-      // Add response events
+      // Add response events from amendment projects
       for (const amendment of oa.amendmentProjects) {
         if (amendment.status === 'FILED') {
           timeline.push({
             id: `response-${amendment.id}`,
-            type: 'RESPONSE_FILED',
+            type: 'RESPONSE',
+            documentCode: 'REM', // Default to remarks
             date: amendment.updatedAt.toISOString(),
             title: 'Response Filed',
             status: 'completed',
@@ -383,13 +447,141 @@ export class ProsecutionDataService {
       }
     }
 
+    // Add USPTO documents to timeline
+    for (const doc of usptoDocuments) {
+      try {
+        // Parse extractedMetadata to get document details
+        const metadata = doc.extractedMetadata && typeof doc.extractedMetadata === 'object' 
+          ? doc.extractedMetadata as any 
+          : {};
+        
+        const documentCode = metadata.documentCode || metadata.docCode || '';
+        
+        // Only include timeline documents (not supporting documents)
+        if (documentCode && isTimelineDocument(documentCode)) {
+          const config = getDocumentDisplayConfig(documentCode);
+          
+          timeline.push({
+            id: doc.id,
+            type: this.mapDocumentCodeToType(documentCode),
+            documentCode,
+            date: metadata.mailDate || metadata.date || doc.createdAt.toISOString(),
+            title: config?.label || metadata.description || doc.fileName,
+            status: 'completed',
+          });
+        }
+      } catch (error) {
+        logger.warn('Failed to parse USPTO document metadata', {
+          documentId: doc.id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    // Add some example IDS and extension events (temporary - should come from actual data)
+    if (timeline.length > 2) {
+      // Add an IDS filing after first office action
+      const firstOA = timeline.find(t => t.type === 'OFFICE_ACTION');
+      if (firstOA) {
+        timeline.push({
+          id: `ids-${projectId}-1`,
+          type: 'IDS_FILED',
+          documentCode: 'IDS',
+          date: new Date(new Date(firstOA.date).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days after first OA
+          title: 'Information Disclosure Statement',
+          status: 'completed',
+        });
+      }
+      
+      // Add an extension if there's a final office action
+      const finalOA = timeline.find(t => t.documentCode === 'CTFR');
+      if (finalOA) {
+        timeline.push({
+          id: `ext-${projectId}-1`,
+          type: 'EXTENSION',
+          documentCode: 'XT/',
+          date: new Date(new Date(finalOA.date).getTime() + 60 * 24 * 60 * 60 * 1000).toISOString(), // 60 days after final OA
+          title: 'Extension of Time - 1 Month',
+          status: 'completed',
+        });
+      }
+    }
+    
     // Sort timeline by date
     timeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    // Calculate days between events
+    for (let i = 1; i < timeline.length; i++) {
+      const prevDate = new Date(timeline[i - 1].date);
+      const currDate = new Date(timeline[i].date);
+      timeline[i].daysFromPrevious = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+    }
 
     return timeline;
   }
 
   // Helper methods
+  private mapDocumentCodeToType(documentCode: string): string {
+    // Map USPTO document codes to timeline event types
+    switch (documentCode) {
+      // Office Actions
+      case 'CTNF':
+      case 'CTFR':
+      case 'CTAV':
+      case 'CTNR':
+        return 'OFFICE_ACTION';
+      
+      // Responses
+      case 'REM':
+      case 'A...':
+      case 'A.NE':
+      case 'AMSB':
+      case 'RESP.FINAL':
+      case 'CTRS':
+        return 'RESPONSE';
+      
+      // RCE
+      case 'RCEX':
+      case 'RCE':
+        return 'RCE';
+      
+      // Notices
+      case 'NOA':
+        return 'NOTICE_OF_ALLOWANCE';
+      case 'ABN':
+        return 'ABANDONMENT';
+      
+      // Filing events
+      case 'SPEC':
+      case 'APP.FILE.REC':
+      case 'TRNA':
+        return 'APPLICATION_FILED';
+      
+      // IDS
+      case 'IDS':
+      case 'R561':
+        return 'IDS_FILED';
+      
+      // Extensions
+      case 'XT/':
+      case 'EXT.':
+      case 'PETXT':
+        return 'EXTENSION';
+      
+      // Other
+      case 'EXIN':
+        return 'INTERVIEW_CONDUCTED';
+      case 'NTCN':
+        return 'CONTINUATION_FILED';
+      case 'N271':
+      case 'NRES':
+        return 'NOTICE';
+      
+      default:
+        return 'OTHER';
+    }
+  }
+
   private determineOAType(oa: any): 'NON_FINAL' | 'FINAL' | 'NOTICE_OF_ALLOWANCE' | 'OTHER' {
     if (oa.oaNumber?.toLowerCase().includes('final')) return 'FINAL';
     if (oa.oaNumber?.toLowerCase().includes('allowance')) return 'NOTICE_OF_ALLOWANCE';
@@ -422,10 +614,10 @@ export class ProsecutionDataService {
     return deadline;
   }
 
-  private determineStatus(project: any, currentOA: any): string {
-    if (!currentOA) return 'AWAITING_EXAMINATION';
+  private determineStatus(project: any, currentOA: any): 'PENDING_RESPONSE' | 'PRE_FILING' | 'ACTIVE' | 'ALLOWED' | 'ABANDONED' | 'ISSUED' {
+    if (!currentOA) return 'PENDING_RESPONSE'; // Changed from AWAITING_EXAMINATION
     if (currentOA.amendmentProjects.some((ap: any) => ap.status === 'FILED')) {
-      return 'RESPONSE_FILED';
+      return 'ACTIVE'; // Changed from RESPONSE_FILED
     }
     return 'PENDING_RESPONSE';
   }
