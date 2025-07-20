@@ -933,6 +933,7 @@ model PatentApplication {
   artUnit            String?
   examinerName       String?
   examinerId         String?
+  examiner           String?  // Full examiner info
   status             String   @default("PENDING") // PENDING, ALLOWED, ABANDONED, ISSUED
   metadata           String?  @db.NVarChar(Max) // JSON for additional data
   createdAt          DateTime @default(now())
@@ -941,10 +942,32 @@ model PatentApplication {
   project            Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   claimVersions      PatentClaimVersion[]
   strategyRecommendations StrategyRecommendation[]
+  prosecutionEvents  ProsecutionEvent[]
 
   @@index([projectId])
   @@index([applicationNumber])
   @@map("patent_applications")
+}
+
+/// Prosecution timeline events (only milestones that affect strategy/deadlines)
+model ProsecutionEvent {
+  id             String    @id @default(uuid())
+  applicationId  String
+  eventType      String    // APPLICATION_FILED, NON_FINAL_OA, FINAL_OA, etc.
+  eventDate      DateTime
+  title          String
+  documentId     String?   // External document ID
+  metadata       String?   @db.NVarChar(Max) // JSON metadata
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  
+  application    PatentApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  
+  @@index([applicationId])
+  @@index([eventType])
+  @@index([eventDate])
+  @@index([applicationId, eventDate])
+  @@map("prosecution_events")
 }
 
 /// Tracks claim versions at each OA response point

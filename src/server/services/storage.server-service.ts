@@ -42,6 +42,7 @@ const INVENTION_CONTAINER_NAME = env.AZURE_STORAGE_INVENTION_CONTAINER_NAME;
 const FIGURES_CONTAINER = 'figures-private';
 const PATENT_FILES_CONTAINER = 'patent-files-private';
 const OFFICE_ACTIONS_CONTAINER = 'office-actions-private';
+const USPTO_DOCUMENTS_CONTAINER = 'uspto-documents-private';
 
 let blobServiceClient: BlobServiceClient;
 
@@ -59,6 +60,68 @@ function getBlobServiceClient(): BlobServiceClient {
  * such as file parsing, validation, and uploading.
  */
 export class StorageServerService {
+  /**
+   * Upload JSON data to blob storage
+   */
+  static async uploadJson(key: string, data: any): Promise<void> {
+    const containerClient = StorageServerService.getContainerClient(USPTO_DOCUMENTS_CONTAINER);
+    const blockBlobClient = containerClient.getBlockBlobClient(key);
+    
+    const content = JSON.stringify(data);
+    await blockBlobClient.upload(content, content.length, {
+      blobHTTPHeaders: { blobContentType: 'application/json' },
+    });
+  }
+
+  /**
+   * Get JSON data from blob storage
+   */
+  static async getJson(key: string): Promise<any> {
+    const containerClient = StorageServerService.getContainerClient(USPTO_DOCUMENTS_CONTAINER);
+    const blockBlobClient = containerClient.getBlockBlobClient(key);
+    
+    const downloadResponse = await blockBlobClient.download(0);
+    const content = await StorageServerService.streamToString(downloadResponse.readableStreamBody!);
+    return JSON.parse(content);
+  }
+
+  /**
+   * List objects with a given prefix
+   */
+  static async listObjects(prefix: string): Promise<string[]> {
+    const containerClient = StorageServerService.getContainerClient(USPTO_DOCUMENTS_CONTAINER);
+    const keys: string[] = [];
+    
+    for await (const blob of containerClient.listBlobsFlat({ prefix })) {
+      keys.push(blob.name);
+    }
+    
+    return keys;
+  }
+
+  /**
+   * Get container client for a specific container
+   */
+  private static getContainerClient(containerName: string): ContainerClient {
+    const blobServiceClient = getBlobServiceClient();
+    return blobServiceClient.getContainerClient(containerName);
+  }
+
+  /**
+   * Convert stream to string
+   */
+  private static async streamToString(readableStream: NodeJS.ReadableStream): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      readableStream.on('data', (data) => {
+        chunks.push(data instanceof Buffer ? data : Buffer.from(data));
+      });
+      readableStream.on('end', () => {
+        resolve(Buffer.concat(chunks).toString('utf-8'));
+      });
+      readableStream.on('error', reject);
+    });
+  }
   /**
    * Upload figure securely with database tracking and private storage
    */

@@ -6,6 +6,12 @@ import { ApplicationError, ErrorCode } from '@/lib/error';
 import { logger } from '@/server/logger';
 import { fetchProsecutionHistory } from '@/lib/api/uspto/services/prosecutionHistoryService';
 import { AuthenticatedRequest, RequestWithServices } from '@/types/middleware';
+import { 
+  isTimelineMilestone, 
+  getEventType, 
+  getDocumentCategory,
+  ProsecutionEventType 
+} from '@/constants/usptoDocumentCodes';
 
 const SyncUSPTOSchema = z.object({
   applicationNumber: z.string().trim().min(1, 'Application number is required'),
@@ -69,12 +75,11 @@ async function handler(
 
     const { documents } = prosecutionData;
     
-    // Process office actions
+    // Separate documents into categories
+    const officeActionCodes = ['CTNF', 'CTFR', 'CTAV', 'CTSP', 'MCTNF'];
     const officeActions = documents.filter(doc => 
       doc.category === 'office-action' || 
-      doc.documentCode === 'CTNF' || // Non-Final Office Action
-      doc.documentCode === 'CTFR' || // Final Office Action
-      doc.documentCode === 'MCTNF' // Miscellaneous Communication to Applicant
+      officeActionCodes.includes(doc.documentCode)
     );
 
     // Start a transaction to ensure data consistency
@@ -94,10 +99,67 @@ async function handler(
         });
       }
 
-      // Process each office action
+      // Step 1: Store ALL documents in ProjectDocument table with categorization
+      const storedDocuments = [];
+      const timelineEvents = [];
+      
+      for (const doc of documents) {
+        // Check if document already exists
+        const existingDoc = await tx.projectDocument.findFirst({
+          where: {
+            projectId,
+            originalName: doc.documentCode,
+            fileType: 'uspto-document',
+            extractedMetadata: {
+              contains: doc.documentId || doc.mailDate || '',
+            },
+          }
+        });
+
+        if (!existingDoc) {
+          // Store document with categorization
+          const storedDoc = await tx.projectDocument.create({
+            data: {
+              projectId,
+              fileName: `${doc.documentCode}_${doc.mailDate || 'undated'}.json`,
+              originalName: doc.documentCode,
+              fileType: 'uspto-document',
+              storageUrl: doc.pdfUrl || '',
+              extractedText: doc.description || '',
+              extractedMetadata: JSON.stringify({
+                documentId: doc.documentId,
+                documentCode: doc.documentCode,
+                category: getDocumentCategory(doc.documentCode),
+                isTimelineMilestone: isTimelineMilestone(doc.documentCode),
+                mailDate: doc.mailDate,
+                pageCount: doc.pageCount,
+                importance: doc.importance,
+                rawData: doc,
+              }),
+              uploadedBy: authReq.user!.id,
+            }
+          });
+          storedDocuments.push(storedDoc);
+
+          // Track timeline milestones
+          if (isTimelineMilestone(doc.documentCode)) {
+            const eventType = getEventType(doc.documentCode);
+            if (eventType) {
+              timelineEvents.push({
+                documentId: storedDoc.id,
+                documentCode: doc.documentCode,
+                eventType,
+                eventDate: doc.mailDate ? new Date(doc.mailDate) : new Date(),
+                title: doc.description || doc.documentCode,
+              });
+            }
+          }
+        }
+      }
+
+      // Step 2: Create OfficeAction records for backward compatibility
       const createdOAs = [];
       for (const oaDoc of officeActions) {
-        // Check if we already have this office action
         const existingOA = await tx.officeAction.findFirst({
           where: {
             projectId,
@@ -132,7 +194,7 @@ async function handler(
               summaryText: oaDoc.description || 'USPTO Office Action',
               keyIssues: JSON.stringify([]),
               rejectionBreakdown: JSON.stringify({}),
-              totalClaimsRejected: 0, // Would need parsing to get actual count
+              totalClaimsRejected: 0,
               examinerTone: 'NEUTRAL',
               responseComplexity: 'MEDIUM',
             }
@@ -141,6 +203,8 @@ async function handler(
       }
 
       return {
+        documentsStored: storedDocuments.length,
+        timelineEvents: timelineEvents.length,
         officeActionsCreated: createdOAs.length,
         totalDocuments: documents.length,
       };
@@ -150,6 +214,8 @@ async function handler(
       projectId, 
       applicationNumber,
       cleanAppNumber,
+      documentsStored: result.documentsStored,
+      timelineEvents: result.timelineEvents,
       officeActionsCreated: result.officeActionsCreated,
       totalDocuments: result.totalDocuments,
     });
@@ -158,6 +224,8 @@ async function handler(
       success: true,
       message: 'USPTO data synced successfully',
       stats: {
+        documentsStored: result.documentsStored,
+        timelineEvents: result.timelineEvents,
         officeActionsCreated: result.officeActionsCreated,
         totalDocuments: result.totalDocuments,
       }
