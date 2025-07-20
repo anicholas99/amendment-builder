@@ -402,6 +402,7 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
                 {/* Timeline - Thin Bar at Bottom */}
                 <OATimelineWidget
                   projectId={projectId}
+                  applicationNumber={prosecutionOverview?.applicationNumber}
                   onEventClick={handleTimelineEventClick}
                 />
               </div>

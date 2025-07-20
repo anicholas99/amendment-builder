@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/server/logger';
 import { isTimelineMilestone } from '@/constants/usptoDocumentCodes';
+import { getDocumentDisplayConfig } from '@/features/amendment/config/prosecutionDocuments';
 
 const querySchema = z.object({
   projectId: z.string().uuid('Invalid project ID format'),
@@ -38,15 +39,21 @@ async function handler(
     for (const doc of documents) {
       try {
         const metadata = JSON.parse(doc.extractedMetadata || '{}');
+        const documentCode = metadata.documentCode || doc.originalName;
+        const config = getDocumentDisplayConfig(documentCode);
+        
         const docData = {
           id: doc.id,
-          documentCode: metadata.documentCode || doc.originalName,
-          title: doc.extractedText || metadata.description || doc.originalName,
+          documentCode,
+          title: config?.label || doc.extractedText || metadata.description || doc.originalName,
           date: metadata.mailDate ? new Date(metadata.mailDate) : doc.createdAt,
-          category: metadata.category,
+          category: metadata.category || config?.category,
           pdfUrl: doc.storageUrl,
           pageCount: metadata.pageCount,
-          metadata,
+          metadata: {
+            ...metadata,
+            description: config?.description || metadata.description,
+          },
         };
 
         if (metadata.isTimelineMilestone || isTimelineMilestone(metadata.documentCode)) {

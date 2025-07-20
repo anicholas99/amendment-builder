@@ -53,6 +53,7 @@ import {
   getDocumentDisplayConfig,
   DOCUMENT_DISPLAY_CONFIG 
 } from '../config/prosecutionDocuments';
+import { EnhancedTimeline } from './EnhancedTimeline';
 
 interface OATimelineWidgetProps {
   projectId: string;
@@ -396,6 +397,11 @@ export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
   const timeline = usptoData?.timeline || (useEnhanced && applicationNumber ? enhancedTimeline : legacyTimeline);
   const isLoading = usptoLoading || (useEnhanced && applicationNumber ? enhancedLoading : legacyLoading);
   const isMinimalistUI = isFeatureEnabled('ENABLE_MINIMALIST_AMENDMENT_UI');
+  
+  // Always use enhanced timeline for better UI when we have USPTO data
+  if (usptoData?.timeline && usptoData.timeline.length > 0) {
+    return <EnhancedTimeline projectId={projectId} className={className} />;
+  }
   
   // Filter timeline to only show milestone documents
   const milestoneEvents = timeline?.filter(event => {
