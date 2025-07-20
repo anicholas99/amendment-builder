@@ -133,47 +133,67 @@ export class ProsecutionDataService {
     projectId: string,
     tenantId: string
   ): Promise<ClaimChanges> {
-    // Get all claims for the project
-    const claims = await prisma.claim.findMany({
+    // First get the invention for this project
+    const invention = await prisma.invention.findFirst({
       where: {
         projectId,
-        tenantId,
-        deletedAt: null,
-      },
-      include: {
-        versions: {
-          orderBy: { version: 'desc' },
-          take: 2, // Current and previous
+        project: {
+          tenantId,
+          deletedAt: null,
         },
       },
     });
 
-    // Get validation states
+    if (!invention) {
+      // Return empty stats if no invention yet
+      return {
+        totalAmendedClaims: 0,
+        newClaims: 0,
+        cancelledClaims: 0,
+        pendingValidation: false,
+        highRiskClaims: 0,
+        lastAmendmentDate: null,
+      };
+    }
+
+    // Get all claims for the invention
+    const claims = await prisma.claim.findMany({
+      where: {
+        inventionId: invention.id,
+      },
+    });
+
+    // Get validation states - check if ClaimValidation model exists and has expected fields
     const validations = await prisma.claimValidation.findMany({
       where: {
         projectId,
-        tenantId,
         claimId: { in: claims.map(c => c.id) },
       },
       orderBy: { createdAt: 'desc' },
       distinct: ['claimId'],
     });
 
+    // Get claim versions to track amendments
+    const claimVersions = await prisma.claimVersion.findMany({
+      where: {
+        inventionId: invention.id,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
     // Calculate statistics
     let amended = 0;
-    let newClaims = 0;
+    let newClaims = claims.length;
     let cancelled = 0;
     let highRisk = 0;
     let pendingValidation = false;
 
     const validationMap = new Map(validations.map(v => [v.claimId, v]));
 
+    // Track which claims have been amended based on updatedAt vs createdAt
     for (const claim of claims) {
-      if (claim.status === 'CANCELLED') {
-        cancelled++;
-      } else if (claim.versions.length === 1) {
-        newClaims++;
-      } else if (claim.versions.length > 1) {
+      // Consider a claim amended if it was updated after creation
+      if (claim.updatedAt.getTime() > claim.createdAt.getTime() + 1000) { // 1 second buffer
         amended++;
       }
 
@@ -188,10 +208,7 @@ export class ProsecutionDataService {
 
     const lastAmendment = await prisma.claim.findFirst({
       where: {
-        projectId,
-        tenantId,
-        deletedAt: null,
-        updatedAt: { not: undefined },
+        inventionId: invention.id,
       },
       orderBy: { updatedAt: 'desc' },
     });
@@ -278,24 +295,25 @@ export class ProsecutionDataService {
     }
 
     // Validation alert
-    const unvalidatedClaims = await prisma.claim.count({
+    const invention = await prisma.invention.findFirst({
+      where: { projectId: project.id },
+    });
+    
+    const unvalidatedClaims = invention ? await prisma.claim.count({
       where: {
-        projectId: project.id,
-        tenantId: project.tenantId,
-        deletedAt: null,
+        inventionId: invention.id,
         NOT: {
           id: {
             in: await prisma.claimValidation.findMany({
               where: {
                 projectId: project.id,
-                tenantId: project.tenantId,
               },
               select: { claimId: true },
             }).then(validations => validations.map(v => v.claimId)),
           },
         },
       },
-    });
+    }) : 0;
 
     if (unvalidatedClaims > 0) {
       alerts.push({
@@ -318,29 +336,57 @@ export class ProsecutionDataService {
     projectId: string,
     tenantId: string
   ): Promise<any[]> {
-    // Get all prosecution events
-    const events = await prisma.prosecutionEvent.findMany({
+    // Get office actions for this project
+    const officeActions = await prisma.officeAction.findMany({
       where: {
-        patentApplication: {
-          project: {
-            id: projectId,
-            tenantId,
-          },
+        projectId,
+        tenantId,
+      },
+      orderBy: { dateIssued: 'asc' },
+      include: {
+        amendmentProjects: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
         },
       },
-      orderBy: { eventDate: 'asc' },
     });
 
-    return events.map((event, index) => ({
-      id: event.id,
-      type: event.type,
-      date: event.eventDate.toISOString(),
-      title: event.description || this.getEventTitle(event.type),
-      status: 'completed',
-      daysFromPrevious: index > 0 ? 
-        Math.floor((event.eventDate.getTime() - events[index - 1].eventDate.getTime()) / (1000 * 60 * 60 * 24)) : 
-        undefined,
-    }));
+    const timeline: any[] = [];
+
+    // Add office actions to timeline
+    for (let i = 0; i < officeActions.length; i++) {
+      const oa = officeActions[i];
+      const prevOa = i > 0 ? officeActions[i - 1] : null;
+      
+      timeline.push({
+        id: oa.id,
+        type: 'OFFICE_ACTION',
+        date: (oa.dateIssued || oa.createdAt).toISOString(),
+        title: oa.oaNumber || 'Office Action',
+        status: 'completed',
+        daysFromPrevious: prevOa && oa.dateIssued && prevOa.dateIssued ? 
+          Math.floor((oa.dateIssued.getTime() - prevOa.dateIssued.getTime()) / (1000 * 60 * 60 * 24)) : 
+          undefined,
+      });
+
+      // Add response events
+      for (const amendment of oa.amendmentProjects) {
+        if (amendment.status === 'FILED') {
+          timeline.push({
+            id: `response-${amendment.id}`,
+            type: 'RESPONSE_FILED',
+            date: amendment.updatedAt.toISOString(),
+            title: 'Response Filed',
+            status: 'completed',
+          });
+        }
+      }
+    }
+
+    // Sort timeline by date
+    timeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    return timeline;
   }
 
   // Helper methods
@@ -424,28 +470,57 @@ export class ProsecutionDataService {
     projectId: string,
     tenantId: string
   ): Promise<ProsecutionStatistics> {
-    const events = await prisma.prosecutionEvent.findMany({
+    // Get office actions and amendment projects for statistics
+    const officeActions = await prisma.officeAction.findMany({
       where: {
-        patentApplication: {
-          project: {
-            id: projectId,
-            tenantId,
+        projectId,
+        tenantId,
+      },
+      orderBy: { dateIssued: 'asc' },
+      include: {
+        amendmentProjects: {
+          where: { 
+            deletedAt: null,
+            status: 'FILED'
           },
         },
       },
-      orderBy: { eventDate: 'asc' },
     });
 
-    const firstEvent = events[0];
-    const lastEvent = events[events.length - 1];
-    const duration = firstEvent && lastEvent ? 
-      Math.floor((lastEvent.eventDate.getTime() - firstEvent.eventDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+    // Get project creation date for duration calculation
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, tenantId },
+      select: { createdAt: true },
+    });
+
+    const now = new Date();
+    const firstDate = officeActions[0]?.dateIssued || project?.createdAt || now;
+    const duration = Math.floor((now.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Calculate average response time
+    let totalResponseTime = 0;
+    let responseCount = 0;
+    
+    for (const oa of officeActions) {
+      if (oa.amendmentProjects.length > 0 && oa.dateIssued) {
+        const filedResponse = oa.amendmentProjects.find(ap => ap.status === 'FILED');
+        if (filedResponse) {
+          const responseTime = Math.floor(
+            (filedResponse.updatedAt.getTime() - oa.dateIssued.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          totalResponseTime += responseTime;
+          responseCount++;
+        }
+      }
+    }
+
+    const averageResponseTime = responseCount > 0 ? Math.round(totalResponseTime / responseCount) : 45;
 
     return {
-      totalOfficeActions: events.filter(e => e.type === 'OFFICE_ACTION').length,
-      totalResponses: events.filter(e => e.type === 'RESPONSE_FILED').length,
+      totalOfficeActions: officeActions.length,
+      totalResponses: officeActions.filter(oa => oa.amendmentProjects.some(ap => ap.status === 'FILED')).length,
       prosecutionDuration: duration,
-      averageResponseTime: 45, // TODO: Calculate from actual response times
+      averageResponseTime,
     };
   }
 }

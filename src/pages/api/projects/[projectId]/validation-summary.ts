@@ -30,12 +30,36 @@ async function handler(
   try {
     const { projectId } = querySchema.parse(req.query);
 
-    // Get total claim count for the project
-    const totalClaims = await prisma.claim.count({
+    // First get the invention for this project
+    const invention = await prisma.invention.findFirst({
       where: {
         projectId,
-        tenantId,
-        deletedAt: null,
+        project: {
+          tenantId,
+          deletedAt: null,
+        },
+      },
+    });
+
+    if (!invention) {
+      return res.status(200).json({
+        totalClaims: 0,
+        validatedClaims: 0,
+        pendingValidations: 0,
+        failedValidations: 0,
+        highRiskClaims: 0,
+        mediumRiskClaims: 0,
+        lowRiskClaims: 0,
+        hasUnvalidatedClaims: false,
+        hasHighRiskClaims: false,
+        overallRisk: RiskLevel.NONE,
+      });
+    }
+
+    // Get total claim count for the invention
+    const totalClaims = await prisma.claim.count({
+      where: {
+        inventionId: invention.id,
       },
     });
 
