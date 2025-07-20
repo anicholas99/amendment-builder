@@ -59,7 +59,7 @@ async function handler(
     // Fetch prosecution history from USPTO
     const prosecutionData = await fetchProsecutionHistory(cleanAppNumber);
     
-    if (!prosecutionData.success || !prosecutionData.data) {
+    if (!prosecutionData || !prosecutionData.documents) {
       throw new ApplicationError(
         ErrorCode.API_NETWORK_ERROR,
         'Failed to fetch USPTO data', 
@@ -67,7 +67,7 @@ async function handler(
       );
     }
 
-    const { documents } = prosecutionData.data;
+    const { documents } = prosecutionData;
     
     // Process office actions
     const officeActions = documents.filter(doc => 
@@ -80,15 +80,15 @@ async function handler(
     // Start a transaction to ensure data consistency
     const result = await prisma.$transaction(async (tx) => {
       // Update patent application with basic info if available
-      if (prosecutionData.data.applicationData) {
+      if (prosecutionData.applicationData) {
         await tx.patentApplication.update({
           where: { projectId },
           data: {
-            title: prosecutionData.data.applicationData.title || patentApp.title,
-            filingDate: prosecutionData.data.applicationData.filingDate 
-              ? new Date(prosecutionData.data.applicationData.filingDate)
+            title: prosecutionData.applicationData.title || patentApp.title,
+            filingDate: prosecutionData.applicationData.filingDate 
+              ? new Date(prosecutionData.applicationData.filingDate)
               : patentApp.filingDate,
-            status: prosecutionData.data.applicationData.status || patentApp.status,
+            status: prosecutionData.applicationData.status || patentApp.status,
             updatedAt: new Date(),
           }
         });
