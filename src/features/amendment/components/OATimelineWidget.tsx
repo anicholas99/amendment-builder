@@ -381,21 +381,9 @@ export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
   
-  // Try to use REAL USPTO timeline first
-  const { data: usptoData, isLoading: usptoLoading } = useRealUSPTOTimeline(projectId);
-  
-  // Use enhanced timeline if enabled and application number is available
-  const { data: enhancedTimeline, isLoading: enhancedLoading } = useEnhancedProsecutionTimeline(
-    projectId,
-    applicationNumber
-  );
-  
-  // Fallback to legacy timeline
-  const { data: legacyTimeline, isLoading: legacyLoading } = useProsecutionTimeline(projectId);
-  
-  // Use USPTO data if available, otherwise fall back to other sources
-  const timeline = usptoData?.timeline || (useEnhanced && applicationNumber ? enhancedTimeline : legacyTimeline);
-  const isLoading = usptoLoading || (useEnhanced && applicationNumber ? enhancedLoading : legacyLoading);
+  // ONLY use USPTO timeline - no fallbacks
+  const { data: usptoData, isLoading } = useRealUSPTOTimeline(projectId);
+  const timeline = usptoData?.timeline;
   const isMinimalistUI = isFeatureEnabled('ENABLE_MINIMALIST_AMENDMENT_UI');
   
   // Always use enhanced timeline for better UI when we have USPTO data
@@ -446,7 +434,8 @@ export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
       <div className={cn('bg-white rounded-lg border border-gray-200 p-4', className)}>
         <div className="text-center text-gray-500">
           <Clock className="h-8 w-8 mx-auto mb-2" />
-          <p>No prosecution timeline available</p>
+          <p className="font-medium">No USPTO Timeline</p>
+          <p className="text-sm mt-1">Link USPTO to view prosecution history</p>
         </div>
       </div>
     );

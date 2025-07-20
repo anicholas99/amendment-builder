@@ -344,7 +344,23 @@ export class ProsecutionDataService {
     projectId: string,
     tenantId: string
   ): Promise<any[]> {
-    // Get office actions for this project
+    // Check if we have USPTO documents first
+    const usptoDocumentCount = await prisma.projectDocument.count({
+      where: {
+        projectId,
+        project: {
+          tenantId,
+        },
+        fileType: 'uspto-document',
+      },
+    });
+
+    // If we have USPTO documents, use ONLY those for the timeline
+    if (usptoDocumentCount > 0) {
+      return this.buildUSPTOOnlyTimeline(projectId, tenantId);
+    }
+
+    // Otherwise fall back to office actions (legacy behavior)
     const officeActions = await prisma.officeAction.findMany({
       where: {
         projectId,
@@ -627,6 +643,64 @@ export class ProsecutionDataService {
     // TODO: Implement real examiner analytics
     // For now, return undefined to hide the panel when no data
     return undefined;
+  }
+
+  /**
+   * Build timeline using ONLY USPTO documents
+   */
+  private async buildUSPTOOnlyTimeline(
+    projectId: string,
+    tenantId: string
+  ): Promise<any[]> {
+    const usptoDocuments = await prisma.projectDocument.findMany({
+      where: {
+        projectId,
+        project: {
+          tenantId,
+        },
+        fileType: 'uspto-document',
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const timeline: any[] = [];
+
+    for (const doc of usptoDocuments) {
+      try {
+        const metadata = doc.extractedMetadata && typeof doc.extractedMetadata === 'object' 
+          ? doc.extractedMetadata as any 
+          : {};
+        
+        const documentCode = metadata.documentCode || metadata.docCode || '';
+        const config = getDocumentDisplayConfig(documentCode);
+        
+        timeline.push({
+          id: doc.id,
+          type: this.mapDocumentCodeToType(documentCode),
+          documentCode,
+          date: metadata.mailDate || metadata.date || doc.createdAt.toISOString(),
+          title: config?.label || metadata.description || doc.fileName,
+          status: 'completed',
+        });
+      } catch (error) {
+        logger.warn('Failed to parse USPTO document metadata', {
+          documentId: doc.id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+    
+    // Sort timeline by date
+    timeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    // Calculate days between events
+    for (let i = 1; i < timeline.length; i++) {
+      const prevDate = new Date(timeline[i - 1].date);
+      const currDate = new Date(timeline[i].date);
+      timeline[i].daysFromPrevious = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    return timeline;
   }
 
   private async calculateProsecutionStatistics(
