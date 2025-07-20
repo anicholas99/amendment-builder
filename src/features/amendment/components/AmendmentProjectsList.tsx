@@ -49,6 +49,7 @@ import { OfficeActionUpload } from '@/features/office-actions/components/OfficeA
 import { useOfficeActions } from '@/hooks/api/useAmendment';
 import { logger } from '@/utils/clientLogger';
 import { cn } from '@/lib/utils';
+import { isFeatureEnabled } from '@/config/featureFlags';
 
 // Types
 interface AmendmentProject {
@@ -123,7 +124,52 @@ export const AmendmentProjectsList: React.FC<AmendmentProjectsListProps> = ({
 
   // Create amendment projects from office actions with real status
   const amendmentProjects: AmendmentProject[] = useMemo(() => {
-    return officeActions.map((oa) => {
+    // Debug logging
+    logger.info('[AmendmentProjectsList] Office Actions received', {
+      count: officeActions.length,
+      officeActions: officeActions.map(oa => ({
+        id: oa.id,
+        status: oa.status,
+        dateIssued: oa.dateIssued,
+        fileName: oa.fileName,
+      }))
+    });
+    
+    // Apply filtering based on feature flag
+    let filteredOAs = officeActions;
+    
+    if (isFeatureEnabled('ENABLE_OA_SIX_MONTH_FILTER')) {
+      // Legacy 6-month filter
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      
+      filteredOAs = officeActions.filter(oa => {
+        const oaDate = oa.dateIssued || oa.createdAt;
+        return new Date(oaDate) > sixMonthsAgo;
+      });
+    } else {
+      // Timeline-aware filtering - only show OAs that need a response
+      // Also filter out old OAs as a safety check
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      
+      filteredOAs = officeActions.filter(oa => {
+        // Must be PENDING_RESPONSE status
+        if (oa.status !== 'PENDING_RESPONSE') return false;
+        
+        // Safety check: Also ensure it's not older than 90 days past deadline
+        const oaDate = oa.dateIssued || oa.createdAt;
+        const deadline = new Date(oaDate);
+        deadline.setDate(deadline.getDate() + 90);
+        
+        // If deadline is more than 90 days ago, skip it
+        if (deadline < ninetyDaysAgo) return false;
+        
+        return true;
+      });
+    }
+    
+    return filteredOAs.map((oa) => {
       // Determine status based on office action status and time since upload
       let status: AmendmentProject['status'] = 'DRAFT';
       const daysSinceUpload = Math.floor(

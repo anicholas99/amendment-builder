@@ -14,6 +14,7 @@ import {
 } from '@/lib/api/uspto/types/prosecution-events';
 import { StorageServerService } from './storage.server-service';
 import { generateId } from '@/lib/utils/ids';
+import { ProsecutionTimelineService } from './prosecutionTimeline.server-service';
 
 interface USPTODocument {
   documentId: string;
@@ -80,6 +81,10 @@ export class USPTOSyncService {
           );
         }
 
+        // Build timeline to determine which OA is current
+        const timeline = ProsecutionTimelineService.buildTimelineSequence(documents);
+        const currentOA = ProsecutionTimelineService.findCurrentOfficeAction(timeline);
+
         // Process each document
         for (const doc of documents) {
           const docId = generateId();
@@ -139,9 +144,13 @@ export class USPTOSyncService {
               }
             });
 
+            const oaType = doc.documentCode === 'CTFR' ? 'FINAL' : 'NON_FINAL';
+            
+            // Determine if this is the current OA based on timeline
+            const isCurrentOA = ProsecutionTimelineService.isCurrentOfficeAction(doc, currentOA);
+            const status = isCurrentOA ? 'PENDING_RESPONSE' : 'COMPLETED';
+            
             if (!existingOA) {
-              const oaType = doc.documentCode === 'CTFR' ? 'FINAL' : 'NON_FINAL';
-              
               await tx.officeAction.create({
                 data: {
                   projectId,
@@ -149,10 +158,12 @@ export class USPTOSyncService {
                   oaNumber: doc.documentCode,
                   dateIssued: doc.mailDate ? new Date(doc.mailDate) : new Date(),
                   originalFileName: doc.description,
-                  status: 'COMPLETED',
+                  status,
                   examinerRemarks: doc.description || 'USPTO Office Action',
                   parsedJson: JSON.stringify({
                     oaType,
+                    isCurrentOA,
+                    timelinePosition: timeline.findIndex(t => t.metadata.documentId === doc.documentId),
                     documentId: doc.documentId,
                     pdfUrl: doc.pdfUrl,
                     s3Key: `uspto/${tenantId}/${projectId}/${doc.documentCode}_${doc.documentId}.json`,
@@ -180,11 +191,55 @@ export class USPTOSyncService {
                   responseComplexity: 'MEDIUM',
                 }
               });
+            } else {
+              // Update existing OA status based on timeline
+              await tx.officeAction.update({
+                where: { id: existingOA.id },
+                data: {
+                  status,
+                  parsedJson: JSON.stringify({
+                    ...JSON.parse(existingOA.parsedJson || '{}'),
+                    oaType,
+                    isCurrentOA,
+                    timelinePosition: timeline.findIndex(t => t.metadata.documentId === doc.documentId),
+                  }),
+                }
+              });
             }
+          }
+        }
+        
+        // Update status for ALL existing Office Actions based on timeline
+        const allProjectOAs = await tx.officeAction.findMany({
+          where: {
+            projectId,
+            tenantId,
+            deletedAt: null,
+          }
+        });
+        
+        for (const oa of allProjectOAs) {
+          if (!oa.dateIssued) continue;
+          
+          const oaDoc = {
+            documentCode: oa.oaNumber || '',
+            mailDate: oa.dateIssued.toISOString(),
+          };
+          
+          const shouldBePending = ProsecutionTimelineService.isCurrentOfficeAction(oaDoc, currentOA);
+          const expectedStatus = shouldBePending ? 'PENDING_RESPONSE' : 'COMPLETED';
+          
+          if (oa.status !== expectedStatus) {
+            await tx.officeAction.update({
+              where: { id: oa.id },
+              data: { status: expectedStatus }
+            });
           }
         }
 
         // Update patent application with latest info
+        const appStatus = ProsecutionTimelineService.getApplicationStatus(timeline);
+        
         if (prosecutionData.applicationData) {
           await tx.patentApplication.update({
             where: { projectId },
@@ -193,9 +248,18 @@ export class USPTOSyncService {
               filingDate: prosecutionData.applicationData.filingDate 
                 ? new Date(prosecutionData.applicationData.filingDate)
                 : patentApp.filingDate,
-              status: prosecutionData.applicationData.status || patentApp.status,
+              status: appStatus,
               examiner: prosecutionData.applicationData.examiner,
               artUnit: prosecutionData.applicationData.artUnit,
+              updatedAt: new Date(),
+            }
+          });
+        } else {
+          // Update status even if no application data
+          await tx.patentApplication.update({
+            where: { projectId },
+            data: {
+              status: appStatus,
               updatedAt: new Date(),
             }
           });

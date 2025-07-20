@@ -132,7 +132,31 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
 
   // Create amendment projects from office actions (existing logic)
   const amendmentProjects: AmendmentProject[] = useMemo(() => {
-    return officeActions.map((oa) => {
+    // Debug log
+    console.log('[EnhancedAmendmentProjectsList] Raw office actions:', officeActions.map(oa => ({
+      id: oa.id,
+      status: oa.status,
+      dateIssued: oa.dateIssued,
+      fileName: oa.fileName,
+    })));
+    
+    // Only show Office Actions that need a response
+    const filteredOAs = officeActions.filter(oa => {
+      // Only show PENDING_RESPONSE status
+      if (oa.status === 'PENDING_RESPONSE') return true;
+      
+      // Fallback: if status is not set properly, check if it's recent (within 90 days)
+      if (!oa.status || oa.status === 'UPLOADED' || oa.status === 'PARSED') {
+        const oaDate = oa.dateIssued || oa.createdAt;
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+        return new Date(oaDate) > ninetyDaysAgo;
+      }
+      
+      return false;
+    });
+    
+    return filteredOAs.map((oa) => {
       let status: AmendmentProject['status'] = 'DRAFT';
       const daysSinceUpload = Math.floor(
         (Date.now() - new Date(oa.createdAt).getTime()) / (1000 * 60 * 60 * 24)

@@ -1,0 +1,1090 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String                     @id @default(uuid())
+  email                 String                     @unique
+  name                  String?
+  passwordHash          String?
+  salt                  String?
+  role                  String                     @default("USER")
+  avatarUrl             String?
+  isVerified            Boolean                    @default(false)
+  verificationToken     String?                    @unique
+  resetToken            String?                    @unique
+  resetTokenExpiry      DateTime?
+  lastLogin             DateTime?
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  deletedAt             DateTime?
+  accounts              Account[]
+  applicationVersions   ApplicationVersion[]
+  claimVersions         ClaimVersion[]
+  combinedAnalyses      CombinedExaminerAnalysis[]
+  uploadedFigures       ProjectFigure[]
+  uploadedDocuments     ProjectDocument[]
+  projects              Project[]
+  searchHistory         SearchHistory[]
+  sessions              Session[]
+  preferences           UserPreference[]
+  tenants               UserTenant[]
+  privacy               UserPrivacy?
+  collaboratingProjects ProjectCollaborator[]
+  invitedCollaborators  ProjectCollaborator[]      @relation("InvitedCollaborators")
+  aiAuditLogs           AIAuditLog[]
+  amendmentProjects     AmendmentProject[]
+  amendmentProjectFiles AmendmentProjectFile[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Project {
+  id                           String                  @id @default(uuid())
+  name                         String
+  textInput                    String?                 @db.NVarChar(Max)
+  userId                       String
+  tenantId                     String
+  status                       String                  @default("DRAFT")
+  hasPatentContent             Boolean                 @default(false)
+  hasProcessedInvention        Boolean                 @default(false)
+  createdAt                    DateTime                @default(now())
+  updatedAt                    DateTime                @updatedAt
+  deletedAt                    DateTime?
+  applicationVersions          ApplicationVersion[]
+  chatMessages                 ChatMessage[]
+  draftDocuments               DraftDocument[]
+  elements                     Element[]
+  invention                    Invention?
+  priorArtAnalysisCacheEntries PriorArtAnalysisCache[]
+  exclusions                   ProjectExclusion[]
+  figures                      ProjectFigure[]
+  projectImages                ProjectImage[]
+  projectDocuments             ProjectDocument[]
+  tenant                       Tenant                  @relation(fields: [tenantId], references: [id])
+  user                         User                    @relation(fields: [userId], references: [id])
+  savedPriorArtItems           SavedPriorArt[]
+  searchHistory                SearchHistory[]
+  collaborators                ProjectCollaborator[]
+  aiAuditLogs                  AIAuditLog[]
+  officeActions                OfficeAction[]
+  amendmentProjects            AmendmentProject[]
+  patentApplication            PatentApplication?
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([tenantId, userId])
+  @@index([tenantId, updatedAt(sort: Desc)])
+  @@map("projects")
+}
+
+model UserPreference {
+  id        String   @id @default(uuid())
+  userId    String
+  key       String
+  value     String   @db.NVarChar(Max)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@map("user_preferences")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  token        String   @unique
+  expiresAt    DateTime
+  ipAddress    String?
+  userAgent    String?  @db.NVarChar(Max)
+  lastActivity DateTime @default(now())
+  createdAt    DateTime @default(now())
+  expires      DateTime
+  sessionToken String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+model Tenant {
+  id                    String                 @id @default(uuid())
+  name                  String
+  slug                  String                 @unique
+  description           String?                @db.NVarChar(Max)
+  settings              String?                @db.NVarChar(Max)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  deletedAt             DateTime?
+  projects              Project[]
+  users                 UserTenant[]
+  aiAuditLogs           AIAuditLog[]
+  officeActions         OfficeAction[]
+  amendmentProjects     AmendmentProject[]
+  amendmentProjectFiles AmendmentProjectFile[]
+
+  @@map("tenants")
+}
+
+model UserTenant {
+  id        String   @id @default(uuid())
+  userId    String
+  tenantId  String
+  role      String   @default("USER")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@map("user_tenants")
+}
+
+/// Project collaboration - allows sharing projects with other users in the same tenant
+model ProjectCollaborator {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  role      String   @default("viewer") // viewer, editor, admin
+  invitedBy String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inviter User    @relation("InvitedCollaborators", fields: [invitedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@index([projectId])
+  @@map("project_collaborators")
+}
+
+model SearchHistory {
+  id                           String                     @id @default(uuid())
+  query                        String                     @db.NVarChar(Max)
+  timestamp                    DateTime                   @default(now())
+  results                      String?                    @db.NVarChar(Max)
+  projectId                    String?
+  userId                       String?
+  citationExtractionStatus     String?
+  suggestions                  AISuggestion[]
+  citations                    CitationJob[]
+  citationMatches              CitationMatch[]
+  combinedExaminerAnalyses     CombinedExaminerAnalysis[]
+  patentabilityScores          PatentabilityScore?
+  priorArtAnalysisCacheEntries PriorArtAnalysisCache[]
+  project                      Project?                   @relation(fields: [projectId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_searchhistory_project")
+  user                         User?                      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_searchhistory_user")
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([timestamp])
+  @@map("search_history")
+}
+
+model CitationJob {
+  id                   String    @id @default(uuid())
+  searchHistoryId      String
+  status               String    @default("PENDING")
+  externalJobId        Int?
+  referenceNumber      String?
+  createdAt            DateTime  @default(now())
+  startedAt            DateTime?
+  completedAt          DateTime?
+  error                String?   @db.NVarChar(Max)
+  lastCheckedAt        DateTime?
+  deepAnalysisJson     String?   @db.NVarChar(Max)
+  errorMessage         String?   @db.NVarChar(Max)
+  rawResultData        String?   @db.NVarChar(Max)
+  examinerAnalysisJson String?   @db.NVarChar(Max)
+
+  // New fields for claim version tracking
+  claim1Hash         String? // Hash of claim 1 when this job was run
+  parsedElementsUsed String? @db.NVarChar(Max) // JSON array of parsed elements used
+  parserVersionUsed  String? // Parser version used for this analysis
+
+  searchHistory SearchHistory   @relation(fields: [searchHistoryId], references: [id], onDelete: Cascade)
+  matches       CitationMatch[]
+  results       CitationResult?
+
+  @@index([searchHistoryId])
+  @@index([status])
+  @@index([claim1Hash])
+  @@map("citation_jobs")
+}
+
+model CitationResult {
+  id            String      @id @default(uuid())
+  citationJobId String      @unique
+  resultsData   String      @db.NVarChar(Max)
+  createdAt     DateTime    @default(now())
+  citationJob   CitationJob @relation(fields: [citationJobId], references: [id], onDelete: Cascade)
+
+  @@map("citation_results")
+}
+
+model ProjectExclusion {
+  id                   String   @id @default(cuid())
+  projectId            String
+  excludedPatentNumber String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  abstract             String?  @db.NVarChar(Max)
+  authors              String?
+  excludedAt           DateTime @default(now())
+  publicationDate      String?
+  title                String?
+  url                  String?
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, excludedPatentNumber])
+  @@index([projectId])
+  @@map("project_exclusions")
+}
+
+model AISuggestion {
+  id              String        @id @default(uuid())
+  searchHistoryId String
+  content         String        @db.NVarChar(Max)
+  status          String        @default("ACTIVE")
+  metadata        String?       @db.NVarChar(Max)
+  feedback        String?       @db.NVarChar(Max)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  searchHistory   SearchHistory @relation(fields: [searchHistoryId], references: [id], onDelete: Cascade)
+
+  @@index([searchHistoryId])
+  @@map("ai_suggestions")
+}
+
+model SavedPriorArt {
+  id                 String   @id @default(uuid())
+  projectId          String
+  patentNumber       String
+  title              String?
+  abstract           String?  @db.NVarChar(Max)
+  url                String?
+  notes              String?  @db.NVarChar(Max)
+  authors            String?
+  publicationDate    String?
+  savedAt            DateTime @default(now())
+  savedCitationsData String?  @db.NVarChar(Max)
+  claim1             String?  @db.NVarChar(Max)
+  summary            String?  @db.NVarChar(Max)
+
+  // New fields for file upload and linking support
+  fileType          String? @default("cited-reference") // "parent-patent", "office-action", "uploaded-doc", etc.
+  storageUrl        String? // Azure blob storage URL for uploaded files
+  isLinked          Boolean @default(true) // false = session-only reference
+  sessionId         String? // For tracking unlinked files in chat sessions
+  extractedText     String? @db.NVarChar(Max) // Full text extraction from PDFs
+  extractedMetadata String? @db.NVarChar(Max) // JSON with title, inventors, etc.
+
+  savedCitations SavedCitation[]
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, patentNumber])
+  @@index([projectId])
+  @@index([sessionId]) // New index for session file queries
+  @@map("saved_prior_art")
+}
+
+model ProjectImage {
+  id        String   @id @default(uuid())
+  projectId String
+  url       String
+  caption   String?
+  order     Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_images")
+}
+
+model ProjectDocument {
+  id                String   @id @default(uuid())
+  projectId         String
+  fileName          String
+  originalName      String
+  fileType          String   @default("uploaded-doc") // 'parent-patent', 'office-action', 'invention-disclosure', etc.
+  storageUrl        String // Azure blob storage URL
+  extractedText     String?  @db.NVarChar(Max) // Full text extraction
+  extractedMetadata String?  @db.NVarChar(Max) // JSON metadata
+  uploadedBy        String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploader          User     @relation(fields: [uploadedBy], references: [id], onUpdate: NoAction)
+
+  @@index([projectId])
+  @@index([uploadedBy])
+  @@map("project_documents")
+}
+
+model ApplicationVersion {
+  id        String     @id @default(uuid())
+  projectId String
+  userId    String
+  name      String?
+  createdAt DateTime   @default(now())
+  deletedAt DateTime?
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onUpdate: NoAction)
+  documents Document[]
+
+  @@index([projectId])
+  @@index([userId])
+  @@map("application_versions")
+}
+
+model Document {
+  id                   String             @id @default(uuid())
+  applicationVersionId String
+  type                 String
+  content              String?            @db.NVarChar(Max)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  deletedAt            DateTime?
+  applicationVersion   ApplicationVersion @relation(fields: [applicationVersionId], references: [id], onDelete: Cascade)
+
+  @@index([applicationVersionId])
+  @@map("documents")
+}
+
+model DraftDocument {
+  id                    String                 @id @default(uuid())
+  projectId             String
+  amendmentProjectId    String? // Optional: for amendment response documents
+  type                  String
+  content               String?                @db.NVarChar(Max)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  amendmentProject      AmendmentProject?      @relation(fields: [amendmentProjectId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  amendmentProjectFiles AmendmentProjectFile[]
+
+  @@unique([projectId, type])
+  @@index([projectId])
+  @@index([amendmentProjectId])
+  @@map("draft_documents")
+}
+
+model CitationMatch {
+  id                       String        @id @default(uuid())
+  searchHistoryId          String
+  citationJobId            String
+  referenceNumber          String
+  citation                 String        @db.NVarChar(Max)
+  paragraph                String?       @db.NVarChar(Max)
+  score                    Float?
+  locationJobId            Int?
+  locationStatus           String?
+  locationData             String?       @db.NVarChar(Max)
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+  locationErrorMessage     String?       @db.NVarChar(Max)
+  parsedElementText        String?       @db.NVarChar(Max)
+  referenceApplicant       String?       @db.NVarChar(Max)
+  referenceAssignee        String?       @db.NVarChar(Max)
+  referencePublicationDate String?
+  referenceTitle           String?       @db.NVarChar(Max)
+  reasoningErrorMessage    String?       @db.NVarChar(Max)
+  reasoningJobId           Int?
+  reasoningScore           Float?
+  reasoningStatus          String?
+  reasoningSummary         String?       @db.NVarChar(Max)
+  analysisSource           String        @default("LEGACY_RELEVANCE")
+  isTopResult              Boolean       @default(false)
+  elementOrder             Int?
+  citationJob              CitationJob   @relation(fields: [citationJobId], references: [id], onUpdate: NoAction)
+  searchHistory            SearchHistory @relation(fields: [searchHistoryId], references: [id], onDelete: Cascade)
+
+  @@index([searchHistoryId])
+  @@index([citationJobId])
+  @@index([referenceNumber])
+  @@map("citation_matches")
+}
+
+model PriorArtAnalysisCache {
+  id              String        @id @default(cuid())
+  projectId       String
+  searchHistoryId String
+  claim1TextHash  String
+  resultsJson     String        @db.Text
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  searchHistory   SearchHistory @relation(fields: [searchHistoryId], references: [id], onUpdate: NoAction)
+
+  @@unique([projectId, searchHistoryId, claim1TextHash], name: "projectId_searchHistoryId_claim1TextHash")
+  @@index([projectId])
+  @@index([searchHistoryId])
+  @@map("prior_art_analysis_cache")
+}
+
+model PatentabilityScore {
+  id                  String        @id @default(uuid())
+  searchHistoryId     String        @unique
+  score               Float
+  elementAnalysisJson String?       @db.NVarChar(Max)
+  overlapMatrixJson   String?       @db.NVarChar(Max)
+  recommendations     String?       @db.NVarChar(Max)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  searchHistory       SearchHistory @relation(fields: [searchHistoryId], references: [id], onUpdate: NoAction)
+
+  @@index([searchHistoryId])
+  @@map("patentability_scores")
+}
+
+model CombinedExaminerAnalysis {
+  id               String   @id @default(uuid())
+  searchHistoryId  String
+  userId           String?
+  referenceNumbers String
+  analysisJson     String   @db.NVarChar(Max)
+  claim1Text       String   @db.NVarChar(Max)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // New fields for claim version tracking
+  claim1Hash        String? // Hash of claim 1 when this analysis was run
+  citationJobIds    String? @db.NVarChar(Max) // JSON array of citation job IDs used
+  parserVersionUsed String? // Parser version used
+
+  searchHistory SearchHistory @relation(fields: [searchHistoryId], references: [id], onDelete: Cascade)
+  user          User?         @relation(fields: [userId], references: [id])
+
+  @@index([searchHistoryId])
+  @@index([userId])
+  @@index([claim1Hash])
+  @@map("combined_examiner_analyses")
+}
+
+model RefinementSession {
+  id          String   @id @default(uuid())
+  projectId   String   @unique
+  contextJson String   @default("{}") @db.NVarChar(Max)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// Chat message history for project assistant
+model ChatMessage {
+  id        String   @id @default(cuid())
+  projectId String
+  role      String
+  content   String   @db.NVarChar(Max)
+  metadata  String?  @db.NVarChar(Max)
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, timestamp])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  timestamp    DateTime @default(now())
+  userId       String?
+  tenantId     String?
+  action       String
+  resourceType String?
+  resourceId   String?
+  method       String?
+  path         String?
+  statusCode   Int?
+  duration     Int?
+  ipAddress    String?
+  userAgent    String?
+  metadata     String?  @db.NVarChar(Max)
+  success      Boolean  @default(true)
+  errorMessage String?  @db.NVarChar(Max)
+
+  @@index([userId, timestamp])
+  @@index([tenantId, timestamp])
+  @@index([action, timestamp])
+  @@index([resourceType, resourceId, timestamp])
+  @@index([timestamp])
+}
+
+model UserPrivacy {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  dataProcessingConsent Boolean   @default(false)
+  marketingConsent      Boolean   @default(false)
+  consentedAt           DateTime?
+  consentIpAddress      String?
+  dataRetentionDays     Int       @default(365)
+  lastDataExportAt      DateTime?
+  lastDataDeletionAt    DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Invention {
+  id                          String    @id @default(uuid())
+  projectId                   String    @unique
+  title                       String?
+  abstract                    String?   @db.NVarChar(Max)
+  technicalField              String?   @db.NVarChar(Max)
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+  advantagesJson              String?   @db.NVarChar(Max)
+  claimsJson                  String?   @db.NVarChar(Max)
+  priorArtJson                String?   @db.NVarChar(Max)
+  noveltyStatement            String?   @db.NVarChar(Max)
+  backgroundJson              String?   @db.NVarChar(Max)
+  definitionsJson             String?   @db.NVarChar(Max)
+  featuresJson                String?   @db.NVarChar(Max)
+  futureDirectionsJson        String?   @db.NVarChar(Max)
+  patentCategory              String?
+  processStepsJson            String?   @db.NVarChar(Max)
+  summary                     String?   @db.NVarChar(Max)
+  technicalImplementationJson String?   @db.NVarChar(Max)
+  useCasesJson                String?   @db.NVarChar(Max)
+  claimSyncedAt               DateTime?
+  lastSyncedClaim             String?   @db.NVarChar(Max)
+  parsedClaimElementsJson     String?   @db.NVarChar(Max)
+  searchQueriesJson           String?   @db.NVarChar(Max)
+
+  // New fields for continuation/file linking support
+  applicationType        String? @default("original") // "original", "continuation", "cip", "reissue"
+  parentApplicationsJson String? @db.NVarChar(Max) // JSON array of parent patent references
+  linkedFileIdsJson      String? @db.NVarChar(Max) // JSON array of linked SavedPriorArt IDs
+
+  // New fields for claim version tracking
+  claim1Hash     String? // SHA-256 hash of claim 1 text
+  claim1ParsedAt DateTime? // When claim 1 was last parsed
+  parserVersion  String?   @default("v1.0") // Parser version used
+
+  // Template fields (added in recent migration)
+  alternativeEmbodimentsJson String? @db.NVarChar(Max)
+  commercialPotential        String? @db.NVarChar(Max)
+  elevatorPitch              String? @db.NVarChar(Max)
+  fundingSourcesJson         String? @db.NVarChar(Max)
+  inventorsJson              String? @db.NVarChar(Max)
+  knownLimitationsJson       String? @db.NVarChar(Max)
+  plannedUses                String? @db.NVarChar(Max)
+  problemStatement           String? @db.NVarChar(Max)
+  publicDisclosuresJson      String? @db.NVarChar(Max)
+  templateCompleteness       Float?  @default(0.0)
+  templateMode               String? @default("simple")
+
+  claimVersions ClaimVersion[]
+  claims        Claim[]
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([claim1Hash])
+  @@index([templateMode])
+  @@map("inventions")
+}
+
+/// Normalized Claim record linked to Invention (replaces claimsJson for editing workflow)
+model Claim {
+  id          String    @id @default(uuid())
+  inventionId String
+  number      Int
+  text        String    @db.NVarChar(Max)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  invention   Invention @relation(fields: [inventionId], references: [id], onDelete: Cascade)
+
+  @@unique([inventionId, number])
+  @@index([inventionId])
+  @@map("claims")
+}
+
+model ClaimVersion {
+  id          String          @id @default(uuid())
+  inventionId String
+  userId      String
+  name        String?
+  createdAt   DateTime        @default(now())
+  snapshots   ClaimSnapshot[]
+  invention   Invention       @relation(fields: [inventionId], references: [id], onDelete: Cascade)
+  user        User            @relation(fields: [userId], references: [id], onUpdate: NoAction)
+
+  @@index([inventionId])
+  @@index([userId])
+  @@index([inventionId, createdAt])
+  @@map("claim_versions")
+}
+
+model ClaimSnapshot {
+  id             String       @id @default(uuid())
+  claimVersionId String
+  number         Int
+  text           String       @db.NVarChar(Max)
+  createdAt      DateTime     @default(now())
+  claimVersion   ClaimVersion @relation(fields: [claimVersionId], references: [id], onDelete: Cascade)
+
+  @@index([claimVersionId])
+  @@map("claim_snapshots")
+}
+
+model ProjectFigure {
+  id             String          @id @default(uuid())
+  projectId      String
+  fileName       String?
+  originalName   String?
+  blobName       String?
+  mimeType       String?
+  sizeBytes      Int?
+  figureKey      String?
+  description    String?         @db.NVarChar(Max)
+  uploadedBy     String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+  displayOrder   Int             @default(0)
+  title          String?
+  status         String          @default("PENDING")
+  figureElements FigureElement[]
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploader       User            @relation(fields: [uploadedBy], references: [id], onUpdate: NoAction)
+
+  @@index([projectId])
+  @@index([blobName])
+  @@index([uploadedBy])
+  @@map("project_figures")
+}
+
+model Element {
+  id             String          @id @default(uuid())
+  projectId      String
+  elementKey     String
+  name           String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  figureElements FigureElement[]
+
+  @@unique([projectId, elementKey])
+  @@index([projectId])
+  @@map("elements")
+}
+
+model FigureElement {
+  id                 String        @id @default(uuid())
+  figureId           String
+  elementId          String
+  calloutDescription String?       @db.NVarChar(Max)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  element            Element       @relation(fields: [elementId], references: [id], onUpdate: NoAction)
+  figure             ProjectFigure @relation(fields: [figureId], references: [id], onDelete: Cascade)
+
+  @@unique([figureId, elementId])
+  @@index([figureId])
+  @@index([elementId])
+  @@index([figureId], map: "IX_FigureElement_FigureId")
+  @@map("figure_elements")
+}
+
+model SavedCitation {
+  id              String        @id @default(uuid())
+  savedPriorArtId String
+  elementText     String        @db.NVarChar(Max)
+  citationText    String        @db.NVarChar(Max)
+  location        String?       @db.NVarChar(255)
+  reasoning       String?       @db.NVarChar(Max)
+  displayOrder    Int           @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  savedPriorArt   SavedPriorArt @relation(fields: [savedPriorArtId], references: [id], onDelete: Cascade)
+
+  @@index([savedPriorArtId])
+  @@index([displayOrder])
+  @@map("saved_citations")
+}
+
+model AIAuditLog {
+  id            String    @id @default(uuid())
+  projectId     String
+  tenantId      String
+  userId        String
+  operation     String // "generate-claims", "analyze-prior-art", "refine-invention", etc.
+  toolName      String? // "openai", "anthropic", "custom-ai-tool", etc.
+  model         String // "gpt-4", "gpt-3.5-turbo", "claude-3-sonnet", etc.
+  prompt        String    @db.NVarChar(Max)
+  response      String    @db.NVarChar(Max)
+  tokenUsage    String    @db.NVarChar(Max) // JSON: { "prompt": 120, "completion": 450, "total": 570 }
+  status        String    @default("SUCCESS") // "SUCCESS", "FAILED", "PARTIAL"
+  errorMessage  String?   @db.NVarChar(Max)
+  humanReviewed Boolean   @default(false)
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  exportedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user    User    @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([projectId, createdAt])
+  @@index([tenantId, userId])
+  @@index([operation, createdAt])
+  @@map("ai_audit_logs")
+}
+
+// Amendment-related models following existing patterns
+model OfficeAction {
+  id               String    @id @default(uuid())
+  projectId        String
+  tenantId         String
+  oaNumber         String? // "Non-Final Office Action" or examiner reference
+  dateIssued       DateTime?
+  examinerId       String?
+  artUnit          String?
+  blobName         String? // S3 storage key (follows ProjectFigure pattern)
+  originalFileName String?
+  mimeType         String?
+  sizeBytes        Int?
+  extractedText    String?   @db.NVarChar(Max) // Raw extracted text from OCR/parsing
+  parsedJson       String?   @db.NVarChar(Max) // Structured OA data
+  examinerRemarks  String?   @db.NVarChar(Max) // AI-generated user-friendly summary
+  status           String    @default("UPLOADED") // UPLOADED, PARSED, PROCESSING, COMPLETED
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime? // Soft delete pattern
+
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rejections        Rejection[]
+  amendmentProjects AmendmentProject[]
+  claimVersions     PatentClaimVersion[]
+  summary           OfficeActionSummary?
+  strategyRecommendations StrategyRecommendation[]
+  rejectionAnalyses RejectionAnalysisResult[]
+
+  @@index([projectId])
+  @@index([tenantId])
+  @@index([tenantId, projectId])
+  @@index([status])
+  @@map("office_actions")
+}
+
+model Rejection {
+  id             String   @id @default(uuid())
+  officeActionId String
+  type           String // "102", "103", "101", "112"
+  claimNumbers   String   @db.NVarChar(Max) // JSON array: ["1", "3", "7"]
+  citedPriorArt  String?  @db.NVarChar(Max) // JSON array of patent numbers
+  examinerText   String   @db.NVarChar(Max) // Raw examiner reasoning
+  parsedElements String?  @db.NVarChar(Max) // Structured claim element mapping
+  status         String   @default("PENDING") // PENDING, ADDRESSED, RESOLVED
+  displayOrder   Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  officeAction OfficeAction @relation(fields: [officeActionId], references: [id], onDelete: Cascade)
+  analysisResult RejectionAnalysisResult?
+
+  @@index([officeActionId])
+  @@index([type])
+  @@map("rejections")
+}
+
+model AmendmentProject {
+  id                       String    @id @default(uuid())
+  officeActionId           String
+  projectId                String // Link to original patent project
+  tenantId                 String
+  userId                   String
+  name                     String // "Response to Non-Final OA - Dec 2024"
+  status                   String    @default("DRAFT") // DRAFT, IN_REVIEW, READY_TO_FILE, FILED
+  dueDate                  DateTime? // USPTO response deadline
+  filedDate                DateTime?
+  responseType             String? // "AMENDMENT", "CONTINUATION", "RCE"
+  validationOverridden     Boolean   @default(false) // True if user proceeded despite warnings
+  validationOverrideReason String? // Optional reason for override
+  validationOverrideAt     DateTime? // When override occurred
+  validationOverrideBy     String? // User who performed override
+  validationSummary        String?   @db.NVarChar(Max) // JSON snapshot of validation state
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  deletedAt                DateTime?
+
+  officeAction   OfficeAction           @relation(fields: [officeActionId], references: [id], onDelete: Cascade)
+  project        Project                @relation(fields: [projectId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenant         Tenant                 @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user           User                   @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  draftDocuments DraftDocument[] // Reuse existing draft system
+  amendmentFiles AmendmentProjectFile[] // New: Track all files for this amendment
+
+  @@index([officeActionId])
+  @@index([projectId])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([tenantId, userId])
+  @@index([status, dueDate])
+  @@index([validationOverridden])
+  @@map("amendment_projects")
+}
+
+// New model for comprehensive amendment file tracking
+model AmendmentProjectFile {
+  id                 String    @id @default(uuid())
+  amendmentProjectId String
+  tenantId           String
+  fileType           String // "office_action", "draft_response", "filed_response", "prior_art", "reference_doc", "export_version"
+  fileName           String
+  originalName       String
+  blobName           String? // Azure blob storage key
+  storageUrl         String? // Full URL for access
+  mimeType           String?
+  sizeBytes          Int?
+  version            Int       @default(1) // Version number for tracking iterations
+  status             String    @default("ACTIVE") // ACTIVE, SUPERSEDED, ARCHIVED, FILED
+  tags               String?   @db.NVarChar(Max) // JSON array of tags like ["draft", "v2", "claims-only"]
+  description        String?   @db.NVarChar(Max) // User description or auto-generated summary
+  extractedText      String?   @db.NVarChar(Max) // Full text extraction for search
+  extractedMetadata  String?   @db.NVarChar(Max) // JSON metadata
+  uploadedBy         String
+  linkedDraftId      String? // Optional link to DraftDocument for cross-reference
+  parentFileId       String? // For version chains - which file this supersedes
+  exportedAt         DateTime? // When this was exported/downloaded
+  filedAt            DateTime? // When this was actually filed with USPTO
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime? // Soft delete
+
+  amendmentProject AmendmentProject       @relation(fields: [amendmentProjectId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenant           Tenant                 @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  uploader         User                   @relation(fields: [uploadedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  linkedDraft      DraftDocument?         @relation(fields: [linkedDraftId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  parentFile       AmendmentProjectFile?  @relation("FileVersionChain", fields: [parentFileId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  childFiles       AmendmentProjectFile[] @relation("FileVersionChain")
+
+  @@index([amendmentProjectId])
+  @@index([tenantId])
+  @@index([fileType])
+  @@index([status])
+  @@index([uploadedBy])
+  @@index([tenantId, amendmentProjectId])
+  @@index([amendmentProjectId, fileType])
+  @@index([amendmentProjectId, createdAt])
+  @@index([parentFileId]) // For version chains
+  @@map("amendment_project_files")
+}
+
+// ============ NEW MODELS FOR STRUCTURED AMENDMENT INTELLIGENCE ============
+
+/// Background job queue for async processing
+model JobQueue {
+  id            String   @id @default(uuid())
+  type          String   // 'OFFICE_ACTION_ORCHESTRATION', etc.
+  payload       String   @db.NVarChar(Max) // JSON payload
+  status        String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  attempts      Int      @default(0)
+  maxAttempts   Int      @default(3)
+  lastError     String?  @db.NVarChar(Max)
+  scheduledAt   DateTime @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  
+  @@index([type, status, scheduledAt])
+  @@index([status, createdAt])
+  @@map("job_queue")
+}
+
+/// Core patent application entity for grounding all prosecution data
+model PatentApplication {
+  id                 String   @id @default(uuid())
+  projectId          String   @unique
+  applicationNumber  String?
+  filingDate         DateTime?
+  title              String?
+  inventors          String?  @db.NVarChar(Max) // JSON array
+  assignee           String?
+  artUnit            String?
+  examinerName       String?
+  examinerId         String?
+  examiner           String?  // Full examiner info
+  status             String   @default("PENDING") // PENDING, ALLOWED, ABANDONED, ISSUED
+  metadata           String?  @db.NVarChar(Max) // JSON for additional data
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  project            Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  claimVersions      PatentClaimVersion[]
+  strategyRecommendations StrategyRecommendation[]
+  prosecutionEvents  ProsecutionEvent[]
+
+  @@index([projectId])
+  @@index([applicationNumber])
+  @@map("patent_applications")
+}
+
+/// Prosecution timeline events (only milestones that affect strategy/deadlines)
+model ProsecutionEvent {
+  id             String    @id @default(uuid())
+  applicationId  String
+  eventType      String    // APPLICATION_FILED, NON_FINAL_OA, FINAL_OA, etc.
+  eventDate      DateTime
+  title          String
+  documentId     String?   // External document ID
+  metadata       String?   @db.NVarChar(Max) // JSON metadata
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  
+  application    PatentApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  
+  @@index([applicationId])
+  @@index([eventType])
+  @@index([eventDate])
+  @@index([applicationId, eventDate])
+  @@map("prosecution_events")
+}
+
+/// Tracks claim versions at each OA response point
+model PatentClaimVersion {
+  id                  String    @id @default(uuid())
+  applicationId       String
+  officeActionId      String?   // Null for initial filing
+  versionNumber       Int
+  status              String    @default("ACTIVE") // ACTIVE, SUPERSEDED, CANCELLED
+  effectiveDate       DateTime
+  source              String    // INITIAL_FILING, AMENDMENT, PRELIMINARY_AMENDMENT
+  claimsJson          String    @db.NVarChar(Max) // Full claim set as JSON
+  claim1Hash          String?   // For quick comparison
+  elementAnalysisJson String?   @db.NVarChar(Max) // Parsed elements
+  createdAt           DateTime  @default(now())
+  
+  application         PatentApplication @relation(fields: [applicationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  officeAction        OfficeAction?     @relation(fields: [officeActionId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@unique([applicationId, versionNumber])
+  @@index([applicationId])
+  @@index([officeActionId])
+  @@index([claim1Hash])
+  @@map("patent_claim_versions")
+}
+
+/// AI-generated rejection analysis results
+model RejectionAnalysisResult {
+  id                String   @id @default(uuid())
+  rejectionId       String   @unique
+  officeActionId    String
+  analysisType      String   // STRENGTH_ASSESSMENT, CLAIM_CHARTING, STRATEGY_RECOMMENDATION
+  strengthScore     Float?   // 0-1 score of rejection strength
+  priorArtMapping   String?  @db.NVarChar(Max) // JSON: element -> prior art mapping
+  suggestedStrategy String?  // ARGUE, AMEND, COMBINATION
+  reasoning         String?  @db.NVarChar(Max)
+  confidenceScore   Float?
+  modelVersion      String?
+  agentVersion      String?  // Track which version of the agent/prompt was used
+  model             String?  // Track which AI model was used (gpt-4, gpt-3.5, etc)
+  createdAt         DateTime @default(now())
+  
+  rejection         Rejection    @relation(fields: [rejectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  officeAction      OfficeAction @relation(fields: [officeActionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([rejectionId])
+  @@index([officeActionId])
+  @@map("rejection_analysis_results")
+}
+
+/// Structured OA summary for quick access and UI display
+model OfficeActionSummary {
+  id                    String   @id @default(uuid())
+  officeActionId        String   @unique
+  summaryText           String   @db.NVarChar(Max) // Human-readable summary
+  keyIssues             String   @db.NVarChar(Max) // JSON array of key issues
+  rejectionBreakdown    String   @db.NVarChar(Max) // JSON: type -> count mapping
+  totalClaimsRejected   Int
+  allowedClaims         String?  @db.NVarChar(Max) // JSON array
+  strategyHint          String?  // Quick strategy guidance
+  claimImpactMap        String?  @db.NVarChar(Max) // JSON: claim -> impact
+  examinerTone          String?  // FAVORABLE, NEUTRAL, HOSTILE
+  responseComplexity    String?  // LOW, MEDIUM, HIGH
+  // Add numeric columns for efficient querying
+  num102Rejections      Int      @default(0)
+  num103Rejections      Int      @default(0)
+  num101Rejections      Int      @default(0)
+  num112Rejections      Int      @default(0)
+  numOtherRejections    Int      @default(0)
+  createdAt             DateTime @default(now())
+  
+  officeAction          OfficeAction @relation(fields: [officeActionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([officeActionId])
+  @@index([num102Rejections, num103Rejections, num101Rejections, num112Rejections])
+  @@map("office_action_summaries")
+}
+
+/// Overall strategy recommendations for responding to an OA
+model StrategyRecommendation {
+  id                 String   @id @default(uuid())
+  officeActionId     String
+  applicationId      String
+  overallStrategy    String   // ARGUE_ALL, AMEND_NARROW, MIXED_APPROACH, FILE_CONTINUATION
+  priorityActions    String   @db.NVarChar(Max) // JSON array of actions
+  estimatedDifficulty String  // EASY, MEDIUM, HARD
+  successProbability Float?   // 0-1 estimated probability
+  keyArguments       String?  @db.NVarChar(Max) // JSON: suggested arguments
+  amendmentFocus     String?  @db.NVarChar(Max) // JSON: elements to amend
+  alternativeOptions String?  @db.NVarChar(Max) // JSON: other paths
+  reasoning          String   @db.NVarChar(Max)
+  createdAt          DateTime @default(now())
+  
+  officeAction       OfficeAction      @relation(fields: [officeActionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  application        PatentApplication @relation(fields: [applicationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([officeActionId])
+  @@index([applicationId])
+  @@map("strategy_recommendations")
+}
+
+model ClaimValidation {
+  id              String   @id @default(uuid())
+  claimId         String
+  projectId       String
+  tenantId        String
+  validationState String   // PENDING, PASSED_LOW, PASSED_MED, PASSED_HIGH, FAILED, NOT_STARTED
+  riskLevel       String?  // LOW, MEDIUM, HIGH, NONE
+  message         String?  @db.NVarChar(1000)
+  details         String?  @db.NVarChar(Max) // JSON with detailed results
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([claimId])
+  @@index([projectId])
+  @@index([tenantId])
+  @@index([validationState])
+  @@index([projectId, validationState], name: "IX_claim_validations_project_state")
+  @@map("claim_validations")
+}

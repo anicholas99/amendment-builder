@@ -59,8 +59,8 @@ export class ProsecutionDataService {
         throw new ApplicationError(ErrorCode.PROJECT_NOT_FOUND);
       }
 
-      // Get current office action (most recent)
-      const currentOA = project.officeActions[0];
+      // Get current office action (one that needs response)
+      const currentOA = project.officeActions.find(oa => oa.status === 'PENDING_RESPONSE');
       
       // Get claim statistics
       const claimStats = await this.getClaimStatistics(projectId, tenantId);
@@ -406,7 +406,19 @@ export class ProsecutionDataService {
   private calculateDeadline(oa: any): Date {
     const issued = oa.dateIssued || oa.createdAt;
     const deadline = new Date(issued);
-    deadline.setDate(deadline.getDate() + 90); // Standard 3-month deadline
+    
+    // Determine deadline based on OA type
+    const oaType = this.determineOAType(oa);
+    if (oaType === 'FINAL') {
+      // Final OA: 2 months (60 days) statutory deadline
+      deadline.setDate(deadline.getDate() + 60);
+    } else {
+      // Non-Final OA: 3 months (90 days) statutory deadline
+      deadline.setDate(deadline.getDate() + 90);
+    }
+    
+    // TODO: Add extension calculation based on XT/ documents
+    
     return deadline;
   }
 

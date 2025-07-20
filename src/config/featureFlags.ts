@@ -12,6 +12,11 @@ export const FEATURE_FLAGS = {
   // Enable minimalist UI for amendment studio (attorney-focused design)
   // Default to true - set NEXT_PUBLIC_MINIMALIST_AMENDMENT_UI=false to disable
   ENABLE_MINIMALIST_AMENDMENT_UI: process.env.NEXT_PUBLIC_MINIMALIST_AMENDMENT_UI !== 'false',
+  
+  // Enable 6-month filter for Office Actions as a fallback
+  // Default to false - uses timeline-aware status determination
+  // Set NEXT_PUBLIC_ENABLE_OA_SIX_MONTH_FILTER=true to enable the legacy filter
+  ENABLE_OA_SIX_MONTH_FILTER: process.env.NEXT_PUBLIC_ENABLE_OA_SIX_MONTH_FILTER === 'true',
 } as const;
 
 /**
