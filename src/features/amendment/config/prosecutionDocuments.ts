@@ -118,6 +118,14 @@ export const DOCUMENT_DISPLAY_CONFIG: Record<string, DocumentConfig> = {
     category: 'response',
     description: 'Response to non-final rejection'
   },
+  'AMSB': {
+    documentCode: 'AMSB',
+    label: 'Amendment/Submission',
+    shortLabel: 'Amendment',
+    isTimeline: true,
+    category: 'response',
+    description: 'Amendment and/or arguments submitted'
+  },
   'RCEX': {
     documentCode: 'RCEX',
     label: 'RCE Filed',

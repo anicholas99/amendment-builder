@@ -103,20 +103,35 @@ async function handler(
       const storedDocuments = [];
       const timelineEvents = [];
       
-      for (const doc of documents) {
-        // Check if document already exists
-        const existingDoc = await tx.projectDocument.findFirst({
-          where: {
-            projectId,
-            originalName: doc.documentCode,
-            fileType: 'uspto-document',
-            extractedMetadata: {
-              contains: doc.documentId || doc.mailDate || '',
-            },
+      // Get all existing USPTO documents for this project in one query
+      const existingDocs = await tx.projectDocument.findMany({
+        where: {
+          projectId,
+          fileType: 'uspto-document',
+        },
+        select: {
+          originalName: true,
+          extractedMetadata: true,
+        }
+      });
+      
+      // Create a Set for faster lookups
+      const existingDocSet = new Set(
+        existingDocs.map(doc => {
+          try {
+            const metadata = JSON.parse(doc.extractedMetadata || '{}');
+            return `${doc.originalName}_${metadata.documentId || metadata.mailDate || ''}`;
+          } catch {
+            return doc.originalName;
           }
-        });
-
-        if (!existingDoc) {
+        })
+      );
+      
+      for (const doc of documents) {
+        // Check if document already exists using the Set
+        const docKey = `${doc.documentCode}_${doc.documentId || doc.mailDate || ''}`;
+        
+        if (!existingDocSet.has(docKey)) {
           // Store document with categorization
           const storedDoc = await tx.projectDocument.create({
             data: {
@@ -159,16 +174,26 @@ async function handler(
 
       // Step 2: Create OfficeAction records for backward compatibility
       const createdOAs = [];
+      
+      // Get all existing office actions in one query
+      const existingOAs = await tx.officeAction.findMany({
+        where: {
+          projectId,
+        },
+        select: {
+          oaNumber: true,
+          dateIssued: true,
+        }
+      });
+      
+      const existingOASet = new Set(
+        existingOAs.map(oa => `${oa.oaNumber}_${oa.dateIssued?.toISOString() || ''}`)
+      );
+      
       for (const oaDoc of officeActions) {
-        const existingOA = await tx.officeAction.findFirst({
-          where: {
-            projectId,
-            oaNumber: oaDoc.documentCode,
-            dateIssued: oaDoc.mailDate ? new Date(oaDoc.mailDate) : undefined,
-          }
-        });
-
-        if (!existingOA) {
+        const oaKey = `${oaDoc.documentCode}_${oaDoc.mailDate || ''}`;
+        
+        if (!existingOASet.has(oaKey)) {
           const newOA = await tx.officeAction.create({
             data: {
               projectId,
@@ -208,6 +233,9 @@ async function handler(
         officeActionsCreated: createdOAs.length,
         totalDocuments: documents.length,
       };
+    }, {
+      timeout: 30000, // 30 seconds timeout for large USPTO syncs
+      maxWait: 30000, // Maximum time to wait for transaction to start
     });
 
     logger.info('USPTO sync completed', { 

@@ -81,11 +81,6 @@ export class ProsecutionDataService {
       
       // Get prosecution timeline
       const timeline = await this.buildProsecutionTimeline(projectId, tenantId);
-      logger.info('Built prosecution timeline', { 
-        projectId, 
-        timelineLength: timeline.length,
-        eventTypes: timeline.map(t => ({ type: t.type, documentCode: t.documentCode }))
-      });
       
       // Get examiner analytics if we have examiner data
       let examinerAnalytics: ExaminerAnalytics | undefined;
@@ -414,11 +409,6 @@ export class ProsecutionDataService {
         documentCode = 'CTNR';
       }
       
-      logger.info('Office action document code', { 
-        oaId: oa.id, 
-        oaNumber: oa.oaNumber,
-        determinedCode: documentCode 
-      });
       
       timeline.push({
         id: oa.id,
@@ -435,74 +425,43 @@ export class ProsecutionDataService {
       // Add response events from amendment projects
       for (const amendment of oa.amendmentProjects) {
         if (amendment.status === 'FILED') {
+          // Use AMSB for amendments (most common response type)
           timeline.push({
             id: `response-${amendment.id}`,
             type: 'RESPONSE',
-            documentCode: 'REM', // Default to remarks
+            documentCode: 'AMSB', // Amendment/Submission
             date: amendment.updatedAt.toISOString(),
-            title: 'Response Filed',
+            title: 'Amendment Filed',
             status: 'completed',
           });
         }
       }
     }
 
-    // Add USPTO documents to timeline
+
+    // Remove the filter that only includes timeline documents - show ALL USPTO documents
+    // This way we get the complete prosecution history
     for (const doc of usptoDocuments) {
       try {
-        // Parse extractedMetadata to get document details
         const metadata = doc.extractedMetadata && typeof doc.extractedMetadata === 'object' 
           ? doc.extractedMetadata as any 
           : {};
         
         const documentCode = metadata.documentCode || metadata.docCode || '';
+        const config = getDocumentDisplayConfig(documentCode);
         
-        // Only include timeline documents (not supporting documents)
-        if (documentCode && isTimelineDocument(documentCode)) {
-          const config = getDocumentDisplayConfig(documentCode);
-          
-          timeline.push({
-            id: doc.id,
-            type: this.mapDocumentCodeToType(documentCode),
-            documentCode,
-            date: metadata.mailDate || metadata.date || doc.createdAt.toISOString(),
-            title: config?.label || metadata.description || doc.fileName,
-            status: 'completed',
-          });
-        }
+        timeline.push({
+          id: doc.id,
+          type: this.mapDocumentCodeToType(documentCode),
+          documentCode,
+          date: metadata.mailDate || metadata.date || doc.createdAt.toISOString(),
+          title: config?.label || metadata.description || doc.fileName,
+          status: 'completed',
+        });
       } catch (error) {
         logger.warn('Failed to parse USPTO document metadata', {
           documentId: doc.id,
           error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
-
-    // Add some example IDS and extension events (temporary - should come from actual data)
-    if (timeline.length > 2) {
-      // Add an IDS filing after first office action
-      const firstOA = timeline.find(t => t.type === 'OFFICE_ACTION');
-      if (firstOA) {
-        timeline.push({
-          id: `ids-${projectId}-1`,
-          type: 'IDS_FILED',
-          documentCode: 'IDS',
-          date: new Date(new Date(firstOA.date).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days after first OA
-          title: 'Information Disclosure Statement',
-          status: 'completed',
-        });
-      }
-      
-      // Add an extension if there's a final office action
-      const finalOA = timeline.find(t => t.documentCode === 'CTFR');
-      if (finalOA) {
-        timeline.push({
-          id: `ext-${projectId}-1`,
-          type: 'EXTENSION',
-          documentCode: 'XT/',
-          date: new Date(new Date(finalOA.date).getTime() + 60 * 24 * 60 * 60 * 1000).toISOString(), // 60 days after final OA
-          title: 'Extension of Time - 1 Month',
-          status: 'completed',
         });
       }
     }

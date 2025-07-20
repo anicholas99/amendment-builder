@@ -46,6 +46,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useProsecutionTimeline } from '@/hooks/api/useProsecutionOverview';
 import { useEnhancedProsecutionTimeline } from '@/hooks/api/useEnhancedProsecution';
+import { useRealUSPTOTimeline } from '@/hooks/api/useRealUSPTOTimeline';
 import { isFeatureEnabled } from '@/config/featureFlags';
 import { 
   isTimelineDocument, 
@@ -379,6 +380,9 @@ export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
   
+  // Try to use REAL USPTO timeline first
+  const { data: usptoData, isLoading: usptoLoading } = useRealUSPTOTimeline(projectId);
+  
   // Use enhanced timeline if enabled and application number is available
   const { data: enhancedTimeline, isLoading: enhancedLoading } = useEnhancedProsecutionTimeline(
     projectId,
@@ -388,18 +392,16 @@ export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
   // Fallback to legacy timeline
   const { data: legacyTimeline, isLoading: legacyLoading } = useProsecutionTimeline(projectId);
   
-  const timeline = useEnhanced && applicationNumber ? enhancedTimeline : legacyTimeline;
-  const isLoading = useEnhanced && applicationNumber ? enhancedLoading : legacyLoading;
+  // Use USPTO data if available, otherwise fall back to other sources
+  const timeline = usptoData?.timeline || (useEnhanced && applicationNumber ? enhancedTimeline : legacyTimeline);
+  const isLoading = usptoLoading || (useEnhanced && applicationNumber ? enhancedLoading : legacyLoading);
   const isMinimalistUI = isFeatureEnabled('ENABLE_MINIMALIST_AMENDMENT_UI');
   
   // Filter timeline to only show milestone documents
-  console.log('[OATimelineWidget] Raw timeline data:', timeline);
   const milestoneEvents = timeline?.filter(event => {
     // Check by document code first (if available)
     if (event.documentCode) {
-      const isTimeline = isTimelineDocument(event.documentCode);
-      console.log(`[OATimelineWidget] Document ${event.documentCode} is timeline: ${isTimeline}`);
-      return isTimeline;
+      return isTimelineDocument(event.documentCode);
     }
     // Fallback to checking by type for legacy data
     const timelineTypes = ['FILING', 'APPLICATION_FILED', 'OFFICE_ACTION', 'NON_FINAL_OA', 
@@ -408,7 +410,6 @@ export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
       'EXTENSION', 'CONTINUATION_FILED', 'NOTICE'];
     return timelineTypes.includes(event.type);
   }) || [];
-  console.log('[OATimelineWidget] Filtered milestone events:', milestoneEvents);
 
   const handleEventClick = (event: TimelineEvent) => {
     setSelectedEvent(event);
@@ -449,13 +450,6 @@ export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
   const getEventConfig = (event: TimelineEvent) => {
     const docConfig = event.documentCode ? getDocumentDisplayConfig(event.documentCode) : null;
     const visualConfig = event.documentCode ? EVENT_VISUAL_CONFIG[event.documentCode] : EVENT_VISUAL_CONFIG[event.type];
-    
-    console.log(`[OATimelineWidget] Getting config for event:`, {
-      documentCode: event.documentCode,
-      type: event.type,
-      hasVisualConfig: !!visualConfig,
-      icon: visualConfig?.icon?.name || 'default'
-    });
     
     return {
       label: docConfig?.label || event.title || event.type,
