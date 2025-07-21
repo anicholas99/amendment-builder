@@ -59,10 +59,10 @@ export class ProsecutionTimelineService {
    * Build a timeline sequence from USPTO documents
    */
   static buildTimelineSequence(documents: USPTODocument[]): TimelineEvent[] {
-    // Sort documents by mail date (oldest first)
+    // Sort documents by mail date (latest first)
     const sortedDocs = documents
       .filter(doc => doc.mailDate && isMilestoneEvent(doc.documentCode))
-      .sort((a, b) => new Date(a.mailDate!).getTime() - new Date(b.mailDate!).getTime());
+      .sort((a, b) => new Date(b.mailDate!).getTime() - new Date(a.mailDate!).getTime());
     
     const timeline: TimelineEvent[] = [];
     

@@ -5,7 +5,7 @@
  * with proper dates, icons, and visual hierarchy
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import {
   FileText,
@@ -36,6 +36,8 @@ import {
   Gavel,
   Info,
   Loader2,
+  Reply,
+  PlusCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -46,7 +48,9 @@ import { useRealUSPTOTimeline } from '@/hooks/api/useRealUSPTOTimeline';
 import { getDocumentDisplayConfig } from '../config/prosecutionDocuments';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
+import { AmendmentClientService } from '@/client/services/amendment.client-service';
 import { apiFetch } from '@/lib/api/apiClient';
+import { useRouter } from 'next/router';
 
 interface EnhancedTimelineProps {
   projectId: string;
@@ -267,8 +271,27 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
 }) => {
   const { data: usptoData, isLoading } = useRealUSPTOTimeline(projectId);
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [downloadingDocs, setDownloadingDocs] = useState<Set<string>>(new Set());
+  const [processingOfficeAction, setProcessingOfficeAction] = useState<string | null>(null);
+  
+  // Find the latest office action that needs a response
+  const latestOfficeAction = useMemo(() => {
+    if (!usptoData?.timeline) return null;
+    
+    // Office action document codes that typically need responses
+    const officeActionCodes = ['CTNF', 'CTFR', 'CTAV', 'MCTNF', 'MCTFR'];
+    
+    // Sort by date descending and find the first office action
+    const sortedEvents = [...usptoData.timeline].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+    
+    return sortedEvents.find(event => 
+      officeActionCodes.includes(event.documentCode)
+    );
+  }, [usptoData?.timeline]);
   
   // Download USPTO document mutation
   const downloadUSPTODoc = useMutation({
@@ -366,13 +389,20 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
     };
   };
   
-  // Group events by year for better organization
+  // Group events by year for better organization (latest first)
   const eventsByYear = timeline.reduce((acc: any, event: any) => {
     const year = format(event.date, 'yyyy');
     if (!acc[year]) acc[year] = [];
     acc[year].push(event);
     return acc;
   }, {});
+  
+  // Sort events within each year by date (latest first)
+  Object.keys(eventsByYear).forEach(year => {
+    eventsByYear[year].sort((a: any, b: any) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  });
   
   return (
     <div className={cn('bg-white rounded-lg border', className)}>
@@ -404,7 +434,9 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
       <ScrollArea className="h-[600px]">
         <div className="p-6">
           <TooltipProvider>
-            {Object.entries(eventsByYear).map(([year, yearEvents]: [string, any]) => (
+            {Object.entries(eventsByYear)
+              .sort(([yearA], [yearB]) => parseInt(yearB) - parseInt(yearA))
+              .map(([year, yearEvents]: [string, any]) => (
               <div key={year} className="mb-8 last:mb-0">
                 {/* Year Header */}
                 <div className="flex items-center gap-3 mb-4">
@@ -452,12 +484,23 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                         </Tooltip>
                         
                         {/* Content */}
-                        <div className="flex-1 pb-4">
+                        <div className={cn(
+                          "flex-1 pb-4",
+                          latestOfficeAction && event.id === latestOfficeAction.id && "border-l-4 border-blue-500 pl-4 -ml-1"
+                        )}>
                           <div className="flex items-start justify-between gap-4">
                             <div>
-                              <h4 className="font-medium text-gray-900 group-hover:text-gray-700">
-                                {config.label}
-                              </h4>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-medium text-gray-900 group-hover:text-gray-700">
+                                  {config.label}
+                                </h4>
+                                {/* Latest OA indicator */}
+                                {latestOfficeAction && event.id === latestOfficeAction.id && (
+                                  <Badge className="text-xs px-2 py-0 bg-blue-600 text-white">
+                                    Latest OA
+                                  </Badge>
+                                )}
+                              </div>
                               {config.description && (
                                 <p className="text-sm text-gray-500 mt-0.5">
                                   {config.description}
@@ -562,6 +605,68 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                                   </TooltipContent>
                                 </Tooltip>
                               )}
+                              
+                              {/* New Response button for latest office action */}
+                              {latestOfficeAction && event.id === latestOfficeAction.id && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="default"
+                                      size="sm"
+                                      className="h-8 px-3 gap-1 bg-blue-600 hover:bg-blue-700"
+                                      disabled={processingOfficeAction === event.id}
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        setProcessingOfficeAction(event.id);
+                                        
+                                        try {
+                                          // Process the timeline office action
+                                          const result = await AmendmentClientService.processTimelineOfficeAction(
+                                            projectId,
+                                            event.id,
+                                            event.id // Use event.id as both officeActionId and timelineEventId
+                                          );
+                                          
+                                          toast({
+                                            title: "Office Action Processed",
+                                            description: result.processed 
+                                              ? `Office Action OCR'd and response created for ${event.documentCode}`
+                                              : `Response created for ${event.documentCode}`,
+                                          });
+                                          
+                                          // Navigate to amendment studio
+                                          router.push(`/projects/${projectId}/amendments/studio?amendmentId=${result.amendmentProjectId}`);
+                                        } catch (error) {
+                                          console.error('Failed to process office action:', error);
+                                          toast({
+                                            title: "Error",
+                                            description: "Failed to create response. Please try again.",
+                                            variant: "destructive",
+                                          });
+                                        } finally {
+                                          setProcessingOfficeAction(null);
+                                        }
+                                      }}
+                                    >
+                                      {processingOfficeAction === event.id ? (
+                                        <>
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                          <span className="text-xs font-medium">Processing...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Reply className="h-3 w-3" />
+                                          <span className="text-xs font-medium">New Response</span>
+                                        </>
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Create a new response for this office action</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                              
                               <Button
                                 variant="ghost"
                                 size="sm"

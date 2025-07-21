@@ -230,6 +230,69 @@ export class AmendmentClientService {
     }
   }
 
+  /**
+   * Process a timeline Office Action (download, OCR, parse, and create amendment project)
+   */
+  static async processTimelineOfficeAction(
+    projectId: string,
+    officeActionId: string,
+    timelineEventId?: string
+  ): Promise<{ amendmentProjectId: string; processed: boolean }> {
+    try {
+      logger.info('[AmendmentClientService] Processing timeline Office Action', {
+        projectId,
+        officeActionId,
+        timelineEventId,
+      });
+
+      const response = await apiFetch(
+        `${API_ROUTES.AMENDMENTS.OFFICE_ACTIONS.LIST(projectId)}/process-timeline`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            officeActionId,
+            timelineEventId,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new ApplicationError(
+          ErrorCode.API_NETWORK_ERROR,
+          `Failed to process timeline Office Action: ${response.status}`
+        );
+      }
+
+      const result = await response.json();
+
+      logger.info('[AmendmentClientService] Timeline Office Action processed successfully', {
+        officeActionId,
+        amendmentProjectId: result.amendmentProjectId,
+        processed: result.processed,
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('[AmendmentClientService] Failed to process timeline Office Action', {
+        error,
+        projectId,
+        officeActionId,
+      });
+
+      if (error instanceof ApplicationError) {
+        throw error;
+      }
+
+      throw new ApplicationError(
+        ErrorCode.API_NETWORK_ERROR,
+        `Process failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
   // ============ REJECTION ANALYSIS ============
 
   /**

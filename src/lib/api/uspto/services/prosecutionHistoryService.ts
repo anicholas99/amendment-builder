@@ -363,8 +363,8 @@ export const getProsecutionTimeline = (history: ProsecutionHistory) => {
     });
   }
 
-  // Sort chronologically
-  events.sort((a, b) => a.date.getTime() - b.date.getTime());
+  // Sort chronologically (latest first)
+  events.sort((a, b) => b.date.getTime() - a.date.getTime());
 
   return events;
 };

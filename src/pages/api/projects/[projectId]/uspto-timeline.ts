@@ -85,8 +85,8 @@ async function handler(
       }
     }
 
-    // Sort timeline by date
-    timeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Sort timeline by date (latest first)
+    timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     // Get office actions for additional context
     const officeActions = await prisma.officeAction.findMany({

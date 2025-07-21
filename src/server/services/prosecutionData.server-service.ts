@@ -388,8 +388,8 @@ export class ProsecutionDataService {
       }
     }
     
-    // Sort timeline by date
-    timeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Sort timeline by date (latest first)
+    timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     // Calculate days between events
     for (let i = 1; i < timeline.length; i++) {
