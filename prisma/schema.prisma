@@ -341,6 +341,12 @@ model ProjectDocument {
   extractedMetadata String?  @db.NVarChar(Max) // JSON metadata
   applicationNumber String? // USPTO application number for linked documents
   
+  // NEW: OCR fields
+  ocrText          String?  @db.NVarChar(Max) // Raw OCR results from manual processing
+  ocrStatus        String?  // 'pending', 'completed', 'failed', null
+  ocrProcessedAt   DateTime? // When OCR was last run
+  ocrError         String?  // Error message if OCR failed
+  
   // USPTO-specific fields
   usptoDocumentCode String? // CTNF, CLM, REM, SPEC, etc.
   usptoMailDate     DateTime? // Official mail date from USPTO
@@ -358,6 +364,7 @@ model ProjectDocument {
   @@index([applicationNumber])
   @@index([projectId, isEssentialDoc, fileType]) // For fast AI document queries
   @@index([projectId, usptoDocumentCode]) // For USPTO document lookups
+  @@index([projectId, ocrStatus]) // NEW: For OCR status queries
   @@map("project_documents")
 }
 

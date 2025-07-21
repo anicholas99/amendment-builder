@@ -216,4 +216,144 @@ export const projectDocumentRepository = {
       throw error;
     }
   },
+
+  /**
+   * Find a document by ID with tenant verification for security
+   */
+  async findByIdWithTenantVerification(
+    documentId: string,
+    tenantId: string
+  ): Promise<ProjectDocument | null> {
+    try {
+      if (!prisma) {
+        throw new ApplicationError(
+          ErrorCode.DB_CONNECTION_ERROR,
+          'Database client not initialized'
+        );
+      }
+
+      return await prisma.projectDocument.findFirst({
+        where: {
+          id: documentId,
+          project: {
+            tenantId: tenantId,
+          },
+        },
+      });
+    } catch (error) {
+      logger.error('[ProjectDocumentRepo] Failed to find document with tenant verification', {
+        error,
+        documentId,
+        tenantId,
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Update OCR status for a document
+   */
+  async updateOCRStatus(
+    documentId: string,
+    status: 'pending' | 'completed' | 'failed',
+    error?: string
+  ): Promise<ProjectDocument> {
+    try {
+      if (!prisma) {
+        throw new ApplicationError(
+          ErrorCode.DB_CONNECTION_ERROR,
+          'Database client not initialized'
+        );
+      }
+
+      const updateData: any = {
+        ocrStatus: status,
+        ocrProcessedAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      if (error) {
+        updateData.ocrError = error;
+      }
+
+      return await prisma.projectDocument.update({
+        where: { id: documentId },
+        data: updateData,
+      });
+    } catch (error) {
+      logger.error('[ProjectDocumentRepo] Failed to update OCR status', {
+        error,
+        documentId,
+        status,
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Update document with OCR results
+   */
+  async updateOCRResult(
+    documentId: string,
+    ocrText: string
+  ): Promise<ProjectDocument> {
+    try {
+      if (!prisma) {
+        throw new ApplicationError(
+          ErrorCode.DB_CONNECTION_ERROR,
+          'Database client not initialized'
+        );
+      }
+
+      return await prisma.projectDocument.update({
+        where: { id: documentId },
+        data: {
+          ocrText,
+          ocrStatus: 'completed',
+          ocrProcessedAt: new Date(),
+          ocrError: null, // Clear any previous errors
+          updatedAt: new Date(),
+        } as any, // Type assertion until schema migration is applied
+      });
+    } catch (error) {
+      logger.error('[ProjectDocumentRepo] Failed to update OCR result', {
+        error,
+        documentId,
+        textLength: ocrText.length,
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Find documents by OCR status for a project
+   */
+  async findByOCRStatus(
+    projectId: string,
+    status: 'pending' | 'completed' | 'failed'
+  ): Promise<ProjectDocument[]> {
+    try {
+      if (!prisma) {
+        throw new ApplicationError(
+          ErrorCode.DB_CONNECTION_ERROR,
+          'Database client not initialized'
+        );
+      }
+
+      return await prisma.projectDocument.findMany({
+        where: {
+          projectId,
+          ocrStatus: status,
+        } as any, // Type assertion until schema migration is applied
+        orderBy: { ocrProcessedAt: 'desc' } as any, // Type assertion until schema migration is applied
+      });
+    } catch (error) {
+      logger.error('[ProjectDocumentRepo] Failed to find documents by OCR status', {
+        error,
+        projectId,
+        status,
+      });
+      throw error;
+    }
+  },
 };

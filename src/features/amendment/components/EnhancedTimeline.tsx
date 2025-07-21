@@ -38,6 +38,7 @@ import {
   Loader2,
   Reply,
   PlusCircle,
+  ScanLine, // Add OCR icon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -51,6 +52,7 @@ import { toast } from '@/hooks/use-toast';
 import { AmendmentClientService } from '@/client/services/amendment.client-service';
 import { apiFetch } from '@/lib/api/apiClient';
 import { useRouter } from 'next/router';
+import { useDocumentOCRWithPolling } from '@/hooks/api/useDocumentOCR'; // Add OCR hook
 
 interface EnhancedTimelineProps {
   projectId: string;
@@ -607,6 +609,15 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                                   </TooltipContent>
                                 </Tooltip>
                               )}
+
+                              {/* OCR Button - only show if document has been downloaded */}
+                              {event.storageUrl && event.storageUrl.startsWith('/api/') && (
+                                <OCRButton
+                                  projectId={projectId}
+                                  documentId={event.id}
+                                  fileName={event.title || event.documentCode || 'Document'}
+                                />
+                              )}
                               
                               {/* New Response button for latest office action */}
                               {latestOfficeAction && event.id === latestOfficeAction.id && (
@@ -717,5 +728,104 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
         </div>
       )}
     </div>
+  );
+};
+
+// OCR Button Component
+interface OCRButtonProps {
+  projectId: string;
+  documentId: string;
+  fileName: string;
+}
+
+const OCRButton: React.FC<OCRButtonProps> = ({ 
+  projectId, 
+  documentId, 
+  fileName 
+}) => {
+  const {
+    data: ocrStatus,
+    isProcessing,
+    isCompleted,
+    isFailed,
+    hasText,
+    textLength,
+    error,
+    startOCR,
+  } = useDocumentOCRWithPolling(projectId, documentId);
+
+  const handleOCRClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!isProcessing && !isCompleted) {
+      try {
+        await startOCR(projectId, documentId);
+      } catch (error) {
+        // Error handling is done in the hook
+        console.error('OCR failed:', error);
+      }
+    }
+  };
+
+  // Don't show button if already has text
+  if (hasText) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 text-green-600"
+            disabled
+          >
+            <FileCheck className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>OCR completed ({textLength} characters)</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant={isFailed ? "destructive" : isProcessing ? "secondary" : "outline"}
+          size="sm"
+          className="h-7 px-2 gap-1"
+          onClick={handleOCRClick}
+          disabled={isProcessing}
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span className="text-xs">OCR...</span>
+            </>
+          ) : isFailed ? (
+            <>
+              <AlertCircle className="h-3 w-3" />
+              <span className="text-xs">Retry</span>
+            </>
+          ) : (
+            <>
+              <ScanLine className="h-3 w-3" />
+              <span className="text-xs">OCR</span>
+            </>
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>
+          {isProcessing 
+            ? 'Running OCR processing...' 
+            : isFailed 
+              ? `OCR failed: ${error || 'Unknown error'}. Click to retry.`
+              : 'Run OCR to extract text from document'
+          }
+        </p>
+      </TooltipContent>
+    </Tooltip>
   );
 };
