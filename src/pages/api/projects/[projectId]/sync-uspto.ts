@@ -148,6 +148,7 @@ async function handler(
               }),
               applicationNumber,
               uploadedBy: authReq.user!.id,
+              isEssentialDoc: isEssentialDocument(doc.documentCode), // Mark essential documents
             }
           });
           storedDocuments.push(storedDoc);
