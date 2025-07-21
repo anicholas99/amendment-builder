@@ -35,6 +35,7 @@ import {
   Scale,
   Gavel,
   Info,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +44,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { useRealUSPTOTimeline } from '@/hooks/api/useRealUSPTOTimeline';
 import { getDocumentDisplayConfig } from '../config/prosecutionDocuments';
+import { useMutation } from '@tanstack/react-query';
+import { toast } from '@/hooks/use-toast';
+import { apiFetch } from '@/lib/api/apiClient';
 
 interface EnhancedTimelineProps {
   projectId: string;
@@ -263,6 +267,56 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
 }) => {
   const { data: usptoData, isLoading } = useRealUSPTOTimeline(projectId);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [downloadingDocs, setDownloadingDocs] = useState<Set<string>>(new Set());
+  
+  // Download USPTO document mutation
+  const downloadUSPTODoc = useMutation({
+    mutationFn: async (params: {
+      documentId: string;
+      documentCode: string;
+      mailRoomDate: string;
+      documentDescription?: string;
+    }) => {
+      const response = await apiFetch(`/api/projects/${projectId}/office-actions/uspto-download`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicationNumber: usptoData?.applicationNumber,
+          ...params
+        })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to download document');
+      }
+      
+      return response.json();
+    },
+    onMutate: (variables) => {
+      setDownloadingDocs(prev => new Set(prev).add(variables.documentId));
+    },
+    onSuccess: (data, variables) => {
+      toast({
+        title: 'Document Downloaded',
+        description: `Successfully downloaded ${variables.documentCode} document to project storage`,
+      });
+    },
+    onError: (error, variables) => {
+      toast({
+        title: 'Download Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+    onSettled: (data, error, variables) => {
+      setDownloadingDocs(prev => {
+        const next = new Set(prev);
+        next.delete(variables.documentId);
+        return next;
+      });
+    }
+  });
   
   if (isLoading) {
     return (
@@ -423,19 +477,64 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                             </div>
                             
                             {/* Action buttons */}
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-1">
+                              {/* Download from USPTO button */}
+                              {event.documentCode && usptoData?.applicationNumber && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 px-2 gap-1"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        downloadUSPTODoc.mutate({
+                                          documentId: event.id,
+                                          documentCode: event.documentCode,
+                                          mailRoomDate: format(event.date, 'MM/dd/yyyy'),
+                                          documentDescription: event.title
+                                        });
+                                      }}
+                                      disabled={downloadingDocs.has(event.id)}
+                                    >
+                                      {downloadingDocs.has(event.id) ? (
+                                        <>
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                          <span className="text-xs">Downloading...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Download className="h-3 w-3" />
+                                          <span className="text-xs">Get PDF</span>
+                                        </>
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Download PDF from USPTO</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                              {/* Existing download button for already downloaded PDFs */}
                               {event.pdfUrl && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    window.open(event.pdfUrl, '_blank');
-                                  }}
-                                >
-                                  <Download className="h-3.5 w-3.5" />
-                                </Button>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(event.pdfUrl, '_blank');
+                                      }}
+                                    >
+                                      <Eye className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>View PDF</p>
+                                  </TooltipContent>
+                                </Tooltip>
                               )}
                               <Button
                                 variant="ghost"

@@ -167,4 +167,53 @@ export const projectDocumentRepository = {
       throw error;
     }
   },
+
+  /**
+   * Find a document by USPTO document identifier
+   * Uses extractedMetadata to check for existing USPTO downloads
+   */
+  async findByUSPTOIdentifier(
+    projectId: string,
+    usptoDocumentId: string
+  ): Promise<ProjectDocument | null> {
+    try {
+      if (!prisma) {
+        throw new ApplicationError(
+          ErrorCode.DB_CONNECTION_ERROR,
+          'Database client not initialized'
+        );
+      }
+
+      const documents = await prisma.projectDocument.findMany({
+        where: {
+          projectId,
+          fileType: 'office-action',
+        },
+      });
+
+      // Check extractedMetadata for USPTO document ID
+      for (const doc of documents) {
+        if (doc.extractedMetadata) {
+          try {
+            const metadata = JSON.parse(doc.extractedMetadata);
+            if (metadata.usptoDocumentId === usptoDocumentId) {
+              return doc;
+            }
+          } catch (e) {
+            // Skip if metadata parsing fails
+            continue;
+          }
+        }
+      }
+
+      return null;
+    } catch (error) {
+      logger.error('[ProjectDocumentRepo] Failed to find document by USPTO ID', {
+        error,
+        projectId,
+        usptoDocumentId,
+      });
+      throw error;
+    }
+  },
 };

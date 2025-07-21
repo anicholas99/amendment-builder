@@ -53,7 +53,8 @@
       "Bash(cp:*)",
       "Bash(python3:*)",
       "Bash(./node_modules/.bin/eslint:*)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "Bash(npx prisma migrate:*)"
     ],
     "deny": []
   }

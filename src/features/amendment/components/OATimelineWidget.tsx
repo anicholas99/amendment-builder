@@ -32,7 +32,8 @@ import {
   File,
   Mail,
   Folder,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +49,9 @@ import { useProsecutionTimeline } from '@/hooks/api/useProsecutionOverview';
 import { useEnhancedProsecutionTimeline } from '@/hooks/api/useEnhancedProsecution';
 import { useRealUSPTOTimeline } from '@/hooks/api/useRealUSPTOTimeline';
 import { isFeatureEnabled } from '@/config/featureFlags';
+import { useMutation } from '@tanstack/react-query';
+import { toast } from '@/hooks/use-toast';
+import { apiFetch } from '@/lib/api/apiClient';
 import { 
   isTimelineDocument, 
   getDocumentDisplayConfig,
@@ -647,6 +651,7 @@ export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
       selectedEvent={selectedEvent}
       applicationNumber={applicationNumber}
       getEventConfig={getEventConfig}
+      projectId={projectId}
     />
     </>
   );
@@ -660,6 +665,7 @@ interface DocumentDrawerProps {
   selectedEvent: TimelineEvent | null;
   applicationNumber?: string | null;
   getEventConfig: (event: TimelineEvent) => any;
+  projectId: string;
 }
 
 const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
@@ -669,8 +675,59 @@ const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
   selectedEvent,
   applicationNumber,
   getEventConfig,
+  projectId,
 }) => {
   const [localSelectedEvent, setLocalSelectedEvent] = useState(selectedEvent);
+  const [downloadingDocs, setDownloadingDocs] = useState<Set<string>>(new Set());
+  
+  // Download USPTO document mutation
+  const downloadUSPTODoc = useMutation({
+    mutationFn: async (params: {
+      documentId: string;
+      documentCode: string;
+      mailRoomDate: string;
+      documentDescription?: string;
+    }) => {
+      const response = await apiFetch(`/api/projects/${projectId}/office-actions/uspto-download`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicationNumber,
+          ...params
+        })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to download document');
+      }
+      
+      return response.json();
+    },
+    onMutate: (variables) => {
+      setDownloadingDocs(prev => new Set(prev).add(variables.documentId));
+    },
+    onSuccess: (data, variables) => {
+      toast({
+        title: 'Document Downloaded',
+        description: `Successfully downloaded ${variables.documentCode} document`,
+      });
+    },
+    onError: (error, variables) => {
+      toast({
+        title: 'Download Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+    onSettled: (data, error, variables) => {
+      setDownloadingDocs(prev => {
+        const next = new Set(prev);
+        next.delete(variables.documentId);
+        return next;
+      });
+    }
+  });
   
   // Update local state when parent selection changes
   React.useEffect(() => {
@@ -786,6 +843,37 @@ const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
                         {doc.documentCode && ` • ${doc.documentCode}`}
                       </div>
                     </div>
+                    {/* Download button for USPTO documents */}
+                    {doc.documentCode && applicationNumber && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-2 gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          downloadUSPTODoc.mutate({
+                            documentId: doc.id,
+                            documentCode: doc.documentCode,
+                            mailRoomDate: format(doc.date, 'MM/dd/yyyy'),
+                            documentDescription: doc.title
+                          });
+                        }}
+                        disabled={downloadingDocs.has(doc.id)}
+                        title="Download PDF from USPTO"
+                      >
+                        {downloadingDocs.has(doc.id) ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <span className="text-xs">Downloading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download className="h-3 w-3" />
+                            <span className="text-xs">Get PDF</span>
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </button>
                 );
               })}
@@ -823,6 +911,37 @@ const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
                           </div>
                         )}
                       </div>
+                      {/* Download button for supporting documents */}
+                      {doc.documentCode && applicationNumber && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 px-2 gap-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadUSPTODoc.mutate({
+                              documentId: doc.id,
+                              documentCode: doc.documentCode,
+                              mailRoomDate: format(doc.date, 'MM/dd/yyyy'),
+                              documentDescription: doc.title
+                            });
+                          }}
+                          disabled={downloadingDocs.has(doc.id)}
+                          title="Download PDF from USPTO"
+                        >
+                          {downloadingDocs.has(doc.id) ? (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <span className="text-xs">Downloading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-3 w-3" />
+                              <span className="text-xs">Get PDF</span>
+                            </>
+                          )}
+                        </Button>
+                      )}
                     </div>
                   );
                 })}

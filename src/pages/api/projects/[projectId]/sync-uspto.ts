@@ -198,6 +198,7 @@ async function handler(
             data: {
               projectId,
               tenantId,
+              applicationNumber, // Add the application number here
               oaNumber: oaDoc.documentCode,
               dateIssued: oaDoc.mailDate ? new Date(oaDoc.mailDate) : new Date(),
               originalFileName: oaDoc.description,

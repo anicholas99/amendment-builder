@@ -511,6 +511,7 @@ model ChatMessage {
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, timestamp])
+  @@map("chat_messages")
 }
 
 model AuditLog {

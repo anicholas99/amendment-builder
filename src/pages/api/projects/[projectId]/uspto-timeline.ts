@@ -21,6 +21,15 @@ async function handler(
   const { projectId } = querySchema.parse(req.query);
 
   try {
+    // Get the patent application for this project
+    const patentApplication = await prisma.patentApplication.findFirst({
+      where: {
+        projectId,
+      },
+    });
+
+    const applicationNumber = patentApplication?.applicationNumber || null;
+
     // Get all USPTO documents for the project
     const documents = await prisma.projectDocument.findMany({
       where: {
@@ -92,6 +101,7 @@ async function handler(
     return res.status(200).json({
       success: true,
       data: {
+        applicationNumber,
         timeline,
         filesDrawer,
         officeActions,

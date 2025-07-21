@@ -338,44 +338,13 @@ export class ProsecutionDataService {
   }
 
   /**
-   * Build prosecution timeline from real events
+   * Build prosecution timeline from USPTO documents ONLY
    */
   private async buildProsecutionTimeline(
     projectId: string,
     tenantId: string
   ): Promise<any[]> {
-    // Check if we have USPTO documents first
-    const usptoDocumentCount = await prisma.projectDocument.count({
-      where: {
-        projectId,
-        project: {
-          tenantId,
-        },
-        fileType: 'uspto-document',
-      },
-    });
-
-    // If we have USPTO documents, use ONLY those for the timeline
-    if (usptoDocumentCount > 0) {
-      return this.buildUSPTOOnlyTimeline(projectId, tenantId);
-    }
-
-    // Otherwise fall back to office actions (legacy behavior)
-    const officeActions = await prisma.officeAction.findMany({
-      where: {
-        projectId,
-        tenantId,
-      },
-      orderBy: { dateIssued: 'asc' },
-      include: {
-        amendmentProjects: {
-          where: { deletedAt: null },
-          orderBy: { createdAt: 'desc' },
-        },
-      },
-    });
-
-    // Get USPTO documents from ProjectDocument (responses, RCEs, etc.)
+    // ONLY use USPTO documents - no fallbacks
     const usptoDocuments = await prisma.projectDocument.findMany({
       where: {
         projectId,
@@ -383,80 +352,17 @@ export class ProsecutionDataService {
           tenantId,
         },
         fileType: 'uspto-document',
-        // deletedAt: null, // Not part of ProjectDocumentWhereInput
       },
       orderBy: { createdAt: 'asc' },
     });
 
+    if (usptoDocuments.length === 0) {
+      return []; // No timeline without USPTO data
+    }
+
     const timeline: any[] = [];
 
-    // Add application filing event as the first event
-    const project = await prisma.project.findFirst({
-      where: { id: projectId, tenantId },
-      include: { invention: true }
-    });
-    
-    if (project?.invention?.createdAt) {
-      timeline.push({
-        id: `filing-${project.id}`,
-        type: 'APPLICATION_FILED',
-        documentCode: 'SPEC',
-        date: project.invention.createdAt.toISOString(),
-        title: 'Application Filed',
-        status: 'completed',
-      });
-      logger.info('Added filing event to timeline', { projectId });
-    } else {
-      logger.warn('No invention data found for filing event', { projectId });
-    }
-
-    // Add office actions to timeline
-    for (let i = 0; i < officeActions.length; i++) {
-      const oa = officeActions[i];
-      const prevOa = i > 0 ? officeActions[i - 1] : null;
-      
-      // Determine document code based on OA type
-      let documentCode = 'CTNF'; // Default to non-final
-      if (oa.oaNumber?.toLowerCase().includes('final')) {
-        documentCode = 'CTFR';
-      } else if (oa.oaNumber?.toLowerCase().includes('advisory')) {
-        documentCode = 'CTAV';
-      } else if (oa.oaNumber?.toLowerCase().includes('restriction')) {
-        documentCode = 'CTNR';
-      }
-      
-      
-      timeline.push({
-        id: oa.id,
-        type: 'OFFICE_ACTION',
-        documentCode,
-        date: (oa.dateIssued || oa.createdAt).toISOString(),
-        title: oa.oaNumber || 'Office Action',
-        status: 'completed',
-        daysFromPrevious: prevOa && oa.dateIssued && prevOa.dateIssued ? 
-          Math.floor((oa.dateIssued.getTime() - prevOa.dateIssued.getTime()) / (1000 * 60 * 60 * 24)) : 
-          undefined,
-      });
-
-      // Add response events from amendment projects
-      for (const amendment of oa.amendmentProjects) {
-        if (amendment.status === 'FILED') {
-          // Use AMSB for amendments (most common response type)
-          timeline.push({
-            id: `response-${amendment.id}`,
-            type: 'RESPONSE',
-            documentCode: 'AMSB', // Amendment/Submission
-            date: amendment.updatedAt.toISOString(),
-            title: 'Amendment Filed',
-            status: 'completed',
-          });
-        }
-      }
-    }
-
-
-    // Remove the filter that only includes timeline documents - show ALL USPTO documents
-    // This way we get the complete prosecution history
+    // Build timeline from USPTO documents only
     for (const doc of usptoDocuments) {
       try {
         const metadata = doc.extractedMetadata && typeof doc.extractedMetadata === 'object' 
@@ -645,63 +551,6 @@ export class ProsecutionDataService {
     return undefined;
   }
 
-  /**
-   * Build timeline using ONLY USPTO documents
-   */
-  private async buildUSPTOOnlyTimeline(
-    projectId: string,
-    tenantId: string
-  ): Promise<any[]> {
-    const usptoDocuments = await prisma.projectDocument.findMany({
-      where: {
-        projectId,
-        project: {
-          tenantId,
-        },
-        fileType: 'uspto-document',
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-
-    const timeline: any[] = [];
-
-    for (const doc of usptoDocuments) {
-      try {
-        const metadata = doc.extractedMetadata && typeof doc.extractedMetadata === 'object' 
-          ? doc.extractedMetadata as any 
-          : {};
-        
-        const documentCode = metadata.documentCode || metadata.docCode || '';
-        const config = getDocumentDisplayConfig(documentCode);
-        
-        timeline.push({
-          id: doc.id,
-          type: this.mapDocumentCodeToType(documentCode),
-          documentCode,
-          date: metadata.mailDate || metadata.date || doc.createdAt.toISOString(),
-          title: config?.label || metadata.description || doc.fileName,
-          status: 'completed',
-        });
-      } catch (error) {
-        logger.warn('Failed to parse USPTO document metadata', {
-          documentId: doc.id,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
-    
-    // Sort timeline by date
-    timeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    
-    // Calculate days between events
-    for (let i = 1; i < timeline.length; i++) {
-      const prevDate = new Date(timeline[i - 1].date);
-      const currDate = new Date(timeline[i].date);
-      timeline[i].daysFromPrevious = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
-    }
-
-    return timeline;
-  }
 
   private async calculateProsecutionStatistics(
     projectId: string,

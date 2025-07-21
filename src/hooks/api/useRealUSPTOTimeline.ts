@@ -8,6 +8,7 @@ import { apiFetch } from '@/lib/api/apiClient';
 import { logger } from '@/utils/clientLogger';
 
 interface USPTOTimelineResponse {
+  applicationNumber: string | null;
   timeline: Array<{
     id: string;
     documentCode: string;
@@ -64,6 +65,7 @@ export function useRealUSPTOTimeline(projectId: string) {
       });
       
       return {
+        applicationNumber: data.applicationNumber,
         timeline: transformedTimeline,
         filesDrawer: data.filesDrawer,
         officeActions: data.officeActions,
