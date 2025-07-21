@@ -59,7 +59,9 @@ async function handler(
           date: metadata.mailDate ? new Date(metadata.mailDate) : doc.createdAt,
           category: metadata.category || config?.category,
           pdfUrl: doc.storageUrl,
-          storageUrl: doc.storageUrl, // Include for checking download status
+          // Check if document has been downloaded (has proper view URL or blob reference)
+          storageUrl: doc.storageUrl?.startsWith('/api/') ? doc.storageUrl : 
+                     (doc.extractedText?.startsWith('blob:') ? `/api/projects/${projectId}/documents/${doc.id}/view` : null),
           pageCount: metadata.pageCount,
           metadata: {
             ...metadata,

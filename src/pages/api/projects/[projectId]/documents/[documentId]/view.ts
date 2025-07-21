@@ -66,7 +66,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
-    const containerClient = blobServiceClient.getContainerClient('uspto-documents-private');
+    const containerClient = blobServiceClient.getContainerClient('office-actions-private');
     const blobClient = containerClient.getBlobClient(blobName);
 
     // Check if blob exists
