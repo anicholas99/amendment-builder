@@ -237,12 +237,32 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
   };
 
   const handleProjectClick = (amendmentId: string) => {
+    console.log('🔍 handleProjectClick called with:', amendmentId);
+    console.log('🔍 onAmendmentClick available:', !!onAmendmentClick);
+    
     if (onAmendmentClick) {
-      onAmendmentClick(amendmentId);
+      // Extract office action ID from amendment ID (remove amendment- prefix)  
+      const officeActionId = amendmentId.replace(/^amendment-/, '');
+      console.log('🔍 Calling onAmendmentClick with officeActionId:', officeActionId);
+      onAmendmentClick(officeActionId);
     } else {
       // Extract office action ID from amendment ID (remove amendment- prefix)
       const officeActionId = amendmentId.replace(/^amendment-/, '');
-      router.push(`/projects/${projectId}/amendments/studio?amendmentId=${officeActionId}`);
+      
+      // Check if we're on a tenant route and preserve it
+      const currentPath = router.asPath;
+      const tenantMatch = currentPath.match(/^\/([^\/]+)\/projects/);
+      
+      if (tenantMatch) {
+        // We're on a tenant route, preserve the tenant
+        const tenant = tenantMatch[1];
+        console.log('🔍 Routing to tenant route:', `/${tenant}/projects/${projectId}/amendments/studio?amendmentId=${officeActionId}`);
+        router.push(`/${tenant}/projects/${projectId}/amendments/studio?amendmentId=${officeActionId}`);
+      } else {
+        // Non-tenant route
+        console.log('🔍 Routing to non-tenant route:', `/projects/${projectId}/amendments/studio?amendmentId=${officeActionId}`);
+        router.push(`/projects/${projectId}/amendments/studio?amendmentId=${officeActionId}`);
+      }
     }
   };
 

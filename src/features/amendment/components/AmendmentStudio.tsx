@@ -224,7 +224,7 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
     
     logger.info('[AmendmentStudio] Generating amendment based on analysis', {
       officeActionId: selectedOfficeActionId,
-      strategy: analysisData.overallStrategy?.primaryStrategy,
+      strategy: analysisData.overallStrategy,
     });
     
     // Navigate to drafting workspace or trigger generation
@@ -314,12 +314,21 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
     }
   }, [projectId, selectedOfficeActionId]);
 
+  // Handler to open draft inline (no routing)
+  const handleOpenDraft = useCallback((officeActionId: string) => {
+    setSelectedOfficeActionId(officeActionId);
+    setShowProjects(false);
+  }, []);
+
   if (showProjects) {
     // Use enhanced UI by default, with fallback to legacy
     const useEnhancedUI = process.env.NEXT_PUBLIC_ENHANCED_AMENDMENT_UI !== 'false';
     
     if (useEnhancedUI) {
-      return <EnhancedAmendmentProjectsList projectId={projectId} />;
+      return <EnhancedAmendmentProjectsList 
+        projectId={projectId} 
+        onAmendmentClick={handleOpenDraft}
+      />;
     }
     
     return <AmendmentProjectsList projectId={projectId} />;

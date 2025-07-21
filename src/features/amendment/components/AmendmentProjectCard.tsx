@@ -112,9 +112,8 @@ export const AmendmentProjectCard: React.FC<AmendmentProjectCardProps> = ({
   };
 
   const handleCardClick = () => {
-    // Navigate to amendment studio using the real project ID and office action ID
-    const officeActionId = project.id.replace(/^amendment-/, '');
-    router.push(`/projects/${realProjectId}/amendments/studio?amendmentId=${officeActionId}`);
+    // Use the same logic as the "Continue Draft" button
+    onOpenDraft(project.id);
   };
 
   return (
