@@ -44,7 +44,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { useRealUSPTOTimeline } from '@/hooks/api/useRealUSPTOTimeline';
 import { getDocumentDisplayConfig } from '../config/prosecutionDocuments';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import { apiFetch } from '@/lib/api/apiClient';
 
@@ -266,6 +266,7 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
   className,
 }) => {
   const { data: usptoData, isLoading } = useRealUSPTOTimeline(projectId);
+  const queryClient = useQueryClient();
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [downloadingDocs, setDownloadingDocs] = useState<Set<string>>(new Set());
   
@@ -298,6 +299,8 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
         title: 'Document Downloaded',
         description: `Successfully downloaded ${variables.documentCode} document to project storage`,
       });
+      // Refetch timeline to update button state
+      queryClient.invalidateQueries({ queryKey: ['uspto-timeline', projectId] });
     },
     onError: (error, variables) => {
       toast({
@@ -480,11 +483,20 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
-                                      variant="outline"
+                                      variant={event.storageUrl && event.storageUrl.startsWith('/api/') ? "secondary" : "outline"}
                                       size="sm"
                                       className="h-8 px-2 gap-1"
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        
+                                        // Check if already downloaded
+                                        if (event.storageUrl && event.storageUrl.startsWith('/api/')) {
+                                          // Open PDF viewer in new tab
+                                          window.open(event.storageUrl, '_blank');
+                                          return;
+                                        }
+                                        
+                                        // Download logic
                                         if (!event.documentId) {
                                           toast({
                                             title: "Document ID not found",
@@ -500,12 +512,17 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                                           documentDescription: event.title
                                         });
                                       }}
-                                      disabled={downloadingDocs.has(event.id) || !event.documentId}
+                                      disabled={downloadingDocs.has(event.id) || (!event.documentId && !event.storageUrl)}
                                     >
                                       {downloadingDocs.has(event.id) ? (
                                         <>
                                           <Loader2 className="h-3 w-3 animate-spin" />
                                           <span className="text-xs">Downloading...</span>
+                                        </>
+                                      ) : event.storageUrl && event.storageUrl.startsWith('/api/') ? (
+                                        <>
+                                          <Eye className="h-3 w-3" />
+                                          <span className="text-xs">View PDF</span>
                                         </>
                                       ) : (
                                         <>
@@ -516,7 +533,9 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                    <p>Download PDF from USPTO</p>
+                                    <p>{event.storageUrl && event.storageUrl.startsWith('/api/') 
+                                      ? 'View PDF' 
+                                      : 'Download PDF from USPTO'}</p>
                                   </TooltipContent>
                                 </Tooltip>
                               )}

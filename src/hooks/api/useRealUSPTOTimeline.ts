@@ -18,6 +18,7 @@ interface USPTOTimelineResponse {
     eventType?: string;
     category?: string;
     pdfUrl?: string;
+    storageUrl?: string;
     pageCount?: number;
     metadata?: any;
   }>;
@@ -57,6 +58,7 @@ export function useRealUSPTOTimeline(projectId: string) {
         status: 'completed',
         category: event.category,
         pdfUrl: event.pdfUrl,
+        storageUrl: event.storageUrl,
         pageCount: event.pageCount,
       }));
       

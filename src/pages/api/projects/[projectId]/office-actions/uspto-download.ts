@@ -2,7 +2,6 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
 import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
 import { AuthenticatedRequest } from '@/types/api';
-import { projectDocumentRepository } from '@/repositories/projectDocumentRepository';
 import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { USPTO_CONFIG } from '@/config/uspto';
@@ -29,12 +28,32 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const tenantId = req.user!.tenantId;
     const userId = req.user!.id;
 
-    // Check if document already exists
-    const existingDoc = await projectDocumentRepository.findByUSPTOIdentifier(projectId, documentId);
-    if (existingDoc) {
+    // Find the existing document record by USPTO document ID
+    const existingDoc = await prisma.projectDocument.findFirst({
+      where: {
+        projectId,
+        OR: [
+          { extractedMetadata: { contains: `"documentId":"${documentId}"` } },
+          { extractedMetadata: { contains: `"usptoDocumentId":"${documentId}"` } },
+          { extractedMetadata: { contains: `"documentIdentifier":"${documentId}"` } }
+        ]
+      }
+    });
+
+    if (!existingDoc) {
+      throw new ApplicationError(
+        ErrorCode.NOT_FOUND,
+        'Document record not found. Please sync USPTO data first.',
+        404
+      );
+    }
+
+    // Check if already has a storage URL (already downloaded)
+    if (existingDoc.storageUrl && existingDoc.storageUrl.startsWith('/api/')) {
       logger.info('[USPTO Download] Document already downloaded', { 
         projectId,
-        documentId 
+        documentId,
+        storageUrl: existingDoc.storageUrl
       });
       return res.status(200).json({ 
         message: 'Document already downloaded',
@@ -195,27 +214,29 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       }
     }
     
-    // Storage service returns blobName, not url
-    const storageUrl = `/api/projects/${projectId}/documents/${uploadResult.blobName}/download`;
+    // Create the proper view URL for the document
+    const storageUrl = `/api/projects/${projectId}/documents/${existingDoc.id}/view`;
 
-    // Create ProjectDocument record
-    const projectDocument = await projectDocumentRepository.create({
-      project: { connect: { id: projectId } },
-      fileName,
-      originalName: fileName,
-      fileType: 'office-action',
-      storageUrl,
-      applicationNumber,
-      extractedMetadata: JSON.stringify({
-        usptoDocumentId: documentId,
-        usptoApplicationNumber: applicationNumber,
-        documentCode,
-        mailRoomDate,
-        documentDescription,
-        downloadedAt: new Date().toISOString(),
-        source: 'USPTO_API'
-      }),
-      uploader: { connect: { id: userId } },
+    // Update the existing document record with the downloaded PDF info
+    const projectDocument = await prisma.projectDocument.update({
+      where: { id: existingDoc.id },
+      data: {
+        storageUrl,
+        fileName,
+        // Merge the existing metadata with download info
+        extractedMetadata: JSON.stringify({
+          ...JSON.parse(existingDoc.extractedMetadata || '{}'),
+          downloadedAt: new Date().toISOString(),
+          blobName: uploadResult.blobName,
+          fileSize: uploadResult.size,
+          source: 'USPTO_API_DOWNLOAD'
+        }),
+        // Store the blob name separately for the view endpoint
+        originalName: fileName,
+        // Mark the actual blob location
+        extractedText: `blob:${uploadResult.blobName}`, // Temporary storage of blob reference
+        updatedAt: new Date(),
+      },
     });
 
     logger.info('[USPTO Download] Document downloaded successfully', { 

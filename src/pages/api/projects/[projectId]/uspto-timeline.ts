@@ -59,6 +59,7 @@ async function handler(
           date: metadata.mailDate ? new Date(metadata.mailDate) : doc.createdAt,
           category: metadata.category || config?.category,
           pdfUrl: doc.storageUrl,
+          storageUrl: doc.storageUrl, // Include for checking download status
           pageCount: metadata.pageCount,
           metadata: {
             ...metadata,
