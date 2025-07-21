@@ -161,23 +161,42 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       projectId 
     });
     
-    // Create a File-like object for the storage service
+    // Save to a temporary file for the storage service
+    const os = await import('os');
+    const path = await import('path');
+    const tmpDir = os.tmpdir();
+    const tmpFilePath = path.join(tmpDir, `uspto-${Date.now()}-${fileName}`);
+    const fs = await import('fs').then(m => m.promises);
+    await fs.writeFile(tmpFilePath, fileBuffer);
+    
+    // Create a formidable.File object
     const fileObject = {
-      originalname: fileName,
+      filepath: tmpFilePath,
+      originalFilename: fileName,
       mimetype: 'application/pdf',
-      buffer: fileBuffer,
       size: fileBuffer.length,
-    } as Express.Multer.File;
+    } as any;
     
-    const uploadResult = await StorageServerService.uploadOfficeActionDocument(
-      fileObject,
-      {
-        userId,
-        tenantId,
+    let uploadResult;
+    try {
+      uploadResult = await StorageServerService.uploadOfficeActionDocument(
+        fileObject,
+        {
+          userId,
+          tenantId,
+        }
+      );
+    } finally {
+      // Clean up temp file
+      try {
+        await fs.unlink(tmpFilePath);
+      } catch (e) {
+        // Ignore cleanup errors
       }
-    );
+    }
     
-    const storageUrl = uploadResult.url;
+    // Storage service returns blobName, not url
+    const storageUrl = `/api/projects/${projectId}/documents/${uploadResult.blobName}/download`;
 
     // Create ProjectDocument record
     const projectDocument = await projectDocumentRepository.create({
