@@ -12,6 +12,7 @@ import {
   getDocumentCategory,
   ProsecutionEventType 
 } from '@/constants/usptoDocumentCodes';
+import { isEssentialDocument } from '@/lib/api/uspto/utils/documentCategorization';
 
 const SyncUSPTOSchema = z.object({
   applicationNumber: z.string().trim().min(1, 'Application number is required'),

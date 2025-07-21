@@ -949,6 +949,55 @@ export class StorageServerService {
       type: file.mimetype,
     };
   }
+
+  /**
+   * Upload a buffer directly to blob storage
+   * Used for programmatic uploads (e.g., USPTO document downloads)
+   */
+  static async uploadBuffer(
+    buffer: Buffer,
+    blobName: string,
+    mimeType: string,
+    containerName: string
+  ): Promise<string> {
+    logger.debug('[StorageServerService] Uploading buffer to blob storage', {
+      blobName,
+      mimeType,
+      containerName,
+      bufferSize: buffer.length,
+    });
+
+    try {
+      const containerClient = getBlobServiceClient().getContainerClient(containerName);
+      await containerClient.createIfNotExists();
+      
+      const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+      await blockBlobClient.upload(buffer, buffer.length, {
+        blobHTTPHeaders: {
+          blobContentType: mimeType,
+        },
+      });
+
+      logger.info('[StorageServerService] Successfully uploaded buffer to Azure', {
+        blobName,
+        containerName,
+        size: buffer.length,
+      });
+
+      // Return the blob name (not full URL for security)
+      return blobName;
+    } catch (error) {
+      logger.error('[StorageServerService] Failed to upload buffer', {
+        blobName,
+        containerName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ApplicationError(
+        ErrorCode.INTERNAL_ERROR,
+        'Failed to upload to storage'
+      );
+    }
+  }
 }
 
 /**

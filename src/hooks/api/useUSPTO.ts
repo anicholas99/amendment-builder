@@ -251,6 +251,55 @@ export const useUSPTOTimelineForProject = (applicationNumber: string | null) => 
   });
 };
 
+/**
+ * Hook to link a USPTO application to a project
+ * This stores all documents and OCRs essential ones
+ */
+export const useLinkUSPTOToProject = () => {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: ({ projectId, applicationNumber }: { 
+      projectId: string; 
+      applicationNumber: string;
+    }) => USPTOService.linkUSPTOToProject(projectId, applicationNumber),
+    
+    onSuccess: (data, variables) => {
+      logger.info('USPTO application linked successfully', { 
+        projectId: variables.projectId,
+        applicationNumber: variables.applicationNumber,
+        documentsStored: data.documentsStored,
+        essentialProcessed: data.essentialProcessed,
+      });
+      
+      // Invalidate queries that might be affected
+      queryClient.invalidateQueries({
+        queryKey: ['projects', variables.projectId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['project-documents', variables.projectId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['file-history', variables.projectId],
+      });
+      
+      // Show success with document summary
+      const errorCount = data.errors?.length || 0;
+      if (errorCount === 0) {
+        toast.success(`USPTO linked successfully. ${data.essentialProcessed}/${data.essentialDocuments} essential documents processed.`);
+      } else {
+        toast.warning(`USPTO linked with ${errorCount} errors. ${data.essentialProcessed}/${data.essentialDocuments} essential documents processed.`);
+      }
+    },
+    
+    onError: (error) => {
+      logger.error('Failed to link USPTO application', { error });
+      toast.error('Failed to link USPTO application to project');
+    },
+  });
+};
+
 // Helper functions
 function mapUSPTOEventType(usptoType: string): 'FILING' | 'OFFICE_ACTION' | 'RESPONSE' | 'NOTICE_OF_ALLOWANCE' | 'FINAL_REJECTION' | 'RCE' {
   const typeMap: Record<string, any> = {

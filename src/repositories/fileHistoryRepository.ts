@@ -94,7 +94,7 @@ export async function buildFileHistoryContext(
     });
 
     throw new ApplicationError(
-      ErrorCode.DATABASE_ERROR,
+      ErrorCode.INTERNAL_ERROR,
       `Failed to build file history context: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
@@ -753,5 +753,93 @@ export async function validateFileHistoryCompleteness(
       error: error instanceof Error ? error.message : String(error),
     });
     throw error;
+  }
+}
+
+/**
+ * Get essential USPTO documents for AI context from ProjectDocument table
+ * Returns OCR'd text from core documents needed for drafting responses
+ */
+export async function getEssentialUSPTODocuments(
+  projectId: string,
+  tenantId: string
+): Promise<{
+  officeAction?: string;
+  claims?: string;
+  specification?: string;
+  lastResponse?: string;
+  searchNotes?: string;
+  interview?: string;
+}> {
+  try {
+    logger.debug('[FileHistoryRepository] Fetching essential USPTO documents', {
+      projectId,
+      tenantId,
+    });
+
+    // Get all essential documents with extracted text
+    const docs = await prisma.projectDocument.findMany({
+      where: {
+        projectId,
+        project: {
+          tenantId,
+          deletedAt: null,
+        },
+        fileType: 'uspto-document',
+        isEssentialDoc: true,
+        extractedText: { not: null },
+      },
+      select: {
+        usptoDocumentCode: true,
+        documentCategory: true,
+        extractedText: true,
+        usptoMailDate: true,
+        originalName: true,
+      },
+      orderBy: { usptoMailDate: 'desc' },
+    });
+
+    // Group by category and get most recent
+    const result: any = {};
+    
+    // Map categories to result keys
+    const categoryMap: Record<string, string> = {
+      'office-action': 'officeAction',
+      'claims': 'claims',
+      'specification': 'specification',
+      'response': 'lastResponse',
+      'search-notes': 'searchNotes',
+      'interview': 'interview',
+    };
+
+    for (const doc of docs) {
+      const resultKey = categoryMap[doc.documentCategory || ''];
+      if (resultKey && !result[resultKey] && doc.extractedText) {
+        result[resultKey] = doc.extractedText;
+      }
+    }
+
+    logger.info('[FileHistoryRepository] Essential USPTO documents retrieved', {
+      projectId,
+      tenantId,
+      hasOfficeAction: !!result.officeAction,
+      hasClaims: !!result.claims,
+      hasSpecification: !!result.specification,
+      hasLastResponse: !!result.lastResponse,
+      hasSearchNotes: !!result.searchNotes,
+      hasInterview: !!result.interview,
+    });
+
+    return result;
+  } catch (error) {
+    logger.error('[FileHistoryRepository] Failed to get essential USPTO documents', {
+      projectId,
+      tenantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw new ApplicationError(
+      ErrorCode.INTERNAL_ERROR,
+      `Failed to get essential USPTO documents: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 } 

@@ -228,9 +228,15 @@ export class USPTOService {
         opt => opt.mimeTypeIdentifier.toLowerCase().includes('pdf')
       ) || document.downloadOptionBag[0];
       
+      const docId = 'documentId' in document && document.documentId 
+        ? document.documentId 
+        : 'documentIdentifier' in document && document.documentIdentifier
+        ? document.documentIdentifier
+        : 'unknown';
+        
       return {
-        documentId: 'documentId' in document ? document.documentId : 'documentIdentifier' in document ? document.documentIdentifier : '',
-        filename: `document_${document.documentId || 'unknown'}.pdf`,
+        documentId: docId,
+        filename: `document_${docId}.pdf`,
         contentType: pdfOption.mimeTypeIdentifier,
         size: 0, // Size not provided by new API
         downloadUrl: pdfOption.downloadUrl,
@@ -448,6 +454,72 @@ export class USPTOService {
         : new ApplicationError(
             ErrorCode.API_NETWORK_ERROR,
             'Failed to fetch prosecution history from USPTO'
+          );
+    }
+  }
+
+  /**
+   * Link a USPTO application to a project
+   * This will store all documents and OCR essential ones
+   */
+  static async linkUSPTOToProject(
+    projectId: string,
+    applicationNumber: string
+  ): Promise<{
+    applicationNumber: string;
+    totalDocuments: number;
+    documentsStored: number;
+    essentialDocuments: number;
+    essentialProcessed: number;
+    errors: Array<{
+      documentCode: string;
+      error: string;
+    }>;
+  }> {
+    if (!projectId || !applicationNumber) {
+      throw new ApplicationError(
+        ErrorCode.VALIDATION_REQUIRED_FIELD,
+        'Project ID and application number are required'
+      );
+    }
+
+    try {
+      logger.debug('Linking USPTO application to project', { 
+        projectId,
+        applicationNumber 
+      });
+
+      const response = await apiFetch(
+        API_ROUTES.PROJECTS.LINK_USPTO(projectId),
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            applicationNumber,
+          }),
+        }
+      );
+      const data = await response.json();
+
+      logger.debug('USPTO application linked successfully', {
+        projectId,
+        applicationNumber,
+        documentsStored: data.data?.documentsStored,
+        essentialProcessed: data.data?.essentialProcessed,
+      });
+
+      return data.data;
+    } catch (error) {
+      logger.error('Error linking USPTO application', { 
+        error, 
+        projectId,
+        applicationNumber 
+      });
+      
+      throw error instanceof ApplicationError
+        ? error
+        : new ApplicationError(
+            ErrorCode.API_NETWORK_ERROR,
+            'Failed to link USPTO application to project'
           );
     }
   }

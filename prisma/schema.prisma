@@ -335,11 +335,18 @@ model ProjectDocument {
   projectId         String
   fileName          String
   originalName      String
-  fileType          String   @default("uploaded-doc") // 'parent-patent', 'office-action', 'invention-disclosure', etc.
-  storageUrl        String // Azure blob storage URL
-  extractedText     String?  @db.NVarChar(Max) // Full text extraction
+  fileType          String   @default("uploaded-doc") // 'uspto-document', 'parent-patent', 'office-action', 'invention-disclosure', etc.
+  storageUrl        String? // Azure blob storage URL - NULL for USPTO docs until downloaded
+  extractedText     String?  @db.NVarChar(Max) // Full text extraction - NULL until OCR'd
   extractedMetadata String?  @db.NVarChar(Max) // JSON metadata
   applicationNumber String? // USPTO application number for linked documents
+  
+  // USPTO-specific fields
+  usptoDocumentCode String? // CTNF, CLM, REM, SPEC, etc.
+  usptoMailDate     DateTime? // Official mail date from USPTO
+  isEssentialDoc    Boolean @default(false) // Marks core docs for AI context
+  documentCategory  String? // 'office-action', 'response', 'claims', 'specification', etc.
+  
   uploadedBy        String
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -349,6 +356,8 @@ model ProjectDocument {
   @@index([projectId])
   @@index([uploadedBy])
   @@index([applicationNumber])
+  @@index([projectId, isEssentialDoc, fileType]) // For fast AI document queries
+  @@index([projectId, usptoDocumentCode]) // For USPTO document lookups
   @@map("project_documents")
 }
 

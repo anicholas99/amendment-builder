@@ -180,6 +180,9 @@ export const API_ROUTES = {
     
     // Patent PDF retrieval
     RETRIEVE_PATENT_PDF: (projectId: string) => `/api/projects/${projectId}/retrieve-patent-pdf`,
+    
+    // USPTO linking
+    LINK_USPTO: (projectId: string) => `/api/projects/${projectId}/link-uspto`,
   },
 
   // ============ SEARCH & HISTORY ============
