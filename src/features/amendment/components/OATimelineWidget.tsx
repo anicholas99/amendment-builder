@@ -65,6 +65,7 @@ interface OATimelineWidgetProps {
   onEventClick?: (eventId: string, eventType: string) => void;
   className?: string;
   useEnhanced?: boolean; // Toggle between legacy and enhanced timeline
+  onAmendmentClick?: (officeActionId: string) => void;
 }
 
 interface TimelineEvent {
@@ -381,6 +382,7 @@ export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
   onEventClick,
   className,
   useEnhanced = true, // Default to enhanced if application number is available
+  onAmendmentClick,
 }) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
@@ -392,7 +394,7 @@ export const OATimelineWidget: React.FC<OATimelineWidgetProps> = ({
   
   // Always use enhanced timeline for better UI when we have USPTO data
   if (usptoData?.timeline && usptoData.timeline.length > 0) {
-    return <EnhancedTimeline projectId={projectId} className={className} />;
+    return <EnhancedTimeline projectId={projectId} className={className} onAmendmentClick={onAmendmentClick} />;
   }
   
   // Filter timeline to only show milestone documents

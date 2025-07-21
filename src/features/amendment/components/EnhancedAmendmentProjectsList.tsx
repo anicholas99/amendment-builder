@@ -146,13 +146,16 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
       console.log('[EnhancedAmendmentProjectsList] Checking OA:', {
         id: oa.id,
         status: oa.status,
+        statusType: typeof oa.status,
         dateIssued: oa.dateIssued,
         createdAt: oa.createdAt,
         fileName: oa.fileName,
+        statusCheck: !oa.status || oa.status === 'UPLOADED' || oa.status === 'PARSED' || oa.status === 'PROCESSING',
+        completedCheck: oa.status === 'COMPLETED',
       });
       
       // Show all office actions that are recent or need attention
-      if (!oa.status || oa.status === 'UPLOADED' || oa.status === 'PARSED' || oa.status === 'PROCESSING') {
+      if (!oa.status || oa.status === 'UPLOADED' || oa.status === 'PARSED' || oa.status === 'PROCESSING' || oa.status === 'ERROR') {
         const oaDate = oa.dateIssued || oa.createdAt;
         if (!oaDate) return true; // If no date, show it
         
@@ -450,6 +453,7 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
                   projectId={projectId}
                   applicationNumber={prosecutionOverview?.applicationNumber}
                   onEventClick={handleTimelineEventClick}
+                  onAmendmentClick={onAmendmentClick}
                 />
               </div>
             )}

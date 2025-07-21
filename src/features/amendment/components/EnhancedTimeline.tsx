@@ -55,6 +55,7 @@ import { useRouter } from 'next/router';
 interface EnhancedTimelineProps {
   projectId: string;
   className?: string;
+  onAmendmentClick?: (officeActionId: string) => void;
 }
 
 // Enhanced visual configuration with more icons and better colors
@@ -268,6 +269,7 @@ const EVENT_VISUAL_CONFIG: Record<string, {
 export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
   projectId,
   className,
+  onAmendmentClick,
 }) => {
   const { data: usptoData, isLoading } = useRealUSPTOTimeline(projectId);
   const queryClient = useQueryClient();
@@ -632,8 +634,10 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                                             description: `Response created for ${event.documentCode} dated ${format(event.date, 'MMM d, yyyy')}`,
                                           });
                                           
-                                          // Navigate to amendment studio
-                                          router.push(`/projects/${projectId}/amendments/studio?amendmentId=${result.amendmentProjectId}`);
+                                          // Update the view inline using the same pattern as existing responses
+                                          if (result.officeActionId && onAmendmentClick) {
+                                            onAmendmentClick(result.officeActionId);
+                                          }
                                         } catch (error) {
                                           console.error('Failed to process office action:', error);
                                           toast({

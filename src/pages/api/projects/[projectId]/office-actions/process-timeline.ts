@@ -17,6 +17,7 @@ import { logger } from '@/server/logger';
 import { prisma } from '@/lib/prisma';
 import { env } from '@/config/env';
 import { StorageServerService } from '@/server/services/storage.server-service';
+import { EnhancedTextExtractionService } from '@/server/services/enhanced-text-extraction.server-service';
 import { AmendmentServerService } from '@/server/services/amendment.server-service';
 
 // ============ VALIDATION SCHEMAS ============
@@ -119,7 +120,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         const tempFilePath = `/tmp/oa-${officeAction.id}-${Date.now()}.pdf`;
         await blockBlobClient.downloadToFile(tempFilePath);
         
-        // Create a formidable-like file object for the existing extraction service
+        // Create a formidable-like file object for the extraction service
         const fileObject = {
           filepath: tempFilePath,
           originalFilename: projectDocument.originalName,
@@ -127,8 +128,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           size: 0,
         } as any;
         
-        // Extract text using the robust existing service
-        extractedText = await StorageServerService.extractTextFromFile(fileObject);
+        // Use the SAME text extraction method as manual upload
+        try {
+          // Try enhanced text extraction first (with OCR support) - same as manual upload
+          extractedText = await EnhancedTextExtractionService.extractTextFromFile(fileObject);
+        } catch (enhancedError) {
+          logger.warn('[process-timeline] Enhanced text extraction failed, trying basic method', {
+            error: enhancedError instanceof Error ? enhancedError.message : String(enhancedError),
+          });
+          // Fall back to basic extraction - same fallback as manual upload
+          extractedText = await StorageServerService.extractTextFromFile(fileObject);
+        }
         
         // Clean up
         await fs.unlink(tempFilePath);
