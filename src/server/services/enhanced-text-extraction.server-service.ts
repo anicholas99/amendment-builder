@@ -2,7 +2,7 @@
  * Enhanced Text Extraction Service
  * 
  * Provides hybrid text extraction capabilities:
- * - Text-based PDFs: Uses MarkItDown for clean Markdown extraction
+ * - Text-based PDFs: Uses pdf-parse for clean text extraction
  * - Scanned PDFs: Uses Azure Document Intelligence OCR
  * - DOCX files: Uses mammoth (existing)
  * - TXT files: Direct file reading
@@ -29,8 +29,6 @@ const ACCEPTED_DOCUMENT_TYPES = [
   'text/plain',
 ];
 
-// MarkItDown will be dynamically imported when needed
-
 /**
  * Enhanced Text Extraction Service
  * Provides intelligent text extraction with OCR fallback capabilities
@@ -49,6 +47,41 @@ export class EnhancedTextExtractionService {
     }
 
     return true;
+  }
+
+  /**
+   * Extract text using pdf-parse for text-based PDFs
+   */
+  private static async extractWithPdfParse(filePath: string): Promise<string> {
+    try {
+      logger.debug('[EnhancedTextExtraction] Using pdf-parse for text extraction');
+      
+      const pdfParse = (await import('pdf-parse')).default;
+      const dataBuffer = await fs.readFile(filePath);
+      const result = await pdfParse(dataBuffer);
+      
+      if (!result.text || result.text.trim().length === 0) {
+        throw new ApplicationError(
+          ErrorCode.FILE_PROCESSING_ERROR,
+          'No text extracted from PDF'
+        );
+      }
+      
+      logger.info('[EnhancedTextExtraction] pdf-parse extraction successful', {
+        textLength: result.text.length,
+        pageCount: result.numpages,
+      });
+      
+      return result.text;
+    } catch (error) {
+      logger.error('[EnhancedTextExtraction] pdf-parse extraction failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ApplicationError(
+        ErrorCode.FILE_PROCESSING_ERROR,
+        `PDF text extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
   }
 
   /**
@@ -79,34 +112,6 @@ export class EnhancedTextExtractionService {
         error: error instanceof Error ? error.message : String(error),
       });
       return false;
-    }
-  }
-
-  /**
-   * Extract text using MarkItDown for text-based PDFs
-   */
-  private static async extractWithMarkItDown(filePath: string): Promise<string> {
-    try {
-      logger.debug('[EnhancedTextExtraction] Using MarkItDown for text extraction');
-      
-      // Dynamic import of markitdown
-      const { MarkItDown: MarkItDownClass } = await import('markitdown');
-      const markitdown = new MarkItDownClass();
-      const result = await markitdown.convert(filePath);
-      
-      logger.info('[EnhancedTextExtraction] MarkItDown extraction successful', {
-        textLength: result.length,
-      });
-      
-      return result;
-    } catch (error) {
-      logger.error('[EnhancedTextExtraction] MarkItDown extraction failed', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw new ApplicationError(
-        ErrorCode.FILE_PROCESSING_ERROR,
-        `MarkItDown extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
     }
   }
 
@@ -251,12 +256,12 @@ export class EnhancedTextExtractionService {
         const hasTextLayer = await this.hasTextLayer(filepath);
         
         if (hasTextLayer) {
-          logger.info('[EnhancedTextExtraction] Using MarkItDown for text-based PDF');
+          logger.info('[EnhancedTextExtraction] Using pdf-parse for text-based PDF');
           try {
-            extractedText = await this.extractWithMarkItDown(filepath);
-          } catch (markItDownError) {
-            logger.warn('[EnhancedTextExtraction] MarkItDown failed, falling back to OCR', {
-              error: markItDownError instanceof Error ? markItDownError.message : String(markItDownError),
+            extractedText = await this.extractWithPdfParse(filepath);
+          } catch (pdfParseError) {
+            logger.warn('[EnhancedTextExtraction] pdf-parse failed, falling back to OCR', {
+              error: pdfParseError instanceof Error ? pdfParseError.message : String(pdfParseError),
             });
             // Fall back to OCR
             extractedText = await this.extractWithOCR(filepath);
