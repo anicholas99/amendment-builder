@@ -238,16 +238,17 @@ export const AmendmentProjectsList: React.FC<AmendmentProjectsListProps> = ({
   };
 
   const handleProjectClick = (amendmentId: string) => {
-    router.push(`${router.asPath}/studio?amendmentId=${amendmentId}`);
+    // Extract office action ID from amendment ID (remove amendment- prefix)
+    const officeActionId = amendmentId.replace(/^amendment-/, '');
+    router.push(`/projects/${projectId}/amendments/studio?amendmentId=${officeActionId}`);
   };
 
   const handleUploadComplete = (officeAction: any) => {
     setShowUploadModal(false);
     refetch(); // Refresh the list
     
-    // Navigate to new amendment studio
-    const newAmendmentId = `amendment-${officeAction.id}`;
-    router.push(`${router.asPath}/studio?amendmentId=${newAmendmentId}`);
+    // Navigate to new amendment studio using office action ID directly
+    router.push(`/projects/${projectId}/amendments/studio?amendmentId=${officeAction.id}`);
   };
 
   // Get days until due

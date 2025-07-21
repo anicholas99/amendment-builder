@@ -6,8 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { LoadingState } from '@/components/common/LoadingState';
 import { cn } from '@/lib/utils';
-import { useQuery } from '@tanstack/react-query';
-import { apiFetch } from '@/lib/api/apiClient';
+import { useOfficeActions } from '@/hooks/api/useAmendment';
 import { logger } from '@/utils/clientLogger';
 import { useToast } from '@/hooks/useToastWrapper';
 import type { OfficeAction } from '@/types/amendment';
@@ -36,47 +35,13 @@ export const OfficeActionsList: React.FC<OfficeActionsListProps> = ({
 }) => {
   const toast = useToast();
 
-  // Fetch Office Actions for the project
+  // Fetch Office Actions for the project using the proper hook
   const {
     data: officeActions = [],
     isLoading,
     error,
     refetch,
-  } = useQuery<OfficeAction[]>({
-    queryKey: ['officeActions', projectId],
-    queryFn: async () => {
-      if (!projectId) return [];
-
-      try {
-        logger.debug('[OfficeActionsList] Fetching Office Actions', { projectId });
-
-        const response = await apiFetch(`/api/projects/${projectId}/office-actions`);
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch Office Actions');
-        }
-
-        const result = await response.json();
-        const actions = result.data || [];
-
-        logger.info('[OfficeActionsList] Office Actions fetched successfully', {
-          projectId,
-          count: actions.length,
-        });
-
-        return actions;
-      } catch (error) {
-        logger.error('[OfficeActionsList] Failed to fetch Office Actions', {
-          error,
-          projectId,
-        });
-        throw error;
-      }
-    },
-    enabled: !!projectId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 3,
-  });
+  } = useOfficeActions(projectId);
 
   // Handle Office Action selection
   const handleOfficeActionClick = React.useCallback(
@@ -282,13 +247,13 @@ export const OfficeActionsList: React.FC<OfficeActionsListProps> = ({
               )}
               onClick={() => handleOfficeActionClick(officeAction.id)}
             >
-              <CardHeader className={cn('pb-2', compact ? 'p-3' : 'p-4')}>
+              <CardHeader className="p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">
-                        {officeAction.originalFileName || 'Office Action'}
+                        {officeAction.fileName || 'Office Action'}
                       </p>
                       {officeAction.oaNumber && (
                         <p className="text-xs text-muted-foreground truncate">
@@ -316,17 +281,17 @@ export const OfficeActionsList: React.FC<OfficeActionsListProps> = ({
                         <span>Issued {formatDate(officeAction.dateIssued)}</span>
                       </div>
                     )}
-                    {officeAction.examinerId && (
+                    {officeAction.examiner?.id && (
                       <div className="flex items-center gap-1">
                         <User className="h-3 w-3" />
-                        <span className="truncate">{officeAction.examinerId}</span>
+                        <span className="truncate">{officeAction.examiner.id}</span>
                       </div>
                     )}
                   </div>
                   
-                  {officeAction.artUnit && (
+                  {officeAction.examiner?.artUnit && (
                     <div className="text-xs text-muted-foreground">
-                      Art Unit: {officeAction.artUnit}
+                      Art Unit: {officeAction.examiner.artUnit}
                     </div>
                   )}
                   

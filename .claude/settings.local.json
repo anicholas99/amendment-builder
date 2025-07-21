@@ -55,7 +55,8 @@
       "Bash(./node_modules/.bin/eslint:*)",
       "Bash(awk:*)",
       "Bash(npx prisma migrate:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npx prisma:*)"
     ],
     "deny": []
   }

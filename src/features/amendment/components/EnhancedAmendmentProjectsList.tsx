@@ -138,28 +138,52 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
       status: oa.status,
       dateIssued: oa.dateIssued,
       fileName: oa.fileName,
+      createdAt: oa.createdAt,
     })));
     
     // Only show Office Actions that need a response
     const filteredOAs = officeActions.filter(oa => {
-      // Only show PENDING_RESPONSE status
-      if (oa.status === 'PENDING_RESPONSE') return true;
+      console.log('[EnhancedAmendmentProjectsList] Checking OA:', {
+        id: oa.id,
+        status: oa.status,
+        dateIssued: oa.dateIssued,
+        createdAt: oa.createdAt,
+        fileName: oa.fileName,
+      });
       
-      // Fallback: if status is not set properly, check if it's recent (within 90 days)
-      if (!oa.status || oa.status === 'UPLOADED' || oa.status === 'PARSED') {
+      // Show all office actions that are recent or need attention
+      if (!oa.status || oa.status === 'UPLOADED' || oa.status === 'PARSED' || oa.status === 'PROCESSING') {
         const oaDate = oa.dateIssued || oa.createdAt;
+        if (!oaDate) return true; // If no date, show it
+        
+        const oaDateObj = new Date(oaDate);
         const ninetyDaysAgo = new Date();
         ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-        return new Date(oaDate) > ninetyDaysAgo;
+        
+        console.log('[EnhancedAmendmentProjectsList] Date comparison:', {
+          oaId: oa.id,
+          oaDate: oaDate,
+          oaDateObj: oaDateObj,
+          ninetyDaysAgo: ninetyDaysAgo,
+          isRecent: oaDateObj > ninetyDaysAgo,
+        });
+        
+        return oaDateObj > ninetyDaysAgo;
       }
+      
+      // Also show completed office actions
+      if (oa.status === 'COMPLETED') return true;
       
       return false;
     });
     
+    console.log('[EnhancedAmendmentProjectsList] Filtered OAs:', filteredOAs.length);
+    
     return filteredOAs.map((oa) => {
       let status: AmendmentProject['status'] = 'DRAFT';
+      const createdAtDate = new Date(oa.createdAt);
       const daysSinceUpload = Math.floor(
-        (Date.now() - new Date(oa.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+        (Date.now() - createdAtDate.getTime()) / (1000 * 60 * 60 * 24)
       );
       
       if (oa.status === 'UPLOADED') {
@@ -173,7 +197,7 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
       }
 
       const dueDate = oa.dateIssued 
-        ? new Date(oa.dateIssued.getTime() + (90 * 24 * 60 * 60 * 1000))
+        ? new Date(new Date(oa.dateIssued).getTime() + (90 * 24 * 60 * 60 * 1000))
         : new Date(Date.now() + (90 * 24 * 60 * 60 * 1000));
 
       let responseType: AmendmentProject['responseType'] = 'AMENDMENT';
@@ -187,8 +211,8 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
         status,
         dueDate,
         responseType,
-        createdAt: oa.createdAt,
-        updatedAt: oa.updatedAt,
+        createdAt: createdAtDate,
+        updatedAt: new Date(oa.updatedAt),
         officeAction: {
           id: oa.id,
           originalFileName: oa.fileName,
@@ -216,7 +240,9 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
     if (onAmendmentClick) {
       onAmendmentClick(amendmentId);
     } else {
-      router.push(`${router.asPath}/studio?amendmentId=${amendmentId}`);
+      // Extract office action ID from amendment ID (remove amendment- prefix)
+      const officeActionId = amendmentId.replace(/^amendment-/, '');
+      router.push(`/projects/${projectId}/amendments/studio?amendmentId=${officeActionId}`);
     }
   };
 
@@ -227,8 +253,8 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
     if (onUploadComplete) {
       onUploadComplete(officeAction);
     } else {
-      const newAmendmentId = `amendment-${officeAction.id}`;
-      router.push(`${router.asPath}/studio?amendmentId=${newAmendmentId}`);
+      // Use the office action ID directly, not with amendment- prefix
+      router.push(`/projects/${projectId}/amendments/studio?amendmentId=${officeAction.id}`);
     }
   };
 
@@ -488,6 +514,7 @@ export const EnhancedAmendmentProjectsList: React.FC<EnhancedAmendmentProjectsLi
                         <AmendmentProjectCard
                           key={project.id}
                           project={prosecutionData}
+                          realProjectId={projectId}
                           onOpenDraft={() => handleProjectClick(project.id)}
                           onViewFiles={(id) => logger.info('View files', { id })}
                           onViewTimeline={(id) => logger.info('View timeline', { id })}

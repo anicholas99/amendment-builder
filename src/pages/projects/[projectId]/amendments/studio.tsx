@@ -55,7 +55,7 @@ const AmendmentStudioPage: React.FC<AmendmentStudioPageProps> = ({
       <AuthGuard>
         <AmendmentStudio 
           projectId={projectId}
-          officeActionId={amendmentId as string}
+          officeActionId={amendmentId ? String(amendmentId).replace(/^amendment-/, '') : undefined}
         />
       </AuthGuard>
     </>

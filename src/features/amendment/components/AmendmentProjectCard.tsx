@@ -59,6 +59,7 @@ interface AmendmentProjectCardProps {
       label?: string;
     }>;
   };
+  realProjectId: string; // Add this prop for the real project ID
   onOpenDraft: (projectId: string) => void;
   onViewFiles?: (projectId: string) => void;
   onViewTimeline?: (projectId: string) => void;
@@ -88,6 +89,7 @@ const getMilestoneIcon = (type: string) => {
 
 export const AmendmentProjectCard: React.FC<AmendmentProjectCardProps> = ({
   project,
+  realProjectId,
   onOpenDraft,
   onViewFiles,
   onViewTimeline,
@@ -110,8 +112,9 @@ export const AmendmentProjectCard: React.FC<AmendmentProjectCardProps> = ({
   };
 
   const handleCardClick = () => {
-    // Navigate to amendment studio
-    router.push(`/projects/${project.id}/amendment?tab=analysis`);
+    // Navigate to amendment studio using the real project ID and office action ID
+    const officeActionId = project.id.replace(/^amendment-/, '');
+    router.push(`/projects/${realProjectId}/amendments/studio?amendmentId=${officeActionId}`);
   };
 
   return (

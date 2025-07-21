@@ -29,14 +29,7 @@ const ACCEPTED_DOCUMENT_TYPES = [
   'text/plain',
 ];
 
-// MarkItDown integration (will be imported when available)
-let MarkItDown: any = null;
-try {
-  // Dynamic import for MarkItDown since it might not be available in all environments
-  MarkItDown = require('markitdown').MarkItDown;
-} catch (error) {
-  logger.warn('[EnhancedTextExtraction] MarkItDown not available, falling back to basic PDF parsing');
-}
+// MarkItDown will be dynamically imported when needed
 
 /**
  * Enhanced Text Extraction Service
@@ -93,17 +86,12 @@ export class EnhancedTextExtractionService {
    * Extract text using MarkItDown for text-based PDFs
    */
   private static async extractWithMarkItDown(filePath: string): Promise<string> {
-    if (!MarkItDown) {
-      throw new ApplicationError(
-        ErrorCode.INTERNAL_ERROR,
-        'MarkItDown not available'
-      );
-    }
-
     try {
       logger.debug('[EnhancedTextExtraction] Using MarkItDown for text extraction');
       
-      const markitdown = new MarkItDown();
+      // Dynamic import of markitdown
+      const { MarkItDown: MarkItDownClass } = await import('markitdown');
+      const markitdown = new MarkItDownClass();
       const result = await markitdown.convert(filePath);
       
       logger.info('[EnhancedTextExtraction] MarkItDown extraction successful', {
@@ -262,7 +250,7 @@ export class EnhancedTextExtractionService {
         // Enhanced PDF handling
         const hasTextLayer = await this.hasTextLayer(filepath);
         
-        if (hasTextLayer && MarkItDown) {
+        if (hasTextLayer) {
           logger.info('[EnhancedTextExtraction] Using MarkItDown for text-based PDF');
           try {
             extractedText = await this.extractWithMarkItDown(filepath);
