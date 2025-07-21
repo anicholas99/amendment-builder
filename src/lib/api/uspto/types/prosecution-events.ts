@@ -40,6 +40,10 @@ export const MILESTONE_DOCUMENT_CODES: Record<string, ProsecutionEventType> = {
   'TRNA': ProsecutionEventType.APPLICATION_FILED,
   'APP.FILE.REC': ProsecutionEventType.APPLICATION_FILED,
   'SPEC': ProsecutionEventType.APPLICATION_FILED,
+  'FILING': ProsecutionEventType.APPLICATION_FILED,
+  'APPLICATION': ProsecutionEventType.APPLICATION_FILED,
+  'FILED': ProsecutionEventType.APPLICATION_FILED,
+  'SPECIFICATION': ProsecutionEventType.APPLICATION_FILED,
   
   // Office Actions
   'CTNF': ProsecutionEventType.NON_FINAL_OA,

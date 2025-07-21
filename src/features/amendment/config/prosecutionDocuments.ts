@@ -21,6 +21,10 @@ export const TIMELINE_DOCUMENT_CODES = new Set([
   'SPEC', // Specification/Application Filed
   'APP.FILE.REC', // Application Filing Receipt
   'TRNA', // Patent Application Published
+  'FILING', // Application Filing
+  'APPLICATION', // Application Filed
+  'FILED', // Filed
+  'SPECIFICATION', // Specification
   
   // Office action nodes
   'CTNF', // Non-Final Office Action
@@ -176,6 +180,38 @@ export const DOCUMENT_DISPLAY_CONFIG: Record<string, DocumentConfig> = {
   // Application Filing - Timeline
   'SPEC': {
     documentCode: 'SPEC',
+    label: 'Application Filed',
+    shortLabel: 'Filed',
+    isTimeline: true,
+    category: 'notice',
+    description: 'Patent application filed'
+  },
+  'FILING': {
+    documentCode: 'FILING',
+    label: 'Application Filed',
+    shortLabel: 'Filed',
+    isTimeline: true,
+    category: 'notice',
+    description: 'Patent application filed'
+  },
+  'APPLICATION': {
+    documentCode: 'APPLICATION',
+    label: 'Application Filed',
+    shortLabel: 'Filed',
+    isTimeline: true,
+    category: 'notice',
+    description: 'Patent application filed'
+  },
+  'FILED': {
+    documentCode: 'FILED',
+    label: 'Application Filed',
+    shortLabel: 'Filed',
+    isTimeline: true,
+    category: 'notice',
+    description: 'Patent application filed'
+  },
+  'SPECIFICATION': {
+    documentCode: 'SPECIFICATION',
     label: 'Application Filed',
     shortLabel: 'Filed',
     isTimeline: true,

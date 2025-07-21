@@ -108,7 +108,7 @@ function mapDocumentCodeToType(documentCode: string): string {
   }
   
   // Filing events
-  if (['SPEC', 'APP.FILE.REC', 'TRNA'].includes(documentCode)) {
+  if (['SPEC', 'APP.FILE.REC', 'TRNA', 'FILING', 'APPLICATION', 'FILED', 'SPECIFICATION'].includes(documentCode)) {
     return 'APPLICATION_FILED';
   }
   

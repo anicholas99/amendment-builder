@@ -69,7 +69,8 @@ async function handler(
           },
         };
 
-        if (metadata.isTimelineMilestone || isTimelineMilestone(metadata.documentCode)) {
+        // Always use current function check, ignore stored metadata flags
+        if (isTimelineMilestone(documentCode)) {
           timeline.push({
             ...docData,
             eventType: metadata.eventType,
@@ -132,8 +133,7 @@ async function handler(
 export default SecurePresets.tenantProtected(
   TenantResolvers.fromProject,
   handler,
-  { 
-    rateLimit: 'standard',
+  {
     validate: { query: querySchema }
   }
 );

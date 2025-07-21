@@ -25,6 +25,10 @@ export const TIMELINE_DOCUMENT_CODES: Record<string, ProsecutionEventType> = {
   'APP.FILE.REC*': ProsecutionEventType.FILED,
   'ADS': ProsecutionEventType.FILED,
   'SPEC': ProsecutionEventType.FILED,
+  'FILING': ProsecutionEventType.FILED,
+  'APPLICATION': ProsecutionEventType.FILED,
+  'FILED': ProsecutionEventType.FILED,
+  'SPECIFICATION': ProsecutionEventType.FILED,
   
   // Office Actions
   'CTNF': ProsecutionEventType.NON_FINAL_OA,
