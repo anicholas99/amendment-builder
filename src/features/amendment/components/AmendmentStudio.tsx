@@ -320,6 +320,12 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
     setShowProjects(false);
   }, []);
 
+  // Handler to go back to projects list
+  const handleGoBack = useCallback(() => {
+    setSelectedOfficeActionId(null);
+    setShowProjects(true);
+  }, []);
+
   if (showProjects) {
     // Use enhanced UI by default, with fallback to legacy
     const useEnhancedUI = process.env.NEXT_PUBLIC_ENHANCED_AMENDMENT_UI !== 'false';
@@ -354,15 +360,26 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
           {isMinimalistUI ? (
             <div className="flex-shrink-0 bg-card border-b border-border px-4 py-3">
               <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-lg font-semibold">
-                    {adaptedOfficeAction?.fileName || 'Amendment Studio'}
-                  </h1>
-                  {adaptedOfficeAction?.metadata?.applicationNumber && (
-                    <span className="text-sm text-muted-foreground ml-2">
-                      • {adaptedOfficeAction.metadata.applicationNumber}
-                    </span>
-                  )}
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleGoBack}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    title="Back to Amendment List"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div>
+                    <h1 className="text-lg font-semibold">
+                      {adaptedOfficeAction?.fileName || 'Amendment Studio'}
+                    </h1>
+                    {adaptedOfficeAction?.metadata?.applicationNumber && (
+                      <span className="text-sm text-muted-foreground ml-2">
+                        • {adaptedOfficeAction.metadata.applicationNumber}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

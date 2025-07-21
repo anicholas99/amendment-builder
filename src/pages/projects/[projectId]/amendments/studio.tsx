@@ -10,13 +10,14 @@
  * - Export capabilities
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { AuthGuard } from '@/components/AuthGuard';
 import { AmendmentStudio } from '@/features/amendment/components/AmendmentStudio';
 import { logger } from '@/server/logger';
+import { useActiveDocument } from '@/contexts/ActiveDocumentContext';
 
 // ============ INTERFACES ============
 
@@ -33,6 +34,23 @@ const AmendmentStudioPage: React.FC<AmendmentStudioPageProps> = ({
 }) => {
   const router = useRouter();
   const { amendmentId } = router.query;
+  const { setActiveDocument } = useActiveDocument();
+
+  // ============ ACTIVE DOCUMENT CONTEXT ============
+  
+  // Set active document for proper sidebar highlighting
+  useEffect(() => {
+    setActiveDocument({
+      projectId,
+      documentType: 'amendments',
+      content: '',
+    });
+
+    // Cleanup on unmount
+    return () => {
+      setActiveDocument(null);
+    };
+  }, [projectId, setActiveDocument]);
 
   // ============ COMPUTED VALUES ============
   
