@@ -54,7 +54,6 @@ import {
 import { cn } from '@/lib/utils';
 import { DocumentViewer } from '@/components/common/DocumentViewer';
 import { OfficeActionDetailedSummary } from './OfficeActionDetailedSummary';
-import { RiskBadge, type RiskLevel } from './RiskBadge';
 import { isFeatureEnabled } from '@/config/featureFlags';
 import type { DetailedAnalysis } from '@/types/amendment';
 
@@ -193,32 +192,7 @@ export const OfficeActionNavigator: React.FC<OfficeActionNavigatorProps> = ({
       });
   }, [officeAction?.rejections, searchTerm, filterType]);
 
-  // Simple risk assessment based on rejection type and prior art count
-  const getClaimRiskLevel = useCallback((claim: string): RiskLevel => {
-    if (!officeAction?.rejections) return 'PENDING';
-    
-    const claimRejections = officeAction.rejections.filter(r => 
-      r.claims.includes(claim)
-    );
-    
-    if (claimRejections.length === 0) return 'LOW';
-    
-    // Check for §112 rejections (highest risk)
-    if (claimRejections.some(r => r.type === '§112')) return 'HIGH';
-    
-    // Check for §101 rejections (high risk)
-    if (claimRejections.some(r => r.type === '§101')) return 'HIGH';
-    
-    // Check for multiple prior art rejections
-    const priorArtRejections = claimRejections.filter(r => 
-      r.type === '§102' || r.type === '§103'
-    );
-    
-    if (priorArtRejections.length > 1) return 'HIGH';
-    if (priorArtRejections.length === 1) return 'MEDIUM';
-    
-    return 'LOW';
-  }, [officeAction?.rejections]);
+
 
   // Group prior art by frequency and relevance
   const priorArtAnalysis = useMemo(() => {
@@ -502,28 +476,14 @@ export const OfficeActionNavigator: React.FC<OfficeActionNavigatorProps> = ({
                               <span className="text-xs text-gray-500">
                                 Claims {rejection.claims.join(', ')}
                               </span>
-                              {isMinimalistUI && (
-                                <div className="flex gap-1 ml-auto">
-                                  {rejection.claims.map(claim => (
-                                    <RiskBadge
-                                      key={claim}
-                                      level={getClaimRiskLevel(claim)}
-                                      size="sm"
-                                      onClick={() => {
-                                        console.log(`Claim ${claim} risk details`);
-                                      }}
-                                    />
-                                  ))}
-                                </div>
-                              )}
                             </div>
                             
                             <h4 className="font-medium text-sm text-gray-900 mb-1">
                               {config.label}
                             </h4>
                             
-                            <p className="text-xs text-gray-600 line-clamp-2">
-                              {rejection.examinerReasoning.slice(0, 100)}...
+                            <p className="text-xs text-gray-600 leading-relaxed">
+                              {rejection.examinerReasoning}
                             </p>
                             
                             {rejection.priorArtReferences.length > 0 && (
