@@ -54,6 +54,7 @@ async function handler(
         const docData = {
           id: doc.id,
           documentCode,
+          documentId: metadata.documentId || metadata.usptoDocumentId || metadata.documentIdentifier,
           title: config?.label || doc.extractedText || metadata.description || doc.originalName,
           date: metadata.mailDate ? new Date(metadata.mailDate) : doc.createdAt,
           category: metadata.category || config?.category,

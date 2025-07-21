@@ -280,10 +280,7 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
       const response = await apiFetch(`/api/projects/${projectId}/office-actions/uspto-download`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          applicationNumber: usptoData?.applicationNumber,
-          ...params
-        })
+        body: JSON.stringify(params)
       });
       
       if (!response.ok) {
@@ -488,14 +485,22 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                                       className="h-8 px-2 gap-1"
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        if (!event.documentId) {
+                                          toast({
+                                            title: "Document ID not found",
+                                            description: "This document may need to be re-synced from USPTO",
+                                            variant: "destructive",
+                                          });
+                                          return;
+                                        }
                                         downloadUSPTODoc.mutate({
-                                          documentId: event.id,
+                                          documentId: event.documentId,
                                           documentCode: event.documentCode,
                                           mailRoomDate: format(event.date, 'MM/dd/yyyy'),
                                           documentDescription: event.title
                                         });
                                       }}
-                                      disabled={downloadingDocs.has(event.id)}
+                                      disabled={downloadingDocs.has(event.id) || !event.documentId}
                                     >
                                       {downloadingDocs.has(event.id) ? (
                                         <>

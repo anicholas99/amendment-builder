@@ -149,8 +149,10 @@ async function handler(
                 mailDate: doc.mailDate,
                 pageCount: doc.pageCount,
                 importance: doc.importance,
+                usptoApplicationNumber: applicationNumber,
                 rawData: doc,
               }),
+              applicationNumber,
               uploadedBy: authReq.user!.id,
             }
           });

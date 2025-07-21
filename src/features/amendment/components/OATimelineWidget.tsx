@@ -691,10 +691,7 @@ const DocumentDrawer: React.FC<DocumentDrawerProps> = ({
       const response = await apiFetch(`/api/projects/${projectId}/office-actions/uspto-download`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          applicationNumber,
-          ...params
-        })
+        body: JSON.stringify(params)
       });
       
       if (!response.ok) {

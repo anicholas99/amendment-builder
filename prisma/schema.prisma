@@ -339,6 +339,7 @@ model ProjectDocument {
   storageUrl        String // Azure blob storage URL
   extractedText     String?  @db.NVarChar(Max) // Full text extraction
   extractedMetadata String?  @db.NVarChar(Max) // JSON metadata
+  applicationNumber String? // USPTO application number for linked documents
   uploadedBy        String
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -347,6 +348,7 @@ model ProjectDocument {
 
   @@index([projectId])
   @@index([uploadedBy])
+  @@index([applicationNumber])
   @@map("project_documents")
 }
 

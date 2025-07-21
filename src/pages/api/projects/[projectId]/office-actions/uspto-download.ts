@@ -1,16 +1,15 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
-import { SecurePresets } from '@/middleware/securePresets';
-import { TenantResolvers } from '@/middleware/tenantResolvers';
-import { createServiceContext } from '@/lib/serviceContext';
-import { StorageService } from '@/services/storage.service';
+import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
+import { AuthenticatedRequest } from '@/types/api';
 import { projectDocumentRepository } from '@/repositories/projectDocumentRepository';
 import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { USPTO_CONFIG } from '@/config/uspto';
+import { StorageServerService } from '@/server/services/storage.server-service';
+import { prisma } from '@/lib/prisma';
 
 const requestSchema = z.object({
-  applicationNumber: z.string().min(1),
   documentId: z.string().min(1),
   documentCode: z.string().min(1),
   mailRoomDate: z.string(),
@@ -19,18 +18,16 @@ const requestSchema = z.object({
 
 type RequestBody = z.infer<typeof requestSchema>;
 
-async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { applicationNumber, documentId, documentCode, mailRoomDate, documentDescription } = req.body as RequestBody;
+    const { documentId, documentCode, mailRoomDate, documentDescription } = req.body as RequestBody;
     const { projectId } = req.query as { projectId: string };
-    const context = await createServiceContext(req, res);
-    
-    // Initialize services
-    const storageService = new StorageService(context);
+    const tenantId = req.user!.tenantId;
+    const userId = req.user!.id;
 
     // Check if document already exists
     const existingDoc = await projectDocumentRepository.findByUSPTOIdentifier(projectId, documentId);
@@ -45,14 +42,82 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       });
     }
 
+    // Get applicationNumber from patent application
+    const patentApp = await prisma.patentApplication.findUnique({
+      where: { projectId },
+      select: { applicationNumber: true }
+    });
+
+    if (!patentApp || !patentApp.applicationNumber) {
+      // Try to get from an existing USPTO document
+      const usptoDoc = await prisma.projectDocument.findFirst({
+        where: {
+          projectId,
+          fileType: 'uspto-document',
+          applicationNumber: { not: null }
+        },
+        select: {
+          applicationNumber: true
+        }
+      });
+
+      if (!usptoDoc || !usptoDoc.applicationNumber) {
+        throw new ApplicationError(
+          ErrorCode.INVALID_INPUT,
+          'No USPTO application number found for this project. Please sync USPTO data first.',
+          400
+        );
+      }
+    }
+
+    const applicationNumber = patentApp?.applicationNumber || 
+      (await prisma.projectDocument.findFirst({
+        where: {
+          projectId,
+          fileType: 'uspto-document',
+          applicationNumber: { not: null }
+        },
+        select: {
+          applicationNumber: true
+        }
+      }))?.applicationNumber;
+
+    if (!applicationNumber) {
+      throw new ApplicationError(
+        ErrorCode.INVALID_INPUT,
+        'Application number not found for project',
+        400
+      );
+    }
+
+    // Clean application number for USPTO API (remove formatting)
+    const cleanAppNumber = applicationNumber.replace(/[^0-9]/g, '');
+    
+    // Debug API key configuration
+    logger.info('[USPTO Download] API Key check', {
+      hasApiKey: !!USPTO_CONFIG.API_KEY,
+      apiKeyLength: USPTO_CONFIG.API_KEY?.length || 0,
+      apiKeyFirstChars: USPTO_CONFIG.API_KEY?.substring(0, 4) || 'none',
+      envVarExists: !!process.env.USPTO_ODP_API_KEY,
+      envVarLength: process.env.USPTO_ODP_API_KEY?.length || 0
+    });
+    
     // Download PDF from USPTO
     logger.info('[USPTO Download] Downloading document', { 
       applicationNumber, 
+      cleanAppNumber,
       documentId,
       projectId 
     });
     
-    const downloadUrl = `https://api.uspto.gov/api/v1/download/applications/${applicationNumber}/${documentId}.pdf`;
+    const downloadUrl = `https://api.uspto.gov/api/v1/download/applications/${cleanAppNumber}/${documentId}.pdf`;
+    // Log the exact request being made
+    logger.info('[USPTO Download] Making request', {
+      url: downloadUrl,
+      hasApiKey: !!USPTO_CONFIG.API_KEY,
+      apiKeyValue: USPTO_CONFIG.API_KEY ? `${USPTO_CONFIG.API_KEY.substring(0, 4)}...` : 'missing'
+    });
+    
     const response = await fetch(downloadUrl, {
       method: 'GET',
       headers: {
@@ -62,6 +127,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     });
 
     if (!response.ok) {
+      logger.error('[USPTO Download] USPTO API error', {
+        status: response.status,
+        statusText: response.statusText,
+        url: downloadUrl,
+        hasApiKey: !!USPTO_CONFIG.API_KEY,
+        apiKeyLength: USPTO_CONFIG.API_KEY?.length || 0
+      });
+      
+      if (response.status === 403) {
+        throw new ApplicationError(
+          ErrorCode.EXTERNAL_SERVICE_ERROR,
+          'USPTO API access denied. Please check API key configuration.'
+        );
+      }
+      
       throw new ApplicationError(
         ErrorCode.EXTERNAL_SERVICE_ERROR,
         `Failed to download USPTO document: ${response.status}`
@@ -81,12 +161,23 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       projectId 
     });
     
-    const storageUrl = await storageService.uploadOfficeAction(
-      projectId,
-      fileName,
-      fileBuffer,
-      'application/pdf'
+    // Create a File-like object for the storage service
+    const fileObject = {
+      originalname: fileName,
+      mimetype: 'application/pdf',
+      buffer: fileBuffer,
+      size: fileBuffer.length,
+    } as Express.Multer.File;
+    
+    const uploadResult = await StorageServerService.uploadOfficeActionDocument(
+      fileObject,
+      {
+        userId,
+        tenantId,
+      }
     );
+    
+    const storageUrl = uploadResult.url;
 
     // Create ProjectDocument record
     const projectDocument = await projectDocumentRepository.create({
@@ -95,6 +186,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       originalName: fileName,
       fileType: 'office-action',
       storageUrl,
+      applicationNumber,
       extractedMetadata: JSON.stringify({
         usptoDocumentId: documentId,
         usptoApplicationNumber: applicationNumber,
@@ -104,7 +196,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         downloadedAt: new Date().toISOString(),
         source: 'USPTO_API'
       }),
-      uploader: { connect: { id: context.userId! } },
+      uploader: { connect: { id: userId } },
     });
 
     logger.info('[USPTO Download] Document downloaded successfully', { 

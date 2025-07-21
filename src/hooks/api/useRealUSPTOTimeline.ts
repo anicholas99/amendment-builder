@@ -12,6 +12,7 @@ interface USPTOTimelineResponse {
   timeline: Array<{
     id: string;
     documentCode: string;
+    documentId?: string;
     title: string;
     date: string;
     eventType?: string;
@@ -47,6 +48,7 @@ export function useRealUSPTOTimeline(projectId: string) {
       // Transform timeline data to match expected format
       const transformedTimeline = data.timeline.map((event) => ({
         id: event.id,
+        documentId: event.documentId,
         type: mapDocumentCodeToType(event.documentCode),
         documentCode: event.documentCode,
         date: new Date(event.date),
