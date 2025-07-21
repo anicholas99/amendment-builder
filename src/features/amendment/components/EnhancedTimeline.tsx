@@ -273,6 +273,7 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
   // Download USPTO document mutation
   const downloadUSPTODoc = useMutation({
     mutationFn: async (params: {
+      id: string; // Database record ID
       documentId: string;
       documentCode: string;
       mailRoomDate: string;
@@ -506,6 +507,7 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                                           return;
                                         }
                                         downloadUSPTODoc.mutate({
+                                          id: event.id, // Pass the actual record ID
                                           documentId: event.documentId,
                                           documentCode: event.documentCode,
                                           mailRoomDate: format(event.date, 'MM/dd/yyyy'),

@@ -9,6 +9,7 @@ import { StorageServerService } from '@/server/services/storage.server-service';
 import { prisma } from '@/lib/prisma';
 
 const requestSchema = z.object({
+  id: z.string().uuid(), // Database record ID
   documentId: z.string().min(1),
   documentCode: z.string().min(1),
   mailRoomDate: z.string(),
@@ -23,27 +24,23 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 
   try {
-    const { documentId, documentCode, mailRoomDate, documentDescription } = req.body as RequestBody;
+    const { id, documentId, documentCode, mailRoomDate, documentDescription } = req.body as RequestBody;
     const { projectId } = req.query as { projectId: string };
     const tenantId = req.user!.tenantId;
     const userId = req.user!.id;
 
-    // Find the existing document record by USPTO document ID
+    // Find the existing document record by ID
     const existingDoc = await prisma.projectDocument.findFirst({
       where: {
+        id,
         projectId,
-        OR: [
-          { extractedMetadata: { contains: `"documentId":"${documentId}"` } },
-          { extractedMetadata: { contains: `"usptoDocumentId":"${documentId}"` } },
-          { extractedMetadata: { contains: `"documentIdentifier":"${documentId}"` } }
-        ]
       }
     });
 
     if (!existingDoc) {
       throw new ApplicationError(
         ErrorCode.NOT_FOUND,
-        'Document record not found. Please sync USPTO data first.',
+        'Document record not found.',
         404
       );
     }
