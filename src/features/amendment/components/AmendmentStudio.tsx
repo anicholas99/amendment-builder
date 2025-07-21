@@ -355,7 +355,7 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
 
       {/* Main Content Area */}
       <div className="flex-1 h-full overflow-hidden">
-        <div className="h-full flex flex-col bg-card border border-border rounded-lg shadow-lg overflow-hidden">
+        <div className="h-full flex flex-col bg-card border border-border shadow-lg overflow-hidden">
           {/* Fixed header - simplified for minimalist UI */}
           {isMinimalistUI ? (
             <div className="flex-shrink-0 bg-card border-b border-border px-4 py-3">

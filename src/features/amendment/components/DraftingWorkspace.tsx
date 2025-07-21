@@ -11,6 +11,7 @@ import {
   MessageSquare,
   FileText,
   Eye,
+  EyeOff,
   Download,
   Save,
   Undo,
@@ -26,7 +27,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
-  Lightbulb
+  Lightbulb,
+  History,
+  X
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -429,9 +432,22 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
 
   // State to control showing original claim text
   const [showOriginalText, setShowOriginalText] = useState<Record<string, boolean>>({});
+  
+  // State to control showing live preview
+  const [showLivePreview, setShowLivePreview] = useState<Record<string, boolean>>({});
+  
+  // State to control showing file history panel
+  const [showFileHistory, setShowFileHistory] = useState(false);
 
   const toggleShowOriginalText = (claimId: string) => {
     setShowOriginalText(prev => ({
+      ...prev,
+      [claimId]: !prev[claimId]
+    }));
+  };
+
+  const toggleShowLivePreview = (claimId: string) => {
+    setShowLivePreview(prev => ({
       ...prev,
       [claimId]: !prev[claimId]
     }));
@@ -483,6 +499,21 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
           </span>
 
           <Separator orientation="vertical" className="h-6" />
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant={showFileHistory ? "default" : "outline"} 
+                  size="sm" 
+                  onClick={() => setShowFileHistory(!showFileHistory)}
+                >
+                  <History className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>File History</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           <TooltipProvider>
             <Tooltip>
@@ -557,6 +588,24 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
                   </TooltipTrigger>
                   <TooltipContent>
                     {showOriginalText[claim.id] ? 'Hide' : 'Show'} original claim text
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleShowLivePreview(claim.id)}
+                      className={showLivePreview[claim.id] ? 'bg-blue-100' : ''}
+                    >
+                      {showLivePreview[claim.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {showLivePreview[claim.id] ? 'Hide' : 'Show'} live preview
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -637,13 +686,13 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
               className="min-h-[120px] font-mono text-sm"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Changes are highlighted automatically in the preview below
+              Click the <Eye className="h-3 w-3 inline mx-1" /> icon to toggle live preview
             </p>
           </div>
 
           {/* Live Amendment Preview */}
-          {claim.amendedText && (
-            <div>
+          {claim.amendedText && showLivePreview[claim.id] && (
+            <div className="animate-in fade-in-0 slide-in-from-bottom-2 duration-200">
               <label className="text-sm font-medium mb-2 block text-blue-700">
                 Live Amendment Preview
               </label>
@@ -758,11 +807,76 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
   }
 
   return (
-    <div className={cn("h-full flex flex-col", className)}>
+    <div className={cn("h-full flex flex-col relative", className)}>
       {renderHeader()}
 
+      {/* File History Overlay Panel */}
+      {showFileHistory && (
+        <div className="absolute top-[65px] right-4 z-20 w-[400px] max-h-[calc(100%-80px)] bg-white border border-gray-200 rounded-lg shadow-xl animate-in fade-in-0 slide-in-from-right-2 duration-200">
+          <div className="p-4 border-b bg-gray-50 rounded-t-lg">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold flex items-center gap-2">
+                <History className="h-4 w-4" />
+                File History
+              </h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowFileHistory(false)}
+                className="h-6 w-6 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="max-h-[500px] overflow-y-auto">
+            <AmendmentFileHistory
+              amendmentProjectId={amendmentProjectId || ''}
+              files={filesData?.files || []}
+              isLoading={filesLoading}
+              onDownload={(file) => {
+                if (file.storageUrl) {
+                  window.open(file.storageUrl, '_blank');
+                } else {
+                  toast.error({
+                    title: 'Download Failed',
+                    description: 'No download URL available for this file',
+                  });
+                }
+              }}
+              onPreview={(file) => {
+                if (file.storageUrl) {
+                  window.open(file.storageUrl, '_blank');
+                } else {
+                  toast.error({
+                    title: 'Preview Failed',
+                    description: 'No preview available for this file',
+                  });
+                }
+              }}
+              onDelete={(file) => {
+                deleteFileMutation.mutate(file.id, {
+                  onSuccess: () => {
+                    toast.success({
+                      title: 'File Deleted',
+                      description: `${file.fileName} has been deleted successfully`,
+                    });
+                  },
+                  onError: (error) => {
+                    toast.error({
+                      title: 'Delete Failed',
+                      description: error.message || 'Failed to delete file',
+                    });
+                  },
+                });
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-        <TabsList className="grid w-full grid-cols-4 rounded-none border-b bg-gray-50 flex-shrink-0">
+        <TabsList className="grid w-full grid-cols-3 rounded-none border-b bg-gray-50 flex-shrink-0">
           <TabsTrigger value="claims" className="flex items-center gap-2">
             <FileEdit className="h-4 w-4" />
             Claims ({claimAmendments.length})
@@ -770,10 +884,6 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
           <TabsTrigger value="arguments" className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
             Arguments ({argumentSections.length})
-          </TabsTrigger>
-          <TabsTrigger value="files" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            File History
           </TabsTrigger>
           <TabsTrigger value="preview" className="flex items-center gap-2">
             <Eye className="h-4 w-4" />
@@ -860,55 +970,6 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="files" className="flex-1 mt-0 overflow-hidden">
-          <ScrollArea className="h-full">
-            <div className="p-6">
-            <AmendmentFileHistory
-              amendmentProjectId={amendmentProjectId || ''}
-              files={filesData?.files || []}
-              isLoading={filesLoading}
-              onDownload={(file) => {
-                // Open download URL in new tab
-                if (file.storageUrl) {
-                  window.open(file.storageUrl, '_blank');
-                } else {
-                  toast.error({
-                    title: 'Download Failed',
-                    description: 'No download URL available for this file',
-                  });
-                }
-              }}
-              onPreview={(file) => {
-                // Open preview in new tab for supported file types
-                if (file.storageUrl) {
-                  window.open(file.storageUrl, '_blank');
-                } else {
-                  toast.error({
-                    title: 'Preview Failed',
-                    description: 'No preview available for this file',
-                  });
-                }
-              }}
-              onDelete={(file) => {
-                deleteFileMutation.mutate(file.id, {
-                  onSuccess: () => {
-                    toast.success({
-                      title: 'File Deleted',
-                      description: `${file.fileName} has been deleted successfully`,
-                    });
-                  },
-                  onError: (error) => {
-                    toast.error({
-                      title: 'Delete Failed',
-                      description: error.message || 'Failed to delete file',
-                    });
-                  },
-                });
-              }}
-            />
-          </div>
-          </ScrollArea>
-        </TabsContent>
 
         <TabsContent value="preview" className="flex-1 mt-0 overflow-hidden">
           <ScrollArea className="h-full">
