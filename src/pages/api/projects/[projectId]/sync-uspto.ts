@@ -75,13 +75,6 @@ async function handler(
 
     const { documents } = prosecutionData;
     
-    // Separate documents into categories
-    const officeActionCodes = ['CTNF', 'CTFR', 'CTAV', 'CTSP', 'MCTNF'];
-    const officeActions = documents.filter(doc => 
-      doc.category === 'office-action' || 
-      officeActionCodes.includes(doc.documentCode)
-    );
-
     // Start a transaction to ensure data consistency
     const result = await prisma.$transaction(async (tx) => {
       // Update patent application with basic info if available
@@ -99,7 +92,7 @@ async function handler(
         });
       }
 
-      // Step 1: Store ALL documents in ProjectDocument table with categorization
+      // Store ALL documents in ProjectDocument table - this is the source of truth
       const storedDocuments = [];
       const timelineEvents = [];
       
@@ -158,7 +151,7 @@ async function handler(
           });
           storedDocuments.push(storedDoc);
 
-          // Track timeline milestones
+          // Track timeline milestones for UI display
           if (isTimelineMilestone(doc.documentCode)) {
             const eventType = getEventType(doc.documentCode);
             if (eventType) {
@@ -174,66 +167,12 @@ async function handler(
         }
       }
 
-      // Step 2: Create OfficeAction records for backward compatibility
-      const createdOAs = [];
-      
-      // Get all existing office actions in one query
-      const existingOAs = await tx.officeAction.findMany({
-        where: {
-          projectId,
-        },
-        select: {
-          oaNumber: true,
-          dateIssued: true,
-        }
-      });
-      
-      const existingOASet = new Set(
-        existingOAs.map(oa => `${oa.oaNumber}_${oa.dateIssued?.toISOString() || ''}`)
-      );
-      
-      for (const oaDoc of officeActions) {
-        const oaKey = `${oaDoc.documentCode}_${oaDoc.mailDate || ''}`;
-        
-        if (!existingOASet.has(oaKey)) {
-          const newOA = await tx.officeAction.create({
-            data: {
-              projectId,
-              tenantId,
-              applicationNumber, // Add the application number here
-              oaNumber: oaDoc.documentCode,
-              dateIssued: oaDoc.mailDate ? new Date(oaDoc.mailDate) : new Date(),
-              originalFileName: oaDoc.description,
-              status: 'COMPLETED',
-              examinerRemarks: `${oaDoc.description} - ${oaDoc.documentCode}`,
-              parsedJson: JSON.stringify({
-                usptoDocument: oaDoc,
-                category: oaDoc.category,
-                importance: oaDoc.importance,
-              }),
-            }
-          });
-          createdOAs.push(newOA);
-
-          // Create summary for the office action
-          await tx.officeActionSummary.create({
-            data: {
-              officeActionId: newOA.id,
-              summaryText: oaDoc.description || 'USPTO Office Action',
-              keyIssues: JSON.stringify([]),
-              rejectionBreakdown: JSON.stringify({}),
-              totalClaimsRejected: 0,
-              examinerTone: 'NEUTRAL',
-              responseComplexity: 'MEDIUM',
-            }
-          });
-        }
-      }
+      // Note: We store prosecution history in ProjectDocument records, not in the Project model
+      // The timeline will read from ProjectDocument table as the source of truth
 
       return {
         documentsStored: storedDocuments.length,
         timelineEvents: timelineEvents.length,
-        officeActionsCreated: createdOAs.length,
         totalDocuments: documents.length,
       };
     }, {
@@ -247,7 +186,6 @@ async function handler(
       cleanAppNumber,
       documentsStored: result.documentsStored,
       timelineEvents: result.timelineEvents,
-      officeActionsCreated: result.officeActionsCreated,
       totalDocuments: result.totalDocuments,
     });
 
@@ -257,7 +195,6 @@ async function handler(
       stats: {
         documentsStored: result.documentsStored,
         timelineEvents: result.timelineEvents,
-        officeActionsCreated: result.officeActionsCreated,
         totalDocuments: result.totalDocuments,
       }
     });

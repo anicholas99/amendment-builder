@@ -621,17 +621,15 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                                         
                                         try {
                                           // Process the timeline office action
+                                          // event.id is the ProjectDocument ID for timeline events
                                           const result = await AmendmentClientService.processTimelineOfficeAction(
                                             projectId,
-                                            event.id,
-                                            event.id // Use event.id as both officeActionId and timelineEventId
+                                            event.id // This is the ProjectDocument ID
                                           );
                                           
                                           toast({
                                             title: "Office Action Processed",
-                                            description: result.processed 
-                                              ? `Office Action OCR'd and response created for ${event.documentCode}`
-                                              : `Response created for ${event.documentCode}`,
+                                            description: `Response created for ${event.documentCode} dated ${format(event.date, 'MMM d, yyyy')}`,
                                           });
                                           
                                           // Navigate to amendment studio

@@ -231,18 +231,16 @@ export class AmendmentClientService {
   }
 
   /**
-   * Process a timeline Office Action (download, OCR, parse, and create amendment project)
+   * Process a timeline Office Action (create OA record, parse, and create amendment project)
    */
   static async processTimelineOfficeAction(
     projectId: string,
-    officeActionId: string,
-    timelineEventId?: string
-  ): Promise<{ amendmentProjectId: string; processed: boolean }> {
+    projectDocumentId: string
+  ): Promise<{ officeActionId: string; amendmentProjectId: string; processed: boolean }> {
     try {
       logger.info('[AmendmentClientService] Processing timeline Office Action', {
         projectId,
-        officeActionId,
-        timelineEventId,
+        projectDocumentId,
       });
 
       const response = await apiFetch(
@@ -253,8 +251,7 @@ export class AmendmentClientService {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            officeActionId,
-            timelineEventId,
+            projectDocumentId,
           }),
         }
       );
@@ -269,7 +266,7 @@ export class AmendmentClientService {
       const result = await response.json();
 
       logger.info('[AmendmentClientService] Timeline Office Action processed successfully', {
-        officeActionId,
+        officeActionId: result.officeActionId,
         amendmentProjectId: result.amendmentProjectId,
         processed: result.processed,
       });
@@ -279,7 +276,7 @@ export class AmendmentClientService {
       logger.error('[AmendmentClientService] Failed to process timeline Office Action', {
         error,
         projectId,
-        officeActionId,
+        projectDocumentId,
       });
 
       if (error instanceof ApplicationError) {

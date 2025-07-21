@@ -1,6 +1,6 @@
 /**
  * USPTO Sync Service
- * Focused on data needed for AI-powered amendment automation
+ * Focused on storing USPTO documents in ProjectDocument table only
  */
 
 import { prisma } from '@/lib/prisma';
@@ -29,7 +29,6 @@ interface USPTODocument {
 
 interface SyncResult {
   eventsCreated: number;
-  officeActionsCreated: number;
   documentsStored: number;
   totalDocuments: number;
 }
@@ -38,7 +37,7 @@ export class USPTOSyncService {
 
   /**
    * Sync USPTO data for a project
-   * Only stores what's needed for AI automation
+   * Only stores documents in ProjectDocument table
    */
   async syncUSPTOData(
     projectId: string,
@@ -65,7 +64,6 @@ export class USPTOSyncService {
       
       return await prisma.$transaction(async (tx) => {
         let eventsCreated = 0;
-        let officeActionsCreated = 0;
         let documentsStored = 0;
 
         // Get or ensure patent application exists
@@ -81,27 +79,54 @@ export class USPTOSyncService {
           );
         }
 
-        // Build timeline to determine which OA is current
+        // Build timeline to determine document status
         const timeline = ProsecutionTimelineService.buildTimelineSequence(documents);
-        const currentOA = ProsecutionTimelineService.findCurrentOfficeAction(timeline);
 
-        // Process each document
+        // Process each document - store in ProjectDocument only
         for (const doc of documents) {
           const docId = generateId();
           
-          // Step 1: Store document metadata in S3 (not in DB)
-          if (doc.pdfUrl) {
-            const s3Key = `uspto/${tenantId}/${projectId}/${doc.documentCode}_${doc.documentId}.json`;
-            await StorageServerService.uploadJson(s3Key, {
-              ...doc,
-              syncedAt: new Date().toISOString(),
+          // Check if document already exists
+          const existingDoc = await tx.projectDocument.findFirst({
+            where: {
               projectId,
-              applicationNumber,
+              fileType: 'uspto-document',
+              originalName: doc.documentCode,
+              extractedMetadata: {
+                contains: doc.documentId
+              }
+            }
+          });
+
+          if (!existingDoc) {
+            // Store document in ProjectDocument table
+            await tx.projectDocument.create({
+              data: {
+                id: docId,
+                projectId,
+                fileName: `${doc.documentCode}_${doc.mailDate || 'undated'}.json`,
+                originalName: doc.documentCode,
+                fileType: 'uspto-document',
+                storageUrl: doc.pdfUrl || '',
+                extractedText: doc.description || '',
+                extractedMetadata: JSON.stringify({
+                  documentId: doc.documentId,
+                  documentCode: doc.documentCode,
+                  category: doc.category,
+                  mailDate: doc.mailDate,
+                  pageCount: doc.pageCount,
+                  importance: doc.importance,
+                  usptoApplicationNumber: applicationNumber,
+                  rawData: doc,
+                }),
+                applicationNumber,
+                uploadedBy: userId,
+              }
             });
             documentsStored++;
           }
 
-          // Step 2: Check if this is a milestone event
+          // Track milestone events for timeline display (but don't create Office Actions)
           if (isMilestoneEvent(doc.documentCode)) {
             const eventType = getEventType(doc.documentCode);
             if (eventType) {
@@ -117,7 +142,7 @@ export class USPTOSyncService {
               if (!existingEvent) {
                 await tx.prosecutionEvent.create({
                   data: {
-                    id: docId,
+                    id: generateId(),
                     applicationId: patentApp.id,
                     eventType,
                     eventDate: doc.mailDate ? new Date(doc.mailDate) : new Date(),
@@ -125,7 +150,7 @@ export class USPTOSyncService {
                     documentId: doc.documentId,
                     metadata: {
                       documentCode: doc.documentCode,
-                      s3Key: `uspto/${tenantId}/${projectId}/${doc.documentCode}_${doc.documentId}.json`,
+                      projectDocumentId: docId,
                     },
                   }
                 });
@@ -133,113 +158,9 @@ export class USPTOSyncService {
               }
             }
           }
-
-          // Step 3: Create OfficeAction records for OA-specific processing
-          if (['CTNF', 'CTFR', 'CTAV'].includes(doc.documentCode)) {
-            const existingOA = await tx.officeAction.findFirst({
-              where: {
-                projectId,
-                oaNumber: doc.documentCode,
-                dateIssued: doc.mailDate ? new Date(doc.mailDate) : undefined,
-              }
-            });
-
-            const oaType = doc.documentCode === 'CTFR' ? 'FINAL' : 'NON_FINAL';
-            
-            // Determine if this is the current OA based on timeline
-            const isCurrentOA = ProsecutionTimelineService.isCurrentOfficeAction(doc, currentOA);
-            const status = isCurrentOA ? 'PENDING_RESPONSE' : 'COMPLETED';
-            
-            if (!existingOA) {
-              await tx.officeAction.create({
-                data: {
-                  projectId,
-                  tenantId,
-                  oaNumber: doc.documentCode,
-                  dateIssued: doc.mailDate ? new Date(doc.mailDate) : new Date(),
-                  originalFileName: doc.description,
-                  status,
-                  examinerRemarks: doc.description || 'USPTO Office Action',
-                  parsedJson: JSON.stringify({
-                    oaType,
-                    isCurrentOA,
-                    timelinePosition: timeline.findIndex(t => t.metadata.documentId === doc.documentId),
-                    documentId: doc.documentId,
-                    pdfUrl: doc.pdfUrl,
-                    s3Key: `uspto/${tenantId}/${projectId}/${doc.documentCode}_${doc.documentId}.json`,
-                  }),
-                }
-              });
-              officeActionsCreated++;
-
-              // Create empty summary for AI to fill later
-              await tx.officeActionSummary.create({
-                data: {
-                  officeActionId: (await tx.officeAction.findFirst({
-                    where: { 
-                      projectId,
-                      oaNumber: doc.documentCode,
-                      dateIssued: doc.mailDate ? new Date(doc.mailDate) : undefined,
-                    },
-                    select: { id: true }
-                  }))!.id,
-                  summaryText: 'Pending AI analysis',
-                  keyIssues: JSON.stringify([]),
-                  rejectionBreakdown: JSON.stringify({}),
-                  totalClaimsRejected: 0,
-                  examinerTone: 'NEUTRAL',
-                  responseComplexity: 'MEDIUM',
-                }
-              });
-            } else {
-              // Update existing OA status based on timeline
-              await tx.officeAction.update({
-                where: { id: existingOA.id },
-                data: {
-                  status,
-                  parsedJson: JSON.stringify({
-                    ...JSON.parse(existingOA.parsedJson || '{}'),
-                    oaType,
-                    isCurrentOA,
-                    timelinePosition: timeline.findIndex(t => t.metadata.documentId === doc.documentId),
-                  }),
-                }
-              });
-            }
-          }
-        }
-        
-        // Update status for ALL existing Office Actions based on timeline
-        const allProjectOAs = await tx.officeAction.findMany({
-          where: {
-            projectId,
-            tenantId,
-            deletedAt: null,
-          }
-        });
-        
-        for (const oa of allProjectOAs) {
-          if (!oa.dateIssued) continue;
-          
-          const oaDoc = {
-            documentCode: oa.oaNumber || '',
-            mailDate: oa.dateIssued.toISOString(),
-          };
-          
-          const shouldBePending = ProsecutionTimelineService.isCurrentOfficeAction(oaDoc, currentOA);
-          const expectedStatus = shouldBePending ? 'PENDING_RESPONSE' : 'COMPLETED';
-          
-          if (oa.status !== expectedStatus) {
-            await tx.officeAction.update({
-              where: { id: oa.id },
-              data: { status: expectedStatus }
-            });
-          }
         }
 
         // Update patent application with latest info
-        const appStatus = ProsecutionTimelineService.getApplicationStatus(timeline);
-        
         if (prosecutionData.applicationData) {
           await tx.patentApplication.update({
             where: { projectId },
@@ -248,100 +169,42 @@ export class USPTOSyncService {
               filingDate: prosecutionData.applicationData.filingDate 
                 ? new Date(prosecutionData.applicationData.filingDate)
                 : patentApp.filingDate,
-              status: appStatus,
-              examiner: prosecutionData.applicationData.examiner,
-              artUnit: prosecutionData.applicationData.artUnit,
-              updatedAt: new Date(),
-            }
-          });
-        } else {
-          // Update status even if no application data
-          await tx.patentApplication.update({
-            where: { projectId },
-            data: {
-              status: appStatus,
-              updatedAt: new Date(),
+              status: prosecutionData.applicationData.status || patentApp.status,
+              metadata: {
+                ...patentApp.metadata,
+                lastUSPTOSync: new Date().toISOString(),
+                totalDocuments: documents.length,
+              }
             }
           });
         }
 
-        logger.info('USPTO sync completed', {
-          projectId,
-          applicationNumber,
-          eventsCreated,
-          officeActionsCreated,
-          documentsStored,
-          totalDocuments: documents.length,
-        });
+        // Note: We don't store prosecution history in the Project model
+        // All prosecution data is stored in ProjectDocument records as the source of truth
 
         return {
           eventsCreated,
-          officeActionsCreated,
           documentsStored,
           totalDocuments: documents.length,
         };
       });
+
     } catch (error) {
-      logger.error('USPTO sync failed', {
+      logger.error('[USPTOSyncService] Failed to sync USPTO data', {
         projectId,
         applicationNumber,
         error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       });
-      throw error;
+
+      if (error instanceof ApplicationError) {
+        throw error;
+      }
+
+      throw new ApplicationError(
+        ErrorCode.INTERNAL_ERROR,
+        `Failed to sync USPTO data: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
-  }
-
-  /**
-   * Get USPTO documents for a project
-   * Returns both timeline events and file drawer contents
-   */
-  async getUSPTODocuments(
-    projectId: string,
-    tenantId: string
-  ): Promise<{
-    timeline: any[];
-    documents: any[];
-  }> {
-    // Get patent application
-    const patentApp = await prisma.patentApplication.findUnique({
-      where: { projectId },
-      include: {
-        prosecutionEvents: {
-          orderBy: { eventDate: 'asc' },
-        },
-      },
-    });
-
-    if (!patentApp) {
-      return { timeline: [], documents: [] };
-    }
-
-    // Get all stored documents from S3
-    const s3Prefix = `uspto/${tenantId}/${projectId}/`;
-    const documentsList = await StorageServerService.listObjects(s3Prefix);
-    
-    // Build timeline from prosecution events
-    const timeline = patentApp.prosecutionEvents.map(event => ({
-      id: event.id,
-      type: event.eventType,
-      date: event.eventDate,
-      title: event.title,
-      documentId: event.documentId,
-      metadata: event.metadata,
-    }));
-
-    // Build documents list from S3
-    const documents = await Promise.all(
-      documentsList.map(async (key) => {
-        const data = await StorageServerService.getJson(key);
-        return {
-          ...data,
-          s3Key: key,
-          isTimelineEvent: isMilestoneEvent(data.documentCode),
-        };
-      })
-    );
-
-    return { timeline, documents };
   }
 }
