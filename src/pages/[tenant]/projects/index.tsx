@@ -172,7 +172,7 @@ export default function Projects() {
                         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 font-medium rounded-lg shadow-sm hover:shadow transition-all duration-200"
                       >
                         <FiPlus className="mr-2 h-4 w-4" />
-                        New Amendment Response
+                        Create New Project
                       </Button>
                     </div>
                   </div>

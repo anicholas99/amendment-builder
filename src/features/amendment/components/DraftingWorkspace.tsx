@@ -64,6 +64,7 @@ import { useToast } from '@/hooks/useToastWrapper';
 import { AmendmentFileHistory } from './AmendmentFileHistory';
 import ClaimDiffViewer from './ClaimDiffViewer';
 import LegitimateClaimViewer from './LegitimateClaimViewer';
+import { ClaimAmendmentGenerator } from './ClaimAmendmentGenerator';
 import { 
   useAmendmentProjectFiles, 
   useDeleteAmendmentProjectFile 
@@ -894,15 +895,44 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
         <TabsContent value="claims" className="flex-1 mt-0 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="p-6">
+              {/* AI-Generated Amendments Section */}
+              {projectId && (
+                <div className="mb-6">
+                  <ClaimAmendmentGenerator 
+                    projectId={projectId}
+                    officeActionId={selectedOfficeActionId || undefined}
+                    onAmendmentUpdate={() => {
+                      // When AI amendments are updated, we might want to sync with manual amendments
+                      setHasUnsavedChanges(true);
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Divider between AI and manual amendments */}
+              {projectId && claimAmendments.length > 0 && (
+                <div className="my-8 relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <Separator className="w-full" />
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="bg-white px-4 text-sm text-muted-foreground">
+                      Manual Amendments
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Manual Amendments Section */}
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-semibold">Claim Amendments</h2>
+                <h2 className="text-lg font-semibold">Manual Claim Amendments</h2>
                 <Button onClick={addClaimAmendment} size="sm">
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Claim
+                  Add Manual Claim
                 </Button>
               </div>
 
-              {claimAmendments.length === 0 ? (
+              {claimAmendments.length === 0 && !projectId ? (
                 <div className="text-center py-12 text-gray-500">
                   {selectedOfficeAction ? (
                     <div className="max-w-md mx-auto">
@@ -931,11 +961,11 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
                     </div>
                   )}
                 </div>
-              ) : (
+              ) : claimAmendments.length > 0 ? (
                 <div className="space-y-4">
                   {claimAmendments.map(renderClaimAmendment)}
                 </div>
-              )}
+              ) : null}
             </div>
           </ScrollArea>
         </TabsContent>

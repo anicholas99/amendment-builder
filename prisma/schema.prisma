@@ -94,6 +94,7 @@ model Project {
   officeActions                OfficeAction[]
   amendmentProjects            AmendmentProject[]
   patentApplication            PatentApplication?
+  claimAmendments              ClaimAmendment[]
 
   @@index([tenantId])
   @@index([userId])
@@ -149,6 +150,8 @@ model Tenant {
   officeActions         OfficeAction[]
   amendmentProjects     AmendmentProject[]
   amendmentProjectFiles AmendmentProjectFile[]
+  claimAmendments       ClaimAmendment[]
+  amendmentRecommendations AmendmentRecommendation[]
 
   @@map("tenants")
 }
@@ -808,6 +811,8 @@ model OfficeAction {
   summary           OfficeActionSummary?
   strategyRecommendations StrategyRecommendation[]
   rejectionAnalyses RejectionAnalysisResult[]
+  claimAmendments   ClaimAmendment[]
+  amendmentRecommendations AmendmentRecommendation[]
 
   @@index([projectId])
   @@index([tenantId])
@@ -1117,7 +1122,7 @@ model ClaimAmendment {
   claimNumber    Int
   originalText   String         @db.NVarChar(Max)
   amendedText    String         @db.NVarChar(Max)
-  changes        Json?          // Array of change objects
+  changes        String?        @db.NVarChar(Max) // Array of change objects as JSON string
   changeReason   String         @db.NVarChar(Max)
   aiGenerated    Boolean        @default(true)
   userApproved   Boolean        @default(false)
@@ -1128,7 +1133,7 @@ model ClaimAmendment {
   deletedAt      DateTime?
 
   project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  officeAction OfficeAction @relation(fields: [officeActionId], references: [id], onDelete: Cascade)
+  officeAction OfficeAction @relation(fields: [officeActionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([projectId])
@@ -1159,4 +1164,3 @@ model AmendmentRecommendation {
   @@index([tenantId])
   @@map("amendment_recommendations")
 }
-EOF < /dev/null

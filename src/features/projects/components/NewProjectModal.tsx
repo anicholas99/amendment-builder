@@ -163,7 +163,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isSuccess ? 'Amendment Response Created!' : 'Create New Amendment Response'}
+            {isSuccess ? 'Project Created!' : 'Create New Project'}
           </DialogTitle>
         </DialogHeader>
 

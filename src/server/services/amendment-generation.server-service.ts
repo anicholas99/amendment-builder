@@ -1,10 +1,11 @@
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { prisma } from '@/lib/db/prisma';
+import { prisma } from '@/lib/prisma';
 import { RequestContext } from '@/types/request';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { logger } from '@/server/logger';
-import { AIService } from './ai.server-service';
+import { OpenaiServerService } from './openai.server-service';
+import { AmendmentRepository } from '@/repositories/amendmentRepository';
 
 // Types
 export interface ClaimAmendment {
@@ -44,6 +45,14 @@ export class AmendmentGenerationService {
     });
 
     try {
+      // Check database connection
+      if (!prisma) {
+        throw new ApplicationError(
+          ErrorCode.DB_CONNECTION_ERROR,
+          'Database connection not available'
+        );
+      }
+
       // 1. Get the most recent claims document (OCR'd from prosecution history)
       const recentClaimsDoc = await prisma.projectDocument.findFirst({
         where: {
@@ -75,10 +84,10 @@ export class AmendmentGenerationService {
         },
       });
 
-      if (!officeAction?.analysisSummary) {
+      if (!officeAction) {
         throw new ApplicationError(
           ErrorCode.NOT_FOUND,
-          'No Office Action analysis found. Please analyze the Office Action first.'
+          'No Office Action found. Please upload and analyze an Office Action first.'
         );
       }
 
@@ -99,17 +108,24 @@ export class AmendmentGenerationService {
       );
 
       // 5. Generate amendments using AI
-      const aiResponse = await AIService.generateStructuredResponse(
-        prompt,
-        {
-          temperature: 0.3, // Lower temperature for more consistent legal drafting
-          maxTokens: 16000,
-          model: 'gpt-4-turbo-preview',
-        },
-        context
-      );
+      const aiResponse = await OpenaiServerService.getChatCompletion({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a patent attorney assistant specializing in USPTO claim amendments. Provide responses in valid JSON format.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        temperature: 0.3, // Lower temperature for more consistent legal drafting
+        max_tokens: 16000,
+        model: 'gpt-4-turbo-preview',
+        response_format: { type: 'json_object' },
+      });
 
-      const result = this.parseAIResponse(aiResponse);
+      const result = this.parseAIResponse(aiResponse.content);
 
       // 6. Store the generated amendments
       await this.storeAmendments(projectId, officeAction.id, result, context);
@@ -149,16 +165,16 @@ PREVIOUS CLAIMS (from prosecution history):
 ${claimsText}
 
 OFFICE ACTION ANALYSIS:
-${officeAction.analysisSummary}
+${officeAction.examinerRemarks || officeAction.parsedJson || 'No analysis available'}
 
 EXAMINER'S RECOMMENDATIONS:
 ${recommendationText}
 
 REJECTIONS TO ADDRESS:
 ${officeAction.rejections.map((r: any) => `
-Claim ${r.claimNumbers}: ${r.statutoryBasis}
-Reason: ${r.explanation}
-Prior Art: ${r.priorArt || 'N/A'}
+Claim ${r.claimNumbers}: ${r.type}
+Examiner Text: ${r.examinerText}
+Prior Art: ${r.citedPriorArt || 'N/A'}
 `).join('\n')}
 
 INSTRUCTIONS:
@@ -246,26 +262,21 @@ IMPORTANT:
     result: AmendmentGenerationResult,
     context: RequestContext
   ): Promise<void> {
-    // Store each claim amendment
-    await prisma.$transaction(
-      result.claims.map(claim =>
-        prisma.claimAmendment.create({
-          data: {
-            projectId,
-            officeActionId,
-            tenantId: context.tenantId,
-            claimNumber: claim.claimNumber,
-            originalText: claim.originalText,
-            amendedText: claim.amendedText,
-            changes: claim.changes as Prisma.JsonArray,
-            changeReason: claim.changeReason,
-            aiGenerated: true,
-            version: 1,
-            status: 'DRAFT',
-          },
-        })
-      )
-    );
+    const amendmentData = result.claims.map(claim => ({
+      projectId,
+      officeActionId,
+      tenantId: context.tenantId,
+      claimNumber: claim.claimNumber,
+      originalText: claim.originalText,
+      amendedText: claim.amendedText,
+      changes: claim.changes,
+      changeReason: claim.changeReason,
+      aiGenerated: true,
+      version: 1,
+      status: 'DRAFT',
+    }));
+
+    await AmendmentRepository.createMany(amendmentData);
   }
 
   /**
@@ -275,17 +286,10 @@ IMPORTANT:
     projectId: string,
     context: RequestContext
   ): Promise<AmendmentGenerationResult> {
-    const amendments = await prisma.claimAmendment.findMany({
-      where: {
-        projectId,
-        tenantId: context.tenantId,
-        deletedAt: null,
-      },
-      orderBy: [
-        { version: 'desc' },
-        { claimNumber: 'asc' },
-      ],
-    });
+    const amendments = await AmendmentRepository.findByProject(
+      projectId,
+      context.tenantId
+    );
 
     if (amendments.length === 0) {
       throw new ApplicationError(
@@ -326,15 +330,11 @@ IMPORTANT:
     amendedText: string,
     context: RequestContext
   ): Promise<void> {
-    const existing = await prisma.claimAmendment.findFirst({
-      where: {
-        projectId,
-        claimNumber,
-        tenantId: context.tenantId,
-        deletedAt: null,
-      },
-      orderBy: { version: 'desc' },
-    });
+    const existing = await AmendmentRepository.findByClaimNumber(
+      projectId,
+      claimNumber,
+      context.tenantId
+    );
 
     if (!existing) {
       throw new ApplicationError(
@@ -344,16 +344,6 @@ IMPORTANT:
     }
 
     // Create new version with updated text
-    await prisma.claimAmendment.create({
-      data: {
-        ...existing,
-        id: undefined,
-        amendedText,
-        version: existing.version + 1,
-        aiGenerated: false, // User edited
-        updatedAt: new Date(),
-        createdAt: new Date(),
-      },
-    });
+    await AmendmentRepository.createNewVersion(existing, amendedText);
   }
 }

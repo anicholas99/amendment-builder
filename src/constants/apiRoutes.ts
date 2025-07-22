@@ -399,6 +399,11 @@ export const API_ROUTES = {
       VERSION: (fileId: string) => `/api/amendment-project-files/${fileId}/versions`,
       HISTORY: (fileId: string) => `/api/amendment-project-files/${fileId}/history`,
     },
+    CLAIM_AMENDMENTS: {
+      GENERATE: (projectId: string) => `/api/projects/${projectId}/amendments/generate`,
+      UPDATE: (projectId: string, claimNumber: number) => 
+        `/api/projects/${projectId}/amendments/${claimNumber}`,
+    },
   },
 
   // ============ USPTO INTEGRATION ============
@@ -451,3 +456,12 @@ export const buildApiUrl = (
  * const urlWithQuery = buildApiUrl(api.projects.list, { page: 1, limit: 10 }); // '/api/projects?page=1&limit=10'
  */
 export const api = API_ROUTES;
+
+// Export commonly used routes for easier access
+export const apiRoutes = {
+  ...API_ROUTES,
+  projects: {
+    ...API_ROUTES.PROJECTS,
+    amendments: API_ROUTES.AMENDMENTS.CLAIM_AMENDMENTS,
+  },
+};

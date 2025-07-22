@@ -23,6 +23,7 @@ export { userKeys } from './userKeys';
 export { versionKeys } from './versionKeys';
 export { aiAuditKeys } from './aiAuditKeys';
 export { usptoQueryKeys } from './usptoKeys';
+export { amendmentKeys } from './amendmentKeys';
 
 // Import all key factories for use in helper functions
 import { projectKeys } from './projectKeys';
