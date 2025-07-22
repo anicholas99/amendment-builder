@@ -285,44 +285,73 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
   const [processingAutoOCR, setProcessingAutoOCR] = useState(false);
   const [ocrProgress, setOcrProgress] = useState({ current: 0, total: 0, currentDoc: '' });
   
-  // Find the latest office action that needs a response
-  const latestOfficeAction = useMemo(() => {
-    if (!usptoData?.timeline) return null;
-    
-    // Office action document codes that typically need responses
-    const officeActionCodes = ['CTNF', 'CTFR', 'CTAV', 'MCTNF', 'MCTFR'];
-    
-    // Sort by date descending and find the first office action
-    const sortedEvents = [...usptoData.timeline].sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-    
-    return sortedEvents.find(event => 
-      officeActionCodes.includes(event.documentCode)
-    );
-  }, [usptoData?.timeline]);
+     // Find the latest office action (separate for UI highlighting)
+   const latestOfficeAction = useMemo(() => {
+     if (!usptoData?.timeline) return null;
+     
+     return usptoData.timeline
+       .filter(event => ['CTNF', 'CTFR', 'CTAV', 'MCTNF', 'MCTFR'].includes(event.documentCode))
+       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] || null;
+   }, [usptoData?.timeline]);
 
-  // Find essential documents that need OCR (following your existing pattern)
-  const essentialDocsNeedingOCR = useMemo(() => {
-    if (!usptoData?.timeline) return [];
+   // Smart document selection for AI amendment drafting (following your strategy)
+   const getSmartOCRDocuments = useMemo(() => {
+     if (!usptoData?.timeline || !latestOfficeAction) return { essential: [], optional: [] };
+     
+     const latestOADate = new Date(latestOfficeAction.date);
+     
+     // Helper to find most recent doc of given codes
+     const findRecentDoc = (codes: string[], beforeDate?: Date) => {
+       return usptoData.timeline
+         .filter(event => 
+           codes.includes(event.documentCode) && 
+           event.documentId &&
+           (!beforeDate || new Date(event.date) <= beforeDate)
+         )
+         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+     };
     
-    // Essential document codes for AI amendment drafting (from your documentCategorization.ts)
-    const essentialCodes = ['CTNF', 'CTFR', 'CTAV', 'MCTNF', 'MCTFR', 'CLM', 'CLMN', 'REM', 'REM.', 'A...', 'A.NE', 'A.AF', 'AMDT', 'SPEC', 'SRNT', 'SRFW', 'SEARCH', 'EXIN', 'INT.SUM', 'APPIN'];
+    // Helper to find largest spec
+    const findLargestSpec = () => {
+      return usptoData.timeline
+        .filter(event => event.documentCode === 'SPEC' && event.documentId)
+        .sort((a, b) => (b.pageCount || 0) - (a.pageCount || 0))[0];
+    };
     
-    return usptoData.timeline.filter(event => 
-      // Must be essential document
-      essentialCodes.includes(event.documentCode) && 
-      // Must have document ID (downloadable)
-      event.documentId &&
-      // Either not downloaded yet (needs download + OCR)
-      (!event.storageUrl || !event.storageUrl.startsWith('/api/'))
+    // Essential documents for AI amendment drafting
+    const essential = [
+      latestOfficeAction, // Latest office action
+      findRecentDoc(['CLM', 'CLMN'], latestOADate), // Current claims
+      findRecentDoc(['REM', 'REM.', 'A...', 'A.NE', 'A.AF', 'AMDT'], latestOADate), // Last response
+      findLargestSpec(), // Specification (largest by pages)
+    ].filter(Boolean);
+    
+         // Optional but helpful documents
+     const optional = [
+       findRecentDoc(['SRNT'], new Date(latestOfficeAction.date)), // Search notes from same OA
+       findRecentDoc(['SRFW', 'SEARCH'], new Date(latestOfficeAction.date)), // Classification notes
+       findRecentDoc(['EXIN', 'INT.SUM'], latestOADate), // Interview summary
+     ].filter(Boolean);
+    
+         return { essential, optional };
+   }, [usptoData, latestOfficeAction]);
+  
+  // Documents that need OCR (either not downloaded or need processing)
+  const smartDocsNeedingOCR = useMemo(() => {
+    const { essential, optional } = getSmartOCRDocuments;
+    const allSmartDocs = [...essential, ...optional];
+    
+    return allSmartDocs.filter(doc => 
+      doc && 
+      doc.documentId &&
+      (!doc.storageUrl || !doc.storageUrl.startsWith('/api/'))
     );
-  }, [usptoData?.timeline]);
+  }, [getSmartOCRDocuments]);
 
   // Auto-OCR all essential documents (following your existing mutation patterns)
   const autoOCRMutation = useMutation({
     mutationFn: async () => {
-      const docs = essentialDocsNeedingOCR;
+      const docs = smartDocsNeedingOCR;
       setOcrProgress({ current: 0, total: docs.length, currentDoc: '' });
       
       const results = [];
@@ -544,16 +573,16 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
             <h3 className="text-lg font-semibold text-gray-900">Prosecution Timeline</h3>
             <p className="text-sm text-gray-500 mt-0.5">
               {timeline.length} events • {Object.keys(eventsByYear).length} years
-              {essentialDocsNeedingOCR.length > 0 && (
+              {smartDocsNeedingOCR.length > 0 && (
                 <span className="ml-2 text-orange-600">
-                  • {essentialDocsNeedingOCR.length} docs need OCR
+                  • {getSmartOCRDocuments.essential.filter(d => d && d.documentId && (!d.storageUrl || !d.storageUrl.startsWith('/api/'))).length} essential + {getSmartOCRDocuments.optional.filter(d => d && d.documentId && (!d.storageUrl || !d.storageUrl.startsWith('/api/'))).length} optional docs need OCR
                 </span>
               )}
             </p>
           </div>
           <div className="flex items-center gap-4">
             {/* Auto-OCR Button */}
-            {essentialDocsNeedingOCR.length > 0 && (
+            {smartDocsNeedingOCR.length > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -574,19 +603,25 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                       <>
                         <Play className="h-3.5 w-3.5" />
                         <span className="text-xs">
-                          Auto-OCR {essentialDocsNeedingOCR.length} Docs
+                          Auto-OCR {smartDocsNeedingOCR.length} Docs
                         </span>
                       </>
                     )}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>
-                    {processingAutoOCR 
-                      ? `Processing OCR on ${ocrProgress.currentDoc}... (${ocrProgress.current}/${ocrProgress.total})`
-                      : `Run OCR on ${essentialDocsNeedingOCR.length} essential documents for AI context`
-                    }
-                  </p>
+                  <div className="text-xs max-w-xs space-y-1">
+                    {processingAutoOCR ? (
+                      <p>Processing OCR on {ocrProgress.currentDoc}... ({ocrProgress.current}/{ocrProgress.total})</p>
+                    ) : (
+                      <>
+                        <p className="font-medium">Smart OCR for AI Amendment Context:</p>
+                        <p>Essential: Latest OA, Claims, Last Response, Specification</p>
+                        <p>Optional: Search Notes, Interview Summary</p>
+                        <p className="text-orange-400">Total: {smartDocsNeedingOCR.length} documents</p>
+                      </>
+                    )}
+                  </div>
                 </TooltipContent>
               </Tooltip>
             )}
