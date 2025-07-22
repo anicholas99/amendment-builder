@@ -32,6 +32,8 @@ const requestBodySchema = z.object({
   templateStyle: z.enum(['formal', 'standard', 'concise']).optional().default('standard'),
   includeBoilerplate: z.boolean().optional().default(true),
   firmName: z.string().optional(),
+  strategy: z.string().optional(),
+  userInstructions: z.string().optional(),
 }).strict();
 
 // ============ HANDLER ============

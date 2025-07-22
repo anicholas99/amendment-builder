@@ -375,18 +375,17 @@ export class AmendmentClientService {
       });
 
       const response = await apiFetch(
-        API_ROUTES.AMENDMENTS.RESPONSES.GENERATE(
-          request.projectId,
-          request.officeActionId
-        ),
+        API_ROUTES.AMENDMENTS.CLAIM_AMENDMENTS.GENERATE(request.projectId),
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            officeActionId: request.officeActionId,
             strategy: request.strategy,
             userInstructions: request.userInstructions,
+            regenerate: true, // Force generation of new amendments
           }),
         }
       );

@@ -5,8 +5,10 @@ export const amendmentKeys = {
   all: ['amendments'] as const,
   
   // By project
-  byProject: (projectId: string) => 
-    ['amendments', 'project', projectId] as const,
+  byProject: (projectId: string, officeActionId?: string) => 
+    officeActionId 
+      ? ['amendments', 'project', projectId, 'office-action', officeActionId] as const
+      : ['amendments', 'project', projectId] as const,
   
   // By claim number
   byClaim: (projectId: string, claimNumber: number) => 

@@ -1,71 +1,136 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
 import { SecurePresets, TenantResolvers } from '@/server/api/securePresets';
-import { AmendmentGenerationService } from '@/server/services/amendment-generation.server-service';
-import { RequestContext } from '@/types/request';
-import { AuthenticatedRequest } from '@/types/middleware';
-import { ApplicationError, ErrorCode } from '@/lib/error';
 import { logger } from '@/server/logger';
+import { prisma } from '@/lib/prisma';
+import { AmendmentGenerationService } from '@/server/services/amendment-generation.server-service';
+import { AuthenticatedRequest } from '@/types/middleware';
+
+// Extended request interface with tenant properties
+interface TenantAwareRequest extends AuthenticatedRequest {
+  tenantId?: string;
+}
 
 // Request validation
 const requestSchema = z.object({
+  officeActionId: z.string().uuid().optional(),
   regenerate: z.boolean().optional().default(false),
+  strategy: z.string().optional(),
+  userInstructions: z.string().optional(),
 });
 
-async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+async function handler(req: TenantAwareRequest, res: NextApiResponse) {
   const { projectId } = req.query;
   
   if (!projectId || typeof projectId !== 'string') {
     return res.status(400).json({ error: 'Invalid project ID' });
   }
   
-  const context: RequestContext = {
-    userId: req.userId!,
-    tenantId: req.tenantId!,
-    userPermissions: req.userPermissions || [],
-  };
-  
   logger.info('[API] Amendment generation request', {
     projectId,
     method: req.method,
-    userId: context.userId,
   });
 
   try {
+    if (!prisma) {
+      return res.status(500).json({ error: 'Database connection not available' });
+    }
+
+    // Extract context from secure middleware
+    const context = {
+      tenantId: req.tenantId || req.user?.tenantId || '',
+      userId: req.user?.id || '',
+    };
+
     switch (req.method) {
       case 'GET': {
-        // Get existing amendments
-        const amendments = await AmendmentGenerationService.getAmendments(
-          projectId as string,
-          context
-        );
+        // Get officeActionId from query parameters
+        const { officeActionId } = req.query;
         
-        return res.status(200).json(amendments);
+        // Use service layer to get existing amendments
+        const result = await AmendmentGenerationService.getAmendments(
+          projectId, 
+          context, 
+          officeActionId as string | undefined
+        );
+
+        // Transform response to match both AmendmentStudio and ClaimAmendmentGenerator expectations
+        if (result.claims.length > 0) {
+          const amendmentStudioResponse = {
+            success: true,
+            amendment: {
+              id: `amendment-existing`,
+              officeActionId: officeActionId || '',
+              projectId,
+              status: 'COMPLETE' as const,
+              strategy: 'COMBINATION' as const,
+              claimAmendments: result.claims.map(claim => ({
+                claimNumber: claim.claimNumber.toString(),
+                originalText: claim.originalText,
+                amendedText: claim.amendedText,
+                justification: claim.changeReason,
+              })),
+              argumentSections: [],
+              createdAt: result.generatedAt,
+              updatedAt: result.generatedAt,
+            },
+            // Also include the original format for ClaimAmendmentGenerator
+            claims: result.claims,
+            summary: result.summary,
+            generatedAt: result.generatedAt,
+          };
+          return res.status(200).json(amendmentStudioResponse);
+        } else {
+          // Return empty result with both formats
+          return res.status(200).json({
+            success: false,
+            amendment: null,
+            claims: [],
+            summary: result.summary,
+            generatedAt: result.generatedAt,
+          });
+        }
       }
 
       case 'POST': {
-        // Generate new amendments
-        const { regenerate } = requestSchema.parse(req.body || {});
+        // Generate new amendments using service layer
+        const { officeActionId, regenerate, strategy, userInstructions } = requestSchema.parse(req.body || {});
         
-        // Check if we should regenerate
-        if (!regenerate) {
-          try {
-            const existing = await AmendmentGenerationService.getAmendments(
-              projectId as string,
-              context
-            );
-            return res.status(200).json(existing);
-          } catch (error) {
-            // No existing amendments, proceed with generation
-          }
-        }
+        // Use the service to generate amendments
+        const result = await AmendmentGenerationService.generateAmendments(projectId, context, officeActionId);
         
-        const amendments = await AmendmentGenerationService.generateAmendments(
-          projectId as string,
-          context
-        );
-        
-        return res.status(201).json(amendments);
+        logger.info('[API] Amendments generated via service', {
+          projectId,
+          officeActionId,
+          claimCount: result.claims.length,
+        });
+
+        // Transform response to match AmendmentStudio expectations
+        const amendmentStudioResponse = {
+          success: true,
+          amendment: {
+            id: `amendment-${Date.now()}`,
+            officeActionId: officeActionId || '',
+            projectId,
+            status: 'COMPLETE' as const,
+            strategy: strategy || 'COMBINATION' as const,
+            claimAmendments: result.claims.map(claim => ({
+              claimNumber: claim.claimNumber.toString(),
+              originalText: claim.originalText,
+              amendedText: claim.amendedText,
+              justification: claim.changeReason,
+            })),
+            argumentSections: [], // Will be populated by separate argument generation
+            createdAt: result.generatedAt,
+            updatedAt: result.generatedAt,
+          },
+          // Also include the original format for ClaimAmendmentGenerator
+          claims: result.claims,
+          summary: result.summary,
+          generatedAt: result.generatedAt,
+        };
+
+        return res.status(201).json(amendmentStudioResponse);
       }
 
       default:
@@ -78,14 +143,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       error: error instanceof Error ? error.message : String(error),
     });
     
-    if (error instanceof ApplicationError) {
-      return res.status(error.statusCode || 500).json({ 
-        error: error.message,
-        code: error.code,
-      });
-    }
-    
-    return res.status(500).json({ error: 'Failed to process amendment generation request' });
+    return res.status(500).json({ 
+      error: 'Failed to process amendment generation request',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 }
 
@@ -95,6 +156,5 @@ export default SecurePresets.tenantProtected(
   handler,
   {
     rateLimit: 'ai', // Use AI rate limit for amendment generation
-    validate: { body: requestSchema },
   }
 );

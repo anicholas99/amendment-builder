@@ -56,7 +56,7 @@ export function ClaimAmendmentGenerator({
   const [showDiff, setShowDiff] = useState<Record<number, boolean>>({});
 
   // React Query hooks
-  const { data: amendments, isLoading, error } = useAmendments(projectId);
+  const { data: amendments, isLoading, error } = useAmendments(projectId, officeActionId);
   const generateMutation = useGenerateAmendments();
   const updateMutation = useUpdateAmendment();
 
@@ -194,121 +194,131 @@ export function ClaimAmendmentGenerator({
           <TabsContent value="amendments" className="mt-0">
             <ScrollArea className="h-[600px]">
               <div className="space-y-4 p-6">
-                {amendments?.claims.map((claim) => (
-                  <Card key={claim.claimNumber} className="overflow-hidden">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline">
-                            Claim {claim.claimNumber}
-                          </Badge>
-                          {claim.changeReason && (
-                            <Badge variant="secondary" className="text-xs">
-                              {claim.changeReason.slice(0, 50)}...
+                {amendments && amendments.claims && amendments.claims.length > 0 ? (
+                  amendments.claims.map((claim) => (
+                    <Card key={claim.claimNumber} className="overflow-hidden">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">
+                              Claim {claim.claimNumber}
                             </Badge>
-                          )}
-                        </div>
-                        <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => toggleDiff(claim.claimNumber)}
-                          >
-                            {showDiff[claim.claimNumber] ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
+                            {claim.changeReason && (
+                              <Badge variant="secondary" className="text-xs">
+                                {claim.changeReason.slice(0, 50)}...
+                              </Badge>
                             )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleEditStart(claim)}
-                            disabled={editingClaimNumber === claim.claimNumber}
-                          >
-                            <Edit3 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-
-                    <CardContent className="pt-0">
-                      {editingClaimNumber === claim.claimNumber ? (
-                        <div className="space-y-3">
-                          <Textarea
-                            value={editedText}
-                            onChange={(e) => setEditedText(e.target.value)}
-                            className="min-h-[150px] font-mono text-sm"
-                            placeholder="Enter amended claim text..."
-                          />
-                          <div className="flex justify-end gap-2">
+                          </div>
+                          <div className="flex gap-1">
                             <Button
                               size="sm"
-                              variant="outline"
-                              onClick={handleEditCancel}
+                              variant="ghost"
+                              onClick={() => toggleDiff(claim.claimNumber)}
                             >
-                              Cancel
+                              {showDiff[claim.claimNumber] ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
                             </Button>
                             <Button
                               size="sm"
-                              onClick={() => handleEditSave(claim.claimNumber)}
-                              disabled={updateMutation.isPending}
+                              variant="ghost"
+                              onClick={() => handleEditStart(claim)}
+                              disabled={editingClaimNumber === claim.claimNumber}
                             >
-                              {updateMutation.isPending ? (
-                                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                              ) : (
-                                <Save className="mr-2 h-4 w-4" />
-                              )}
-                              Save
+                              <Edit3 className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>
-                      ) : showDiff[claim.claimNumber] ? (
-                        <ClaimDiffViewer
-                          original={claim.originalText}
-                          amended={claim.amendedText}
-                          className="text-sm"
-                        />
-                      ) : (
-                        <div className="space-y-3">
-                          <div>
-                            <p className="text-xs font-medium text-muted-foreground mb-1">
-                              Amended Text
-                            </p>
-                            <div className="rounded-md bg-muted p-3 font-mono text-sm">
-                              {claim.amendedText}
+                      </CardHeader>
+
+                      <CardContent className="pt-0">
+                        {editingClaimNumber === claim.claimNumber ? (
+                          <div className="space-y-3">
+                            <Textarea
+                              value={editedText}
+                              onChange={(e) => setEditedText(e.target.value)}
+                              className="min-h-[150px] font-mono text-sm"
+                              placeholder="Enter amended claim text..."
+                            />
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleEditCancel}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => handleEditSave(claim.claimNumber)}
+                                disabled={updateMutation.isPending}
+                              >
+                                {updateMutation.isPending ? (
+                                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Save className="mr-2 h-4 w-4" />
+                                )}
+                                Save
+                              </Button>
                             </div>
                           </div>
-                          {claim.changes.length > 0 && (
+                        ) : showDiff[claim.claimNumber] ? (
+                          <ClaimDiffViewer
+                            claimNumber={claim.claimNumber.toString()}
+                            originalText={claim.originalText}
+                            amendedText={claim.amendedText}
+                            className="text-sm"
+                          />
+                        ) : (
+                          <div className="space-y-3">
                             <div>
                               <p className="text-xs font-medium text-muted-foreground mb-1">
-                                Changes Made
+                                Amended Text
                               </p>
-                              <div className="space-y-1">
-                                {claim.changes.map((change, idx) => (
-                                  <div 
-                                    key={idx} 
-                                    className="flex items-start gap-2 text-xs"
-                                  >
-                                    <Badge 
-                                      variant={change.type === 'addition' ? 'default' : 'destructive'}
-                                      className="text-[10px] px-1 py-0"
-                                    >
-                                      {change.type}
-                                    </Badge>
-                                    <span className="text-muted-foreground">
-                                      {change.text}
-                                    </span>
-                                  </div>
-                                ))}
+                              <div className="rounded-md bg-muted p-3 font-mono text-sm">
+                                {claim.amendedText}
                               </div>
                             </div>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
+                            {claim.changes.length > 0 && (
+                              <div>
+                                <p className="text-xs font-medium text-muted-foreground mb-1">
+                                  Changes Made
+                                </p>
+                                <div className="space-y-1">
+                                  {claim.changes.map((change, idx) => (
+                                    <div 
+                                      key={idx} 
+                                      className="flex items-start gap-2 text-xs"
+                                    >
+                                      <Badge 
+                                        variant={change.type === 'addition' ? 'default' : 'destructive'}
+                                        className="text-[10px] px-1 py-0"
+                                      >
+                                        {change.type}
+                                      </Badge>
+                                      <span className="text-muted-foreground">
+                                        {change.text}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  <Alert variant="default">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      No amendments generated yet. Click "Generate Amendments" to start.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
             </ScrollArea>
           </TabsContent>
@@ -331,12 +341,12 @@ export function ClaimAmendmentGenerator({
                     <dl className="space-y-1 text-sm">
                       <div className="flex justify-between">
                         <dt className="text-muted-foreground">Total Claims:</dt>
-                        <dd className="font-medium">{amendments?.claims.length}</dd>
+                        <dd className="font-medium">{amendments?.claims?.length || 0}</dd>
                       </div>
                       <div className="flex justify-between">
                         <dt className="text-muted-foreground">Amended:</dt>
                         <dd className="font-medium">
-                          {amendments?.claims.filter(c => c.changes.length > 0).length}
+                          {amendments?.claims?.filter(c => c.changes?.length > 0).length || 0}
                         </dd>
                       </div>
                       <div className="flex justify-between">

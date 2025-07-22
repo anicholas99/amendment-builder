@@ -33,6 +33,7 @@ import { AmendmentClientService } from '@/client/services/amendment.client-servi
 import { DraftApiService } from '@/services/api/draftApiService';
 import { AmendmentWorkspaceTabs } from './AmendmentWorkspaceTabs';
 import { toast } from 'sonner';
+import { apiFetch } from '@/lib/api/apiClient';
 
 interface AmendmentStudioProps {
   projectId: string;
@@ -247,62 +248,51 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
   }, [selectedOfficeActionId, canAnalyze, projectId, refetchAnalyses, refetchStrategy, hasAnalysis, analysisData]);
 
   const handleGenerateAmendment = useCallback(async () => {
-    if (!selectedOfficeActionId || !analysisData) return;
+    if (!selectedOfficeActionId) return;
     
-    logger.info('[AmendmentStudio] Generating amendment based on analysis', {
+    logger.info('[AmendmentStudio] Generating simplified amendment response', {
       officeActionId: selectedOfficeActionId,
-      strategy: analysisData.overallStrategy?.primaryStrategy,
-      analysisCount: analysisData.analyses?.length,
+      projectId,
     });
     
     try {
-      // Map analysis strategy to amendment strategy types
-      const strategyMapping: Record<string, 'AMEND_CLAIMS' | 'ARGUE_REJECTION' | 'COMBINATION'> = {
-        'ARGUE': 'ARGUE_REJECTION',
-        'AMEND': 'AMEND_CLAIMS', 
-        'COMBINATION': 'COMBINATION',
-      };
-      
-      const mappedStrategy = strategyMapping[analysisData.overallStrategy?.primaryStrategy || 'COMBINATION'] || 'COMBINATION';
-      
-      // Call the amendment generation service with correct parameters
-      // NOTE: The server automatically retrieves:
-      // - OCR'd office action content
-      // - Current claims text  
-      // - Rejection analysis results
-      // - Full prosecution history context
-      const generatedAmendment = await AmendmentClientService.generateAmendment({
-        projectId,
-        officeActionId: selectedOfficeActionId,
-        strategy: mappedStrategy,
-        userInstructions: `Generate amendment response based on rejection analysis. Primary strategy: ${analysisData.overallStrategy?.primaryStrategy}. Key recommendations: ${analysisData.overallStrategy?.reasoning}`,
-      });
-      
-      if (generatedAmendment.success) {
-        logger.info('[AmendmentStudio] Amendment generated successfully', {
-          officeActionId: selectedOfficeActionId,
-          strategy: mappedStrategy,
-        });
-        
-        // Switch to draft tab to show generated content
-        // The draft workspace will be populated with the generated amendment
-        toast.success('Amendment response generated successfully! Check the Draft tab.');
-        
-        // TODO: Trigger tab switch to 'draft' - will be implemented when tab switching is available
-        
-      } else {
-        throw new Error('Amendment generation failed');
+      // Call the new simplified amendment generation API
+      const response = await apiFetch(
+        `/api/projects/${projectId}/amendments/generate-response`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            officeActionId: selectedOfficeActionId,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate response: ${response.status}`);
       }
+
+      const result = await response.json();
+      
+      logger.info('[AmendmentStudio] Amendment response generated successfully', {
+        officeActionId: selectedOfficeActionId,
+        claimsCount: result.claims.length,
+        amendedCount: result.claims.filter((c: any) => c.wasAmended).length,
+      });
+
+      toast.success(`Amendment response generated! ${result.claims.length} claims processed (${result.claims.filter((c: any) => c.wasAmended).length} amended).`);
       
     } catch (error) {
-      logger.error('[AmendmentStudio] Failed to generate amendment', {
+      logger.error('[AmendmentStudio] Failed to generate amendment response', {
         officeActionId: selectedOfficeActionId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       
       toast.error('Failed to generate amendment response. Please try again.');
     }
-  }, [selectedOfficeActionId, analysisData, projectId]);
+  }, [selectedOfficeActionId, projectId]);
 
   const handleRejectionSelect = useCallback((rejectionId: string) => {
     logger.info('[AmendmentStudio] Rejection selected', { rejectionId });

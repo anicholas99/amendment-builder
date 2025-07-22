@@ -10,10 +10,10 @@ import { amendmentKeys } from '@/lib/queryKeys';
 /**
  * React Query hook for fetching amendments
  */
-export function useAmendments(projectId: string | undefined) {
+export function useAmendments(projectId: string | undefined, officeActionId?: string | undefined) {
   return useQuery({
-    queryKey: amendmentKeys.byProject(projectId!),
-    queryFn: () => AmendmentsClientService.getAmendments(projectId!),
+    queryKey: amendmentKeys.byProject(projectId!, officeActionId),
+    queryFn: () => AmendmentsClientService.getAmendments(projectId!, officeActionId),
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

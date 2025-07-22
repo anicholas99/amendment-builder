@@ -297,11 +297,29 @@ export class ResponseShellGenerationService {
     request: ResponseShellRequest
   ): Promise<any> {
     // Build rejections section for prompt
-    const rejectionsSection = rejections.map((rejection, index) => `
-${index + 1}. ${rejection.type} Rejection (Claims ${rejection.claimNumbers?.join(', ') || 'Unknown'})
-   Prior Art: ${rejection.citedPriorArt?.join(', ') || 'None specified'}
+    const rejectionsSection = rejections.map((rejection, index) => {
+      // Parse JSON strings from database with error handling
+      let claimNumbers: string[] = [];
+      let citedPriorArt: string[] = [];
+      
+      try {
+        claimNumbers = rejection.claimNumbers ? JSON.parse(rejection.claimNumbers) : [];
+      } catch {
+        claimNumbers = [];
+      }
+      
+      try {
+        citedPriorArt = rejection.citedPriorArt ? JSON.parse(rejection.citedPriorArt) : [];
+      } catch {
+        citedPriorArt = [];
+      }
+      
+      return `
+${index + 1}. ${rejection.type} Rejection (Claims ${claimNumbers.join(', ') || 'Unknown'})
+   Prior Art: ${Array.isArray(citedPriorArt) ? citedPriorArt.join(', ') : 'None specified'}
    Examiner Reasoning: ${rejection.examinerText || 'No specific reasoning provided'}
-`).join('\n');
+`;
+    }).join('\n');
 
     // Build user prompt
     const userPrompt = renderPromptTemplate(RESPONSE_SHELL_USER_PROMPT, {

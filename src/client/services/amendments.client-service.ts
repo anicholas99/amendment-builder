@@ -41,7 +41,7 @@ export class AmendmentsClientService {
     params: GenerateAmendmentsParams
   ): Promise<AmendmentGenerationResult> {
     try {
-      const response = await apiFetch<AmendmentGenerationResult>(
+      const response = await apiFetch(
         API_ROUTES.AMENDMENTS.CLAIM_AMENDMENTS.GENERATE(params.projectId),
         {
           method: 'POST',
@@ -49,7 +49,20 @@ export class AmendmentsClientService {
         }
       );
 
-      return response;
+      const data = await response.json();
+
+      // Handle dual response format - extract the original format for ClaimAmendmentGenerator
+      if (data.claims) {
+        // New dual format response
+        return {
+          claims: data.claims,
+          summary: data.summary,
+          generatedAt: new Date(data.generatedAt),
+        };
+      } else {
+        // Legacy format (shouldn't happen but handle gracefully)
+        return data;
+      }
     } catch (error) {
       throw new ApplicationError(
         ErrorCode.API_ERROR,
@@ -60,16 +73,35 @@ export class AmendmentsClientService {
   }
 
   /**
-   * Get existing amendments for a project
+   * Get existing amendments for a project and optional office action
    */
-  static async getAmendments(projectId: string): Promise<AmendmentGenerationResult> {
+  static async getAmendments(
+    projectId: string, 
+    officeActionId?: string
+  ): Promise<AmendmentGenerationResult> {
     try {
-      const response = await apiFetch<AmendmentGenerationResult>(
-        API_ROUTES.AMENDMENTS.CLAIM_AMENDMENTS.GENERATE(projectId),
-        { method: 'GET' }
-      );
+      let url = API_ROUTES.AMENDMENTS.CLAIM_AMENDMENTS.GENERATE(projectId);
+      
+      // Add officeActionId as query parameter if provided
+      if (officeActionId) {
+        url += `?officeActionId=${encodeURIComponent(officeActionId)}`;
+      }
+      
+      const response = await apiFetch(url, { method: 'GET' });
+      const data = await response.json();
 
-      return response;
+      // Handle dual response format - extract the original format for ClaimAmendmentGenerator
+      if (data.claims) {
+        // New dual format response
+        return {
+          claims: data.claims,
+          summary: data.summary,
+          generatedAt: new Date(data.generatedAt),
+        };
+      } else {
+        // Legacy format (shouldn't happen but handle gracefully)
+        return data;
+      }
     } catch (error) {
       throw new ApplicationError(
         ErrorCode.API_ERROR,

@@ -44,6 +44,35 @@ export class AmendmentRepository {
   }
 
   /**
+   * Find amendments for a specific office action
+   */
+  static async findByProjectAndOfficeAction(
+    projectId: string, 
+    officeActionId: string, 
+    tenantId: string
+  ) {
+    if (!prisma) {
+      throw new ApplicationError(
+        ErrorCode.DB_CONNECTION_ERROR,
+        'Database connection not available'
+      );
+    }
+
+    return prisma.claimAmendment.findMany({
+      where: {
+        projectId,
+        officeActionId,
+        tenantId,
+        deletedAt: null,
+      },
+      orderBy: [
+        { version: 'desc' },
+        { claimNumber: 'asc' },
+      ],
+    });
+  }
+
+  /**
    * Find a specific amendment by claim number
    */
   static async findByClaimNumber(
