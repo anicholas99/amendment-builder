@@ -54,6 +54,7 @@ import { AmendmentClientService } from '@/client/services/amendment.client-servi
 import { apiFetch } from '@/lib/api/apiClient';
 import { useRouter } from 'next/router';
 import { useDocumentOCRWithPolling } from '@/hooks/api/useDocumentOCR'; // Add OCR hook
+import { AmendmentContextTest } from './AmendmentContextTest';
 
 interface EnhancedTimelineProps {
   projectId: string;
@@ -641,6 +642,11 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
             )}
           </div>
         </div>
+      </div>
+      
+      {/* Amendment Context Test */}
+      <div className="p-4 border-b bg-blue-50/30">
+        <AmendmentContextTest projectId={projectId} />
       </div>
       
       {/* Timeline */}
