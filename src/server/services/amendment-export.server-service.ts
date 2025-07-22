@@ -246,8 +246,11 @@ export class AmendmentExportServerService {
         error: error instanceof Error ? error.message : String(error),
       });
 
-      // Fallback to template-based generation
-      return this.generateFallbackDocumentContent(exportData, options);
+      // Don't use fallback content - throw error to client
+      throw new ApplicationError(
+        ErrorCode.AI_SERVICE_ERROR,
+        `Document generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -419,41 +422,7 @@ export class AmendmentExportServerService {
     return Buffer.from(placeholderContent, 'utf-8');
   }
 
-  /**
-   * Generate fallback document content without AI
-   */
-  private static generateFallbackDocumentContent(
-    exportData: AmendmentExportData,
-    options: AmendmentExportOptions
-  ): string {
-    logger.info('[AmendmentExportServerService] Using fallback document generation');
 
-    const sections = [
-      `AMENDMENT RESPONSE - ${exportData.title}`,
-      '',
-      `Response Type: ${exportData.responseType}`,
-      `Application Number: ${options.applicationNumber || 'Unknown'}`,
-      `Mailing Date: ${options.mailingDate || 'Unknown'}`,
-      `Examiner: ${options.examinerName || 'Unknown'}`,
-      '',
-      'AMENDMENT',
-      '',
-      ...exportData.claimAmendments.flatMap(amendment => [
-        `Claim ${amendment.claimNumber} (${amendment.status}):`,
-        amendment.amendedText,
-        '',
-      ]),
-      'REMARKS',
-      '',
-      ...exportData.argumentSections.flatMap(section => [
-        section.title,
-        section.content,
-        '',
-      ]),
-    ];
-
-    return sections.join('\n');
-  }
 
   /**
    * Generate filename for export

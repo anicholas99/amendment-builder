@@ -222,8 +222,11 @@ export class ClaimValidationService {
         error: error instanceof Error ? error.message : String(error),
       });
       
-      // Fallback to simple keyword matching
-      return this.fallbackValidation(claimText, citedReferences);
+      // Don't use fallback validation - throw error to client
+      throw new ApplicationError(
+        ErrorCode.AI_SERVICE_ERROR,
+        `Claim validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 

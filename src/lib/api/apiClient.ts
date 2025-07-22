@@ -167,9 +167,9 @@ export async function apiFetch(
   // Determine timeout - use custom timeout or default based on request type
   let timeoutMs = internalOptions.timeout;
   if (!timeoutMs) {
-    // For long-running operations like rejection analysis, use extended timeout
-    if (url.includes('/analyze-rejections') || url.includes('/deep-analysis')) {
-      timeoutMs = 60000; // 60 seconds for analysis operations
+    // For long-running operations like rejection analysis and office action processing, use extended timeout
+    if (url.includes('/analyze-rejections') || url.includes('/deep-analysis') || url.includes('/process-timeline')) {
+      timeoutMs = 60000; // 60 seconds for analysis and processing operations
     } else {
       timeoutMs = apiConfig.timeout; // Default 30 seconds
     }

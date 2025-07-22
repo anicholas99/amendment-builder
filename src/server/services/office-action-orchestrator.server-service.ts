@@ -131,7 +131,11 @@ export class OfficeActionOrchestratorService {
             rejectionId: rejection.id,
             error: error instanceof Error ? error.message : String(error),
           });
-          errors.push(`Rejection ${rejection.id} analysis failed`);
+          // Don't continue with partial data - rejection analysis is critical
+          throw new ApplicationError(
+            ErrorCode.AI_SERVICE_ERROR,
+            `Critical rejection analysis failed for rejection ${rejection.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
+          );
         }
       }
       stepsCompleted.push('REJECTION_ANALYSIS');

@@ -409,14 +409,11 @@ Respond in JSON format:
     } catch (error) {
       logger.error('[SuggestionValidation] GPT analysis failed', { error });
       
-      // Conservative fallback - if GPT fails, mark as potentially disclosed
-      return {
-        suggestionText: amendment.suggestionText,
-        isDisclosed: true,
-        disclosureEvidence: ['Validation failed - conservatively marking as disclosed'],
-        validationScore: 1.0,
-        recommendation: 'remove',
-      };
+      // Re-throw the error instead of returning fallback data
+      throw new ApplicationError(
+        ErrorCode.AI_SERVICE_ERROR,
+        `Suggestion validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 

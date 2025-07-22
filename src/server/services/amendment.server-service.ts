@@ -264,13 +264,20 @@ export class AmendmentServerService {
           displayOrder: index,
         }));
         
-        await createRejections(rejectionCreateData);
+        const createdRejections = await createRejections(rejectionCreateData);
         rejectionCount = parsedData.rejections.length;
+
+        // Map AI analysis results to real database rejection IDs
+        const mappedAnalyses = this.mapAnalysesToRealRejectionIds(
+          parseResult.rejectionAnalyses,
+          createdRejections,
+          parsedData.rejections
+        );
 
         // NEW: Store comprehensive rejection analysis results in database
         await this.storeRejectionAnalysisResults(
           officeActionId,
-          parseResult.rejectionAnalyses,
+          mappedAnalyses,
           parseResult.overallStrategy,
           tenantId
         );
@@ -594,28 +601,15 @@ export class AmendmentServerService {
     currentClaim: string,
     projectId: string
   ): Promise<RejectionAnalysis> {
-    // Leverage existing prior art analysis system
-    // This would integrate with the existing callAIServiceForAnalysis function
-    
-    logger.debug('[AmendmentService] Analyzing prior art rejection', {
+    logger.error('[AmendmentService] Prior art analysis not implemented', {
       rejectionId: rejection.id,
       priorArtCount: priorArtRefs.length,
     });
 
-    // TODO: Implement using existing prior art analysis
-    // const analysis = await callAIServiceForAnalysis(currentClaim, priorArtReferences);
-    
-    // For now, return a basic analysis structure
-    return {
-      rejectionId: rejection.id,
-      isValid: true, // TODO: Determine from analysis
-      confidence: 0.8, // TODO: Calculate from analysis
-      missingElements: [], // TODO: Extract from analysis
-      weakArguments: [], // TODO: Extract from analysis
-      recommendedStrategy: AmendmentStrategy.COMBINATION,
-      suggestedAmendments: [], // TODO: Generate from analysis
-      argumentPoints: [], // TODO: Generate from analysis
-    };
+    throw new ApplicationError(
+      ErrorCode.NOT_IMPLEMENTED,
+      'Prior art rejection analysis is not yet implemented. Please use the comprehensive analysis instead.'
+    );
   }
 
   /**
@@ -625,42 +619,15 @@ export class AmendmentServerService {
     rejection: any,
     currentClaim: string
   ): Promise<RejectionAnalysis> {
-    logger.debug('[AmendmentService] Analyzing non-prior art rejection', {
+    logger.error('[AmendmentService] Non-prior art analysis not implemented', {
       rejectionId: rejection.id,
       type: rejection.type,
     });
 
-    // Analyze rejections that don't involve prior art
-    const systemPrompt = renderPromptTemplate(REJECTION_ANALYSIS_SYSTEM_PROMPT, {});
-    const userPrompt = `
-      Analyze this rejection that does not involve prior art:
-      
-      Type: ${rejection.type}
-      Examiner Reasoning: ${rejection.examinerText}
-      Current Claim: ${currentClaim}
-      
-      Provide analysis focusing on the specific statutory requirements.
-    `;
-
-    const aiResponse = await processWithOpenAI(systemPrompt, userPrompt, {
-      maxTokens: 2000,
-      temperature: 0.2,
-    });
-
-         const analysisData = safeJsonParse(aiResponse.content, {}) as {
-       analyses?: RejectionAnalysis[];
-     };
-     
-     return analysisData?.analyses?.[0] || {
-      rejectionId: rejection.id,
-      isValid: false,
-      confidence: 0.6,
-      missingElements: [],
-      weakArguments: [],
-      recommendedStrategy: AmendmentStrategy.ARGUE_REJECTION,
-      suggestedAmendments: [],
-      argumentPoints: [],
-    };
+    throw new ApplicationError(
+      ErrorCode.NOT_IMPLEMENTED,
+      'Non-prior art rejection analysis is not yet implemented. Please use the comprehensive analysis instead.'
+    );
   }
 
   /**
@@ -940,6 +907,49 @@ Generate a comprehensive amendment response that demonstrates the deep understan
   }
 
   /**
+   * Map risk level to difficulty for database storage
+   */
+  private static mapRiskLevelToDifficulty(riskLevel?: string): string {
+    switch (riskLevel?.toUpperCase()) {
+      case 'LOW':
+        return 'EASY';
+      case 'MEDIUM':
+        return 'MEDIUM';
+      case 'HIGH':
+        return 'HARD';
+      default:
+        return 'MEDIUM';
+    }
+  }
+
+  /**
+   * Map AI-generated analysis results to real database rejection IDs
+   */
+  private static mapAnalysesToRealRejectionIds(
+    aiAnalyses: RejectionAnalysisResult[],
+    createdRejections: any[],
+    parsedRejections: any[]
+  ): RejectionAnalysisResult[] {
+    return aiAnalyses.map((analysis, index) => {
+      // Map by index since rejections are created in the same order as parsed
+      const realRejectionId = createdRejections[index]?.id;
+      
+      if (!realRejectionId) {
+        logger.warn('[AmendmentService] Could not map analysis to real rejection ID', {
+          analysisIndex: index,
+          originalRejectionId: analysis.rejectionId,
+        });
+        return analysis; // Return original if mapping fails
+      }
+
+      return {
+        ...analysis,
+        rejectionId: realRejectionId, // Replace with real database ID
+      };
+    });
+  }
+
+  /**
    * Store comprehensive rejection analysis results in database
    */
   private static async storeRejectionAnalysisResults(
@@ -987,17 +997,39 @@ Generate a comprehensive amendment response that demonstrates the deep understan
 
       // Store overall strategy recommendation  
       try {
+        // Get the application ID from the office action's project
+        const officeActionWithProject = await prisma?.officeAction.findUnique({
+          where: { id: officeActionId },
+          include: {
+            project: {
+              include: {
+                patentApplications: {
+                  select: { id: true },
+                  take: 1
+                }
+              }
+            }
+          }
+        });
+
+        const applicationId = officeActionWithProject?.project?.patentApplications?.[0]?.id;
+        
+        if (!applicationId) {
+          logger.warn('[AmendmentService] No patent application found for strategy recommendation', {
+            officeActionId,
+          });
+          return; // Skip strategy creation if no application found
+        }
+
         await prisma?.strategyRecommendation.create({
           data: {
             officeActionId,
+            applicationId,
             overallStrategy: overallStrategy.primaryStrategy,
             priorityActions: JSON.stringify(overallStrategy.alternativeStrategies),
+            estimatedDifficulty: this.mapRiskLevelToDifficulty(overallStrategy.riskLevel),
             reasoning: overallStrategy.reasoning,
-            confidence: overallStrategy.confidence,
-            riskLevel: overallStrategy.riskLevel,
-            analysisType: 'COMPREHENSIVE',
-            modelVersion: 'gpt-4-comprehensive',
-            agentVersion: '2.0.0',
+            successProbability: overallStrategy.confidence,
           },
         });
       } catch (strategyError) {

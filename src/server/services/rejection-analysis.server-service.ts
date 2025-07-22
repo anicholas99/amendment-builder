@@ -265,36 +265,116 @@ export class RejectionAnalysisServerService {
         return null;
       }
 
-      // Check if any rejections have saved analysis
+      // First, try to get analysis from the new RejectionAnalysisResult table
+      let rejectionAnalysisResults: any[] = [];
+      try {
+        if (prisma && 'rejectionAnalysisResult' in prisma) {
+          rejectionAnalysisResults = await (prisma as any).rejectionAnalysisResult.findMany({
+            where: {
+              officeActionId,
+            },
+            include: {
+              rejection: true,
+            },
+          });
+        }
+      } catch (error) {
+        logger.warn('[RejectionAnalysis] Failed to query new analysis table', {
+          officeActionId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       const savedAnalyses: RejectionAnalysisResult[] = [];
       let hasSavedAnalysis = false;
 
-      for (const rejection of officeAction.rejections) {
-        if (rejection.parsedElements && rejection.status) {
+      // Process new format analysis results first
+      if (rejectionAnalysisResults && rejectionAnalysisResults.length > 0) {
+        logger.info('[RejectionAnalysis] Found new format analysis results', {
+          officeActionId,
+          count: rejectionAnalysisResults.length,
+        });
+
+        for (const result of rejectionAnalysisResults) {
           try {
-            const savedAnalysisData = JSON.parse(rejection.parsedElements);
+            // Parse priorArtMapping if it exists
+            let examinerReasoningGaps: string[] = [];
+            let argumentPoints: string[] = [];
+            let amendmentSuggestions: string[] = [];
             
-            // Reconstruct the analysis result
+            if (result.priorArtMapping) {
+              try {
+                const mappingData = JSON.parse(result.priorArtMapping);
+                examinerReasoningGaps = mappingData.examinerReasoningGaps || [];
+                argumentPoints = mappingData.argumentPoints || [];
+                amendmentSuggestions = mappingData.amendmentSuggestions || [];
+              } catch (parseError) {
+                logger.warn('[RejectionAnalysis] Failed to parse priorArtMapping', {
+                  rejectionId: result.rejectionId,
+                  error: parseError instanceof Error ? parseError.message : String(parseError),
+                });
+              }
+            }
+
             const analysisResult: RejectionAnalysisResult = {
-              rejectionId: rejection.id,
-              strength: rejection.status as RejectionStrength,
-              confidenceScore: savedAnalysisData.confidenceScore || 0.8,
-              examinerReasoningGaps: savedAnalysisData.examinerReasoningGaps || [],
-              claimChart: savedAnalysisData.claimChart,
-              recommendedStrategy: savedAnalysisData.recommendedStrategy || 'COMBINATION',
-              strategyRationale: savedAnalysisData.strategyRationale || 'Analysis based on saved data',
-              argumentPoints: savedAnalysisData.argumentPoints || [],
-              amendmentSuggestions: savedAnalysisData.amendmentSuggestions || [],
-              analyzedAt: savedAnalysisData.analyzedAt ? new Date(savedAnalysisData.analyzedAt) : new Date(),
+              rejectionId: result.rejectionId,
+              strength: this.mapScoreToStrength(result.strengthScore || 0.8),
+              confidenceScore: result.confidenceScore || 0.8,
+              examinerReasoningGaps,
+              claimChart: [], // Claim chart not stored in new format yet
+              recommendedStrategy: (result.suggestedStrategy as RecommendedStrategy) || 'COMBINATION',
+              strategyRationale: result.reasoning || 'Comprehensive analysis completed',
+              argumentPoints,
+              amendmentSuggestions,
+              analyzedAt: result.createdAt,
+              modelVersion: result.modelVersion,
+              agentVersion: result.agentVersion,
             };
 
             savedAnalyses.push(analysisResult);
             hasSavedAnalysis = true;
           } catch (error) {
-            logger.warn('[RejectionAnalysis] Failed to parse saved analysis data', {
-              rejectionId: rejection.id,
+            logger.warn('[RejectionAnalysis] Failed to process new format analysis', {
+              rejectionId: result.rejectionId,
               error: error instanceof Error ? error.message : String(error),
             });
+          }
+        }
+      }
+
+      // If no new format analysis found, fall back to legacy format
+      if (!hasSavedAnalysis) {
+        logger.info('[RejectionAnalysis] No new format analysis found, checking legacy format', {
+          officeActionId,
+        });
+
+        for (const rejection of officeAction.rejections) {
+          if (rejection.parsedElements && rejection.status) {
+            try {
+              const savedAnalysisData = JSON.parse(rejection.parsedElements);
+              
+              // Reconstruct the analysis result from legacy format
+              const analysisResult: RejectionAnalysisResult = {
+                rejectionId: rejection.id,
+                strength: rejection.status as RejectionStrength,
+                confidenceScore: savedAnalysisData.confidenceScore || 0.8,
+                examinerReasoningGaps: savedAnalysisData.examinerReasoningGaps || [],
+                claimChart: savedAnalysisData.claimChart,
+                recommendedStrategy: savedAnalysisData.recommendedStrategy || 'COMBINATION',
+                strategyRationale: savedAnalysisData.strategyRationale || 'Analysis based on saved data',
+                argumentPoints: savedAnalysisData.argumentPoints || [],
+                amendmentSuggestions: savedAnalysisData.amendmentSuggestions || [],
+                analyzedAt: savedAnalysisData.analyzedAt ? new Date(savedAnalysisData.analyzedAt) : new Date(),
+              };
+
+              savedAnalyses.push(analysisResult);
+              hasSavedAnalysis = true;
+            } catch (error) {
+              logger.warn('[RejectionAnalysis] Failed to parse legacy analysis data', {
+                rejectionId: rejection.id,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
           }
         }
       }
@@ -313,6 +393,7 @@ export class RejectionAnalysisServerService {
         officeActionId,
         rejectionCount: savedAnalyses.length,
         overallStrategy: overallStrategy.primaryStrategy,
+        source: rejectionAnalysisResults && rejectionAnalysisResults.length > 0 ? 'new-format' : 'legacy-format',
       });
 
       return {
@@ -454,7 +535,6 @@ export class RejectionAnalysisServerService {
 
   /**
    * Get claim texts for analysis
-   * For now, use invention claims as fallback
    */
   private static async getClaimTexts(
     projectId: string,
@@ -462,36 +542,40 @@ export class RejectionAnalysisServerService {
   ): Promise<string[]> {
     const claimTexts: string[] = [];
     
-    try {
-      // Try to get claims from invention
-      if (!prisma) {
-        logger.warn('[RejectionAnalysis] Prisma client not initialized');
-        return ['[Claim text not available]'];
-      }
-      
-      const project = await prisma.project.findUnique({
-        where: { id: projectId },
-        include: { invention: { include: { claims: true } } },
-      });
+    if (!prisma) {
+      throw new ApplicationError(
+        ErrorCode.DB_CONNECTION_ERROR,
+        'Database client is not initialized.'
+      );
+    }
+    
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: { invention: { include: { claims: true } } },
+    });
 
-      if (project?.invention?.claims) {
-        for (const claimNumber of claimNumbers) {
-          const claim = project.invention.claims.find(
-            (c: any) => c.claimNumber === claimNumber
-          );
-          if (claim) {
-            claimTexts.push(`Claim ${claimNumber}: ${claim.text}`);
-          }
-        }
-      }
-    } catch (error) {
-      logger.warn('[RejectionAnalysis] Failed to get claim texts', {
-        projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
+    if (!project?.invention?.claims || project.invention.claims.length === 0) {
+      throw new ApplicationError(
+        ErrorCode.DB_RECORD_NOT_FOUND,
+        `No claims found for project ${projectId}. Claims are required for rejection analysis.`
+      );
     }
 
-    return claimTexts.length > 0 ? claimTexts : ['[Claim text not available]'];
+    for (const claimNumber of claimNumbers) {
+      const claim = project.invention.claims.find(
+        (c: any) => c.claimNumber === claimNumber
+      );
+      if (claim) {
+        claimTexts.push(`Claim ${claimNumber}: ${claim.text}`);
+      } else {
+        throw new ApplicationError(
+          ErrorCode.DB_RECORD_NOT_FOUND,
+          `Claim ${claimNumber} not found for project ${projectId}`
+        );
+      }
+    }
+
+    return claimTexts;
   }
 
   /**
@@ -919,5 +1003,16 @@ Provide thorough, expert-level analysis that leverages ALL available context for
         index === self.findIndex(i => i.description === insight.description)
       )
       .sort((a, b) => b.confidence - a.confidence);
+  }
+
+  /**
+   * Maps a numeric strength score to a RejectionStrength enum value
+   * This is the inverse of the mapStrengthToScore function
+   */
+  private static mapScoreToStrength(score: number): RejectionStrength {
+    if (score >= 0.8) return 'STRONG';
+    if (score >= 0.6) return 'MODERATE';
+    if (score >= 0.3) return 'WEAK';
+    return 'FLAWED';
   }
 } 
