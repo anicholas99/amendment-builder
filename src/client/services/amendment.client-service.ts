@@ -305,7 +305,7 @@ export class AmendmentClientService {
       });
 
       const response = await apiFetch(
-        API_ROUTES.AMENDMENTS.REJECTIONS.ANALYZE(
+        API_ROUTES.AMENDMENTS.REJECTIONS.ANALYZE_ALL(
           request.projectId,
           request.officeActionId
         ),

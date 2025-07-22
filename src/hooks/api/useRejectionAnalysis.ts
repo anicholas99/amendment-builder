@@ -9,8 +9,13 @@ import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/apiClient';
 import { logger } from '@/utils/clientLogger';
 import { z } from 'zod';
+import type {
+  RejectionAnalysisResult,
+  StrategyRecommendation,
+  OfficeActionAnalysis,
+} from '@/types/domain/rejection-analysis';
 
-// ============ TYPES ============
+// ============ LEGACY TYPES - Keep for backward compatibility ============
 
 export interface RejectionAnalysis {
   rejectionId: string;
@@ -35,17 +40,6 @@ export interface OfficeActionSummary {
   num101Rejections: number;
   num112Rejections: number;
   totalClaimsRejected: number;
-}
-
-export interface StrategyRecommendation {
-  overallStrategy: 'ARGUE_ALL' | 'AMEND_NARROW' | 'MIXED_APPROACH' | 'FILE_CONTINUATION';
-  priorityActions: string[];
-  estimatedDifficulty: 'EASY' | 'MEDIUM' | 'HARD';
-  successProbability: number;
-  keyArguments: Record<string, string>;
-  amendmentFocus: Record<string, string[]>;
-  alternativeOptions: string[];
-  reasoning: string;
 }
 
 // ============ VALIDATION SCHEMAS ============
@@ -123,23 +117,43 @@ export function useRejectionAnalysis(rejectionId: string) {
 
 /**
  * Fetch all rejection analyses for an office action
+ * Returns the enhanced RejectionAnalysisResult array from domain types
  */
-export function useOfficeActionAnalyses(officeActionId: string) {
-  return useQuery({
+export function useOfficeActionAnalyses(officeActionId: string, projectId?: string) {
+  return useQuery<RejectionAnalysisResult[]>({
     queryKey: rejectionAnalysisQueryKeys.byOfficeAction(officeActionId),
     queryFn: async () => {
-      logger.debug('[useOfficeActionAnalyses] Fetching analyses', { officeActionId });
+      logger.debug('[useOfficeActionAnalyses] Fetching analyses', { officeActionId, projectId });
       
-      const response = await apiFetch(`/api/office-actions/${officeActionId}/analyses`);
-      const data = await response.json();
-      
-      if (!data || !Array.isArray(data)) {
+      if (!projectId) {
+        logger.warn('[useOfficeActionAnalyses] No projectId provided, cannot fetch analyses');
         return [];
       }
       
-      return data.map(item => RejectionAnalysisSchema.parse(item));
+      const response = await apiFetch(
+        `/api/projects/${projectId}/office-actions/${officeActionId}/analyze-rejections`
+      );
+      const data = await response.json();
+      
+      // Handle the wrapped response format from apiResponse.ok()
+      // Response structure: { data: { success: true, analyses: [...], overallStrategy: {...} } }
+      const responseData = data.data || data;
+      
+      if (!responseData || !responseData.success) {
+        logger.warn('[useOfficeActionAnalyses] No successful response data', { responseData });
+        return [];
+      }
+      
+      const analyses = responseData.analyses || [];
+      logger.debug('[useOfficeActionAnalyses] Successfully parsed analyses', { 
+        analysisCount: analyses.length,
+        officeActionId,
+        projectId 
+      });
+      
+      return analyses;
     },
-    enabled: !!officeActionId,
+    enabled: !!officeActionId && !!projectId,
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -169,23 +183,44 @@ export function useOfficeActionSummary(officeActionId: string) {
 
 /**
  * Fetch strategy recommendation
+ * Returns the enhanced StrategyRecommendation from domain types
  */
-export function useStrategyRecommendation(officeActionId: string) {
-  return useQuery({
+export function useStrategyRecommendation(officeActionId: string, projectId?: string) {
+  return useQuery<StrategyRecommendation | null>({
     queryKey: rejectionAnalysisQueryKeys.strategy(officeActionId),
     queryFn: async () => {
-      logger.debug('[useStrategyRecommendation] Fetching strategy', { officeActionId });
+      logger.debug('[useStrategyRecommendation] Fetching strategy', { officeActionId, projectId });
       
-      const response = await apiFetch(`/api/office-actions/${officeActionId}/strategy`);
-      const data = await response.json();
-      
-      if (!data) {
+      if (!projectId) {
+        logger.warn('[useStrategyRecommendation] No projectId provided, cannot fetch strategy');
         return null;
       }
       
-      return StrategyRecommendationSchema.parse(data);
+      const response = await apiFetch(
+        `/api/projects/${projectId}/office-actions/${officeActionId}/analyze-rejections`
+      );
+      const data = await response.json();
+      
+      // Handle the wrapped response format from apiResponse.ok()
+      // Response structure: { data: { success: true, analyses: [...], overallStrategy: {...} } }
+      const responseData = data.data || data;
+      
+      if (!responseData || !responseData.success) {
+        logger.warn('[useStrategyRecommendation] No successful response data', { responseData });
+        return null;
+      }
+      
+      const strategy = responseData.overallStrategy || null;
+      logger.debug('[useStrategyRecommendation] Successfully parsed strategy', { 
+        hasStrategy: !!strategy,
+        primaryStrategy: strategy?.primaryStrategy,
+        officeActionId,
+        projectId 
+      });
+      
+      return strategy;
     },
-    enabled: !!officeActionId,
+    enabled: !!officeActionId && !!projectId,
     staleTime: 10 * 60 * 1000,
   });
 }

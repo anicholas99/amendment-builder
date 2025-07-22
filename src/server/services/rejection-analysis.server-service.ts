@@ -22,8 +22,10 @@ import type {
   RejectionStrength,
   RejectionAnalysisResult,
   ClaimChartRow,
-  StrategyRecommendation 
+  StrategyRecommendation,
+  RecommendedStrategy
 } from '@/types/domain/rejection-analysis';
+import type { AmendmentContextBundle } from './amendment-context.server-service';
 
 // ============ PROMPT TEMPLATES ============
 
@@ -188,6 +190,17 @@ export class RejectionAnalysisServerService {
         argumentPoints: analysisResult.argumentPoints || [],
         amendmentSuggestions: analysisResult.amendmentSuggestions || [],
         analyzedAt: new Date(),
+        // Enhanced tracking fields
+        modelVersion: 'gpt-4',
+        agentVersion: '2.0.0',
+        contextualInsights: [
+          {
+            type: 'OCR_UTILIZATION',
+            description: 'Analysis performed using raw Office Action text from OCR parsing',
+            confidence: 0.95,
+            source: 'Office Action OCR'
+          }
+        ]
       };
 
       // 7. Save analysis to database
@@ -318,7 +331,7 @@ export class RejectionAnalysisServerService {
   }
 
   /**
-   * Analyzes all rejections for an Office Action
+   * Analyzes all rejections for an Office Action with comprehensive OCR context
    */
   static async analyzeOfficeActionRejections(
     officeActionId: string,
@@ -327,7 +340,7 @@ export class RejectionAnalysisServerService {
     analyses: RejectionAnalysisResult[];
     overallStrategy: StrategyRecommendation;
   }> {
-    logger.info('[RejectionAnalysis] Analyzing all rejections for Office Action', {
+    logger.info('[RejectionAnalysis] Starting comprehensive rejection analysis with OCR context', {
       officeActionId,
     });
 
@@ -348,17 +361,38 @@ export class RejectionAnalysisServerService {
         );
       }
 
-      // Analyze each rejection
+      // Get comprehensive amendment context with all OCR'd documents
+      const { AmendmentContextService } = await import('./amendment-context.server-service');
+      const amendmentContext = await AmendmentContextService.getAmendmentDraftingContext(
+        officeAction.projectId,
+        tenantId
+      );
+
+      logger.info('[RejectionAnalysis] Retrieved amendment context', {
+        contextComplete: amendmentContext.metadata.contextComplete,
+        ocrDocuments: amendmentContext.metadata.ocrDocuments,
+        missingDocs: amendmentContext.metadata.missingDocuments,
+      });
+
+      // Enhanced analysis with full context
       const analyses: RejectionAnalysisResult[] = [];
       for (const rejection of officeAction.rejections) {
-        const analysis = await this.analyzeRejection(rejection.id, tenantId, {
-          includeClaimChart: true,
-        });
+        const analysis = await this.analyzeRejectionWithContext(
+          rejection,
+          amendmentContext,
+          tenantId
+        );
         analyses.push(analysis);
       }
 
-      // Generate overall strategy
-      const overallStrategy = this.generateOverallStrategy(analyses);
+      // Generate comprehensive strategy with context
+      const overallStrategy = this.generateOverallStrategyWithContext(analyses, amendmentContext);
+
+      logger.info('[RejectionAnalysis] Completed comprehensive analysis', {
+        analysisCount: analyses.length,
+        strategy: overallStrategy.primaryStrategy,
+        contextUtilized: amendmentContext.metadata.contextComplete,
+      });
 
       return {
         analyses,
@@ -491,5 +525,399 @@ export class RejectionAnalysisServerService {
     });
 
     return considerations.slice(0, 5); // Top 5 considerations
+  }
+
+  /**
+   * Enhanced rejection analysis with comprehensive OCR context
+   */
+  private static async analyzeRejectionWithContext(
+    rejection: any,
+    amendmentContext: AmendmentContextBundle,
+    tenantId: string
+  ): Promise<RejectionAnalysisResult> {
+    logger.info('[RejectionAnalysis] Analyzing rejection with OCR context', {
+      rejectionId: rejection.id,
+      rejectionType: rejection.type,
+      contextComplete: amendmentContext.metadata.contextComplete,
+    });
+
+    try {
+      // Build comprehensive context from OCR documents
+      const contextualPrompt = this.buildContextualAnalysisPrompt(rejection, amendmentContext);
+
+      // Enhanced AI analysis with full context
+      const aiResponse = await processWithOpenAI(
+        this.buildEnhancedSystemPrompt(),
+        contextualPrompt,
+        {
+          maxTokens: 6000, // Increased for comprehensive analysis
+          temperature: 0.2,
+        }
+      );
+
+      const analysisResult = safeJsonParse<any>(aiResponse.content);
+      if (!analysisResult) {
+        throw new ApplicationError(
+          ErrorCode.AI_INVALID_RESPONSE,
+          'Failed to parse enhanced AI analysis response'
+        );
+      }
+
+      // Structure enhanced result
+      const result: RejectionAnalysisResult = {
+        rejectionId: rejection.id,
+        strength: analysisResult.strength as RejectionStrength,
+        confidenceScore: analysisResult.confidenceScore,
+        examinerReasoningGaps: analysisResult.examinerReasoningGaps || [],
+        claimChart: analysisResult.claimChart || [],
+        recommendedStrategy: analysisResult.recommendedStrategy,
+        strategyRationale: analysisResult.strategyRationale,
+        argumentPoints: analysisResult.argumentPoints || [],
+        amendmentSuggestions: analysisResult.amendmentSuggestions || [],
+        analyzedAt: new Date(),
+        // Enhanced tracking and context
+        modelVersion: 'gpt-4',
+        agentVersion: '2.0.0', 
+        contextualInsights: this.buildContextualInsights(
+          amendmentContext,
+          analysisResult.contextualInsights || []
+        )
+      };
+
+      // Save enhanced analysis
+      await updateRejectionAnalysis(rejection.id, {
+        strength: result.strength,
+        analysisData: result,
+      });
+
+      logger.info('[RejectionAnalysis] Enhanced analysis completed', {
+        rejectionId: rejection.id,
+        strength: result.strength,
+        strategy: result.recommendedStrategy,
+        contextUtilized: amendmentContext.metadata.contextComplete,
+      });
+
+      return result;
+
+    } catch (error) {
+      logger.error('[RejectionAnalysis] Enhanced analysis failed', {
+        rejectionId: rejection.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Build comprehensive contextual analysis prompt using OCR documents
+   */
+  private static buildContextualAnalysisPrompt(
+    rejection: any,
+    context: AmendmentContextBundle
+  ): string {
+    const claimNumbers = typeof rejection.claimNumbers === 'string' 
+      ? JSON.parse(rejection.claimNumbers) 
+      : rejection.claimNumbers;
+    
+    const citedReferences = typeof rejection.citedPriorArt === 'string'
+      ? JSON.parse(rejection.citedPriorArt || '[]')
+      : (rejection.citedPriorArt || []);
+
+    return `EXPERT PATENT ATTORNEY REJECTION ANALYSIS
+
+You are analyzing this Office Action rejection with comprehensive context from all available documents.
+
+═══ REJECTION TO ANALYZE ═══
+TYPE: ${rejection.type}
+AFFECTED CLAIMS: ${claimNumbers.join(', ')}
+CITED PRIOR ART: ${citedReferences.join(', ')}
+
+EXAMINER'S REASONING:
+${rejection.examinerText}
+
+═══ FULL OFFICE ACTION CONTEXT ═══
+${context.officeAction ? `
+OFFICE ACTION (${context.officeAction.docCode}, ${context.officeAction.date.toLocaleDateString()}):
+${context.officeAction.text}
+
+═══════════════════════════════════════
+` : 'Office Action text not available in OCR context.'}
+
+═══ CURRENT CLAIMS CONTEXT ═══
+${context.claims ? `
+CURRENT CLAIMS (${context.claims.docCode}, ${context.claims.date.toLocaleDateString()}):
+${context.claims.text}
+
+═══════════════════════════════════════
+` : 'Current claims not available in OCR context.'}
+
+═══ SPECIFICATION CONTEXT ═══
+${context.specification ? `
+SPECIFICATION (${context.specification.docCode}):
+${context.specification.text.substring(0, 8000)}${context.specification.text.length > 8000 ? '...[TRUNCATED]' : ''}
+
+═══════════════════════════════════════
+` : 'Specification not available in OCR context.'}
+
+═══ PREVIOUS RESPONSE CONTEXT ═══
+${context.lastResponse ? `
+LAST APPLICANT RESPONSE (${context.lastResponse.docCode}, ${context.lastResponse.date.toLocaleDateString()}):
+${context.lastResponse.text}
+
+═══════════════════════════════════════
+` : 'No previous response available in OCR context.'}
+
+═══ ADDITIONAL CONTEXT ═══
+${context.extras.examinerSearch ? `
+EXAMINER SEARCH NOTES:
+${context.extras.examinerSearch.text}
+` : ''}
+${context.extras.interview ? `
+INTERVIEW SUMMARY:
+${context.extras.interview.text}
+` : ''}
+
+═══ ANALYSIS REQUIREMENTS ═══
+
+Perform expert-level analysis considering ALL available context:
+
+1. **COMPREHENSIVE STRENGTH ASSESSMENT**:
+   - Cross-reference examiner reasoning with actual claim language
+   - Identify specific claim elements not properly addressed
+   - Compare with previous response arguments (if available)
+   - Assess legal reasoning quality
+
+2. **DETAILED CLAIM CHART ANALYSIS**:
+   - Map each claim element to cited prior art
+   - Identify missing elements or improper combinations
+   - Note any changes since previous response
+
+3. **STRATEGIC RECOMMENDATION**:
+   - Consider prosecution history from previous response
+   - Evaluate amendment vs. argument options
+   - Account for specification support for amendments
+
+4. **CONTEXT-AWARE INSIGHTS**:
+   - Leverage examiner search strategy insights
+   - Consider interview discussions (if available)
+   - Build on successful previous arguments
+
+Return comprehensive JSON analysis:
+
+{
+  "strength": "STRONG|MODERATE|WEAK|FLAWED",
+  "confidenceScore": 0.95,
+  "examinerReasoningGaps": [
+    "Examiner failed to address claim element X in the prior art mapping",
+    "Improper combination rationale - no teaching or motivation shown"
+  ],
+  "claimChart": [
+    {
+      "claimElement": "exact claim language",
+      "priorArtDisclosure": "quoted prior art text or 'NOT DISCLOSED'",
+      "isDisclosed": true/false,
+      "notes": "analysis of disclosure quality"
+    }
+  ],
+  "recommendedStrategy": "ARGUE|AMEND|COMBINATION",
+  "strategyRationale": "Detailed explanation considering prosecution history and context",
+  "argumentPoints": [
+    "Specific argument leveraging context and prior responses",
+    "Reference to specification support for claim interpretation"
+  ],
+  "amendmentSuggestions": [
+    "Specific claim amendment with specification support cited",
+    "Alternative amendment option with prosecution strategy"
+  ],
+  "contextualInsights": [
+    "Key insights from examiner search strategy",
+    "Connections to previous response arguments",
+    "Specification passages that support arguments"
+  ]
+}`;
+  }
+
+  /**
+   * Build enhanced system prompt for contextual analysis
+   */
+  private static buildEnhancedSystemPrompt(): string {
+    return `You are a senior USPTO patent attorney with 20+ years of prosecution experience, specializing in comprehensive Office Action response strategy.
+
+Your expertise includes:
+- Deep understanding of 35 U.S.C. §§ 101, 102, 103, 112 law and MPEP guidance
+- Advanced claim chart analysis with element-by-element prior art mapping
+- Strategic prosecution planning considering file history and examiner patterns
+- Specification mining for claim support and amendment options
+- Cost-effective response strategies balancing argument vs. amendment approaches
+
+ANALYSIS STANDARDS:
+- Examine every claim element against cited prior art with precision
+- Identify subtle examiner reasoning flaws and missing legal requirements
+- Consider prosecution history to avoid estoppel issues
+- Recommend strategies that maximize claim scope while ensuring allowability
+- Provide actionable insights that directly support attorney decision-making
+
+You have access to the complete OCR'd file history including:
+- Full Office Action text with examiner reasoning
+- Current claim language and dependencies  
+- Complete specification for amendment support
+- Previous response arguments and prosecution strategy
+- Examiner search notes and interview summaries
+
+Provide thorough, expert-level analysis that leverages ALL available context for optimal response strategy.`;
+  }
+
+  /**
+   * Generate comprehensive strategy considering amendment context
+   */
+  private static generateOverallStrategyWithContext(
+    analyses: RejectionAnalysisResult[],
+    context: AmendmentContextBundle
+  ): StrategyRecommendation {
+    if (analyses.length === 0) {
+      throw new ApplicationError(
+        ErrorCode.INVALID_INPUT,
+        'Cannot generate strategy without analyses'
+      );
+    }
+
+    // Enhanced strategy calculation with context
+    const strategyCounts = analyses.reduce((acc, analysis) => {
+      acc[analysis.recommendedStrategy] = (acc[analysis.recommendedStrategy] || 0) + 1;
+      return acc;
+    }, {} as Record<RecommendedStrategy, number>);
+
+    const primaryStrategy = Object.entries(strategyCounts)
+      .sort(([, a], [, b]) => (b as number) - (a as number))[0][0] as RecommendedStrategy;
+
+    const confidence = strategyCounts[primaryStrategy] / analyses.length;
+
+    // Enhanced reasoning considering context
+    const strongRejections = analyses.filter(a => a.strength === 'STRONG').length;
+    const weakRejections = analyses.filter(a => ['WEAK', 'FLAWED'].includes(a.strength)).length;
+    const hasSpecification = !!context.specification;
+    const hasPreviousResponse = !!context.lastResponse;
+
+    let reasoning: string;
+    if (primaryStrategy === 'ARGUE') {
+      reasoning = `Most rejections have identifiable weaknesses (${weakRejections} weak vs ${strongRejections} strong). `;
+      if (hasPreviousResponse) {
+        reasoning += `Previous response arguments can be strengthened with additional evidence. `;
+      }
+      reasoning += `Arguments should focus on examiner reasoning gaps and prior art deficiencies.`;
+    } else if (primaryStrategy === 'AMEND') {
+      reasoning = `Strong rejections require claim amendments (${strongRejections} strong rejections). `;
+      if (hasSpecification) {
+        reasoning += `Specification provides adequate support for distinctive amendments. `;
+      }
+      reasoning += `Focus on adding elements that clearly distinguish over cited art.`;
+    } else {
+      reasoning = `Mixed rejection strengths suggest hybrid approach. `;
+      reasoning += `Argue weak rejections while amending for strong ones. `;
+      if (context.metadata.contextComplete) {
+        reasoning += `Complete context enables targeted strategy for each rejection.`;
+      }
+    }
+
+    const riskLevel = strongRejections > weakRejections ? 'HIGH' : context.metadata.contextComplete ? 'LOW' : 'MEDIUM';
+
+    return {
+      primaryStrategy,
+      alternativeStrategies: this.getAlternativeStrategies(primaryStrategy),
+      confidence,
+      reasoning,
+      riskLevel,
+      keyConsiderations: [
+        ...this.extractKeyConsiderations(analyses),
+        context.metadata.contextComplete ? 'Complete OCR context available for comprehensive analysis' : 'Limited context - some documents missing from OCR',
+        hasSpecification ? 'Specification available for amendment support' : 'No specification context for amendments',
+        hasPreviousResponse ? 'Previous response arguments available for reference' : 'No prosecution history available',
+      ],
+    };
+  }
+
+  /**
+   * Build contextual insights based on OCR documents and AI analysis
+   */
+  private static buildContextualInsights(
+    context: AmendmentContextBundle,
+    existingInsights: any[]
+  ): any[] {
+    const insights: any[] = [];
+
+    // OCR document utilization insights
+    if (context.officeAction) {
+      insights.push({
+        type: 'OCR_UTILIZATION',
+        description: `Analysis leveraged full Office Action text (${context.officeAction.docCode}) from OCR parsing for comprehensive understanding.`,
+        confidence: 0.95,
+        source: 'Office Action OCR'
+      });
+    }
+
+    if (context.claims) {
+      insights.push({
+        type: 'SPECIFICATION_REFERENCE',
+        description: `Current claims document (${context.claims.docCode}) analyzed for element-by-element mapping.`,
+        confidence: 0.90,
+        source: 'Claims OCR'
+      });
+    }
+
+    if (context.specification) {
+      insights.push({
+        type: 'SPECIFICATION_REFERENCE',
+        description: `Specification text analyzed to identify potential amendment support for claim limitations.`,
+        confidence: 0.85,
+        source: 'Specification OCR'
+      });
+    }
+
+    if (context.lastResponse) {
+      insights.push({
+        type: 'PROSECUTION_HISTORY',
+        description: `Previous response (${context.lastResponse.docCode}) reviewed to avoid inconsistent arguments and build on prior positions.`,
+        confidence: 0.88,
+        source: 'Previous Response OCR'
+      });
+    }
+
+    if (context.extras.examinerSearch) {
+      insights.push({
+        type: 'OCR_UTILIZATION',
+        description: `Examiner search notes analyzed to understand search strategy and art universe considered.`,
+        confidence: 0.80,
+        source: 'Examiner Search Notes'
+      });
+    }
+
+    if (context.extras.interview) {
+      insights.push({
+        type: 'PROSECUTION_HISTORY',
+        description: `Interview summary reviewed to understand examiner's position and any informal guidance provided.`,
+        confidence: 0.75,
+        source: 'Interview Summary'
+      });
+    }
+
+    // Add comprehensive context indicator
+    if (context.metadata.contextComplete) {
+      insights.push({
+        type: 'OCR_UTILIZATION',
+        description: `Complete prosecution file history available and utilized for expert-level analysis.`,
+        confidence: 0.98,
+        source: 'Complete File History'
+      });
+    }
+
+    // Add existing insights from AI analysis
+    insights.push(...existingInsights);
+
+    // Return unique insights sorted by confidence
+    return insights
+      .filter((insight, index, self) => 
+        index === self.findIndex(i => i.description === insight.description)
+      )
+      .sort((a, b) => b.confidence - a.confidence);
   }
 } 

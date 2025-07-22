@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useOfficeActions, useOfficeAction } from '@/hooks/api/useAmendment';
 import { useOfficeActionAnalyses, useStrategyRecommendation } from '@/hooks/api/useRejectionAnalysis';
-import { AmendmentApiService } from '@/services/api/amendmentApiService';
+import { AmendmentClientService } from '@/client/services/amendment.client-service';
 import { DraftApiService } from '@/services/api/draftApiService';
 import { AmendmentWorkspaceTabs } from './AmendmentWorkspaceTabs';
 
@@ -163,8 +163,8 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
   });
 
   // Rejection analysis hooks and state
-  const { data: analyses, isLoading: analysesLoading, refetch: refetchAnalyses } = useOfficeActionAnalyses(selectedOfficeActionId || '');
-  const { data: overallStrategy, refetch: refetchStrategy } = useStrategyRecommendation(selectedOfficeActionId || '');
+  const { data: analyses, isLoading: analysesLoading, refetch: refetchAnalyses } = useOfficeActionAnalyses(selectedOfficeActionId || '', projectId);
+  const { data: overallStrategy, refetch: refetchStrategy } = useStrategyRecommendation(selectedOfficeActionId || '', projectId);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   // Create adapted analysis data structure
@@ -198,17 +198,24 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
   const handleAnalyzeRejections = useCallback(async () => {
     if (!selectedOfficeActionId || !canAnalyze) return;
     
-    logger.info('[AmendmentStudio] Starting rejection analysis', { 
-      officeActionId: selectedOfficeActionId 
+    logger.info('[AmendmentStudio] Starting enhanced rejection analysis with OCR context', { 
+      officeActionId: selectedOfficeActionId,
+      projectId 
     });
     
     setIsAnalyzing(true);
     try {
-      // Trigger analysis via API service (placeholder - needs implementation)
-      // await AmendmentApiService.analyzeOfficeActionRejections(selectedOfficeActionId, { includeClaimCharts: true });
+      // Call the enhanced rejection analysis service with OCR context
+      await AmendmentClientService.analyzeRejections({
+        projectId,
+        officeActionId: selectedOfficeActionId,
+        forceRefresh: true, // Always run fresh analysis with latest OCR data
+      });
       
-      // For now, just simulate the API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      logger.info('[AmendmentStudio] Enhanced rejection analysis completed', {
+        officeActionId: selectedOfficeActionId,
+        projectId,
+      });
       
       // Refetch the analysis data
       await Promise.all([refetchAnalyses(), refetchStrategy()]);
@@ -217,7 +224,7 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
     } finally {
       setIsAnalyzing(false);
     }
-  }, [selectedOfficeActionId, canAnalyze, refetchAnalyses, refetchStrategy]);
+  }, [selectedOfficeActionId, canAnalyze, projectId, refetchAnalyses, refetchStrategy]);
 
   const handleGenerateAmendment = useCallback(() => {
     if (!selectedOfficeActionId || !analysisData) return;

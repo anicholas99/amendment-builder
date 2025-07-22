@@ -18,6 +18,13 @@ export interface ClaimChartRow {
   notes: string;
 }
 
+export interface ContextualInsight {
+  type: 'OCR_UTILIZATION' | 'PRIOR_ART_MAPPING' | 'SPECIFICATION_REFERENCE' | 'PROSECUTION_HISTORY';
+  description: string;
+  confidence: number;
+  source?: string;
+}
+
 export interface RejectionAnalysisResult {
   rejectionId: string;
   strength: RejectionStrength;
@@ -29,6 +36,10 @@ export interface RejectionAnalysisResult {
   argumentPoints: string[];
   amendmentSuggestions: string[];
   analyzedAt: Date;
+  // Enhanced tracking and context fields
+  modelVersion?: string;
+  agentVersion?: string;
+  contextualInsights?: ContextualInsight[];
 }
 
 export interface StrategyRecommendation {
