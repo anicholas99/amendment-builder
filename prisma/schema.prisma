@@ -1108,3 +1108,55 @@ model ClaimValidation {
   @@index([projectId, validationState], name: "IX_claim_validations_project_state")
   @@map("claim_validations")
 }
+
+model ClaimAmendment {
+  id             String         @id @default(uuid())
+  projectId      String
+  officeActionId String
+  tenantId       String
+  claimNumber    Int
+  originalText   String         @db.NVarChar(Max)
+  amendedText    String         @db.NVarChar(Max)
+  changes        Json?          // Array of change objects
+  changeReason   String         @db.NVarChar(Max)
+  aiGenerated    Boolean        @default(true)
+  userApproved   Boolean        @default(false)
+  version        Int            @default(1)
+  status         String         @default("DRAFT") // DRAFT, APPROVED, FILED
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  officeAction OfficeAction @relation(fields: [officeActionId], references: [id], onDelete: Cascade)
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([projectId])
+  @@index([officeActionId])
+  @@index([tenantId])
+  @@index([tenantId, projectId])
+  @@index([claimNumber, version])
+  @@index([status])
+  @@map("claim_amendments")
+}
+
+model AmendmentRecommendation {
+  id             String         @id @default(uuid())
+  officeActionId String
+  tenantId       String
+  claimNumber    Int?           // Optional, can be general recommendation
+  recommendation String         @db.NVarChar(Max)
+  priority       String         @default("MEDIUM") // HIGH, MEDIUM, LOW
+  category       String?        // CLAIM_LIMITATION, PRIOR_ART, FORMALITY, etc.
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+
+  officeAction OfficeAction @relation(fields: [officeActionId], references: [id], onDelete: Cascade)
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([officeActionId])
+  @@index([tenantId])
+  @@map("amendment_recommendations")
+}
+EOF < /dev/null
