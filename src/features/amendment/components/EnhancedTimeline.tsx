@@ -39,6 +39,7 @@ import {
   Reply,
   PlusCircle,
   ScanLine, // Add OCR icon
+  Play, // Auto-OCR icon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -280,6 +281,10 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
   const [downloadingDocs, setDownloadingDocs] = useState<Set<string>>(new Set());
   const [processingOfficeAction, setProcessingOfficeAction] = useState<string | null>(null);
   
+  // Auto-OCR state
+  const [processingAutoOCR, setProcessingAutoOCR] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState({ current: 0, total: 0, currentDoc: '' });
+  
   // Find the latest office action that needs a response
   const latestOfficeAction = useMemo(() => {
     if (!usptoData?.timeline) return null;
@@ -296,8 +301,129 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
       officeActionCodes.includes(event.documentCode)
     );
   }, [usptoData?.timeline]);
-  
-  // Download USPTO document mutation
+
+  // Find essential documents that need OCR (following your existing pattern)
+  const essentialDocsNeedingOCR = useMemo(() => {
+    if (!usptoData?.timeline) return [];
+    
+    // Essential document codes for AI amendment drafting (from your documentCategorization.ts)
+    const essentialCodes = ['CTNF', 'CTFR', 'CTAV', 'MCTNF', 'MCTFR', 'CLM', 'CLMN', 'REM', 'REM.', 'A...', 'A.NE', 'A.AF', 'AMDT', 'SPEC', 'SRNT', 'SRFW', 'SEARCH', 'EXIN', 'INT.SUM', 'APPIN'];
+    
+    return usptoData.timeline.filter(event => 
+      // Must be essential document
+      essentialCodes.includes(event.documentCode) && 
+      // Must have document ID (downloadable)
+      event.documentId &&
+      // Either not downloaded yet (needs download + OCR)
+      (!event.storageUrl || !event.storageUrl.startsWith('/api/'))
+    );
+  }, [usptoData?.timeline]);
+
+  // Auto-OCR all essential documents (following your existing mutation patterns)
+  const autoOCRMutation = useMutation({
+    mutationFn: async () => {
+      const docs = essentialDocsNeedingOCR;
+      setOcrProgress({ current: 0, total: docs.length, currentDoc: '' });
+      
+      const results = [];
+      
+      for (let i = 0; i < docs.length; i++) {
+        const doc = docs[i];
+        setOcrProgress({ 
+          current: i, 
+          total: docs.length, 
+          currentDoc: doc.documentCode 
+        });
+        
+        try {
+          // Step 1: Download PDF if not already downloaded (following your exact download pattern)
+          if (!doc.storageUrl || !doc.storageUrl.startsWith('/api/')) {
+            const downloadResponse = await apiFetch(`/api/projects/${projectId}/office-actions/uspto-download`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: doc.id,
+                documentId: doc.documentId,
+                documentCode: doc.documentCode,
+                mailRoomDate: format(doc.date, 'MM/dd/yyyy'),
+                documentDescription: doc.title
+              })
+            });
+            
+            if (!downloadResponse.ok) {
+              const error = await downloadResponse.json();
+              throw new Error(`Download failed: ${error.error || 'Unknown error'}`);
+            }
+          }
+          
+          // Step 2: Run OCR (following your exact OCR pattern)
+          const ocrResponse = await apiFetch(`/api/projects/${projectId}/documents/${doc.id}/ocr`, {
+            method: 'POST',
+          });
+          
+          if (!ocrResponse.ok) {
+            const error = await ocrResponse.json();
+            throw new Error(`OCR failed: ${error.message || 'Unknown error'}`);
+          }
+          
+          const ocrResult = await ocrResponse.json();
+          results.push({ 
+            doc: doc.documentCode, 
+            success: true, 
+            result: ocrResult 
+          });
+          
+        } catch (error) {
+          results.push({ 
+            doc: doc.documentCode, 
+            success: false, 
+            error: error instanceof Error ? error.message : String(error) 
+          });
+        }
+      }
+      
+      setOcrProgress({ 
+        current: docs.length, 
+        total: docs.length, 
+        currentDoc: 'Complete' 
+      });
+      
+      return results;
+    },
+    onMutate: () => {
+      setProcessingAutoOCR(true);
+    },
+    onSuccess: (results) => {
+      const successful = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success).length;
+      
+      toast({
+        title: 'Auto-OCR Complete',
+        description: `${successful} documents processed successfully${failed > 0 ? `, ${failed} failed` : ''}`,
+      });
+      
+      // Refresh timeline data (following your existing pattern)
+      queryClient.invalidateQueries({
+        queryKey: ['real-uspto-timeline', projectId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['uspto-timeline', projectId],
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Auto-OCR Failed',
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        variant: 'destructive',
+      });
+    },
+    onSettled: () => {
+      setProcessingAutoOCR(false);
+      setOcrProgress({ current: 0, total: 0, currentDoc: '' });
+    }
+  });
+
+  // Download USPTO document mutation (restored)
   const downloadUSPTODoc = useMutation({
     mutationFn: async (params: {
       id: string; // Database record ID
@@ -410,34 +536,81 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
   
   return (
     <div className={cn('bg-white rounded-lg border', className)}>
-      {/* Header */}
-      <div className="p-4 border-b bg-gray-50/50">
+      <TooltipProvider>
+        {/* Header */}
+        <div className="p-4 border-b bg-gray-50/50">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Prosecution Timeline</h3>
             <p className="text-sm text-gray-500 mt-0.5">
               {timeline.length} events • {Object.keys(eventsByYear).length} years
+              {essentialDocsNeedingOCR.length > 0 && (
+                <span className="ml-2 text-orange-600">
+                  • {essentialDocsNeedingOCR.length} docs need OCR
+                </span>
+              )}
             </p>
           </div>
-          {usptoData?.stats && (
-            <div className="flex items-center gap-4 text-xs">
-              <div className="text-center">
-                <div className="font-semibold text-gray-900">{usptoData.stats.totalDocuments}</div>
-                <div className="text-gray-500">Total Docs</div>
+          <div className="flex items-center gap-4">
+            {/* Auto-OCR Button */}
+            {essentialDocsNeedingOCR.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-3 gap-2 border-blue-200 text-blue-600 hover:bg-blue-50"
+                    onClick={() => autoOCRMutation.mutate()}
+                    disabled={processingAutoOCR}
+                  >
+                    {processingAutoOCR ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span className="text-xs">
+                          OCR {ocrProgress.current}/{ocrProgress.total}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-3.5 w-3.5" />
+                        <span className="text-xs">
+                          Auto-OCR {essentialDocsNeedingOCR.length} Docs
+                        </span>
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>
+                    {processingAutoOCR 
+                      ? `Processing OCR on ${ocrProgress.currentDoc}... (${ocrProgress.current}/${ocrProgress.total})`
+                      : `Run OCR on ${essentialDocsNeedingOCR.length} essential documents for AI context`
+                    }
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            
+            {/* Existing Stats */}
+            {usptoData?.stats && (
+              <div className="flex items-center gap-4 text-xs">
+                <div className="text-center">
+                  <div className="font-semibold text-gray-900">{usptoData.stats.totalDocuments}</div>
+                  <div className="text-gray-500">Total Docs</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold text-orange-600">{usptoData.stats.officeActionCount}</div>
+                  <div className="text-gray-500">Office Actions</div>
+                </div>
               </div>
-              <div className="text-center">
-                <div className="font-semibold text-orange-600">{usptoData.stats.officeActionCount}</div>
-                <div className="text-gray-500">Office Actions</div>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
       
       {/* Timeline */}
       <ScrollArea className="h-[600px]">
         <div className="p-6">
-          <TooltipProvider>
             {Object.entries(eventsByYear)
               .sort(([yearA], [yearB]) => parseInt(yearB) - parseInt(yearA))
               .map(([year, yearEvents]: [string, any]) => (
@@ -701,7 +874,6 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                 </div>
               </div>
             ))}
-          </TooltipProvider>
         </div>
       </ScrollArea>
       
@@ -727,6 +899,7 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
           </div>
         </div>
       )}
+      </TooltipProvider>
     </div>
   );
 };
