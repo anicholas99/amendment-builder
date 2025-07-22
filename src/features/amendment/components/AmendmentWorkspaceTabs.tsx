@@ -33,20 +33,26 @@ import { DraftingWorkspace } from './DraftingWorkspace';
 import { ExportWithValidationButton } from './ExportWithValidationButton';
 import { AmendmentExportService } from '@/services/api/amendmentExportService';
 import { logger } from '@/utils/clientLogger';
+import type { OfficeAction } from '@/types/domain/amendment';
+import type { 
+  RejectionAnalysisResult,
+  StrategyRecommendation 
+} from '@/types/domain/rejection-analysis';
 
 interface AmendmentWorkspaceTabsProps {
   projectId: string;
-  selectedOfficeAction?: any;
-  selectedOfficeActionId?: string | null;
-  amendmentProjectId?: string | null;
-  analyses?: any;
-  overallStrategy?: any;
-  isAnalyzing?: boolean;
+  selectedOfficeAction: OfficeAction | null;
+  selectedOfficeActionId: string | null;
+  amendmentProjectId: string | null;
+  analyses: RejectionAnalysisResult[] | null;
+  overallStrategy: StrategyRecommendation | null;
+  isAnalyzing: boolean;
   selectedRejectionId?: string | null;
   onSelectRejection?: (rejectionId: string) => void;
-  onGenerateAmendment?: () => void;
-  onSave?: (content: any) => void;
+  onGenerateAmendment?: () => Promise<void>;
+  onSave?: () => void;
   onAnalyzeRejections?: () => void;
+  onTabChange?: (tab: string) => void; // Add callback for tab changes
   className?: string;
 }
 
@@ -91,11 +97,13 @@ export const AmendmentWorkspaceTabs: React.FC<AmendmentWorkspaceTabsProps> = ({
   onGenerateAmendment,
   onSave,
   onAnalyzeRejections,
+  onTabChange,
   className,
 }) => {
   const [activeTab, setActiveTab] = useState<string>('analysis');
   const [previewContent, setPreviewContent] = useState<string>('');
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  const [isGeneratingAmendment, setIsGeneratingAmendment] = useState(false);
   const isMinimalistUI = isFeatureEnabled('ENABLE_MINIMALIST_AMENDMENT_UI');
 
   // Determine status
@@ -107,6 +115,23 @@ export const AmendmentWorkspaceTabs: React.FC<AmendmentWorkspaceTabsProps> = ({
     () => getTabConfig(hasAnalysis, hasDraft),
     [hasAnalysis, hasDraft]
   );
+
+  // Enhanced amendment generation handler
+  const handleGenerateAmendmentClick = async () => {
+    if (onGenerateAmendment) {
+      setIsGeneratingAmendment(true);
+      try {
+        await onGenerateAmendment();
+        // Switch to draft tab after successful generation
+        setActiveTab('draft');
+        onTabChange?.('draft');
+      } catch (error) {
+        logger.error('[AmendmentWorkspaceTabs] Amendment generation failed', { error });
+      } finally {
+        setIsGeneratingAmendment(false);
+      }
+    }
+  };
 
   // Generate preview content
   const handleGeneratePreview = useCallback(async () => {
@@ -232,7 +257,8 @@ export const AmendmentWorkspaceTabs: React.FC<AmendmentWorkspaceTabsProps> = ({
             isLoading={isAnalyzing || false}
             selectedRejectionId={selectedRejectionId}
             onSelectRejection={onSelectRejection}
-            onGenerateAmendment={onGenerateAmendment}
+            onGenerateAmendment={handleGenerateAmendmentClick}
+            isGeneratingAmendment={isGeneratingAmendment}
           />
         )}
       </TabsContent>

@@ -1,8 +1,13 @@
 /**
  * Simple Office Action Parser Service
  * 
- * Sends the full OCR text to GPT with one comprehensive prompt.
- * Replaces the overly complex multi-pass system.
+ * Sends the full OCR text to GPT with one comprehensive prompt that includes:
+ * - Rejection parsing and prior art extraction
+ * - Rejection strength analysis and strategic recommendations
+ * - Prosecution context awareness
+ * - Complete summary generation
+ * 
+ * This eliminates 2-3 redundant AI calls by doing everything in one pass.
  */
 
 import { logger } from '@/server/logger';
@@ -11,9 +16,15 @@ import { processWithOpenAI } from '@/server/ai/aiService';
 import { safeJsonParse } from '@/utils/jsonUtils';
 import { ParsedRejection, RejectionTypeValue } from '@/types/domain/amendment';
 import { DetailedAnalysis } from '@/types/amendment';
+import { 
+  RejectionAnalysisResult, 
+  StrategyRecommendation, 
+  RejectionStrength, 
+  RecommendedStrategy 
+} from '@/types/domain/rejection-analysis';
 import { v4 as uuidv4 } from 'uuid';
 
-export interface SimpleOfficeActionAnalysis {
+export interface ComprehensiveOfficeActionAnalysis {
   metadata: {
     applicationNumber: string | null;
     mailingDate: string | null;
@@ -24,6 +35,9 @@ export interface SimpleOfficeActionAnalysis {
     analysisConfidence: number;
   };
   rejections: ParsedRejection[];
+  // NEW: Comprehensive rejection analysis included in single call
+  rejectionAnalyses: RejectionAnalysisResult[];
+  overallStrategy: StrategyRecommendation;
   summary: {
     totalRejections: number;
     rejectionTypes: string[];
@@ -34,9 +48,17 @@ export interface SimpleOfficeActionAnalysis {
   };
 }
 
-const COMPREHENSIVE_OFFICE_ACTION_PROMPT = `You are a USPTO patent examiner analyzing an Office Action document. Extract ALL rejection information, metadata, and prior art references in a single comprehensive analysis.
+// Legacy interface for backward compatibility
+export interface SimpleOfficeActionAnalysis extends ComprehensiveOfficeActionAnalysis {}
 
-**TASK**: Parse this Office Action and extract every detail about rejections, claims, prior art, and document metadata.
+const COMPREHENSIVE_OFFICE_ACTION_PROMPT = `You are a USPTO patent examiner and experienced patent attorney analyzing an Office Action document. Extract ALL rejection information, metadata, prior art references, AND perform comprehensive rejection analysis in a SINGLE comprehensive analysis.
+
+**TASK**: Parse this Office Action and provide:
+1. Complete rejection parsing with metadata
+2. Strength analysis for each rejection  
+3. Strategic recommendations
+4. Overall response strategy
+5. Prosecution context awareness
 
 **REJECTION TYPE IDENTIFICATION**:
 - "35 U.S.C. § 102" or "Section 102" or "anticipated" → type: "§102"
@@ -56,54 +78,40 @@ const COMPREHENSIVE_OFFICE_ACTION_PROMPT = `You are a USPTO patent examiner anal
 - Foreign patents: "EP1234567", "WO2020123456"
 - Non-patent literature: papers, books, websites
 
-**COMPREHENSIVE LEGAL SUMMARY**:
-Generate a detailed, structured summary that attorneys can use for strategy. Include:
+**REJECTION STRENGTH ANALYSIS**:
+For each rejection, assess:
+- **STRONG**: Clear prior art mapping, solid examiner reasoning, difficult to overcome
+- **MODERATE**: Good prior art basis but some gaps in reasoning or mapping
+- **WEAK**: Significant gaps in examiner reasoning or prior art mapping
+- **FLAWED**: Major legal or factual errors in examiner's position
 
-1. **OVERVIEW**: Document type, main rejection pattern, overall tone
-2. **REJECTIONS BY TYPE**: Break down each § 102/103/101/112 with specific issues
-3. **DETAILED ISSUES**: Specific problems (antecedent basis, claim clarity, etc.)
-4. **OBJECTIONS**: Formal issues that require amendment but aren't rejections
-5. **WITHDRAWN/ALLOWED**: What the examiner conceded or withdrew
-6. **PRIOR ART ANALYSIS**: Key references and how they're being used
-7. **STRATEGIC IMPLICATIONS**: Response difficulty, timeline, recommended approach
-8. **SUMMARY TABLE**: Quick reference with rejection types, affected claims, issues
+Consider:
+- Quality of prior art citations
+- Completeness of element mapping
+- Examiner's reasoning strength
+- Legal correctness of rejection
+- Missing claim elements
+- Potential arguments available
 
-Format with clear section headers and structured organization:
-- Rejections (substantive issues)
-- Objections (formal issues)
-- Withdrawn/Allowed items
-- Prior art analysis
-- Strategic implications
+**STRATEGIC RECOMMENDATIONS**:
+For each rejection determine:
+- **ARGUE**: When examiner has clear errors or weak reasoning
+- **AMEND**: When prior art is strong but amendments can avoid it
+- **COMBINATION**: When both arguments and amendments are needed
 
-**DETAILED ANALYSIS INSTRUCTIONS**:
+Consider:
+- Strength of available arguments
+- Ease of amendment around prior art
+- Risk/reward of different approaches
+- Timeline and cost considerations
 
-For § 112 rejections, identify:
-- Antecedent basis issues ("the X" without prior "a X")
-- Ambiguous phrasing or confusing claim language
-- Written description/enablement problems
-- Indefiniteness issues
-
-For § 102/103 rejections, identify:
-- Specific prior art combinations
-- Key claim elements being mapped
-- Examiner's obviousness rationale
-- Missing elements or gaps in prior art
-
-For objections vs rejections:
-- Objections = formal issues (grammar, formatting) - easily fixed
-- Rejections = substantive issues - require argument or amendment
-
-For withdrawn items:
-- What was previously rejected but now withdrawn
-- Examiner's stated reason for withdrawal
-- Positive implications for response strategy
-
-For strategic implications:
-- Response difficulty (Easy/Medium/Hard)
-- Timeline and deadlines
-- Recommended approach (Argue/Amend/Combination)
-- Positive aspects to highlight
-- Main concerns to address
+**PROSECUTION CONTEXT AWARENESS**:
+Analyze within context of:
+- Document type (Non-Final vs Final vs Advisory Action)
+- Examiner tone and approach
+- Previously withdrawn rejections (positive sign)
+- Continuation of previous rejections (concerning pattern)
+- Timeline pressure (Final = more urgent)
 
 **RETURN VALID JSON ONLY**:
 
@@ -114,7 +122,7 @@ For strategic implications:
     "examinerName": "extract examiner name or null",
     "artUnit": "extract art unit or null",
     "confirmationNumber": "extract confirmation number or null",
-    "documentType": "Non-Final Office Action|Final Office Action|Notice of Allowance|Other",
+    "documentType": "Non-Final Office Action|Final Office Action|Advisory Action|Notice of Allowance|Other",
     "analysisConfidence": 0.95
   },
   "rejections": [
@@ -128,6 +136,35 @@ For strategic implications:
       "confidence": 0.95
     }
   ],
+  "rejectionAnalyses": [
+    {
+      "rejectionId": "same-id-as-rejection-above",
+      "strength": "STRONG|MODERATE|WEAK|FLAWED",
+      "confidenceScore": 0.85,
+      "examinerReasoningGaps": ["Missing element X", "Unclear mapping of Y"],
+      "recommendedStrategy": "ARGUE|AMEND|COMBINATION",
+      "strategyRationale": "Detailed explanation of why this strategy is recommended",
+      "argumentPoints": ["Point 1: Prior art doesn't teach X", "Point 2: Missing disclosure of Y"],
+      "amendmentSuggestions": ["Add limitation Z to claim 1", "Clarify term Y in claim 2"],
+      "analyzedAt": "current-iso-date",
+      "contextualInsights": [
+        {
+          "type": "OCR_UTILIZATION",
+          "description": "Analysis performed using complete Office Action OCR text",
+          "confidence": 0.95,
+          "source": "Office Action OCR"
+        }
+      ]
+    }
+  ],
+  "overallStrategy": {
+    "primaryStrategy": "ARGUE|AMEND|COMBINATION",
+    "alternativeStrategies": ["Alternative approach 1", "Alternative approach 2"],
+    "confidence": 0.8,
+    "reasoning": "Overall strategic reasoning considering all rejections",
+    "riskLevel": "LOW|MEDIUM|HIGH",
+    "keyConsiderations": ["Timeline is non-final", "Examiner seems reasonable", "Strong arguments available"]
+  },
   "summary": {
     "totalRejections": 1,
     "rejectionTypes": ["§103"],
@@ -178,35 +215,58 @@ For strategic implications:
 
 export class SimpleOfficeActionParserService {
   /**
-   * Parse Office Action with single comprehensive GPT call
+   * Parse Office Action with comprehensive single GPT call
+   * NEW: Includes rejection analysis and strategic recommendations
    */
   static async parseOfficeAction(
-    officeActionText: string
-  ): Promise<SimpleOfficeActionAnalysis> {
+    officeActionText: string,
+    prosecutionContext?: {
+      projectId: string;
+      applicationNumber?: string;
+      prosecutionRound?: number;
+      previousOfficeActions?: string[];
+    }
+  ): Promise<ComprehensiveOfficeActionAnalysis> {
     const startTime = Date.now();
     
-    logger.info('[SimpleOfficeActionParser] Starting comprehensive analysis', {
+    logger.info('[SimpleOfficeActionParser] Starting comprehensive analysis with prosecution context', {
       textLength: officeActionText.length,
       estimatedTokens: Math.ceil(officeActionText.length / 4),
+      hasContext: !!prosecutionContext,
+      prosecutionRound: prosecutionContext?.prosecutionRound,
     });
 
     try {
-      // Send full text to GPT with comprehensive prompt
-      const userPrompt = COMPREHENSIVE_OFFICE_ACTION_PROMPT.replace('{{officeActionText}}', officeActionText);
-      const systemMessage = 'You are a USPTO patent examiner assistant that analyzes Office Action documents. Provide structured JSON analysis of rejections and prior art.';
+      // Build enhanced prompt with prosecution context
+      let enhancedPrompt = COMPREHENSIVE_OFFICE_ACTION_PROMPT.replace('{{officeActionText}}', officeActionText);
       
-      // Debug log what we're sending to GPT
-      logger.info('[SimpleOfficeActionParser] Sending to GPT', {
+      if (prosecutionContext) {
+        const contextSection = `
+
+**PROSECUTION CONTEXT**:
+- Application Number: ${prosecutionContext.applicationNumber || 'Unknown'}
+- Prosecution Round: ${prosecutionContext.prosecutionRound || 1}
+- Previous Office Actions: ${prosecutionContext.previousOfficeActions?.length || 0}
+
+Consider this context when analyzing rejections and formulating strategy. If this is a later round, look for patterns of examiner behavior and repeated rejections.`;
+
+        enhancedPrompt = enhancedPrompt.replace('**OFFICE ACTION TEXT**:', contextSection + '\n\n**OFFICE ACTION TEXT**:');
+      }
+
+      const systemMessage = 'You are a USPTO patent examiner and experienced patent attorney that analyzes Office Action documents. Provide comprehensive structured JSON analysis including rejection parsing, strength assessment, and strategic recommendations in a single response.';
+      
+      logger.debug('[SimpleOfficeActionParser] Sending enhanced request to AI', {
         textLength: officeActionText.length,
         estimatedTokens: Math.ceil(officeActionText.length / 4),
+        hasContext: !!prosecutionContext,
       });
       
       const aiResponse = await processWithOpenAI(
-        userPrompt,
+        enhancedPrompt,
         systemMessage,
         {
-          temperature: 0.1, // Low temperature for consistent parsing
-          maxTokens: 4000,
+          temperature: 0.1, // Low temperature for consistent analysis
+          maxTokens: 8000, // Increased for comprehensive analysis
           response_format: { type: 'json_object' },
         }
       );
@@ -231,14 +291,16 @@ export class SimpleOfficeActionParserService {
       }
 
       // Validate and clean up the response
-      const analysis = this.validateAndCleanupResponse(parsedResult);
+      const analysis = this.validateAndCleanupComprehensiveResponse(parsedResult);
       
       const processingTime = Date.now() - startTime;
       
-      logger.info('[SimpleOfficeActionParser] Analysis completed successfully', {
+      logger.info('[SimpleOfficeActionParser] Comprehensive analysis completed successfully', {
         rejectionCount: analysis.rejections.length,
+        analysisCount: analysis.rejectionAnalyses.length,
         claimsRejected: analysis.summary.totalClaimsRejected,
         priorArtCount: analysis.summary.uniquePriorArtCount,
+        overallStrategy: analysis.overallStrategy.primaryStrategy,
         processingTime,
         documentType: analysis.metadata.documentType,
       });
@@ -248,10 +310,10 @@ export class SimpleOfficeActionParserService {
     } catch (error) {
       const processingTime = Date.now() - startTime;
       
-      logger.error('[SimpleOfficeActionParser] Analysis failed', {
+      logger.error('[SimpleOfficeActionParser] Comprehensive analysis failed', {
         error: error instanceof Error ? error.message : String(error),
-        processingTime,
         textLength: officeActionText.length,
+        processingTime,
       });
 
       if (error instanceof ApplicationError) {
@@ -259,18 +321,26 @@ export class SimpleOfficeActionParserService {
       }
 
       throw new ApplicationError(
-        ErrorCode.FILE_PROCESSING_ERROR,
-        `Office Action parsing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        ErrorCode.AI_SERVICE_ERROR,
+        `Office Action analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   }
 
   /**
-   * Validate and cleanup the AI response
+   * Validate and cleanup the AI response (legacy method)
    */
   private static validateAndCleanupResponse(rawResponse: any): SimpleOfficeActionAnalysis {
+    // Use the comprehensive validation but return legacy format for backward compatibility
+    return this.validateAndCleanupComprehensiveResponse(rawResponse);
+  }
+
+  /**
+   * Validate and cleanup the comprehensive AI response
+   */
+  private static validateAndCleanupComprehensiveResponse(rawResponse: any): ComprehensiveOfficeActionAnalysis {
     // Ensure required structure exists
-    const analysis: SimpleOfficeActionAnalysis = {
+    const analysis: ComprehensiveOfficeActionAnalysis = {
       metadata: {
         applicationNumber: rawResponse.metadata?.applicationNumber || null,
         mailingDate: rawResponse.metadata?.mailingDate || null,
@@ -281,6 +351,15 @@ export class SimpleOfficeActionParserService {
         analysisConfidence: rawResponse.metadata?.analysisConfidence || 0.8,
       },
       rejections: [],
+      rejectionAnalyses: [],
+      overallStrategy: {
+        primaryStrategy: 'ARGUE', // Default to ARGUE
+        alternativeStrategies: [],
+        confidence: 0.8,
+        reasoning: 'Default reasoning',
+        riskLevel: 'LOW',
+        keyConsiderations: [],
+      },
       summary: {
         totalRejections: 0,
         rejectionTypes: [],
@@ -383,6 +462,39 @@ export class SimpleOfficeActionParserService {
       // Use AI-generated summary if available, otherwise use our generated summary
       analysis.summary.userFriendlySummary = rawResponse.summary?.userFriendlySummary || summaryText;
       
+      // Process rejection analyses
+      if (Array.isArray(rawResponse.rejectionAnalyses)) {
+        const rejectionAnalyses: RejectionAnalysisResult[] = [];
+        for (const analysisResult of rawResponse.rejectionAnalyses) {
+          const rejectionAnalysis: RejectionAnalysisResult = {
+            rejectionId: analysisResult.rejectionId || uuidv4(), // Ensure a unique ID
+            strength: this.validateRejectionStrength(analysisResult.strength),
+            confidenceScore: analysisResult.confidenceScore || 0.8,
+            examinerReasoningGaps: Array.isArray(analysisResult.examinerReasoningGaps) ? analysisResult.examinerReasoningGaps : [],
+            recommendedStrategy: this.validateRecommendedStrategy(analysisResult.recommendedStrategy),
+            strategyRationale: analysisResult.strategyRationale || 'No specific rationale provided.',
+            argumentPoints: Array.isArray(analysisResult.argumentPoints) ? analysisResult.argumentPoints : [],
+            amendmentSuggestions: Array.isArray(analysisResult.amendmentSuggestions) ? analysisResult.amendmentSuggestions : [],
+            analyzedAt: analysisResult.analyzedAt || new Date().toISOString(),
+            contextualInsights: Array.isArray(analysisResult.contextualInsights) ? analysisResult.contextualInsights : [],
+          };
+          rejectionAnalyses.push(rejectionAnalysis);
+        }
+        analysis.rejectionAnalyses = rejectionAnalyses;
+      }
+
+      // Process overall strategy
+      if (rawResponse.overallStrategy) {
+        analysis.overallStrategy = {
+          primaryStrategy: this.validateRecommendedStrategy(rawResponse.overallStrategy.primaryStrategy),
+          alternativeStrategies: Array.isArray(rawResponse.overallStrategy.alternativeStrategies) ? rawResponse.overallStrategy.alternativeStrategies : [],
+          confidence: rawResponse.overallStrategy.confidence || 0.8,
+          reasoning: rawResponse.overallStrategy.reasoning || 'No specific reasoning provided.',
+          riskLevel: this.validateRiskLevel(rawResponse.overallStrategy.riskLevel),
+          keyConsiderations: Array.isArray(rawResponse.overallStrategy.keyConsiderations) ? rawResponse.overallStrategy.keyConsiderations : [],
+        };
+      }
+
       // Preserve detailed analysis from AI response
       // Check both locations where AI might put the detailed analysis
       if (rawResponse.summary?.detailedAnalysis) {
@@ -402,5 +514,29 @@ export class SimpleOfficeActionParserService {
   private static validateRejectionType(type: string): RejectionTypeValue {
     const validTypes: RejectionTypeValue[] = ['§101', '§102', '§103', '§112', 'OTHER'];
     return validTypes.includes(type as RejectionTypeValue) ? (type as RejectionTypeValue) : 'OTHER';
+  }
+
+  /**
+   * Validate rejection strength
+   */
+  private static validateRejectionStrength(strength: string): RejectionStrength {
+    const validStrengths: RejectionStrength[] = ['STRONG', 'MODERATE', 'WEAK', 'FLAWED'];
+    return validStrengths.includes(strength as RejectionStrength) ? (strength as RejectionStrength) : 'STRONG'; // Default to STRONG
+  }
+
+  /**
+   * Validate recommended strategy
+   */
+  private static validateRecommendedStrategy(strategy: string): RecommendedStrategy {
+    const validStrategies: RecommendedStrategy[] = ['ARGUE', 'AMEND', 'COMBINATION'];
+    return validStrategies.includes(strategy as RecommendedStrategy) ? (strategy as RecommendedStrategy) : 'ARGUE'; // Default to ARGUE
+  }
+
+  /**
+   * Validate risk level
+   */
+  private static validateRiskLevel(level: string): StrategyRecommendation['riskLevel'] {
+    const validLevels: StrategyRecommendation['riskLevel'][] = ['LOW', 'MEDIUM', 'HIGH'];
+    return validLevels.includes(level as StrategyRecommendation['riskLevel']) ? (level as StrategyRecommendation['riskLevel']) : 'LOW'; // Default to LOW
   }
 } 

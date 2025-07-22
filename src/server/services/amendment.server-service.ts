@@ -35,6 +35,11 @@ import {
   ArgumentSection,
 } from '@/types/domain/amendment';
 import { ParsedOfficeActionData } from '@/types/amendment';
+import type {
+  RejectionAnalysisResult,
+  StrategyRecommendation,
+  RejectionStrength
+} from '@/types/domain/rejection-analysis';
 import { 
   findOfficeActionById,
   updateOfficeActionParsedData,
@@ -197,9 +202,15 @@ export class AmendmentServerService {
         textLength: extractedText.length,
       });
 
-      // Use simple single-pass analysis (much faster and cheaper!)
+      // Get prosecution context for enhanced AI analysis
+      const prosecutionContext = await this.buildProsecutionContext(officeActionId);
+
+      // Use comprehensive single-pass analysis (includes rejection analysis and strategy!)
       const { SimpleOfficeActionParserService } = await import('./simple-office-action-parser.server-service');
-      const parseResult = await SimpleOfficeActionParserService.parseOfficeAction(extractedText);
+      const parseResult = await SimpleOfficeActionParserService.parseOfficeAction(
+        extractedText,
+        prosecutionContext
+      );
 
       // Transform enhanced parser result to repository format
       const parsedData: ParsedOfficeActionData = {
@@ -237,7 +248,7 @@ export class AmendmentServerService {
         officeActionId,
         tenantId,
         parsedData,
-        'PARSED'
+        'COMPLETED' // Mark as COMPLETED since we have comprehensive analysis
       );
 
       // Create rejection records if any rejections were found
@@ -255,6 +266,14 @@ export class AmendmentServerService {
         
         await createRejections(rejectionCreateData);
         rejectionCount = parsedData.rejections.length;
+
+        // NEW: Store comprehensive rejection analysis results in database
+        await this.storeRejectionAnalysisResults(
+          officeActionId,
+          parseResult.rejectionAnalyses,
+          parseResult.overallStrategy,
+          tenantId
+        );
       }
 
       logger.info('[AmendmentService] Office Action parsing completed', {
@@ -263,40 +282,13 @@ export class AmendmentServerService {
         hasDetailedAnalysis: !!parsedData.detailedAnalysis,
       });
 
-      // Trigger comprehensive orchestration pipeline if enabled
-      try {
-        const enableOrchestration = process.env.ENABLE_OA_ORCHESTRATION === 'true';
-        if (enableOrchestration && rejectionCount > 0) {
-          logger.info('[AmendmentService] Queuing orchestration job', {
-            officeActionId,
-            projectId: await this.getProjectIdForOfficeAction(officeActionId),
-          });
-          
-          // Queue orchestration job instead of running directly
-          const { OfficeActionOrchestrationJob } = await import('../jobs/office-action-orchestration.job');
-          const projectId = await this.getProjectIdForOfficeAction(officeActionId);
-          
-          const jobId = await OfficeActionOrchestrationJob.enqueue({
-            officeActionId,
-            projectId,
-            tenantId,
-          });
-          
-          logger.info('[AmendmentService] Orchestration job queued', {
-            officeActionId,
-            jobId,
-          });
-          
-          // Update OA status to indicate processing
-          await updateOfficeActionStatus(officeActionId, tenantId, 'PROCESSING');
-        }
-      } catch (orchestrationError) {
-        // Don't fail the parsing if orchestration fails
-        logger.error('[AmendmentService] Failed to queue orchestration job', {
-          officeActionId,
-          error: orchestrationError instanceof Error ? orchestrationError.message : String(orchestrationError),
-        });
-      }
+      // Orchestration is no longer needed - comprehensive analysis is complete!
+      logger.info('[AmendmentService] Comprehensive analysis completed - skipping orchestration', {
+        officeActionId,
+        rejectionCount,
+        hasRejectionAnalysis: parseResult.rejectionAnalyses?.length > 0,
+        overallStrategy: parseResult.overallStrategy?.primaryStrategy,
+      });
 
       return {
         success: true,
@@ -881,5 +873,167 @@ Generate a comprehensive amendment response that demonstrates the deep understan
     }
     
     return officeAction.projectId;
+  }
+
+  /**
+   * Build prosecution context for enhanced AI analysis
+   */
+  private static async buildProsecutionContext(officeActionId: string): Promise<{
+    projectId: string;
+    applicationNumber?: string;
+    prosecutionRound?: number;
+    previousOfficeActions?: string[];
+  }> {
+    try {
+      // Get the office action and related project info
+      const officeAction = await findOfficeActionById(officeActionId);
+      if (!officeAction) {
+        logger.warn('[AmendmentService] Office Action not found for prosecution context', {
+          officeActionId,
+        });
+        return { projectId: '' };
+      }
+
+      // Get project and application info
+      const project = await prisma?.project.findUnique({
+        where: { id: officeAction.projectId },
+        include: {
+          patentApplication: true,
+          officeActions: {
+            where: {
+              id: { not: officeActionId }, // Exclude current OA
+            },
+            orderBy: { createdAt: 'asc' },
+            select: { id: true, dateIssued: true, status: true },
+          },
+        },
+      });
+
+      if (!project) {
+        return { projectId: officeAction.projectId };
+      }
+
+      // Build context
+      const context = {
+        projectId: project.id,
+        applicationNumber: project.patentApplication?.applicationNumber || undefined,
+        prosecutionRound: (project.officeActions?.length || 0) + 1, // Current round
+        previousOfficeActions: project.officeActions?.map(oa => oa.id) || [],
+      };
+
+      logger.debug('[AmendmentService] Built prosecution context', {
+        officeActionId,
+        context,
+      });
+
+      return context;
+
+    } catch (error) {
+      logger.warn('[AmendmentService] Failed to build prosecution context', {
+        officeActionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      // Return minimal context on error
+      return { projectId: '' };
+    }
+  }
+
+  /**
+   * Store comprehensive rejection analysis results in database
+   */
+  private static async storeRejectionAnalysisResults(
+    officeActionId: string,
+    rejectionAnalyses: RejectionAnalysisResult[],
+    overallStrategy: StrategyRecommendation,
+    tenantId: string
+  ): Promise<void> {
+    try {
+      logger.info('[AmendmentService] Storing comprehensive analysis results', {
+        officeActionId,
+        analysisCount: rejectionAnalyses.length,
+        strategy: overallStrategy.primaryStrategy,
+      });
+
+      // Store rejection analysis results
+      for (const analysis of rejectionAnalyses) {
+        try {
+          await prisma?.rejectionAnalysisResult.create({
+            data: {
+              rejectionId: analysis.rejectionId,
+              officeActionId,
+              analysisType: 'COMPREHENSIVE',
+              strengthScore: this.mapStrengthToScore(analysis.strength),
+              priorArtMapping: JSON.stringify({
+                examinerReasoningGaps: analysis.examinerReasoningGaps,
+                argumentPoints: analysis.argumentPoints,
+                amendmentSuggestions: analysis.amendmentSuggestions,
+              }),
+              suggestedStrategy: analysis.recommendedStrategy,
+              reasoning: analysis.strategyRationale,
+              confidenceScore: analysis.confidenceScore,
+              modelVersion: 'gpt-4-comprehensive',
+              agentVersion: '2.0.0',
+              model: 'gpt-4',
+            },
+          });
+        } catch (rejectionError) {
+          logger.warn('[AmendmentService] Failed to store rejection analysis', {
+            rejectionId: analysis.rejectionId,
+            error: rejectionError instanceof Error ? rejectionError.message : String(rejectionError),
+          });
+        }
+      }
+
+      // Store overall strategy recommendation  
+      try {
+        await prisma?.strategyRecommendation.create({
+          data: {
+            officeActionId,
+            overallStrategy: overallStrategy.primaryStrategy,
+            priorityActions: JSON.stringify(overallStrategy.alternativeStrategies),
+            reasoning: overallStrategy.reasoning,
+            confidence: overallStrategy.confidence,
+            riskLevel: overallStrategy.riskLevel,
+            analysisType: 'COMPREHENSIVE',
+            modelVersion: 'gpt-4-comprehensive',
+            agentVersion: '2.0.0',
+          },
+        });
+      } catch (strategyError) {
+        logger.warn('[AmendmentService] Failed to store strategy recommendation', {
+          officeActionId,
+          error: strategyError instanceof Error ? strategyError.message : String(strategyError),
+        });
+      }
+
+      logger.info('[AmendmentService] Successfully stored comprehensive analysis results', {
+        officeActionId,
+        analysisCount: rejectionAnalyses.length,
+      });
+
+    } catch (error) {
+      logger.error('[AmendmentService] Failed to store rejection analysis results', {
+        officeActionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      
+      // Don't throw - this is a storage optimization, not critical
+      // The comprehensive analysis is still available in memory and can be used
+    }
+  }
+
+  /**
+   * Map rejection strength to numeric score for database storage
+   */
+  private static mapStrengthToScore(strength: RejectionStrength): number {
+    const strengthMap: Record<RejectionStrength, number> = {
+      'STRONG': 0.9,
+      'MODERATE': 0.7,
+      'WEAK': 0.4,
+      'FLAWED': 0.1,
+    };
+    
+    return strengthMap[strength] || 0.8;
   }
 } 

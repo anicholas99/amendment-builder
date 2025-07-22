@@ -17,7 +17,8 @@ import {
   ChevronDown,
   ChevronRight,
   Scale,
-  Target
+  Target,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +38,7 @@ interface RejectionAnalysisPanelProps {
   onSelectRejection?: (rejectionId: string) => void;
   selectedRejectionId?: string | null;
   onGenerateAmendment?: () => void;
+  isGeneratingAmendment?: boolean;
   className?: string;
 }
 
@@ -75,6 +77,7 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
   onSelectRejection,
   selectedRejectionId,
   onGenerateAmendment,
+  isGeneratingAmendment = false,
   className,
 }) => {
   const [expandedRejections, setExpandedRejections] = useState<Set<string>>(new Set());
@@ -163,8 +166,15 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
             </div>
           </div>
 
-          <Button onClick={onGenerateAmendment} className="w-full">
-            Generate Amendment Response
+          <Button onClick={onGenerateAmendment} className="w-full" disabled={isGeneratingAmendment}>
+            {isGeneratingAmendment ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              'Generate Amendment Response'
+            )}
           </Button>
         </CardContent>
       </Card>
@@ -176,7 +186,14 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
         </CardHeader>
         <CardContent className="space-y-3">
           {analyses.map((analysis, index) => {
-            const strengthConfig = STRENGTH_LABELS[analysis.strength];
+            // Debug: Log the analysis data to understand the structure
+            console.log('🔍 Analysis data:', { 
+              strength: analysis.strength, 
+              rejectionId: analysis.rejectionId,
+              hasStrengthConfig: !!STRENGTH_LABELS[analysis.strength]
+            });
+            
+            const strengthConfig = STRENGTH_LABELS[analysis.strength] || STRENGTH_LABELS.MODERATE;
             const isExpanded = expandedRejections.has(analysis.rejectionId);
 
             return (
