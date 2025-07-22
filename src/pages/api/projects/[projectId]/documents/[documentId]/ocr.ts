@@ -19,6 +19,108 @@ const querySchema = z.object({
 });
 
 /**
+ * Convert PDF to individual page images (same as working test page)
+ */
+async function convertPDFToImages(pdfBuffer: Buffer): Promise<Buffer[]> {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pdf-convert-'));
+  const pdfPath = path.join(tempDir, 'input.pdf');
+  
+  let tempFiles: string[] = [pdfPath];
+  
+  try {
+    // Write PDF to temp file
+    await fs.writeFile(pdfPath, pdfBuffer);
+    
+    // Use pdf-poppler to convert PDF to images
+    const poppler = await import('pdf-poppler');
+    
+    const opts = {
+      format: 'png' as const,
+      out_dir: tempDir,
+      out_prefix: 'page',
+      page: null, // Convert all pages
+      scale: 1024, // Higher scale for better OCR accuracy
+    };
+    
+    await poppler.convert(pdfPath, opts);
+    
+    // Read all generated images
+    const files = await fs.readdir(tempDir);
+    const imageFiles = files
+      .filter(f => f.startsWith('page') && f.endsWith('.png'))
+      .sort(); // Ensure correct page order
+    
+    const images: Buffer[] = [];
+    
+    for (const file of imageFiles) {
+      const imagePath = path.join(tempDir, file);
+      tempFiles.push(imagePath);
+      const imageBuffer = await fs.readFile(imagePath);
+      images.push(imageBuffer);
+    }
+    
+    logger.info('[OCR] PDF converted to images', {
+      pageCount: images.length,
+      tempDir,
+    });
+    
+    return images;
+  } catch (error) {
+    logger.error('[OCR] PDF to images conversion failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw new Error('Failed to convert PDF to images');
+  } finally {
+    // Clean up temp files
+    for (const file of tempFiles) {
+      try {
+        await fs.unlink(file);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
+    try {
+      await fs.rmdir(tempDir);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+  }
+}
+
+
+
+/**
+ * Check if a document is a CLAIM document that needs strikethrough removal
+ */
+function isClaimDoc(document: any): boolean {
+  // Check USPTO document code (primary indicator)
+  if (document.usptoDocumentCode) {
+    const code = document.usptoDocumentCode.toUpperCase();
+    if (code === 'CLM' || code.includes('CLAIM')) {
+      return true;
+    }
+  }
+  
+  // Check filename as secondary indicator
+  if (document.originalName) {
+    const filename = document.originalName.toUpperCase();
+    if (filename.includes('CLM') || filename.includes('CLAIM')) {
+      return true;
+    }
+  }
+  
+  // Check document category
+  if (document.documentCategory) {
+    const category = document.documentCategory.toLowerCase();
+    if (category === 'claims' || category.includes('claim')) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
  * OCR API Handler
  * Simple OCR processing that matches the "New Response" button logic
  * 
@@ -151,13 +253,138 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           blobName,
         });
 
-        // Create formidable-like file object (same as process-timeline.ts)
-        const fileObject = {
-          filepath: tempFilePath,
-          originalFilename: document.originalName,
-          mimetype: 'application/pdf',
-          size: 0,
-        } as any;
+        // Check if this is a CLAIM document that needs strikethrough removal
+        const isClaimDocument = isClaimDoc(document);
+        
+        // Declare fileObject variable that will be used for text extraction
+        let fileObject: any;
+        
+        // If it's a claim document, preprocess with strikethrough removal
+        if (isClaimDocument) {
+          logger.info('[OCR] Claim document detected - applying strikethrough removal', {
+            documentId,
+            fileName: document.originalName,
+            usptoDocumentCode: (document as any).usptoDocumentCode,
+          });
+          
+          try {
+            // Import our strikethrough removal function
+            const { removeStrikethroughsCanvas } = await import('@/lib/image-processing/strikethrough-removal');
+            
+            // Read the PDF file
+            const pdfBuffer = await fs.readFile(tempFilePath);
+            
+            // Convert PDF to images first (same as working test page)
+            const images = await convertPDFToImages(pdfBuffer);
+            
+            // Apply strikethrough removal to each image and process with OCR
+            let allExtractedText = '';
+            
+            for (let i = 0; i < images.length; i++) {
+              try {
+                // Apply strikethrough removal to this page
+                const processedImage = await removeStrikethroughsCanvas(images[i]);
+                
+                logger.debug('[OCR] Processed page for strikethrough removal', {
+                  documentId,
+                  pageNumber: i + 1,
+                  originalSize: images[i].length,
+                  processedSize: processedImage.length,
+                });
+                
+                // Extract text from processed image using Azure Computer Vision
+                const { AzureComputerVisionOCRService } = await import('@/server/services/azure-computer-vision-ocr.server-service');
+                const ocrResult = await AzureComputerVisionOCRService.extractTextFromDocument(
+                  processedImage,
+                  { language: 'en' }
+                );
+                
+                // Add page text with separator
+                if (allExtractedText) {
+                  allExtractedText += '\n\n=== Page ' + (i + 1) + ' ===\n\n';
+                }
+                allExtractedText += ocrResult.content;
+                
+                logger.debug('[OCR] Page OCR completed', {
+                  documentId,
+                  pageNumber: i + 1,
+                  confidence: ocrResult.metadata.confidence,
+                  textLength: ocrResult.content.length,
+                });
+                
+              } catch (pageError) {
+                logger.warn('[OCR] Page processing failed, using original image', {
+                  documentId,
+                  pageNumber: i + 1,
+                  error: pageError instanceof Error ? pageError.message : String(pageError),
+                });
+                
+                // Try OCR on original image for this page
+                try {
+                  const { AzureComputerVisionOCRService } = await import('@/server/services/azure-computer-vision-ocr.server-service');
+                  const ocrResult = await AzureComputerVisionOCRService.extractTextFromDocument(
+                    images[i],
+                    { language: 'en' }
+                  );
+                  
+                  if (allExtractedText) {
+                    allExtractedText += '\n\n=== Page ' + (i + 1) + ' ===\n\n';
+                  }
+                  allExtractedText += ocrResult.content;
+                } catch (ocrError) {
+                  logger.error('[OCR] Page OCR also failed', {
+                    documentId,
+                    pageNumber: i + 1,
+                    error: ocrError instanceof Error ? ocrError.message : String(ocrError),
+                  });
+                  
+                  if (allExtractedText) {
+                    allExtractedText += '\n\n=== Page ' + (i + 1) + ' ===\n\n';
+                  }
+                  allExtractedText += `[OCR failed for page ${i + 1}]`;
+                }
+              }
+            }
+            
+            // Save the extracted text directly
+            await projectDocumentRepository.updateOCRResult(documentId, allExtractedText);
+            
+            logger.info('[OCR] Strikethrough removal and OCR completed', {
+              documentId,
+              originalSize: pdfBuffer.length,
+              pagesProcessed: images.length,
+              totalTextLength: allExtractedText.length,
+            });
+            
+            // Skip the normal OCR processing since we already did it
+            return;
+            
+            // Clean up original temp file
+            await fs.unlink(tempFilePath);
+            
+          } catch (strikethroughError) {
+            logger.warn('[OCR] Strikethrough removal failed, proceeding with original document', {
+              documentId,
+              error: strikethroughError instanceof Error ? strikethroughError.message : String(strikethroughError),
+            });
+            
+            // Fall back to original file if strikethrough removal fails
+            fileObject = {
+              filepath: tempFilePath,
+              originalFilename: document.originalName,
+              mimetype: 'application/pdf',
+              size: 0,
+            };
+          }
+        } else {
+          // Regular document - create file object normally
+          fileObject = {
+            filepath: tempFilePath,
+            originalFilename: document.originalName,
+            mimetype: 'application/pdf',
+            size: 0,
+          };
+        }
 
         // Use the SAME text extraction method as "New Response" button
         let extractedText: string;
@@ -181,8 +408,15 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           });
         }
 
-        // Clean up temp file
-        await fs.unlink(tempFilePath);
+        // Clean up temp file(s)
+        try {
+          await fs.unlink(fileObject.filepath);
+        } catch (cleanupError) {
+          logger.warn('[OCR] Failed to clean up temp file', {
+            tempFile: fileObject.filepath,
+            error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          });
+        }
 
         // Save OCR results to database
         await projectDocumentRepository.updateOCRResult(documentId, extractedText);
