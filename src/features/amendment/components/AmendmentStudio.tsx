@@ -168,6 +168,15 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
   const { data: overallStrategy, refetch: refetchStrategy } = useStrategyRecommendation(selectedOfficeActionId || '', projectId);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
+  // Sync URL parameter with component state on mount and when URL changes
+  useEffect(() => {
+    if (officeActionId && officeActionId !== selectedOfficeActionId) {
+      setSelectedOfficeActionId(officeActionId);
+      setShowProjects(false);
+      logger.info('[AmendmentStudio] Synced officeActionId from URL', { officeActionId });
+    }
+  }, [officeActionId, selectedOfficeActionId]);
+  
   // Create adapted analysis data structure
   const analysisData = useMemo(() => {
     if (!analyses) return null;
@@ -378,17 +387,47 @@ export const AmendmentStudio: React.FC<AmendmentStudioProps> = ({
     }
   }, [projectId, selectedOfficeActionId]);
 
-  // Handler to open draft inline (no routing)
+  // Handler to open draft with URL update
   const handleOpenDraft = useCallback((officeActionId: string) => {
     setSelectedOfficeActionId(officeActionId);
     setShowProjects(false);
-  }, []);
+    
+    // Update URL to include the officeActionId
+    const currentPath = router.pathname;
+    const query = { ...router.query, officeActionId };
+    
+    router.push(
+      {
+        pathname: currentPath,
+        query,
+      },
+      undefined,
+      { shallow: true }
+    );
+    
+    logger.info('[AmendmentStudio] Opened draft and updated URL', { officeActionId });
+  }, [router]);
 
   // Handler to go back to projects list
   const handleGoBack = useCallback(() => {
     setSelectedOfficeActionId(null);
     setShowProjects(true);
-  }, []);
+    
+    // Remove officeActionId from URL
+    const currentPath = router.pathname;
+    const { officeActionId, ...restQuery } = router.query;
+    
+    router.push(
+      {
+        pathname: currentPath,
+        query: restQuery,
+      },
+      undefined,
+      { shallow: true }
+    );
+    
+    logger.info('[AmendmentStudio] Went back to projects list and cleared URL');
+  }, [router]);
 
   if (showProjects) {
     // Use enhanced UI by default, with fallback to legacy

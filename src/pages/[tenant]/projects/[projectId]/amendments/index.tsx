@@ -33,6 +33,7 @@ const AmendmentsPage: React.FC<AmendmentsPageProps> = ({
   projectName,
 }) => {
   const router = useRouter();
+  const { officeActionId } = router.query as { officeActionId?: string };
 
   // ============ COMPUTED VALUES ============
   
@@ -64,6 +65,7 @@ const AmendmentsPage: React.FC<AmendmentsPageProps> = ({
       <AppLayout>
         <AmendmentStudio 
           projectId={projectId}
+          officeActionId={officeActionId}
         />
       </AppLayout>
     </>
