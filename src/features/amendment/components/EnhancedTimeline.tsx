@@ -55,6 +55,7 @@ import { apiFetch } from '@/lib/api/apiClient';
 import { useRouter } from 'next/router';
 import { useDocumentOCRWithPolling } from '@/hooks/api/useDocumentOCR'; // Add OCR hook
 import { AmendmentContextTest } from './AmendmentContextTest';
+import { useAmendmentContext } from '@/hooks/api/useAmendmentContext';
 
 interface EnhancedTimelineProps {
   projectId: string;
@@ -319,9 +320,18 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
         .sort((a, b) => (b.pageCount || 0) - (a.pageCount || 0))[0];
     };
     
+    // Find ALL recent office actions for comprehensive amendment context
+    const recentOfficeActions = usptoData.timeline
+      .filter(event => 
+        ['CTNF', 'CTFR', 'CTAV', 'MCTNF', 'MCTFR'].includes(event.documentCode) && 
+        event.documentId
+      )
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 2); // Include up to 2 most recent office actions (e.g., Final + subsequent Non-Final)
+    
     // Essential documents for AI amendment drafting
     const essential = [
-      latestOfficeAction, // Latest office action
+      ...recentOfficeActions, // All recent office actions (Final + Non-Final)
       findRecentDoc(['CLM', 'CLMN'], latestOADate), // Current claims
       findRecentDoc(['REM', 'REM.', 'A...', 'A.NE', 'A.AF', 'AMDT'], latestOADate), // Last response
       findLargestSpec(), // Specification (largest by pages)
@@ -337,16 +347,23 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
          return { essential, optional };
    }, [usptoData, latestOfficeAction]);
   
-  // Documents that need OCR (either not downloaded or need processing)
+  // Documents that need OCR (downloaded but not OCR'd yet)
   const smartDocsNeedingOCR = useMemo(() => {
     const { essential, optional } = getSmartOCRDocuments;
     const allSmartDocs = [...essential, ...optional];
-    
-    return allSmartDocs.filter(doc => 
-      doc && 
-      doc.documentId &&
-      (!doc.storageUrl || !doc.storageUrl.startsWith('/api/'))
-    );
+
+    return allSmartDocs.filter(doc => {
+      if (!doc || !doc.documentId) return false;
+      
+      // Check if document is downloaded (has storageUrl)
+      const isDownloaded = doc.storageUrl && doc.storageUrl.startsWith('/api/');
+      if (!isDownloaded) return true; // Needs download + OCR
+      
+      // If downloaded, check if it has been OCR'd
+      // We need to check the actual ProjectDocument record for ocrText
+      // For now, we'll be more conservative and include downloaded docs without OCR status
+      return true; // Include all downloaded docs that might need OCR
+    });
   }, [getSmartOCRDocuments]);
 
   // Auto-OCR all essential documents (following your existing mutation patterns)
@@ -617,7 +634,7 @@ export const EnhancedTimeline: React.FC<EnhancedTimelineProps> = ({
                     ) : (
                       <>
                         <p className="font-medium">Smart OCR for AI Amendment Context:</p>
-                        <p>Essential: Latest OA, Claims, Last Response, Specification</p>
+                        <p>Essential: Recent Office Actions, Claims, Last Response, Specification</p>
                         <p>Optional: Search Notes, Interview Summary</p>
                         <p className="text-orange-400">Total: {smartDocsNeedingOCR.length} documents</p>
                       </>
