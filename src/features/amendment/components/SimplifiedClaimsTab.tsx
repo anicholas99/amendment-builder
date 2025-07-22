@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { SimpleMainPanel } from '@/components/common/SimpleMainPanel';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -233,195 +234,201 @@ export function SimplifiedClaimsTab({
   }
 
   return (
-    <div className={cn("p-6 space-y-6", className)}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Amendment Response
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {amendmentData 
-              ? `${amendmentData.claims.length} claims • ${amendmentData.claims.filter(c => c.wasAmended).length} amended`
-              : 'Generate amendments based on Office Action rejections'
-            }
-          </p>
-        </div>
-        
-        <Button
-          onClick={handleGenerateResponse}
-          disabled={isGenerating}
-          size="lg"
-          className="min-w-[140px]"
-        >
-          {isGenerating ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Wand2 className="h-4 w-4 mr-2" />
-              Generate Amendment Response
-            </>
-          )}
-        </Button>
-      </div>
-
-      {/* No data state */}
-      {!amendmentData && !isLoading && (
-        <Card className="p-8 text-center">
-          <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-          <h3 className="text-lg font-semibold mb-2">No Amendment Response Generated</h3>
-          <p className="text-muted-foreground mb-4">
-            Click "Generate Amendment Response" to analyze the Office Action and create amendments for all claims.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            This will automatically get the OCR text of your previous claims and amend them based on the rejection analysis.
-          </p>
-        </Card>
-      )}
-
-      {/* Claims list */}
-      {amendmentData && (
-        <div className="space-y-6">
-          {/* Summary */}
-          {amendmentData.summary && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Amendment Strategy:</strong> {amendmentData.summary}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Claims */}
-          <div className="space-y-4">
-            {amendmentData.claims.map((claim) => (
-              <Card key={claim.claimNumber} className="overflow-hidden">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Badge variant="outline" className="font-mono">
-                        Claim {claim.claimNumber}
-                      </Badge>
-                      
-                      {claim.wasAmended ? (
-                        <Badge variant="default" className="bg-blue-500">
-                          Amended
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">
-                          No Amendment Needed
-                        </Badge>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {/* Show/Hide Original Toggle */}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleShowOriginal(claim.claimNumber)}
-                        className="text-muted-foreground"
-                      >
-                        {showOriginal[claim.claimNumber] ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-
-                      {/* Edit button */}
-                      {editingClaim === claim.claimNumber ? (
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleSaveEdit(claim.claimNumber)}
-                          >
-                            <Save className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleCancelEdit}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleStartEdit(claim)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
-                  {/* Original text (collapsible) */}
-                  {showOriginal[claim.claimNumber] && (
-                    <div className="p-3 bg-muted/50 rounded border">
-                      <p className="text-sm font-medium mb-2 text-muted-foreground">
-                        Original Claim Text:
-                      </p>
-                      <div className="font-mono text-sm leading-relaxed">
-                        {claim.originalText}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Amended text */}
-                  <div>
-                    <p className="text-sm font-medium mb-2">
-                      {claim.wasAmended ? 'Amended Claim Text:' : 'Claim Text:'}
-                    </p>
-                    
-                    {editingClaim === claim.claimNumber ? (
-                      <Textarea
-                        value={editedText}
-                        onChange={(e) => setEditedText(e.target.value)}
-                        className="min-h-[120px] font-mono text-sm"
-                        placeholder="Enter amended claim text..."
-                      />
-                    ) : (
-                      <div className={cn(
-                        "p-3 rounded border font-mono text-sm leading-relaxed whitespace-pre-wrap",
-                        claim.wasAmended 
-                          ? "bg-blue-50 border-blue-200" 
-                          : "bg-gray-50 border-gray-200"
-                      )}>
-                        {claim.amendedText}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Amendment reasoning */}
-                  <div className="pt-2 border-t">
-                    <p className="text-sm font-medium mb-2">
-                      {claim.wasAmended ? 'Amendment Reasoning:' : 'Status:'}
-                    </p>
-                    <div className={cn(
-                      "p-3 rounded text-sm",
-                      claim.wasAmended 
-                        ? "bg-amber-50 border border-amber-200" 
-                        : "bg-green-50 border border-green-200"
-                    )}>
-                      {claim.amendmentReason}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+    <SimpleMainPanel
+      header={
+        <div className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Amendment Response
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {amendmentData 
+                  ? `${amendmentData.claims.length} claims • ${amendmentData.claims.filter(c => c.wasAmended).length} amended`
+                  : 'Generate amendments based on Office Action rejections'
+                }
+              </p>
+            </div>
+            
+            <Button
+              onClick={handleGenerateResponse}
+              disabled={isGenerating}
+              size="lg"
+              className="min-w-[140px]"
+            >
+              {isGenerating ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-4 w-4 mr-2" />
+                  Generate Amendment Response
+                </>
+              )}
+            </Button>
           </div>
         </div>
-      )}
-    </div>
+      }
+      contentPadding={true}
+    >
+      <div className="space-y-6">
+        {/* No data state */}
+        {!amendmentData && !isLoading && (
+          <Card className="p-8 text-center">
+            <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-semibold mb-2">No Amendment Response Generated</h3>
+            <p className="text-muted-foreground mb-4">
+              Click "Generate Amendment Response" to analyze the Office Action and create amendments for all claims.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              This will automatically get the OCR text of your previous claims and amend them based on the rejection analysis.
+            </p>
+          </Card>
+        )}
+
+        {/* Claims list */}
+        {amendmentData && (
+          <div className="space-y-6">
+            {/* Summary */}
+            {amendmentData.summary && (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Amendment Strategy:</strong> {amendmentData.summary}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Claims */}
+            <div className="space-y-4">
+                {amendmentData.claims.map((claim) => (
+                  <Card key={claim.claimNumber} className="overflow-hidden">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Badge variant="outline" className="font-mono">
+                            Claim {claim.claimNumber}
+                          </Badge>
+                          
+                          {claim.wasAmended ? (
+                            <Badge variant="default" className="bg-blue-500">
+                              Amended
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">
+                              No Amendment Needed
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {/* Show/Hide Original Toggle */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleShowOriginal(claim.claimNumber)}
+                            className="text-muted-foreground"
+                          >
+                            {showOriginal[claim.claimNumber] ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </Button>
+
+                          {/* Edit button */}
+                          {editingClaim === claim.claimNumber ? (
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleSaveEdit(claim.claimNumber)}
+                              >
+                                <Save className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleCancelEdit}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleStartEdit(claim)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="space-y-4">
+                      {/* Original text (collapsible) */}
+                      {showOriginal[claim.claimNumber] && (
+                        <div className="p-3 bg-muted/50 rounded border">
+                          <p className="text-sm font-medium mb-2 text-muted-foreground">
+                            Original Claim Text:
+                          </p>
+                          <div className="font-mono text-sm leading-relaxed">
+                            {claim.originalText}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Amended text */}
+                      <div>
+                        <p className="text-sm font-medium mb-2">
+                          {claim.wasAmended ? 'Amended Claim Text:' : 'Claim Text:'}
+                        </p>
+                        
+                        {editingClaim === claim.claimNumber ? (
+                          <Textarea
+                            value={editedText}
+                            onChange={(e) => setEditedText(e.target.value)}
+                            className="min-h-[120px] font-mono text-sm"
+                            placeholder="Enter amended claim text..."
+                          />
+                        ) : (
+                          <div className={cn(
+                            "p-3 rounded border font-mono text-sm leading-relaxed whitespace-pre-wrap",
+                            claim.wasAmended 
+                              ? "bg-blue-50 border-blue-200" 
+                              : "bg-gray-50 border-gray-200"
+                          )}>
+                            {claim.amendedText}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Amendment reasoning */}
+                      <div className="pt-2 border-t">
+                        <p className="text-sm font-medium mb-2">
+                          {claim.wasAmended ? 'Amendment Reasoning:' : 'Status:'}
+                        </p>
+                        <div className={cn(
+                          "p-3 rounded text-sm",
+                          claim.wasAmended 
+                            ? "bg-amber-50 border border-amber-200" 
+                            : "bg-green-50 border border-green-200"
+                        )}>
+                          {claim.amendmentReason}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </SimpleMainPanel>
   );
 } 
