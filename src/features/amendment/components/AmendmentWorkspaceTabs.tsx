@@ -104,35 +104,32 @@ export function AmendmentWorkspaceTabs({
         </TabsList>
 
         <TabsContent value="analysis" className="flex-1 mt-0 overflow-hidden">
-          <ScrollArea className="h-full">
-            <div className="p-6">
-              {!selectedOfficeAction ? (
-                <div className="text-center py-12 text-gray-500">
-                  <FileSearch className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <h3 className="font-medium mb-2">No Office Action Selected</h3>
-                  <p className="text-sm">Select an Office Action to begin analysis</p>
-                </div>
-              ) : !hasRejections ? (
-                <div className="text-center py-12 text-gray-500">
-                  <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-400" />
-                  <h3 className="font-medium mb-2">No Rejections Found</h3>
-                  <p className="text-sm">This Office Action contains no rejections to analyze</p>
-                </div>
-              ) : (
-                <RejectionAnalysisPanel
-                  projectId={projectId}
-                  officeAction={selectedOfficeAction}
-                  analyses={analyses}
-                  overallStrategy={overallStrategy}
-                  isAnalyzing={isAnalyzing}
-                  selectedRejectionId={selectedRejectionId}
-                  onSelectRejection={onSelectRejection}
-                  onAnalyzeRejections={onAnalyzeRejections}
-                  onGenerateAmendment={onGenerateAmendment}
-                />
-              )}
+          {!selectedOfficeAction ? (
+            <div className="h-full flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <FileSearch className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <h3 className="font-medium mb-2">No Office Action Selected</h3>
+                <p className="text-sm">Select an Office Action to begin analysis</p>
+              </div>
             </div>
-          </ScrollArea>
+          ) : !hasRejections ? (
+            <div className="h-full flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-400" />
+                <h3 className="font-medium mb-2">No Rejections Found</h3>
+                <p className="text-sm">This Office Action contains no rejections to analyze</p>
+              </div>
+            </div>
+          ) : (
+                         <RejectionAnalysisPanel
+               analyses={analyses ?? null}
+               overallStrategy={overallStrategy ?? null}
+               isLoading={isAnalyzing}
+               selectedRejectionId={selectedRejectionId}
+               onSelectRejection={onSelectRejection}
+               onGenerateAmendment={onGenerateAmendment}
+             />
+          )}
         </TabsContent>
 
         <TabsContent value="claims" className="flex-1 mt-0 overflow-hidden">

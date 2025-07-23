@@ -24,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { SimpleMainPanel } from '@/components/common/SimpleMainPanel';
 import { cn } from '@/lib/utils';
 import type {
   RejectionAnalysisResult,
@@ -126,21 +127,19 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
   const strongCount = analyses.filter(a => a.strength === 'STRONG').length;
 
   return (
-    <div className={cn('space-y-6', className)}>
-      {/* Clean Summary */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Analysis Summary</CardTitle>
+    <SimpleMainPanel
+      header={
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Rejection Analysis</h2>
             <Badge variant="outline">
               {analyses.length} rejection{analyses.length !== 1 ? 's' : ''} analyzed
             </Badge>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          
           {/* Strategy Recommendation */}
           {overallStrategy && (
-            <Alert>
+            <Alert className="mb-4">
               <Target className="h-4 w-4" />
               <AlertDescription>
                 <strong>Recommended Strategy:</strong> {overallStrategy.primaryStrategy}
@@ -151,7 +150,7 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
           )}
 
           {/* Summary Stats */}
-          <div className="grid grid-cols-3 gap-4 text-center py-4 border rounded-lg bg-gray-50">
+          <div className="grid grid-cols-3 gap-4 text-center py-4 border rounded-lg bg-gray-50 mb-4">
             <div>
               <div className="text-lg font-semibold">{weakCount}</div>
               <div className="text-sm text-gray-600">Weak/Flawed</div>
@@ -176,15 +175,18 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
               'Generate Amendment Response'
             )}
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      }
+      contentPadding={true}
+    >
+      <div className="space-y-6">
 
-      {/* Individual Rejections */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Rejection Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+        {/* Individual Rejections */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Rejection Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
           {analyses.map((analysis, index) => {
             // Debug: Log the analysis data to understand the structure
             console.log('🔍 Analysis data:', { 
@@ -299,27 +301,31 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
               </div>
             );
           })}
-        </CardContent>
-      </Card>
-
-      {/* Key Considerations */}
-      {overallStrategy?.keyConsiderations && overallStrategy.keyConsiderations.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Key Considerations</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {overallStrategy.keyConsiderations.map((consideration, index) => (
-                <li key={index} className="flex items-start gap-2 text-sm">
-                  <span className="text-blue-600 mt-1">•</span>
-                  <span className="text-gray-700">{consideration}</span>
-                </li>
-              ))}
-            </ul>
           </CardContent>
         </Card>
-      )}
-    </div>
+
+        {/* Key Considerations */}
+        {overallStrategy?.keyConsiderations && overallStrategy.keyConsiderations.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Key Considerations</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                {overallStrategy.keyConsiderations.map((consideration, index) => (
+                  <li key={index} className="flex items-start gap-2 text-sm">
+                    <span className="text-blue-600 mt-1">•</span>
+                    <span className="text-gray-700">{consideration}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* Bottom spacer to ensure content isn't cut off */}
+        <div className="h-8" aria-hidden="true" />
+      </div>
+    </SimpleMainPanel>
   );
 }; 

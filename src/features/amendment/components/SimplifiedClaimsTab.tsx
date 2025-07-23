@@ -428,6 +428,9 @@ export function SimplifiedClaimsTab({
             </div>
           </div>
         )}
+        
+        {/* Bottom spacer to ensure content isn't cut off */}
+        <div className="h-8" aria-hidden="true" />
       </div>
     </SimpleMainPanel>
   );
