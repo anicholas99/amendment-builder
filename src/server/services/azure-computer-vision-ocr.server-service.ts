@@ -279,13 +279,11 @@ export class AzureComputerVisionOCRService {
       
       try {
         // Import the Office Action parser dynamically to avoid circular dependencies
-        const { OfficeActionParserService } = await import('./office-action-parser.server-service');
+        const { SimpleOfficeActionParserService } = await import('./simple-office-action-parser.server-service');
         
-        parsedAnalysis = await OfficeActionParserService.parseOfficeAction(
+        parsedAnalysis = await SimpleOfficeActionParserService.parseOfficeAction(
           extractionResult.content,
-          {
-            maxTokens: 200000, // Higher limit for Azure-extracted text
-          }
+          undefined // No prosecution context available in OCR pipeline
         );
         
         analysisTime = Date.now() - analysisStart;

@@ -12,7 +12,7 @@ import { logger } from '@/server/logger';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { DocumentAnalysisClient, AzureKeyCredential } from '@azure/ai-form-recognizer';
 import { env } from '@/config/env';
-import { OfficeActionParserService } from './office-action-parser.server-service';
+import { SimpleOfficeActionParserService } from './simple-office-action-parser.server-service';
 
 interface AzureDocumentAnalysisResult {
   content: string;
@@ -174,11 +174,9 @@ export class AzureDocumentIntelligenceService {
       const analysisStart = Date.now();
       
       try {
-        parsedAnalysis = await OfficeActionParserService.parseOfficeAction(
+        parsedAnalysis = await SimpleOfficeActionParserService.parseOfficeAction(
           extractionResult.content,
-          {
-            maxTokens: 200000, // Higher limit for Azure-extracted text
-          }
+          undefined // No prosecution context available in OCR pipeline
         );
         
         analysisTime = Date.now() - analysisStart;
