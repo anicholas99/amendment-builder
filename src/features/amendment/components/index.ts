@@ -4,4 +4,6 @@ export { OfficeActionNavigator } from './OfficeActionNavigator';
 export { DraftingWorkspace } from './DraftingWorkspace';
 export { AIAssistantPanel } from './AIAssistantPanel';
 export { AmendmentFileHistory } from './AmendmentFileHistory';
-export { ArgumentsTab } from './ArgumentsTab'; 
+export { ArgumentsTab } from './ArgumentsTab';
+export { ClaimsDocumentPreview } from './ClaimsDocumentPreview';
+export { RemarksDocumentPreview } from './RemarksDocumentPreview'; 

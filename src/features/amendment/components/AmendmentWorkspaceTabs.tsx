@@ -31,6 +31,11 @@ import { cn } from '@/lib/utils';
 import { RejectionAnalysisPanel } from './RejectionAnalysisPanel';
 import { SimplifiedClaimsTab } from './SimplifiedClaimsTab';
 import { ArgumentsTab } from './ArgumentsTab';
+import { ClaimsDocumentPreview } from './ClaimsDocumentPreview';
+import { RemarksDocumentPreview } from './RemarksDocumentPreview';
+import { useDraftDocumentByType } from '@/hooks/api/useDraftDocuments';
+import { useToast } from '@/hooks/useToastWrapper';
+import { AmendmentExportService } from '@/services/api/amendmentExportService';
 import { logger } from '@/utils/clientLogger';
 import type { OfficeAction } from '@/types/domain/amendment';
 import type { 
@@ -84,6 +89,116 @@ export function AmendmentWorkspaceTabs({
   const hasRejections = selectedOfficeAction?.rejections?.length > 0;
   const canAnalyze = hasRejections && selectedOfficeActionId;
 
+  // Data fetching for preview
+  const toast = useToast();
+  const { data: claimsDraft } = useDraftDocumentByType(projectId, 'AMENDMENT_RESPONSE');
+  const { data: argumentsDraft } = useDraftDocumentByType(projectId, 'ARGUMENTS');
+
+  // Parse claims data
+  const claimsData = useMemo(() => {
+    if (!claimsDraft?.content) return [];
+    try {
+      const parsed = JSON.parse(claimsDraft.content);
+      return parsed.claims || [];
+    } catch {
+      return [];
+    }
+  }, [claimsDraft]);
+
+  // Parse arguments data
+  const argumentsData = useMemo(() => {
+    if (!argumentsDraft?.content) return [];
+    try {
+      const parsed = JSON.parse(argumentsDraft.content);
+      return parsed.arguments || [];
+    } catch {
+      return [];
+    }
+  }, [argumentsDraft]);
+
+  // Export handlers
+  const handleExportClaims = useCallback(async () => {
+    if (!selectedOfficeActionId || claimsData.length === 0) {
+      toast.error({ 
+        title: 'Export Failed', 
+        description: 'No claims available to export' 
+      });
+      return;
+    }
+
+    try {
+      toast.info({ title: 'Generating CLM Document...', description: 'Creating claims document' });
+      
+      const exportRequest = {
+        projectId,
+        officeActionId: selectedOfficeActionId,
+        content: {
+          title: 'Claim Amendments',
+          responseType: 'AMENDMENT' as const,
+          claimAmendments: claimsData,
+          argumentSections: [], // Empty for CLM-only export
+        },
+        options: { format: 'docx' as const, documentType: 'CLM' }
+      };
+
+      await AmendmentExportService.exportAndDownload(exportRequest, {
+        customFilename: `CLM_${selectedOfficeActionId}_${new Date().toISOString().split('T')[0]}.docx`,
+        onExportComplete: () => {
+          toast.success({ title: 'CLM Export Complete', description: 'Claims document downloaded successfully' });
+        },
+        onExportError: (error) => {
+          toast.error({ title: 'CLM Export Failed', description: error.message });
+        }
+      });
+    } catch (error) {
+      toast.error({ 
+        title: 'Export Failed', 
+        description: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  }, [projectId, selectedOfficeActionId, claimsData, toast]);
+
+  const handleExportRemarks = useCallback(async () => {
+    if (!selectedOfficeActionId || argumentsData.length === 0) {
+      toast.error({ 
+        title: 'Export Failed', 
+        description: 'No remarks available to export' 
+      });
+      return;
+    }
+
+    try {
+      toast.info({ title: 'Generating REM Document...', description: 'Creating remarks document' });
+      
+      const exportRequest = {
+        projectId,
+        officeActionId: selectedOfficeActionId,
+        content: {
+          title: 'Remarks',
+          responseType: 'AMENDMENT' as const,
+          claimAmendments: [], // Empty for REM-only export
+          argumentSections: argumentsData,
+        },
+        options: { format: 'docx' as const, documentType: 'REM' }
+      };
+
+      await AmendmentExportService.exportAndDownload(exportRequest, {
+        customFilename: `REM_${selectedOfficeActionId}_${new Date().toISOString().split('T')[0]}.docx`,
+        onExportComplete: () => {
+          toast.success({ title: 'REM Export Complete', description: 'Remarks document downloaded successfully' });
+        },
+        onExportError: (error) => {
+          toast.error({ title: 'REM Export Failed', description: error.message });
+        }
+      });
+    } catch (error) {
+      toast.error({ 
+        title: 'Export Failed', 
+        description: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  }, [projectId, selectedOfficeActionId, argumentsData, toast]);
+
   return (
     <div className={cn("flex flex-col h-full", className)}>
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">
@@ -100,9 +215,9 @@ export function AmendmentWorkspaceTabs({
             Claims
           </TabsTrigger>
           
-          <TabsTrigger value="arguments" className="flex items-center gap-2">
+          <TabsTrigger value="remarks" className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
-            Arguments
+            Remarks
           </TabsTrigger>
           
           <TabsTrigger value="preview" className="flex items-center gap-2">
@@ -158,13 +273,13 @@ export function AmendmentWorkspaceTabs({
           )}
         </TabsContent>
 
-        <TabsContent value="arguments" className="flex-1 mt-0 overflow-hidden">
+        <TabsContent value="remarks" className="flex-1 mt-0 overflow-hidden">
           {!selectedOfficeActionId ? (
             <div className="h-full flex items-center justify-center text-gray-500">
               <div className="text-center">
                 <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                 <h3 className="font-medium mb-2">No Office Action Selected</h3>
-                <p className="text-sm">Select an Office Action to draft arguments</p>
+                <p className="text-sm">Select an Office Action to draft remarks</p>
               </div>
             </div>
           ) : (
@@ -176,15 +291,74 @@ export function AmendmentWorkspaceTabs({
         </TabsContent>
 
         <TabsContent value="preview" className="flex-1 mt-0 overflow-hidden">
-          <ScrollArea className="h-full">
-            <div className="p-6">
-              <div className="text-center py-12 text-gray-500">
-                <Eye className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <h3 className="font-medium mb-2">Preview Coming Soon</h3>
-                <p className="text-sm">Document preview will be available once claims are generated</p>
+          <div className="flex h-full">
+            {/* REM Preview Panel */}
+            <div className="flex-1 border-r border-gray-200">
+              <div className="p-4 border-b bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4" />
+                    Remarks Document (REM)
+                  </h3>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={handleExportRemarks}
+                      disabled={argumentsData.length === 0}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Export REM
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {argumentsData.length} argument section{argumentsData.length !== 1 ? 's' : ''}
+                </p>
               </div>
+              <RemarksDocumentPreview 
+                argumentSections={argumentsData}
+                responseType="AMENDMENT"
+                applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
+                examinerName={selectedOfficeAction?.metadata?.examinerName}
+                artUnit={selectedOfficeAction?.metadata?.artUnit}
+                className="flex-1"
+              />
             </div>
-          </ScrollArea>
+
+            {/* CLM Preview Panel */}
+            <div className="flex-1">
+              <div className="p-4 border-b bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Claims Document (CLM)
+                  </h3>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={handleExportClaims}
+                      disabled={claimsData.length === 0}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Export CLM
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {claimsData.length} claim amendment{claimsData.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <ClaimsDocumentPreview 
+                claimAmendments={claimsData}
+                applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
+                examinerName={selectedOfficeAction?.metadata?.examinerName}
+                artUnit={selectedOfficeAction?.metadata?.artUnit}
+                className="flex-1"
+              />
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
