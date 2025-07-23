@@ -9,12 +9,21 @@ import { findOfficeActionWithRelationsById } from '@/repositories/officeActionRe
 import { processWithOpenAI } from '@/server/ai/aiService';
 import { safeJsonParse } from '@/utils/jsonUtils';
 import { prisma } from '@/lib/prisma';
+import { AmendmentContextService } from '@/server/services/amendment-context.server-service';
 
 // Request validation schema
 const generateResponseSchema = z.object({
   officeActionId: z.string().uuid(),
   userInstructions: z.string().optional(),
+  budget: z.number().min(0.10).max(5.0).optional(), // Budget in dollars (10 cents to $5)
 });
+
+// Token pricing constants (GPT-4.1 - April 2025)
+const TOKEN_PRICING = {
+  INPUT_PER_1K: 0.002,        // $2.00 per million
+  CACHED_INPUT_PER_1K: 0.0005, // $0.50 per million
+  OUTPUT_PER_1K: 0.008,       // $8.00 per million
+} as const;
 
 interface ClaimAmendmentResult {
   claimNumber: string;
@@ -56,12 +65,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     const requestData = generateResponseSchema.parse(req.body);
-    const { officeActionId, userInstructions } = requestData;
+    const { officeActionId, userInstructions, budget = 0.50 } = requestData;
 
-    logger.info('[GenerateResponse] Starting simplified amendment response generation', {
+    logger.info('[GenerateResponse] Starting enhanced amendment response generation', {
       projectId,
       officeActionId,
       userId: user?.id,
+      budget: `$${budget}`,
     });
 
     // 1. Get the office action with rejections
@@ -82,29 +92,51 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       );
     }
 
-    // 2. Get OCR claims text from office action or project documents
-    const claimsText = await getOCRClaimsText(projectId, user.tenantId);
+    // 2. Calculate token budget for full context  
+    const maxOutputTokens = 16000; // Increased for complex amendments
+    const outputBudget = (maxOutputTokens / 1000) * TOKEN_PRICING.OUTPUT_PER_1K;
+    const inputBudget = budget - outputBudget;
     
-    if (!claimsText) {
+    if (inputBudget <= 0) {
       throw new ApplicationError(
         ErrorCode.VALIDATION_FAILED,
-        'No previous claims text found. Please ensure claims document is uploaded.'
+        `Budget too low. Output tokens alone cost $${outputBudget.toFixed(3)}, but budget is $${budget}`
+      );
+    }
+    
+    const maxInputTokens = Math.floor((inputBudget / TOKEN_PRICING.INPUT_PER_1K) * 1000);
+
+    logger.info('[GenerateResponse] Token budget calculated', {
+      totalBudget: `$${budget}`,
+      maxInputTokens,
+      maxOutputTokens,
+      inputBudget: `$${inputBudget.toFixed(3)}`,
+      outputBudget: `$${outputBudget.toFixed(3)}`,
+    });
+
+    // 3. Get comprehensive document context using AmendmentContextService
+    const documentBundle = await AmendmentContextService.getAmendmentDraftingContext(
+      projectId,
+      user.tenantId
+    );
+
+    if (!documentBundle.officeAction) {
+      throw new ApplicationError(
+        ErrorCode.VALIDATION_FAILED,
+        'No Office Action text found'
       );
     }
 
-    logger.info('[GenerateResponse] Found OCR claims text', {
-      claimsTextLength: claimsText.length,
-      rejectionsCount: officeAction.rejections?.length || 0,
-    });
-
-    // 3. Generate amendments using AI
-    const amendmentResult = await generateAllClaimAmendments(
-      claimsText,
+    // 4. Generate AI prompt with budget-optimized context
+    const amendmentResult = await generateAmendmentWithFullContext(
+      documentBundle,
       officeAction,
-      userInstructions
+      userInstructions,
+      maxInputTokens,
+      maxOutputTokens
     );
 
-    // 4. Store the result in database
+    // 5. Store the result in database
     await storeAmendmentResult(projectId, officeActionId, amendmentResult, user.tenantId);
 
     logger.info('[GenerateResponse] Amendment response generated successfully', {
@@ -402,6 +434,235 @@ Please analyze all claims in the claims text and provide amendments for rejected
     throw new ApplicationError(
       ErrorCode.AI_SERVICE_ERROR,
       'Failed to generate claim amendments'
+    );
+  }
+}
+
+/**
+ * Generate amendment with full document context using budget-optimized approach
+ */
+async function generateAmendmentWithFullContext(
+  documentBundle: any,
+  officeAction: any,
+  userInstructions: string | undefined,
+  maxInputTokens: number,
+  maxOutputTokens: number
+): Promise<GenerateResponseResult> {
+  
+  // Helper to estimate tokens
+  const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
+  
+  // Build rejection context
+  const rejections = officeAction.rejections || [];
+  const rejectionsContext = rejections.map((r: any) => {
+    let claimNumbers: string[] = [];
+    let citedPriorArt: string[] = [];
+    
+    try {
+      claimNumbers = Array.isArray(r.claimNumbers) 
+        ? r.claimNumbers 
+        : JSON.parse(r.claimNumbers || '[]');
+    } catch (e) {
+      claimNumbers = [];
+    }
+    
+    try {
+      citedPriorArt = Array.isArray(r.citedPriorArt)
+        ? r.citedPriorArt
+        : JSON.parse(r.citedPriorArt || '[]');
+    } catch (e) {
+      citedPriorArt = [];
+    }
+    
+    return `
+Type: ${r.type}
+Rejected Claims: ${claimNumbers.join(', ')}
+Prior Art: ${citedPriorArt.join(', ')}
+Examiner Reasoning: ${r.examinerText}
+`;
+  }).join('\n---\n');
+
+  // Build system prompt
+  const systemPrompt = `You are an expert patent attorney drafting amendments to respond to an Office Action with access to full patent prosecution context.
+
+Your task is to analyze the complete patent context (office action, claims, specification, prior responses) and provide sophisticated amendments that address all rejections.
+
+For each claim:
+- If rejected: Provide a strategic amended version that addresses the specific rejection using specification support
+- If not rejected: Keep the claim unchanged but still show it for completeness
+- Use the full specification context to craft detailed amendments with proper antecedent basis
+- Consider previous response strategies to avoid repeating failed arguments
+
+Return your response as valid JSON only:
+
+{
+  "claims": [
+    {
+      "claimNumber": "1",
+      "originalText": "exact original claim text",
+      "amendedText": "amended text (same as original if no amendment needed)", 
+      "wasAmended": true/false,
+      "amendmentReason": "Detailed reason for amendment referencing specification sections"
+    }
+  ],
+  "summary": "Overall strategic summary considering full prosecution context"
+}`;
+
+  // Build user prompt with smart document prioritization
+  const basePrompt = `OFFICE ACTION REJECTIONS:
+${rejectionsContext}
+
+${userInstructions ? `ADDITIONAL INSTRUCTIONS: ${userInstructions}` : ''}
+
+Please analyze all claims and provide amendments that address rejections using the full context provided.`;
+
+  // Document priority for token allocation
+  const documentPriority = [
+    'officeAction',
+    'claims', 
+    'lastResponse',
+    'specification',
+    'examinerSearch',
+    'searchStrategy',
+    'interview'
+  ];
+
+  // Calculate base prompt tokens
+  const basePromptTokens = estimateTokens(systemPrompt + basePrompt);
+  const availableTokens = maxInputTokens - basePromptTokens - 500; // Reserve 500 tokens for safety
+
+  if (availableTokens <= 0) {
+    throw new ApplicationError(
+      ErrorCode.VALIDATION_FAILED,
+      'Token budget too low for basic prompts'
+    );
+  }
+
+  // Build document context with smart truncation
+  let documentContext = '';
+  let tokenCount = 0;
+
+  for (const docType of documentPriority) {
+    let doc = null;
+    let label = '';
+
+    if (docType === 'officeAction' && documentBundle.officeAction) {
+      doc = documentBundle.officeAction;
+      label = 'OFFICE ACTION';
+    } else if (docType === 'claims' && documentBundle.claims) {
+      doc = documentBundle.claims;
+      label = 'CURRENT CLAIMS';
+    } else if (docType === 'lastResponse' && documentBundle.lastResponse) {
+      doc = documentBundle.lastResponse;
+      label = 'PREVIOUS RESPONSE';
+    } else if (docType === 'specification' && documentBundle.specification) {
+      doc = documentBundle.specification;
+      label = 'SPECIFICATION';
+    } else if (docType === 'examinerSearch' && documentBundle.extras?.examinerSearch) {
+      doc = documentBundle.extras.examinerSearch;
+      label = 'EXAMINER SEARCH';
+    } else if (docType === 'searchStrategy' && documentBundle.extras?.searchStrategy) {
+      doc = documentBundle.extras.searchStrategy;
+      label = 'SEARCH STRATEGY';
+    } else if (docType === 'interview' && documentBundle.extras?.interview) {
+      doc = documentBundle.extras.interview;
+      label = 'INTERVIEW SUMMARY';
+    }
+
+    if (!doc) continue;
+
+    const docText = `=== ${label} ===\n${doc.text}\n\n`;
+    const docTokens = estimateTokens(docText);
+
+    if (tokenCount + docTokens <= availableTokens) {
+      documentContext += docText;
+      tokenCount += docTokens;
+    } else {
+      // Try to include a truncated version
+      const remainingTokens = availableTokens - tokenCount;
+      if (remainingTokens > 500) { // Only truncate if we have decent space
+        const maxChars = (remainingTokens - 100) * 4; // Leave some buffer
+        const truncatedText = doc.text.substring(0, maxChars) + '\n[...TRUNCATED FOR TOKEN LIMIT...]';
+        documentContext += `=== ${label} (TRUNCATED) ===\n${truncatedText}\n\n`;
+        break; // Stop adding more documents
+      } else {
+        break; // No space for more
+      }
+    }
+  }
+
+  const fullUserPrompt = `${documentContext}${basePrompt}`;
+
+  // Calculate final cost estimation
+  const finalInputTokens = estimateTokens(systemPrompt + fullUserPrompt);
+  const estimatedCost = (finalInputTokens / 1000 * TOKEN_PRICING.INPUT_PER_1K) + 
+                       (maxOutputTokens / 1000 * TOKEN_PRICING.OUTPUT_PER_1K);
+
+  logger.info('[GenerateResponse] 💰 ENHANCED CONTEXT PRE-GENERATION ESTIMATE 💰', {
+    model: 'gpt-4.1',
+    finalInputTokens,
+    maxOutputTokens,
+    estimatedCost: `$${estimatedCost.toFixed(4)}`,
+    documentsIncluded: {
+      officeAction: !!documentBundle.officeAction,
+      claims: !!documentBundle.claims,
+      lastResponse: !!documentBundle.lastResponse,
+      specification: !!documentBundle.specification,
+      extras: Object.keys(documentBundle.extras || {}).filter(k => documentBundle.extras?.[k]),
+    },
+    contextLength: documentContext.length,
+    tokenUtilization: `${((finalInputTokens / maxInputTokens) * 100).toFixed(1)}%`,
+  });
+
+  try {
+    const aiResponse = await processWithOpenAI(
+      systemPrompt,
+      fullUserPrompt,
+      {
+        maxTokens: maxOutputTokens,
+        temperature: 0.2,
+        model: 'gpt-4.1',
+      }
+    );
+
+    // Calculate actual cost
+    const actualInputTokens = aiResponse.usage?.prompt_tokens || finalInputTokens;
+    const actualOutputTokens = aiResponse.usage?.completion_tokens || maxOutputTokens;
+    
+    const actualInputCost = (actualInputTokens / 1000) * TOKEN_PRICING.INPUT_PER_1K;
+    const actualOutputCost = (actualOutputTokens / 1000) * TOKEN_PRICING.OUTPUT_PER_1K;
+    const actualTotalCost = actualInputCost + actualOutputCost;
+
+    logger.info('[GenerateResponse] 💰 ACTUAL ENHANCED "NEW RESPONSE" COST 💰', {
+      officeActionId: officeAction.id,
+      model: 'gpt-4.1',
+      actualCost: `$${actualTotalCost.toFixed(4)}`,
+      inputCost: `$${actualInputCost.toFixed(4)} (${actualInputTokens} tokens)`,
+      outputCost: `$${actualOutputCost.toFixed(4)} (${actualOutputTokens} tokens)`,
+      totalTokens: actualInputTokens + actualOutputTokens,
+      documentsProcessed: Object.keys(documentBundle).filter(k => documentBundle[k]),
+      contextQuality: 'ENHANCED_FULL_CONTEXT',
+      costDifference: `$${(actualTotalCost - estimatedCost).toFixed(4)}`,
+    });
+
+    const result = safeJsonParse(aiResponse.content);
+    
+    if (!result || !result.claims || !Array.isArray(result.claims)) {
+      throw new Error('Invalid AI response format');
+    }
+
+    return {
+      claims: result.claims,
+      summary: result.summary || 'Enhanced amendment response generated with full context',
+      officeActionId: officeAction.id,
+      generatedAt: new Date().toISOString(),
+    };
+
+  } catch (error) {
+    logger.error('[GenerateResponse] Enhanced AI generation failed', { error });
+    throw new ApplicationError(
+      ErrorCode.AI_SERVICE_ERROR,
+      'Failed to generate enhanced claim amendments'
     );
   }
 }
