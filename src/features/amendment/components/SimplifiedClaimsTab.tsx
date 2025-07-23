@@ -14,8 +14,7 @@ import {
   AlertCircle,
   Wand2,
   RefreshCw,
-  Eye,
-  EyeOff
+  GitCompare
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +31,7 @@ import { useToast } from '@/hooks/useToastWrapper';
 import { apiFetch } from '@/lib/api/apiClient';
 import { logger } from '@/utils/clientLogger';
 import { useDraftDocumentByType, useUpdateDraftDocument } from '@/hooks/api/useDraftDocuments';
+import ClaimDiffViewer from './ClaimDiffViewer';
 
 interface ClaimData {
   claimNumber: string;
@@ -89,7 +89,7 @@ export function SimplifiedClaimsTab({
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingClaim, setEditingClaim] = useState<string | null>(null);
   const [editedText, setEditedText] = useState('');
-  const [showOriginal, setShowOriginal] = useState<Record<string, boolean>>({});
+  const [showDiff, setShowDiff] = useState<Record<string, boolean>>({});
 
   // Mutation hook for updating draft document
   const updateDraftMutation = useUpdateDraftDocument();
@@ -204,8 +204,8 @@ export function SimplifiedClaimsTab({
     setEditedText('');
   };
 
-  const toggleShowOriginal = (claimNumber: string) => {
-    setShowOriginal(prev => ({
+  const toggleDiff = (claimNumber: string) => {
+    setShowDiff(prev => ({
       ...prev,
       [claimNumber]: !prev[claimNumber],
     }));
@@ -344,19 +344,18 @@ export function SimplifiedClaimsTab({
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {/* Show/Hide Original Toggle */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleShowOriginal(claim.claimNumber)}
-                            className="text-muted-foreground"
-                          >
-                            {showOriginal[claim.claimNumber] ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </Button>
+                          {/* Show/Hide Diff Toggle */}
+                          {claim.wasAmended && claim.originalText && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleDiff(claim.claimNumber)}
+                              className="text-muted-foreground"
+                              title={showDiff[claim.claimNumber] ? "Hide diff view" : "Show diff view"}
+                            >
+                              <GitCompare className="h-4 w-4" />
+                            </Button>
+                          )}
 
                           {/* Edit button */}
                           {editingClaim === claim.claimNumber ? (
@@ -390,39 +389,40 @@ export function SimplifiedClaimsTab({
                     </CardHeader>
 
                     <CardContent className="space-y-4">
-                      {/* Original text (collapsible) */}
-                      {showOriginal[claim.claimNumber] && (
-                        <div className="p-3 bg-muted/50 rounded border">
-                          <p className="text-sm font-medium mb-2 text-muted-foreground">
-                            Original Claim Text:
-                          </p>
-                          <div className="font-mono text-sm leading-relaxed">
-                            {claim.originalText}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Amended text */}
+                      {/* Claim text - either diff view or amended text */}
                       <div>
-                        <p className="text-sm font-medium mb-2">
-                          {claim.wasAmended ? 'Amended Claim Text:' : 'Claim Text:'}
-                        </p>
-                        
                         {editingClaim === claim.claimNumber ? (
-                          <Textarea
-                            value={editedText}
-                            onChange={(e) => setEditedText(e.target.value)}
-                            className="min-h-[120px] font-mono text-sm"
-                            placeholder="Enter amended claim text..."
+                          <div>
+                            <p className="text-sm font-medium mb-2">
+                              {claim.wasAmended ? 'Amended Claim Text:' : 'Claim Text:'}
+                            </p>
+                            <Textarea
+                              value={editedText}
+                              onChange={(e) => setEditedText(e.target.value)}
+                              className="min-h-[120px] font-mono text-sm"
+                              placeholder="Enter amended claim text..."
+                            />
+                          </div>
+                        ) : showDiff[claim.claimNumber] && claim.wasAmended && claim.originalText ? (
+                          <ClaimDiffViewer
+                            claimNumber={claim.claimNumber}
+                            originalText={claim.originalText}
+                            amendedText={claim.amendedText}
+                            className="text-sm"
                           />
                         ) : (
-                          <div className={cn(
-                            "p-3 rounded border font-mono text-sm leading-relaxed whitespace-pre-wrap",
-                            claim.wasAmended 
-                              ? "bg-blue-50 border-blue-200" 
-                              : "bg-gray-50 border-gray-200"
-                          )}>
-                            {claim.amendedText}
+                          <div>
+                            <p className="text-sm font-medium mb-2">
+                              {claim.wasAmended ? 'Amended Claim Text:' : 'Claim Text:'}
+                            </p>
+                            <div className={cn(
+                              "p-3 rounded border font-mono text-sm leading-relaxed whitespace-pre-wrap",
+                              claim.wasAmended 
+                                ? "bg-blue-50 border-blue-200" 
+                                : "bg-gray-50 border-gray-200"
+                            )}>
+                              {claim.amendedText}
+                            </div>
                           </div>
                         )}
                       </div>

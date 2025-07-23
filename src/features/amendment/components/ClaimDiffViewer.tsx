@@ -54,7 +54,7 @@ const STATUS_CONFIG = {
   },
 } as const;
 
-// Optimized word-based diff algorithm for real-time updates
+// Attorney-style phrase-based diff algorithm for legal amendments
 const computeWordDiff = (original: string, amended: string): DiffPart[] => {
   if (!original && !amended) return [];
   if (!original) {
@@ -64,39 +64,96 @@ const computeWordDiff = (original: string, amended: string): DiffPart[] => {
     return [{ type: 'removed', text: original }];
   }
 
-  // For real-time performance, use a simpler approach
+  // Use dynamic programming to find the longest common subsequence
+  // This will help us identify larger blocks of unchanged text
   const originalWords = original.split(/(\s+)/).filter(Boolean);
   const amendedWords = amended.split(/(\s+)/).filter(Boolean);
   
-  const diff: DiffPart[] = [];
-  const maxLen = Math.max(originalWords.length, amendedWords.length);
+  // Find longest common subsequence to identify unchanged blocks
+  const lcs = computeLCS(originalWords, amendedWords);
   
-  // Simple line-by-line comparison for better performance
-  for (let i = 0; i < maxLen; i++) {
-    const originalWord = originalWords[i];
-    const amendedWord = amendedWords[i];
-    
-    if (!originalWord && amendedWord) {
-      // Addition at the end
-      diff.push({ type: 'added', text: amendedWord });
-    } else if (originalWord && !amendedWord) {
-      // Deletion at the end
-      diff.push({ type: 'removed', text: originalWord });
-    } else if (originalWord === amendedWord) {
-      // No change
-      diff.push({ type: 'unchanged', text: originalWord });
+  // Build diff by grouping consecutive changes
+  const diff: DiffPart[] = [];
+  let origIndex = 0;
+  let amendIndex = 0;
+  let lcsIndex = 0;
+  
+  while (origIndex < originalWords.length || amendIndex < amendedWords.length) {
+    // Check if we're at a point where text matches LCS
+    if (lcsIndex < lcs.length && 
+        origIndex < originalWords.length && 
+        amendIndex < amendedWords.length &&
+        originalWords[origIndex] === amendedWords[amendIndex] && 
+        originalWords[origIndex] === lcs[lcsIndex]) {
+      
+      // Add unchanged text
+      diff.push({ type: 'unchanged', text: originalWords[origIndex] });
+      origIndex++;
+      amendIndex++;
+      lcsIndex++;
     } else {
-      // Word changed - show both deletion and addition
-      if (originalWord) {
-        diff.push({ type: 'removed', text: originalWord });
+      // Collect consecutive removed text
+      let removedText = '';
+      while (origIndex < originalWords.length && 
+             (lcsIndex >= lcs.length || originalWords[origIndex] !== lcs[lcsIndex])) {
+        removedText += originalWords[origIndex];
+        origIndex++;
       }
-      if (amendedWord) {
-        diff.push({ type: 'added', text: amendedWord });
+      
+      // Collect consecutive added text
+      let addedText = '';
+      while (amendIndex < amendedWords.length && 
+             (lcsIndex >= lcs.length || amendedWords[amendIndex] !== lcs[lcsIndex])) {
+        addedText += amendedWords[amendIndex];
+        amendIndex++;
+      }
+      
+      // Add grouped changes
+      if (removedText) {
+        diff.push({ type: 'removed', text: removedText.trim() });
+      }
+      if (addedText) {
+        diff.push({ type: 'added', text: addedText.trim() });
       }
     }
   }
   
   return diff;
+};
+
+// Helper function to compute Longest Common Subsequence
+const computeLCS = (arr1: string[], arr2: string[]): string[] => {
+  const m = arr1.length;
+  const n = arr2.length;
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+  
+  // Build LCS table
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (arr1[i - 1] === arr2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+  
+  // Reconstruct LCS
+  const lcs: string[] = [];
+  let i = m, j = n;
+  while (i > 0 && j > 0) {
+    if (arr1[i - 1] === arr2[j - 1]) {
+      lcs.unshift(arr1[i - 1]);
+      i--;
+      j--;
+    } else if (dp[i - 1][j] > dp[i][j - 1]) {
+      i--;
+    } else {
+      j--;
+    }
+  }
+  
+  return lcs;
 };
 
 const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
