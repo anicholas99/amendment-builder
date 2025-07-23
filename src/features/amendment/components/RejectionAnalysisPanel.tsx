@@ -138,7 +138,7 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
 
   return (
     <div className={className}>
-      <div className="flex flex-col bg-card" style={{ height: 'calc(100vh - 200px)' }}>
+      <div className="flex flex-col bg-card" style={{ height: 'calc(100vh - 180px)' }}>
         {/* Fixed header */}
         <div className="flex-shrink-0 bg-card border-b border-border">
           <div className="p-6 border-b bg-white">
