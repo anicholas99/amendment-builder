@@ -141,59 +141,56 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
       <div className="flex flex-col bg-card" style={{ height: 'calc(100vh - 180px)' }}>
         {/* Fixed header */}
         <div className="flex-shrink-0 bg-card border-b border-border">
-          <div className="p-6 border-b bg-white">
-            <div className="flex items-center justify-between mb-6">
+          <div className="p-3 border-b bg-white">
+            <div className="flex items-center justify-between mb-3">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Rejection Analysis</h2>
-                <p className="text-sm text-gray-600 mt-1">Strategic assessment and recommendations</p>
+                <h2 className="text-lg font-semibold text-gray-900">Rejection Analysis</h2>
+                <p className="text-xs text-gray-600 mt-0.5">Strategic assessment and recommendations</p>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-500">{analyses.length} rejections</span>
-                <Badge variant="outline" className="bg-gray-50">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">{analyses.length} rejections</span>
+                <Badge variant="outline" className="bg-gray-50 text-xs px-2 py-1">
                   {analyses.filter(a => a.strength === 'STRONG').length} Strong • {' '}
                   {analyses.filter(a => ['WEAK', 'FLAWED'].includes(a.strength)).length} Arguable
                 </Badge>
               </div>
             </div>
 
-            {/* Strategy Section */}
+            {/* Strategy Section - More Compact */}
             {overallStrategy && (
-              <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium text-gray-900 mb-1">Recommended Strategy</h3>
-                    <div className="flex items-center gap-3">
-                      <Badge variant="secondary" className="bg-white border">
-                        {STRATEGY_LABELS[overallStrategy.primaryStrategy]}
-                      </Badge>
-                      <span className="text-sm text-gray-600">
-                        {Math.round(overallStrategy.confidence * 100)}% confidence
-                      </span>
-                    </div>
-                  </div>
-                  <Button 
-                    onClick={onGenerateAmendment} 
-                    disabled={isGeneratingAmendment}
-                    className="bg-gray-900 hover:bg-gray-800 text-white"
-                  >
-                    {isGeneratingAmendment ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <TrendingUp className="mr-2 h-4 w-4" />
-                        Generate Response
-                      </>
-                    )}
-                  </Button>
-                </div>
-                {overallStrategy.reasoning && (
-                  <p className="text-gray-700 text-sm mt-3 pt-3 border-t border-gray-200">
-                    {overallStrategy.reasoning}
-                  </p>
-                )}
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-900">Recommended Strategy</span>
+                                         <Badge variant="outline" className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5">
+                       {STRATEGY_LABELS[overallStrategy.primaryStrategy]}
+                     </Badge>
+                     <span className="text-xs text-blue-700">
+                       {Math.round(overallStrategy.confidence * 100)}% confidence
+                     </span>
+                   </div>
+                   <Button
+                     onClick={onGenerateAmendment}
+                     disabled={isGeneratingAmendment}
+                     size="sm"
+                     className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 h-7"
+                   >
+                     {isGeneratingAmendment ? (
+                       <>
+                         <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                         Generating...
+                       </>
+                     ) : (
+                       'Generate Response'
+                     )}
+                   </Button>
+                 </div>
+                 {overallStrategy.reasoning && (
+                   <p className="text-xs text-blue-800 mt-2 leading-relaxed">
+                     {overallStrategy.reasoning}
+                   </p>
+                 )}
               </div>
             )}
           </div>
