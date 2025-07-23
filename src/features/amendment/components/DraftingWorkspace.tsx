@@ -1073,6 +1073,7 @@ export const DraftingWorkspace: React.FC<DraftingWorkspaceProps> = ({
                           <LegitimateClaimViewer
                             claimNumber={claim.claimNumber}
                             amendedText={claim.amendedText}
+                            originalText={claim.originalText}
                             status={claim.status}
                           />
                           

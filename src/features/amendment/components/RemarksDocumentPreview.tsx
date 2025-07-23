@@ -6,7 +6,6 @@
  */
 
 import React from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 interface ArgumentSection {
@@ -37,11 +36,10 @@ export const RemarksDocumentPreview: React.FC<RemarksDocumentPreviewProps> = ({
   className,
 }) => {
   return (
-    <div className={cn('h-full bg-gray-50', className)}>
-      <ScrollArea className="h-full">
-        <div className="p-6">
-          {/* Document container with proper page styling */}
-          <div className="max-w-[8.5in] mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
+    <div className={cn('bg-gray-50', className)}>
+      <div className="p-6">
+        {/* Document container with proper page styling */}
+        <div className="max-w-[8.5in] mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
             {/* Document content with proper margins */}
             <div className="p-12 text-black" style={{ 
               fontFamily: 'Times, serif',
@@ -139,7 +137,6 @@ export const RemarksDocumentPreview: React.FC<RemarksDocumentPreviewProps> = ({
             </div>
           </div>
         </div>
-      </ScrollArea>
     </div>
   );
 };

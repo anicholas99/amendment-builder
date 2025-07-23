@@ -23,7 +23,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 
@@ -293,8 +292,8 @@ export function AmendmentWorkspaceTabs({
         <TabsContent value="preview" className="flex-1 mt-0 overflow-hidden">
           <div className="flex h-full">
             {/* REM Preview Panel */}
-            <div className="flex-1 border-r border-gray-200">
-              <div className="p-4 border-b bg-gray-50">
+            <div className="flex-1 border-r border-gray-200 flex flex-col">
+              <div className="p-4 border-b bg-gray-50 flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold flex items-center gap-2">
                     <MessageSquare className="h-4 w-4" />
@@ -316,19 +315,20 @@ export function AmendmentWorkspaceTabs({
                   {argumentsData.length} argument section{argumentsData.length !== 1 ? 's' : ''}
                 </p>
               </div>
-              <RemarksDocumentPreview 
-                argumentSections={argumentsData}
-                responseType="AMENDMENT"
-                applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
-                examinerName={selectedOfficeAction?.metadata?.examinerName}
-                artUnit={selectedOfficeAction?.metadata?.artUnit}
-                className="flex-1"
-              />
+              <div className="flex-1 overflow-auto">
+                <RemarksDocumentPreview 
+                  argumentSections={argumentsData}
+                  responseType="AMENDMENT"
+                  applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
+                  examinerName={selectedOfficeAction?.metadata?.examinerName}
+                  artUnit={selectedOfficeAction?.metadata?.artUnit}
+                />
+              </div>
             </div>
 
             {/* CLM Preview Panel */}
-            <div className="flex-1">
-              <div className="p-4 border-b bg-gray-50">
+            <div className="flex-1 flex flex-col">
+              <div className="p-4 border-b bg-gray-50 flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold flex items-center gap-2">
                     <FileText className="h-4 w-4" />
@@ -350,13 +350,14 @@ export function AmendmentWorkspaceTabs({
                   {claimsData.length} claim amendment{claimsData.length !== 1 ? 's' : ''}
                 </p>
               </div>
-              <ClaimsDocumentPreview 
-                claimAmendments={claimsData}
-                applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
-                examinerName={selectedOfficeAction?.metadata?.examinerName}
-                artUnit={selectedOfficeAction?.metadata?.artUnit}
-                className="flex-1"
-              />
+              <div className="flex-1 overflow-auto">
+                <ClaimsDocumentPreview 
+                  claimAmendments={claimsData}
+                  applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
+                  examinerName={selectedOfficeAction?.metadata?.examinerName}
+                  artUnit={selectedOfficeAction?.metadata?.artUnit}
+                />
+              </div>
             </div>
           </div>
         </TabsContent>
