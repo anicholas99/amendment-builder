@@ -4,7 +4,7 @@
  * Shows all claims (amended and unchanged) with reasoning and editing capability
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   FileText, 
   Edit, 
@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/useToastWrapper';
 import { apiFetch } from '@/lib/api/apiClient';
 import { logger } from '@/utils/clientLogger';
+import { useDraftDocumentByType, useUpdateDraftDocument } from '@/hooks/api/useDraftDocuments';
 
 interface ClaimData {
   claimNumber: string;
@@ -60,46 +61,38 @@ export function SimplifiedClaimsTab({
 }: SimplifiedClaimsTabProps) {
   const toast = useToast();
   
+  // Use React Query hook for data fetching
+  const { data: draftDocument, isLoading, refetch } = useDraftDocumentByType(
+    projectId, 
+    'AMENDMENT_RESPONSE'
+  );
+
+  // Parse amendment data from draft document
+  const amendmentData = useMemo<AmendmentResponse | null>(() => {
+    if (!draftDocument?.content) return null;
+    
+    try {
+      const parsedData = JSON.parse(draftDocument.content);
+      if (parsedData.claims && Array.isArray(parsedData.claims)) {
+        logger.info('[SimplifiedClaimsTab] Parsed amendment data', {
+          claimsCount: parsedData.claims.length,
+        });
+        return parsedData;
+      }
+    } catch (error) {
+      logger.error('[SimplifiedClaimsTab] Failed to parse amendment data', { error });
+    }
+    return null;
+  }, [draftDocument]);
+
   // State
-  const [amendmentData, setAmendmentData] = useState<AmendmentResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingClaim, setEditingClaim] = useState<string | null>(null);
   const [editedText, setEditedText] = useState('');
   const [showOriginal, setShowOriginal] = useState<Record<string, boolean>>({});
 
-  // Load existing amendment data on mount
-  useEffect(() => {
-    loadAmendmentData();
-  }, [projectId, officeActionId]);
-
-  const loadAmendmentData = async () => {
-    try {
-      setIsLoading(true);
-      const response = await apiFetch(`/api/projects/${projectId}/draft-documents`);
-      const draftData = await response.json();
-      
-      // Look for amendment response document
-      const amendmentDoc = draftData.documents?.find((doc: any) => 
-        doc.type === 'AMENDMENT_RESPONSE'
-      );
-      
-      if (amendmentDoc) {
-        const parsedData = JSON.parse(amendmentDoc.content);
-        if (parsedData.claims && Array.isArray(parsedData.claims)) {
-          setAmendmentData(parsedData);
-          logger.info('[SimplifiedClaimsTab] Loaded existing amendment data', {
-            claimsCount: parsedData.claims.length,
-          });
-        }
-      }
-    } catch (error) {
-      logger.error('[SimplifiedClaimsTab] Failed to load amendment data', { error });
-      // Don't show error toast - just means no data exists yet
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Mutation hook for updating draft document
+  const updateDraftMutation = useUpdateDraftDocument();
 
   const handleGenerateResponse = async () => {
     try {
@@ -132,7 +125,13 @@ export function SimplifiedClaimsTab({
       }
 
       const result = await response.json();
-      setAmendmentData(result);
+      
+      // Save the generated response using mutation
+      await updateDraftMutation.mutateAsync({
+        projectId,
+        type: 'AMENDMENT_RESPONSE',
+        content: JSON.stringify(result),
+      });
 
       toast.success({
         title: 'Amendment Response Generated!',
@@ -164,7 +163,7 @@ export function SimplifiedClaimsTab({
     if (!amendmentData) return;
 
     try {
-      // Update the local state
+      // Update the claims data
       const updatedClaims = amendmentData.claims.map(claim => 
         claim.claimNumber === claimNumber 
           ? { ...claim, amendedText: editedText }
@@ -176,18 +175,11 @@ export function SimplifiedClaimsTab({
         claims: updatedClaims,
       };
 
-      setAmendmentData(updatedData);
-
-      // Save to backend
-      await apiFetch(`/api/projects/${projectId}/draft-documents`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type: 'AMENDMENT_RESPONSE',
-          content: JSON.stringify(updatedData),
-        }),
+      // Save to backend using mutation
+      await updateDraftMutation.mutateAsync({
+        projectId,
+        type: 'AMENDMENT_RESPONSE',
+        content: JSON.stringify(updatedData),
       });
 
       setEditingClaim(null);
@@ -275,6 +267,33 @@ export function SimplifiedClaimsTab({
       contentPadding={true}
     >
       <div className="space-y-6">
+        {/* Loading state */}
+        {isLoading && (
+          <div className="space-y-4">
+            {/* Loading skeleton for claims */}
+            {[1, 2, 3].map((index) => (
+              <Card key={index} className="overflow-hidden">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-6 w-20" />
+                      <Skeleton className="h-6 w-24" />
+                    </div>
+                    <Skeleton className="h-8 w-20" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
         {/* No data state */}
         {!amendmentData && !isLoading && (
           <Card className="p-8 text-center">

@@ -1,9 +1,10 @@
 /**
- * Amendment Workspace Tabs - Simplified three-tab interface
+ * Amendment Workspace Tabs - Four-tab interface for complete response workflow
  * 
  * 1. Analysis - Review rejections and strategy recommendations
- * 2. Claims - Simplified claims amendment interface  
- * 3. Preview - Review formatted document before export
+ * 2. Claims - Simplified claims amendment interface
+ * 3. Arguments - Draft responses to rejections
+ * 4. Preview - Review formatted document before export
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
@@ -15,7 +16,8 @@ import {
   CheckCircle2,
   Clock,
   FileText,
-  Download
+  Download,
+  MessageSquare
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +30,7 @@ import { cn } from '@/lib/utils';
 // Import components
 import { RejectionAnalysisPanel } from './RejectionAnalysisPanel';
 import { SimplifiedClaimsTab } from './SimplifiedClaimsTab';
+import { ArgumentsTab } from './ArgumentsTab';
 import { logger } from '@/utils/clientLogger';
 import type { OfficeAction } from '@/types/domain/amendment';
 import type { 
@@ -84,7 +87,7 @@ export function AmendmentWorkspaceTabs({
   return (
     <div className={cn("flex flex-col h-full", className)}>
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">
-        <TabsList className="grid w-full grid-cols-3 rounded-none border-b bg-gray-50 flex-shrink-0">
+        <TabsList className="grid w-full grid-cols-4 rounded-none border-b bg-gray-50 flex-shrink-0">
           <TabsTrigger value="analysis" className="flex items-center gap-2">
             <FileSearch className="h-4 w-4" />
             Analysis
@@ -95,6 +98,11 @@ export function AmendmentWorkspaceTabs({
           <TabsTrigger value="claims" className="flex items-center gap-2">
             <Edit3 className="h-4 w-4" />
             Claims
+          </TabsTrigger>
+          
+          <TabsTrigger value="arguments" className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Arguments
           </TabsTrigger>
           
           <TabsTrigger value="preview" className="flex items-center gap-2">
@@ -133,20 +141,38 @@ export function AmendmentWorkspaceTabs({
         </TabsContent>
 
         <TabsContent value="claims" className="flex-1 mt-0 overflow-hidden">
-          <ScrollArea className="h-full">
-            {!selectedOfficeActionId ? (
-              <div className="text-center py-12 text-gray-500">
+          {!selectedOfficeActionId ? (
+            <div className="h-full flex items-center justify-center text-gray-500">
+              <div className="text-center">
                 <Edit3 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                 <h3 className="font-medium mb-2">No Office Action Selected</h3>
                 <p className="text-sm">Select an Office Action to work on claims</p>
               </div>
-            ) : (
-              <SimplifiedClaimsTab
-                projectId={projectId}
-                officeActionId={selectedOfficeActionId}
-              />
-            )}
-          </ScrollArea>
+            </div>
+          ) : (
+            <SimplifiedClaimsTab
+              projectId={projectId}
+              officeActionId={selectedOfficeActionId}
+              className="h-full"
+            />
+          )}
+        </TabsContent>
+
+        <TabsContent value="arguments" className="flex-1 mt-0 overflow-hidden">
+          {!selectedOfficeActionId ? (
+            <div className="h-full flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <h3 className="font-medium mb-2">No Office Action Selected</h3>
+                <p className="text-sm">Select an Office Action to draft arguments</p>
+              </div>
+            </div>
+          ) : (
+            <ArgumentsTab
+              projectId={projectId}
+              officeActionId={selectedOfficeActionId}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="preview" className="flex-1 mt-0 overflow-hidden">
