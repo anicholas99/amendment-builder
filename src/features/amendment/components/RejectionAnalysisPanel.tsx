@@ -1,19 +1,15 @@
 /**
  * Professional Rejection Analysis Panel
  * 
- * Clean, attorney-focused design with minimal visual distractions
- * Prioritizes content readability and professional appearance
+ * Clean, attorney-focused design with consistent styling
+ * Focuses on content readability and professional appearance
  */
 
 import React from 'react';
 import { 
-  AlertTriangle, 
-  CheckCircle2, 
-  XCircle, 
   Target,
   Loader2,
-  TrendingUp,
-  Clock
+  TrendingUp
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -47,31 +43,26 @@ interface RejectionAnalysisPanelProps {
   className?: string;
 }
 
-// Minimal, professional styling
+// Clean, consistent styling
 const STRENGTH_CONFIG: Record<RejectionStrength, {
   label: string;
   priority: number;
-  borderColor: string;
 }> = {
   STRONG: {
     label: 'Strong',
     priority: 1,
-    borderColor: 'border-l-red-300',
   },
   MODERATE: {
     label: 'Moderate', 
     priority: 2,
-    borderColor: 'border-l-amber-300',
   },
   WEAK: {
     label: 'Weak',
     priority: 3,
-    borderColor: 'border-l-blue-300',
   },
   FLAWED: {
     label: 'Flawed',
     priority: 4,
-    borderColor: 'border-l-green-300',
   },
 };
 
@@ -85,7 +76,6 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
   analyses,
   overallStrategy,
   detailedAnalysis,
-  officeActionMetadata,
   examinerRemarks,
   isLoading = false,
   onSelectRejection,
@@ -101,7 +91,7 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
           header={
             <div className="p-6 border-b bg-white">
               <h2 className="text-xl font-semibold text-gray-900">Rejection Analysis</h2>
-              <p className="text-sm text-gray-600 mt-1">Strategic assessment and recommendations</p>
+              <p className="text-sm text-gray-600 mt-1">Analyzing Office Action content and generating strategic recommendations</p>
             </div>
           }
           contentPadding={true}
@@ -165,7 +155,7 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
               </div>
             </div>
 
-            {/* Clean Strategy Section */}
+            {/* Strategy Section */}
             {overallStrategy && (
               <div className="bg-gray-50 rounded-lg p-4 mb-6">
                 <div className="flex items-center justify-between">
@@ -210,156 +200,273 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
         contentPadding={false}
       >
         <div className="overflow-y-auto" style={{ height: 'calc(100vh - 400px)' }}>
-          <div className="p-6 space-y-4">
-            {sortedAnalyses.map((analysis, index) => {
-              const strengthInfo = STRENGTH_CONFIG[analysis.strength];
-              const isSelected = selectedRejectionId === analysis.rejectionId;
-
-              return (
-                <Card
-                  key={analysis.rejectionId}
-                  className={cn(
-                    'transition-all duration-200 cursor-pointer hover:shadow-sm border-l-4',
-                    strengthInfo.borderColor,
-                    'bg-white',
-                    isSelected && 'ring-1 ring-gray-300'
-                  )}
-                  onClick={() => onSelectRejection?.(analysis.rejectionId)}
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-base font-medium text-gray-900">
-                          Rejection {index + 1}
-                        </CardTitle>
-                        <div className="flex items-center gap-3 mt-1">
-                          <Badge variant="outline" className="text-xs bg-gray-50">
-                            {strengthInfo.label} Rejection
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {STRATEGY_LABELS[analysis.recommendedStrategy]}
-                          </Badge>
-                        </div>
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {Math.round(analysis.confidenceScore * 100)}% confidence
-                      </span>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="pt-0 space-y-4">
-                    {/* Strategy Rationale */}
-                    {analysis.strategyRationale && (
-                      <div className="bg-gray-50 rounded p-3">
-                        <h4 className="text-sm font-medium text-gray-900 mb-1">Assessment</h4>
-                        <p className="text-sm text-gray-700">{analysis.strategyRationale}</p>
+          <div className="p-6 space-y-8">
+            
+            {/* Office Action Summary */}
+            {(detailedAnalysis?.overview || examinerRemarks) && (
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Office Action Summary</h3>
+                <Card>
+                  <CardContent className="pt-6">
+                    {detailedAnalysis?.overview && (
+                      <div className="mb-4">
+                        <h4 className="font-medium text-gray-900 mb-2">Document Overview</h4>
+                        <p className="text-gray-700 leading-relaxed">{detailedAnalysis.overview}</p>
                       </div>
                     )}
-
-                    {/* Examiner Issues */}
-                    {analysis.examinerReasoningGaps && analysis.examinerReasoningGaps.length > 0 && (
+                    
+                    {examinerRemarks && examinerRemarks !== detailedAnalysis?.overview && (
                       <div>
-                        <h4 className="text-sm font-medium text-gray-900 mb-2">Examiner Reasoning Issues</h4>
-                        <ul className="space-y-1">
-                          {analysis.examinerReasoningGaps.map((gap, i) => (
-                            <li key={i} className="text-sm text-gray-700 pl-3 border-l-2 border-gray-200">
-                              {gap}
+                        <h4 className="font-medium text-gray-900 mb-2">Examiner's Key Points</h4>
+                        <p className="text-gray-700 leading-relaxed">{examinerRemarks}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Rejection Details */}
+            {detailedAnalysis?.rejectionBreakdown && detailedAnalysis.rejectionBreakdown.length > 0 && (
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Rejection Details</h3>
+                <Card>
+                  <CardContent className="pt-6 space-y-6">
+                    {detailedAnalysis.rejectionBreakdown.map((rejection, index) => (
+                      <div key={index} className="pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
+                        <div className="flex items-start justify-between mb-3">
+                          <h4 className="font-medium text-gray-900">
+                            {rejection.type}: {rejection.title}
+                          </h4>
+                          <Badge variant="outline" className="text-xs">
+                            Claims: {rejection.claims.join(', ')}
+                          </Badge>
+                        </div>
+                        <div className="space-y-2">
+                          {rejection.issues.map((issue, issueIndex) => (
+                            <div key={issueIndex} className="text-gray-700 pl-4 border-l-2 border-gray-200">
+                              {issue}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Formal Objections */}
+            {detailedAnalysis?.objections && detailedAnalysis.objections.length > 0 && (
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Formal Objections</h3>
+                <Card>
+                  <CardContent className="pt-6 space-y-4">
+                    {detailedAnalysis.objections.map((objection, index) => (
+                      <div key={index} className="pb-4 border-b border-gray-100 last:border-b-0 last:pb-0">
+                        <div className="flex items-start justify-between mb-2">
+                          <h4 className="font-medium text-gray-900">{objection.type}</h4>
+                          <Badge variant="outline" className="text-xs">
+                            Claims: {objection.claims.join(', ')}
+                          </Badge>
+                        </div>
+                        <div className="space-y-1">
+                          {objection.issues.map((issue, issueIndex) => (
+                            <div key={issueIndex} className="text-gray-700 pl-4 border-l-2 border-gray-200">
+                              {issue}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Good News */}
+            {detailedAnalysis?.withdrawn && detailedAnalysis.withdrawn.length > 0 && (
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Withdrawn/Allowed Items</h3>
+                <Card>
+                  <CardContent className="pt-6 space-y-3">
+                    {detailedAnalysis.withdrawn.map((item, index) => (
+                      <div key={index} className="p-3 bg-gray-50 rounded border">
+                        <div className="flex items-start justify-between mb-2">
+                          <h4 className="font-medium text-gray-900">{item.type} Withdrawn</h4>
+                          <Badge variant="outline" className="text-xs">
+                            Claims: {item.claims.join(', ')}
+                          </Badge>
+                        </div>
+                        <p className="text-gray-700">{item.reason}</p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Strategic Analysis */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Strategic Analysis by Rejection</h3>
+              <div className="space-y-4">
+                {sortedAnalyses.map((analysis, index) => {
+                  const strengthInfo = STRENGTH_CONFIG[analysis.strength];
+                  const isSelected = selectedRejectionId === analysis.rejectionId;
+
+                  return (
+                    <Card
+                      key={analysis.rejectionId}
+                      className={cn(
+                        'cursor-pointer transition-all duration-200 hover:shadow-md',
+                        isSelected && 'ring-1 ring-gray-400'
+                      )}
+                      onClick={() => onSelectRejection?.(analysis.rejectionId)}
+                    >
+                      <CardHeader className="pb-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <CardTitle className="text-base font-medium text-gray-900">
+                              Rejection {index + 1} - {strengthInfo.label}
+                            </CardTitle>
+                            <div className="flex items-center gap-3 mt-1">
+                              <Badge variant="outline" className="text-xs">
+                                {STRATEGY_LABELS[analysis.recommendedStrategy]}
+                              </Badge>
+                              <span className="text-xs text-gray-500">
+                                {Math.round(analysis.confidenceScore * 100)}% confidence
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </CardHeader>
+
+                      <CardContent className="pt-0 space-y-4">
+                        {/* AI Assessment */}
+                        {analysis.rawStrengthAssessment && (
+                          <div>
+                            <h4 className="font-medium text-gray-900 mb-2">Assessment</h4>
+                            <p className="text-gray-700">{analysis.rawStrengthAssessment}</p>
+                          </div>
+                        )}
+
+                        {/* Strategy */}
+                        {analysis.strategyRationale && (
+                          <div>
+                            <h4 className="font-medium text-gray-900 mb-2">Strategy</h4>
+                            <p className="text-gray-700">{analysis.strategyRationale}</p>
+                          </div>
+                        )}
+
+                        {/* Specific Recommendation */}
+                        {analysis.rawRecommendedStrategy && (
+                          <div>
+                            <h4 className="font-medium text-gray-900 mb-2">Recommendation</h4>
+                            <p className="text-gray-700">{analysis.rawRecommendedStrategy}</p>
+                          </div>
+                        )}
+
+                        {/* Examiner Issues */}
+                        {analysis.examinerReasoningGaps && analysis.examinerReasoningGaps.length > 0 && (
+                          <div>
+                            <h4 className="font-medium text-gray-900 mb-2">Examiner Issues</h4>
+                            <ul className="space-y-1">
+                              {analysis.examinerReasoningGaps.map((gap, i) => (
+                                <li key={i} className="text-gray-700 pl-4 border-l-2 border-gray-200">
+                                  {gap}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Arguments and Amendments */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {analysis.argumentPoints && analysis.argumentPoints.length > 0 && (
+                            <div>
+                              <h4 className="font-medium text-gray-900 mb-2">Key Arguments</h4>
+                              <ul className="space-y-1">
+                                {analysis.argumentPoints.map((point, i) => (
+                                  <li key={i} className="text-gray-700">
+                                    • {point}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {analysis.amendmentSuggestions && analysis.amendmentSuggestions.length > 0 && (
+                            <div>
+                              <h4 className="font-medium text-gray-900 mb-2">Amendment Options</h4>
+                              <ul className="space-y-1">
+                                {analysis.amendmentSuggestions.map((suggestion, i) => (
+                                  <li key={i} className="text-gray-700">
+                                    • {suggestion}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Strategic Implications */}
+            {detailedAnalysis?.strategicImplications && (
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Strategic Implications</h3>
+                <Card>
+                  <CardContent className="pt-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+                      <div>
+                        <div className="text-sm text-gray-600 mb-2">Difficulty</div>
+                        <div className="font-medium text-gray-900">
+                          {detailedAnalysis.strategicImplications.difficulty} Response
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-600 mb-2">Response Time</div>
+                        <div className="font-medium text-gray-900">
+                          {detailedAnalysis.strategicImplications.timeToRespond}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-600 mb-2">Approach</div>
+                        <div className="font-medium text-gray-900">
+                          {detailedAnalysis.strategicImplications.recommendedApproach}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-3">Positive Aspects</h4>
+                        <ul className="space-y-2">
+                          {detailedAnalysis.strategicImplications.positives.map((positive, index) => (
+                            <li key={index} className="text-gray-700">
+                              • {positive}
                             </li>
                           ))}
                         </ul>
                       </div>
-                    )}
-
-                    {/* Arguments and Amendments in two columns */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Arguments */}
-                      {analysis.argumentPoints && analysis.argumentPoints.length > 0 && (
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-900 mb-2">Key Arguments</h4>
-                          <ul className="space-y-1">
-                            {analysis.argumentPoints.map((point, i) => (
-                              <li key={i} className="text-sm text-gray-700">
-                                • {point}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* Amendments */}
-                      {analysis.amendmentSuggestions && analysis.amendmentSuggestions.length > 0 && (
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-900 mb-2">Amendment Options</h4>
-                          <ul className="space-y-1">
-                            {analysis.amendmentSuggestions.map((suggestion, i) => (
-                              <li key={i} className="text-sm text-gray-700">
-                                • {suggestion}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-3">Main Concerns</h4>
+                        <ul className="space-y-2">
+                          {detailedAnalysis.strategicImplications.concerns.map((concern, index) => (
+                            <li key={index} className="text-gray-700">
+                              • {concern}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
-              );
-            })}
-
-            {/* Office Action Summary */}
-            {(detailedAnalysis?.overview || examinerRemarks) && (
-              <Card className="bg-gray-50 border-gray-200">
-                <CardHeader>
-                  <CardTitle className="text-base font-medium text-gray-900">Office Action Summary</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {examinerRemarks && (
-                    <p className="text-gray-700 text-sm">{examinerRemarks}</p>
-                  )}
-                  
-                  {officeActionMetadata && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-3 border-t border-gray-200">
-                      {officeActionMetadata.examinerName && (
-                        <div>
-                          <span className="text-gray-500">Examiner</span>
-                          <div className="font-medium text-gray-900">{officeActionMetadata.examinerName}</div>
-                        </div>
-                      )}
-                      {officeActionMetadata.mailingDate && (
-                        <div>
-                          <span className="text-gray-500">Date</span>
-                          <div className="font-medium text-gray-900">
-                            {new Date(officeActionMetadata.mailingDate).toLocaleDateString()}
-                          </div>
-                        </div>
-                      )}
-                      {officeActionMetadata.artUnit && (
-                        <div>
-                          <span className="text-gray-500">Art Unit</span>
-                          <div className="font-medium text-gray-900">{officeActionMetadata.artUnit}</div>
-                        </div>
-                      )}
-                      {officeActionMetadata.applicationNumber && (
-                        <div>
-                          <span className="text-gray-500">Application</span>
-                          <div className="font-medium text-gray-900">{officeActionMetadata.applicationNumber}</div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Withdrawn/Allowed items */}
-                  {detailedAnalysis?.withdrawn && detailedAnalysis.withdrawn.length > 0 && (
-                    <div className="pt-3 border-t border-gray-200">
-                      <h4 className="text-sm font-medium text-gray-900 mb-2">Good News</h4>
-                      {detailedAnalysis.withdrawn.map((item, index) => (
-                        <div key={index} className="text-sm text-gray-700 bg-white rounded p-2 border">
-                          {item.type} withdrawn for claims {item.claims.join(', ')} - {item.reason}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              </div>
             )}
           </div>
         </div>
