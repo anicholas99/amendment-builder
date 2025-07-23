@@ -34,6 +34,7 @@ export interface AmendmentExportRequest {
       type: string;
       rejectionId?: string;
     }>;
+    includeASMB?: boolean; // Whether to include ASMB as first page
   };
   options?: {
     format?: 'docx' | 'pdf';
@@ -41,6 +42,7 @@ export interface AmendmentExportRequest {
     firmName?: string;
     attorneyName?: string;
     docketNumber?: string;
+    documentType?: 'FULL' | 'ASMB' | 'CLM' | 'REM'; // Type of document to export
   };
 }
 
@@ -149,6 +151,55 @@ export class AmendmentExportService {
     }
     
     return `${baseName}_${timestamp}.${format}`;
+  }
+
+  /**
+   * Export ASMB only document
+   */
+  static async exportASMBDocument(
+    projectId: string,
+    officeActionId: string,
+    options?: {
+      format?: 'docx' | 'pdf';
+      submissionType?: 'AMENDMENT' | 'CONTINUATION' | 'RCE';
+    }
+  ): Promise<Blob> {
+    logger.info('[AmendmentExportService] Starting ASMB export', {
+      projectId,
+      officeActionId,
+      format: options?.format || 'docx',
+    });
+
+    try {
+      const request: AmendmentExportRequest = {
+        projectId,
+        officeActionId,
+        content: {
+          title: 'Amendment Submission Boilerplate',
+          responseType: options?.submissionType || 'AMENDMENT',
+          claimAmendments: [], // Empty for ASMB-only export
+          argumentSections: [], // Empty for ASMB-only export
+          includeASMB: true,
+        },
+        options: {
+          format: options?.format || 'docx',
+          documentType: 'ASMB',
+        },
+      };
+
+      return await this.exportAmendmentDocument(request);
+    } catch (error) {
+      logger.error('[AmendmentExportService] ASMB export failed', {
+        projectId,
+        officeActionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      throw new ApplicationError(
+        ErrorCode.API_NETWORK_ERROR,
+        `ASMB export failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
   }
 
   /**

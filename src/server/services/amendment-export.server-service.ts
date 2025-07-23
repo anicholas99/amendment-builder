@@ -10,6 +10,8 @@ import { ApplicationError, ErrorCode } from '@/lib/error';
 import { renderPromptTemplate } from '@/server/prompts/prompts/utils';
 import { processWithOpenAI } from '@/server/ai/aiService';
 import { safeJsonParse } from '@/utils/jsonUtils';
+import { ASMBDataService } from '@/services/api/asmbDataService';
+import { prisma } from '@/lib/prisma';
 
 // ============ TYPES ============
 
@@ -31,6 +33,7 @@ export interface AmendmentExportData {
     type: string;
     rejectionId?: string;
   }>;
+  includeASMB?: boolean; // New: Whether to include ASMB as first page
 }
 
 export interface AmendmentExportOptions {
@@ -69,17 +72,18 @@ const AMENDMENT_DOCUMENT_GENERATION_SYSTEM_PROMPT = {
 Your task is to format an amendment response into a professional, properly structured document that follows USPTO guidelines and law firm standards.
 
 DOCUMENT STRUCTURE REQUIREMENTS:
-1. **Header Section**: Attorney information, application details, examiner details
-2. **Amendment Section**: Clean claim amendments with proper formatting
+1. **ASMB (Amendment Submission Boilerplate)**: First page with application details, attorney info, and submission statement
+2. **Amendment Section**: Clean claim amendments with proper formatting (starts on page 2)
 3. **Remarks Section**: Professional arguments against rejections
 4. **Signature Block**: Attorney signature area
 
 FORMAT REQUIREMENTS:
 - Use proper USPTO formatting with consistent spacing
-- Number pages appropriately
+- Number pages appropriately starting from page 1 (ASMB)
 - Include all required legal boilerplate
 - Format claims with proper indentation and numbering
 - Use professional legal language throughout
+- Ensure ASMB matches standard USPTO submission format
 
 Return the complete document as formatted text that can be converted to DOCX.`,
 };
@@ -87,6 +91,22 @@ Return the complete document as formatted text that can be converted to DOCX.`,
 const AMENDMENT_DOCUMENT_GENERATION_USER_PROMPT = {
   version: '1.0.0',
   template: `Generate a complete USPTO-compliant amendment response document with the following content:
+
+{{#if includeASMB}}
+**ASMB Data (Amendment Submission Boilerplate):**
+- Application Number: {{applicationNumber}}
+- Filing Date: {{filingDate}}
+- Title: {{title}}
+- Inventor(s): {{inventors}}
+- Examiner: {{examinerName}}
+- Art Unit: {{artUnit}}
+- Attorney: {{attorneyName}}
+- Firm: {{firmName}}
+- Customer Number: {{customerNumber}}
+- Docket Number: {{docketNumber}}
+- Submission Statement: {{submissionStatement}}
+- Office Action Date: {{mailingDate}}
+{{/if}}
 
 **Document Metadata:**
 - Title: {{title}}
@@ -112,7 +132,8 @@ const AMENDMENT_DOCUMENT_GENERATION_USER_PROMPT = {
   {{content}}
 {{/each}}
 
-Generate a complete, professional amendment response document following USPTO formatting guidelines.`,
+Generate a complete, professional amendment response document following USPTO formatting guidelines.
+{{#if includeASMB}}Start with the ASMB as page 1, then claims amendments as page 2, then remarks.{{/if}}`,
 };
 
 // ============ SERVICE CLASS ============
@@ -140,7 +161,7 @@ export class AmendmentExportServerService {
 
     try {
       // Step 1: Generate formatted document content using AI
-      const documentContent = await this.generateDocumentContent(exportData, options);
+      const documentContent = await this.generateDocumentContent(exportData, options, metadata);
 
       // Step 2: Convert to specified format (DOCX/PDF)
       let documentBuffer: Buffer;
@@ -205,21 +226,38 @@ export class AmendmentExportServerService {
    */
   private static async generateDocumentContent(
     exportData: AmendmentExportData,
-    options: AmendmentExportOptions
+    options: AmendmentExportOptions,
+    metadata?: {
+      projectId: string;
+      officeActionId: string;
+      tenantId: string;
+    }
   ): Promise<string> {
     logger.debug('[AmendmentExportServerService] Generating document content with AI');
 
     try {
+      // Fetch ASMB data if requested
+      let asmbData: any = null;
+      if (exportData.includeASMB && metadata?.projectId && metadata?.officeActionId) {
+        asmbData = await this.fetchASMBData(metadata.projectId, metadata.officeActionId, exportData.responseType);
+      }
+
       const systemPrompt = renderPromptTemplate(AMENDMENT_DOCUMENT_GENERATION_SYSTEM_PROMPT, {});
       const userPrompt = renderPromptTemplate(AMENDMENT_DOCUMENT_GENERATION_USER_PROMPT, {
+        includeASMB: exportData.includeASMB,
         title: exportData.title,
         responseType: exportData.responseType,
-        applicationNumber: options.applicationNumber || 'Unknown',
-        mailingDate: options.mailingDate || 'Unknown',
-        examinerName: options.examinerName || 'Unknown',
-        attorneyName: options.attorneyName || 'Attorney Name',
-        firmName: options.firmName || 'Law Firm Name',
-        docketNumber: options.docketNumber || 'Unknown',
+        applicationNumber: asmbData?.applicationNumber || options.applicationNumber || 'Unknown',
+        filingDate: asmbData?.filingDate ? new Date(asmbData.filingDate).toLocaleDateString() : 'Unknown',
+        inventors: asmbData?.inventors ? ASMBDataService.formatInventors(asmbData.inventors) : 'Unknown',
+        examinerName: asmbData?.examinerName || options.examinerName || 'Unknown',
+        artUnit: asmbData?.artUnit || 'Unknown',
+        customerNumber: asmbData?.customerNumber || 'Unknown',
+        submissionStatement: asmbData?.submissionStatement || 'SUBMISSION ACCOMPANYING AMENDMENT',
+        mailingDate: asmbData?.mailingDate ? new Date(asmbData.mailingDate).toLocaleDateString() : options.mailingDate || 'Unknown',
+        attorneyName: asmbData?.attorneyName || options.attorneyName || 'Attorney Name',
+        firmName: asmbData?.firmName || options.firmName || 'Law Firm Name',
+        docketNumber: asmbData?.docketNumber || options.docketNumber || 'Unknown',
         claimAmendments: exportData.claimAmendments,
         argumentSections: exportData.argumentSections,
       });
@@ -449,5 +487,132 @@ export class AmendmentExportServerService {
       .split(/\s+/)
       .filter(word => word.length > 0)
       .length;
+  }
+
+  /**
+   * Fetch ASMB data from the database
+   */
+  private static async fetchASMBData(
+    projectId: string,
+    officeActionId: string,
+    submissionType: 'AMENDMENT' | 'CONTINUATION' | 'RCE'
+  ): Promise<any> {
+    try {
+      if (!prisma) {
+        throw new ApplicationError(
+          ErrorCode.DB_CONNECTION_ERROR,
+          'Database client is not initialized'
+        );
+      }
+
+      // Get all related data in one query
+      const officeAction = await prisma.officeAction.findUnique({
+        where: { id: officeActionId },
+        include: {
+          project: {
+            include: {
+              invention: true,
+              patentApplication: true,
+              user: true,
+              tenant: true,
+            },
+          },
+        },
+      });
+
+      if (!officeAction) {
+        throw new ApplicationError(
+          ErrorCode.DB_RECORD_NOT_FOUND,
+          'Office Action not found'
+        );
+      }
+
+      const { project } = officeAction;
+      const { invention, patentApplication, user, tenant } = project;
+
+      // Parse inventors from invention or patent application
+      let inventors: string[] = [];
+      if (invention?.inventorsJson) {
+        try {
+          const parsed = JSON.parse(invention.inventorsJson);
+          inventors = Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+          logger.warn('Failed to parse inventors JSON from invention', { error });
+        }
+      }
+      
+      // Fallback to patent application inventors
+      if (inventors.length === 0 && patentApplication?.inventors) {
+        try {
+          const parsed = JSON.parse(patentApplication.inventors);
+          inventors = Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+          logger.warn('Failed to parse inventors JSON from patent application', { error });
+        }
+      }
+
+      // Get title from multiple sources (priority: invention > patent application > project)
+      const title = invention?.title || patentApplication?.title || project?.name;
+
+      // Parse tenant settings for firm information
+      let firmSettings: any = {};
+      if (tenant?.settings) {
+        try {
+          firmSettings = JSON.parse(tenant.settings);
+        } catch (error) {
+          logger.warn('Failed to parse tenant settings', { error });
+        }
+      }
+
+      // Calculate response deadline
+      const mailingDate = officeAction.dateIssued;
+      const responseDeadline = ASMBDataService.calculateResponseDeadline(mailingDate || undefined);
+
+      // Generate submission statement
+      const submissionStatement = ASMBDataService.generateSubmissionStatement(
+        submissionType,
+        mailingDate || undefined
+      );
+
+      // Assemble ASMB data
+      return {
+        applicationNumber: officeAction.applicationNumber || patentApplication?.applicationNumber,
+        filingDate: patentApplication?.filingDate?.toISOString(),
+        title,
+        inventors,
+        examinerName: officeAction.examinerId 
+          ? `${officeAction.examinerId}` 
+          : patentApplication?.examinerName,
+        examinerId: officeAction.examinerId || patentApplication?.examinerId,
+        artUnit: officeAction.artUnit || patentApplication?.artUnit,
+        officeActionNumber: officeAction.oaNumber,
+        mailingDate: mailingDate?.toISOString(),
+        responseDeadline: responseDeadline?.toISOString(),
+        attorneyName: user?.name || firmSettings.attorneyName || '[ATTORNEY NAME]',
+        firmName: tenant?.name || '[FIRM NAME]',
+        customerNumber: firmSettings.customerNumber,
+        docketNumber: firmSettings.docketNumber || project?.name,
+        submissionType,
+        submissionStatement,
+      };
+    } catch (error) {
+      logger.error('[AmendmentExportServerService] Failed to fetch ASMB data', {
+        error: error instanceof Error ? error.message : String(error),
+        projectId,
+        officeActionId,
+      });
+      
+      // Return minimal data rather than throwing
+      return {
+        applicationNumber: '[APPLICATION NUMBER]',
+        title: '[INVENTION TITLE]',
+        inventors: [],
+        examinerName: '[EXAMINER NAME]',
+        artUnit: '[ART UNIT]',
+        attorneyName: '[ATTORNEY NAME]',
+        firmName: '[FIRM NAME]',
+        submissionStatement: ASMBDataService.generateSubmissionStatement(submissionType),
+      };
+    }
   }
 } 

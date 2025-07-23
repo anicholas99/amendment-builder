@@ -1,8 +1,13 @@
 /**
- * Office Action Navigator - Left panel component for AmendmentStudio
+ * Enhanced Office Action Navigator - Left panel component for AmendmentStudio
  * 
- * Displays parsed rejections, prior art references, affected claims, and examiner info
- * Clean, organized interface for navigating through Office Action content
+ * Now displays:
+ * - GPT's specific rejection classifications and confidence indicators
+ * - Legal reasoning insights for each rejection
+ * - Enhanced prior art references with detailed metadata
+ * - Human review flags and quality indicators
+ * 
+ * Clean, organized interface for navigating through Office Action content with rich legal analysis
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
@@ -23,7 +28,10 @@ import {
   ExternalLink,
   Download,
   FileCheck,
-  Clock
+  Clock,
+  Info,
+  Lightbulb,
+  AlertCircle
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -55,46 +63,23 @@ import { cn } from '@/lib/utils';
 import { DocumentViewer } from '@/components/common/DocumentViewer';
 import { OfficeActionDetailedSummary } from './OfficeActionDetailedSummary';
 import { isFeatureEnabled } from '@/config/featureFlags';
+import { abbreviateClaimRanges } from '@/utils/claims';
 import type { DetailedAnalysis } from '@/types/amendment';
 
-// Types
+// Enhanced types to support new GPT data
 interface Rejection {
   id: string;
   type: '§102' | '§103' | '§101' | '§112' | 'OTHER';
+  rawType?: string; // GPT's specific classification
+  rejectionCategory?: string; // Specific subcategory  
+  legalBasis?: string; // Full legal citation
   claims: string[];
   priorArtReferences: string[];
   examinerReasoning: string;
+  reasoningInsights?: string[]; // GPT's legal insights
   rawText: string;
-}
-
-interface OfficeActionData {
-  id: string;
-  fileName?: string;
-  metadata?: {
-    applicationNumber?: string;
-    mailingDate?: string;
-    examinerName?: string;
-    artUnit?: string;
-  };
-  examinerRemarks?: string; // User-friendly summary of the Office Action
-  detailedAnalysis?: DetailedAnalysis; // Comprehensive structured analysis
-  rejections: Rejection[];
-  allPriorArtReferences: string[];
-  summary: {
-    totalRejections: number;
-    rejectionTypes: string[];
-    totalClaimsRejected: number;
-    uniquePriorArtCount: number;
-  };
-}
-
-interface OfficeActionNavigatorProps {
-  officeAction?: OfficeActionData;
-  selectedRejectionId?: string | null;
-  onRejectionSelect?: (rejectionId: string) => void;
-  onPriorArtSelect?: (reference: string) => void;
-  projectId: string; // Required for document viewing
-  className?: string;
+  classificationConfidence?: number; // Confidence score
+  requiresHumanReview?: boolean; // Human review flag
 }
 
 // Document viewer state
@@ -106,44 +91,80 @@ interface DocumentViewerState {
   description?: string;
 }
 
-// Enhanced rejection type configuration
+interface OfficeActionData {
+  id: string;
+  fileName: string;
+  metadata: {
+    applicationNumber?: string;
+    mailingDate?: string;
+    examinerName?: string;
+    artUnit?: string;
+    documentType?: string; // Enhanced document type
+  };
+  rejections: Rejection[];
+  allPriorArtReferences: string[];
+  summary: {
+    totalRejections: number;
+    rejectionTypes: string[];
+    totalClaimsRejected: number;
+    uniquePriorArtCount: number;
+  };
+  examinerRemarks?: string;
+  detailedAnalysis?: DetailedAnalysis;
+}
+
+interface OfficeActionNavigatorProps {
+  officeAction?: OfficeActionData;
+  selectedRejectionId?: string | null;
+  onRejectionSelect?: (rejectionId: string) => void;
+  onPriorArtSelect?: (reference: string) => void;
+  projectId: string;
+  className?: string;
+}
+
+// Enhanced rejection type configuration with confidence indicators
 const REJECTION_TYPE_CONFIG = {
   '§102': {
-    label: 'Anticipation',
-    description: 'Prior art discloses invention',
-    color: 'bg-red-100 text-red-700 border-red-200',
-    icon: FileCheck,
-    priority: 1,
+    label: '§ 102 - Anticipation',
+    icon: BookOpen,
+    color: 'text-red-600',
+    bgColor: 'bg-red-50',
+    borderColor: 'border-red-200',
+    description: 'Prior art anticipates claimed invention',
   },
   '§103': {
-    label: 'Obviousness',
-    description: 'Combination of prior art',
-    color: 'bg-orange-100 text-orange-700 border-orange-200',
-    icon: Target,
-    priority: 2,
+    label: '§ 103 - Obviousness',
+    icon: Lightbulb,
+    color: 'text-orange-600',
+    bgColor: 'bg-orange-50',
+    borderColor: 'border-orange-200',
+    description: 'Claims would be obvious over prior art',
   },
   '§101': {
-    label: 'Eligibility',
-    description: 'Not patent-eligible subject matter',
-    color: 'bg-purple-100 text-purple-700 border-purple-200',
-    icon: Scale,
-    priority: 3,
+    label: '§ 101 - Eligibility',
+    icon: AlertTriangle,
+    color: 'text-purple-600',
+    bgColor: 'bg-purple-50',
+    borderColor: 'border-purple-200',
+    description: 'Claims directed to ineligible subject matter',
   },
   '§112': {
-    label: 'Disclosure',
-    description: 'Inadequate written description',
-    color: 'bg-blue-100 text-blue-700 border-blue-200',
+    label: '§ 112 - Description',
     icon: FileText,
-    priority: 4,
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-50',
+    borderColor: 'border-blue-200',
+    description: 'Written description or enablement issues',
   },
   'OTHER': {
     label: 'Other',
-    description: 'Miscellaneous rejection',
-    color: 'bg-gray-100 text-gray-700 border-gray-200',
-    icon: AlertTriangle,
-    priority: 5,
+    icon: AlertCircle,
+    color: 'text-gray-600',
+    bgColor: 'bg-gray-50',
+    borderColor: 'border-gray-200',
+    description: 'Other type of rejection',
   },
-} as const;
+};
 
 export const OfficeActionNavigator: React.FC<OfficeActionNavigatorProps> = ({
   officeAction,
@@ -153,13 +174,19 @@ export const OfficeActionNavigator: React.FC<OfficeActionNavigatorProps> = ({
   projectId,
   className,
 }) => {
+  // State for filtering and collapsible sections
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(['rejections', 'prior-art', 'overview'])
-  );
-  const [hoveredPriorArt, setHoveredPriorArt] = useState<string | null>(null);
-  const isMinimalistUI = isFeatureEnabled('ENABLE_MINIMALIST_AMENDMENT_UI');
+  const [sectionsExpanded, setSectionsExpanded] = useState({
+    metadata: true,
+    rejections: true,
+    priorArt: true,
+    insights: false, // New section for insights
+  });
+  const [rejectionInsightsExpanded, setRejectionInsightsExpanded] = useState<Record<string, boolean>>({});
+
+  // Enhanced navigation features
+  const showMinimalistUI = isFeatureEnabled('ENABLE_MINIMALIST_AMENDMENT_UI');
 
   // Document viewer state
   const [documentViewer, setDocumentViewer] = useState<DocumentViewerState>({
@@ -170,79 +197,21 @@ export const OfficeActionNavigator: React.FC<OfficeActionNavigatorProps> = ({
     description: undefined,
   });
 
-  // Filter rejections based on search and type
-  const filteredRejections = useMemo(() => {
-    if (!officeAction?.rejections) return [];
-    
-    return officeAction.rejections
-      .filter(rejection => {
-        const matchesSearch = searchTerm === '' || 
-          rejection.examinerReasoning.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          rejection.claims.some(claim => claim.includes(searchTerm));
-        
-        const matchesType = filterType === 'all' || rejection.type === filterType;
-        
-        return matchesSearch && matchesType;
-      })
-      .sort((a, b) => {
-        // Sort by priority (higher priority rejections first)
-        const priorityA = REJECTION_TYPE_CONFIG[a.type]?.priority || 999;
-        const priorityB = REJECTION_TYPE_CONFIG[b.type]?.priority || 999;
-        return priorityA - priorityB;
-      });
-  }, [officeAction?.rejections, searchTerm, filterType]);
+  // Toggle section expansion
+  const toggleSection = useCallback((section: keyof typeof sectionsExpanded) => {
+    setSectionsExpanded(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  }, []);
 
-
-
-  // Group prior art by frequency and relevance
-  const priorArtAnalysis = useMemo(() => {
-    if (!officeAction?.rejections) return [];
-    
-    const priorArtMap = new Map<string, {
-      patentNumber: string;
-      rejectionCount: number;
-      rejectionTypes: Set<string>;
-      claimsAffected: Set<string>;
-    }>();
-
-    officeAction.rejections.forEach(rejection => {
-      rejection.priorArtReferences.forEach(ref => {
-        if (!priorArtMap.has(ref)) {
-          priorArtMap.set(ref, {
-            patentNumber: ref,
-            rejectionCount: 0,
-            rejectionTypes: new Set(),
-            claimsAffected: new Set(),
-          });
-        }
-        
-        const entry = priorArtMap.get(ref)!;
-        entry.rejectionCount++;
-        entry.rejectionTypes.add(rejection.type);
-        rejection.claims.forEach(claim => entry.claimsAffected.add(claim));
-      });
-    });
-
-    return Array.from(priorArtMap.values())
-      .sort((a, b) => b.rejectionCount - a.rejectionCount);
-  }, [officeAction?.rejections]);
-
-  const toggleSection = (sectionId: string) => {
-    setExpandedSections(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(sectionId)) {
-        newSet.delete(sectionId);
-      } else {
-        newSet.add(sectionId);
-      }
-      return newSet;
-    });
-  };
-
-  const handlePriorArtClick = (patentNumber: string) => {
-    onPriorArtSelect?.(patentNumber);
-    // Will be enhanced with prior art lookup
-  };
+  // Toggle rejection insights
+  const toggleRejectionInsights = useCallback((rejectionId: string) => {
+    setRejectionInsightsExpanded(prev => ({
+      ...prev,
+      [rejectionId]: !prev[rejectionId]
+    }));
+  }, []);
 
   // Document viewer handlers
   const handleViewOfficeAction = useCallback(() => {
@@ -281,350 +250,457 @@ export const OfficeActionNavigator: React.FC<OfficeActionNavigatorProps> = ({
     });
   }, []);
 
+  // Get confidence indicator component
+  const getConfidenceIndicator = useCallback((confidence?: number) => {
+    if (!confidence) return null;
+    
+    const level = confidence >= 0.9 ? 'high' : confidence >= 0.7 ? 'medium' : 'low';
+    const colors = {
+      high: 'bg-green-100 text-green-800 border-green-200',
+      medium: 'bg-yellow-100 text-yellow-800 border-yellow-200', 
+      low: 'bg-red-100 text-red-800 border-red-200'
+    };
+    
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <Badge variant="outline" className={cn('text-xs', colors[level])}>
+            {Math.round(confidence * 100)}%
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Classification confidence</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }, []);
+
+  // Enhanced filtering logic
+  const filteredRejections = useMemo(() => {
+    if (!officeAction?.rejections) return [];
+
+    return officeAction.rejections.filter(rejection => {
+      const matchesSearch = !searchTerm || 
+        rejection.examinerReasoning.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        rejection.claims.some(claim => claim.includes(searchTerm)) ||
+        (rejection.rawType && rejection.rawType.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (rejection.rejectionCategory && rejection.rejectionCategory.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      const matchesType = filterType === 'all' || rejection.type === filterType;
+      return matchesSearch && matchesType;
+    });
+  }, [officeAction?.rejections, searchTerm, filterType]);
+
+  // Enhanced prior art organization
+  const organizedPriorArt = useMemo(() => {
+    if (!officeAction?.rejections) return [];
+
+    const priorArtMap = new Map();
+    
+    officeAction.rejections.forEach((rejection) => {
+      rejection.priorArtReferences.forEach(ref => {
+        if (!priorArtMap.has(ref)) {
+          priorArtMap.set(ref, {
+            reference: ref,
+            rejectionTypes: new Set(),
+            claimsAffected: new Set(),
+            rejectionIds: new Set(),
+          });
+        }
+        
+        const entry = priorArtMap.get(ref);
+        entry.rejectionTypes.add(rejection.type);
+        rejection.claims.forEach(claim => entry.claimsAffected.add(claim));
+        entry.rejectionIds.add(rejection.id);
+      });
+    });
+
+    return Array.from(priorArtMap.values());
+  }, [officeAction?.rejections]);
+
   if (!officeAction) {
     return (
-      <div className={cn('h-full bg-gray-50 border-r', className)}>
-        <div className="p-6 text-center text-gray-500">
-          <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-          <h3 className="font-medium mb-2">No Office Action Selected</h3>
-          <p className="text-sm">Upload an Office Action to begin analysis</p>
-        </div>
+      <div className={cn('p-6 text-center', className)}>
+        <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+        <h3 className="text-lg font-medium mb-2">No Office Action Selected</h3>
+        <p className="text-muted-foreground">
+          Select an Office Action to view details and navigate rejections.
+        </p>
       </div>
     );
   }
 
   return (
     <TooltipProvider>
-      <div className={cn('h-full bg-gray-50 border-r flex flex-col', className)}>
+      <div className={cn('h-full flex flex-col bg-card', className)}>
         {/* Header */}
-        <div className="p-4 border-b bg-white">
-          <div className="flex items-center gap-3 mb-3">
-            <FileText className="h-5 w-5 text-blue-600" />
+        <div className="p-4 border-b">
+          <div className="flex items-start gap-3 mb-3">
+            <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
             <div className="flex-1 min-w-0">
-              <h2 className="font-semibold text-gray-900 truncate">
-                {officeAction.fileName || 'Office Action'}
+              <h2 className="font-semibold text-sm truncate" title={officeAction.fileName}>
+                {officeAction.fileName}
               </h2>
-              {officeAction.metadata?.applicationNumber && (
-                <p className="text-sm text-gray-600">
-                  App. No. {officeAction.metadata.applicationNumber}
+              {officeAction.metadata.documentType && (
+                <p className="text-xs text-muted-foreground">
+                  {officeAction.metadata.documentType}
                 </p>
               )}
             </div>
           </div>
-          
-          {/* Search and filter */}
+
+          {/* Enhanced Search and Filter */}
           <div className="space-y-2">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search rejections..."
+                placeholder="Search rejections, claims, insights..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 h-8"
+                className="pl-8 text-xs"
               />
             </div>
-            
             <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="h-8">
+              <SelectTrigger className="text-xs">
                 <SelectValue placeholder="Filter by type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="§102">§102 Anticipation</SelectItem>
-                <SelectItem value="§103">§103 Obviousness</SelectItem>
-                <SelectItem value="§101">§101 Eligibility</SelectItem>
-                <SelectItem value="§112">§112 Disclosure</SelectItem>
+                <SelectItem value="§102">§ 102 - Anticipation</SelectItem>
+                <SelectItem value="§103">§ 103 - Obviousness</SelectItem>
+                <SelectItem value="§101">§ 101 - Eligibility</SelectItem>
+                <SelectItem value="§112">§ 112 - Description</SelectItem>
                 <SelectItem value="OTHER">Other</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
 
-        {/* Content */}
+        {/* Scrollable Content */}
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-4">
-            
-            {/* Overview Section */}
+            {/* Enhanced Metadata Section */}
             <Collapsible
-              open={expandedSections.has('overview')}
-              onOpenChange={() => toggleSection('overview')}
+              open={sectionsExpanded.metadata}
+              onOpenChange={() => toggleSection('metadata')}
             >
               <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-between p-0 h-auto"
-                >
-                  <span className="font-medium text-gray-900">Overview</span>
-                  {expandedSections.has('overview') ? (
+                <Button variant="ghost" className="w-full justify-between p-0 h-auto">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    <span className="font-medium text-sm">Document Info</span>
+                  </div>
+                  {sectionsExpanded.metadata ? (
                     <ChevronDown className="h-4 w-4" />
                   ) : (
                     <ChevronRight className="h-4 w-4" />
                   )}
                 </Button>
               </CollapsibleTrigger>
-              
-              <CollapsibleContent className="mt-3">
-                <Card>
-                  <CardContent className="pt-3">
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <div className="font-medium text-gray-900">
-                          {officeAction.summary.totalRejections}
-                        </div>
-                        <div className="text-gray-600">Rejections</div>
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">
-                          {officeAction.summary.totalClaimsRejected}
-                        </div>
-                        <div className="text-gray-600">Claims Affected</div>
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">
-                          {officeAction.summary.uniquePriorArtCount}
-                        </div>
-                        <div className="text-gray-600">Prior Art Refs</div>
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">
-                          {officeAction.metadata?.examinerName || 'Unknown'}
-                        </div>
-                        <div className="text-gray-600">Examiner</div>
-                      </div>
-                    </div>
-                    
-                    {officeAction.metadata?.mailingDate && (
-                      <div className="mt-3 pt-3 border-t">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Calendar className="h-4 w-4" />
-                          <span>Mailed: {new Date(officeAction.metadata.mailingDate).toLocaleDateString()}</span>
-                        </div>
+              <CollapsibleContent className="mt-2">
+                <Card className="bg-muted/30">
+                  <CardContent className="p-3 text-xs space-y-2">
+                    {officeAction.metadata.applicationNumber && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Application:</span>
+                        <span className="font-mono">{officeAction.metadata.applicationNumber}</span>
                       </div>
                     )}
-
-                    {/* View Office Action button */}
-                    <div className="mt-3 pt-3 border-t space-y-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleViewOfficeAction}
-                        className="w-full"
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        View Office Action
-                      </Button>
-                      
-                      {/* Detailed Summary */}
-                      <OfficeActionDetailedSummary
-                        examinerRemarks={officeAction.examinerRemarks}
-                        detailedAnalysis={officeAction.detailedAnalysis}
-                        metadata={officeAction.metadata}
-                      />
-                    </div>
+                    {officeAction.metadata.examinerName && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Examiner:</span>
+                        <span>{officeAction.metadata.examinerName}</span>
+                      </div>
+                    )}
+                    {officeAction.metadata.artUnit && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Art Unit:</span>
+                        <span>{officeAction.metadata.artUnit}</span>
+                      </div>
+                    )}
+                    {officeAction.metadata.mailingDate && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Mailed:</span>
+                        <span>{new Date(officeAction.metadata.mailingDate).toLocaleDateString()}</span>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
+
+                {/* View Office Action button */}
+                <div className="mt-3 space-y-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleViewOfficeAction}
+                    className="w-full"
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Office Action
+                  </Button>
+                </div>
               </CollapsibleContent>
             </Collapsible>
 
-            {/* Rejections Section */}
+            {/* Enhanced Rejections Section */}
             <Collapsible
-              open={expandedSections.has('rejections')}
+              open={sectionsExpanded.rejections}
               onOpenChange={() => toggleSection('rejections')}
             >
               <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-between p-0 h-auto"
-                >
-                  <span className="font-medium text-gray-900">
-                    Rejections ({filteredRejections.length})
-                  </span>
-                  {expandedSections.has('rejections') ? (
+                <Button variant="ghost" className="w-full justify-between p-0 h-auto">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="font-medium text-sm">
+                      Rejections ({filteredRejections.length})
+                    </span>
+                  </div>
+                  {sectionsExpanded.rejections ? (
                     <ChevronDown className="h-4 w-4" />
                   ) : (
                     <ChevronRight className="h-4 w-4" />
                   )}
                 </Button>
               </CollapsibleTrigger>
-              
-              <CollapsibleContent className="mt-3 space-y-2">
-                {filteredRejections.map((rejection) => {
-                  const config = REJECTION_TYPE_CONFIG[rejection.type as keyof typeof REJECTION_TYPE_CONFIG] || REJECTION_TYPE_CONFIG['OTHER'];
-                  const IconComponent = config.icon;
-                  const isSelected = selectedRejectionId === rejection.id;
-                  
-                  return (
-                    <Card
-                      key={rejection.id}
-                      className={cn(
-                        'cursor-pointer transition-all hover:shadow-md',
-                        isSelected && 'ring-2 ring-blue-500 bg-blue-50'
-                      )}
-                      onClick={() => onRejectionSelect?.(rejection.id)}
+              <CollapsibleContent className="mt-2">
+                <div className="space-y-2">
+                  {filteredRejections.map((rejection) => {
+                    const config = REJECTION_TYPE_CONFIG[rejection.type as keyof typeof REJECTION_TYPE_CONFIG] || REJECTION_TYPE_CONFIG['OTHER'];
+                    const IconComponent = config.icon;
+                    const isSelected = selectedRejectionId === rejection.id;
+                    const hasInsights = rejection.reasoningInsights && rejection.reasoningInsights.length > 0;
+                    const hasEnhancedData = rejection.rawType || rejection.rejectionCategory || rejection.legalBasis;
+
+                    return (
+                      <Card
+                        key={rejection.id}
+                        className={cn(
+                          'cursor-pointer transition-all duration-200 hover:shadow-sm',
+                          config.bgColor,
+                          config.borderColor,
+                          isSelected && 'ring-2 ring-blue-500 ring-offset-1',
+                          rejection.requiresHumanReview && 'ring-2 ring-amber-300'
+                        )}
+                        onClick={() => onRejectionSelect?.(rejection.id)}
+                      >
+                        <CardContent className="p-3">
+                          <div className="space-y-2">
+                            {/* Enhanced Header */}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <IconComponent className={cn('h-4 w-4 flex-shrink-0', config.color)} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-1 mb-1">
+                                    <span className="text-sm font-medium">
+                                      {rejection.rawType || rejection.type}
+                                    </span>
+                                    {getConfidenceIndicator(rejection.classificationConfidence)}
+                                    {rejection.requiresHumanReview && (
+                                      <Tooltip>
+                                        <TooltipTrigger>
+                                          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                                            Review
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>Requires human review</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )}
+                                  </div>
+
+                                  {/* Enhanced Classification Details */}
+                                  {hasEnhancedData && (
+                                    <div className="text-xs text-muted-foreground space-y-0.5">
+                                      {rejection.rejectionCategory && (
+                                        <div>Category: {rejection.rejectionCategory}</div>
+                                      )}
+                                      {rejection.legalBasis && (
+                                        <div>Basis: {rejection.legalBasis}</div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <Badge variant="outline" className="text-xs flex-shrink-0">
+                                Claims {abbreviateClaimRanges(rejection.claims)}
+                              </Badge>
+                            </div>
+
+                            {/* Enhanced Insights Section */}
+                            {hasInsights && (
+                              <Collapsible
+                                open={rejectionInsightsExpanded[rejection.id]}
+                                onOpenChange={() => toggleRejectionInsights(rejection.id)}
+                              >
+                                <CollapsibleTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="w-full justify-between p-1 h-auto text-xs"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      <Lightbulb className="h-3 w-3 text-blue-600" />
+                                      <span>Legal Insights ({rejection.reasoningInsights!.length})</span>
+                                    </div>
+                                    {rejectionInsightsExpanded[rejection.id] ? (
+                                      <ChevronDown className="h-3 w-3" />
+                                    ) : (
+                                      <ChevronRight className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent className="mt-1">
+                                  <div className="bg-blue-50/50 rounded p-2 space-y-1">
+                                    {rejection.reasoningInsights!.slice(0, 2).map((insight, index) => (
+                                      <div key={index} className="text-xs text-blue-900 flex items-start gap-1">
+                                        <span className="text-blue-500 mt-0.5">•</span>
+                                        <span className="line-clamp-2">{insight}</span>
+                                      </div>
+                                    ))}
+                                    {rejection.reasoningInsights!.length > 2 && (
+                                      <div className="text-xs text-blue-700 text-center">
+                                        +{rejection.reasoningInsights!.length - 2} more insights
+                                      </div>
+                                    )}
+                                  </div>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            )}
+
+                            {/* Summary */}
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>
+                                {rejection.priorArtReferences.length} reference{rejection.priorArtReferences.length !== 1 ? 's' : ''}
+                              </span>
+                              {hasEnhancedData && (
+                                <span className="text-blue-600">Enhanced</span>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+
+                  {filteredRejections.length === 0 && (
+                    <div className="text-center py-6 text-muted-foreground">
+                      <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No rejections match your search</p>
+                    </div>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Enhanced Prior Art Section */}
+            <Collapsible
+              open={sectionsExpanded.priorArt}
+              onOpenChange={() => toggleSection('priorArt')}
+            >
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" className="w-full justify-between p-0 h-auto">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4" />
+                    <span className="font-medium text-sm">
+                      Prior Art ({organizedPriorArt.length})
+                    </span>
+                  </div>
+                  {sectionsExpanded.priorArt ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2">
+                <div className="space-y-2">
+                  {organizedPriorArt.map((entry, index) => (
+                    <Card 
+                      key={index} 
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => onPriorArtSelect?.(entry.reference)}
                     >
                       <CardContent className="p-3">
-                        <div className="flex items-start gap-3">
-                          <IconComponent className="h-4 w-4 mt-1 text-gray-600" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Badge 
-                                variant="outline" 
-                                className={cn('text-xs', config.color)}
-                              >
-                                {rejection.type}
-                              </Badge>
-                              <span className="text-xs text-gray-500">
-                                Claims {rejection.claims.join(', ')}
-                              </span>
-                            </div>
-                            
-                            <h4 className="font-medium text-sm text-gray-900 mb-1">
-                              {config.label}
-                            </h4>
-                            
-                            <p className="text-xs text-gray-600 leading-relaxed">
-                              {rejection.examinerReasoning}
-                            </p>
-                            
-                            {rejection.priorArtReferences.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1">
-                                {rejection.priorArtReferences.slice(0, 3).map(ref => (
-                                  <Badge 
-                                    key={ref} 
-                                    variant="secondary" 
-                                    className="text-xs"
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium font-mono truncate">
+                              {entry.reference}
+                            </span>
+                            <div className="flex gap-1">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-6 w-6 p-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewPriorArt(entry.reference);
+                                    }}
                                   >
-                                    {ref}
-                                  </Badge>
-                                ))}
-                                {rejection.priorArtReferences.length > 3 && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    +{rejection.priorArtReferences.length - 3} more
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
+                                    <Eye className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>View patent document</p>
+                                </TooltipContent>
+                              </Tooltip>
+                              
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                    <ExternalLink className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Open in USPTO database</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {Array.from(entry.rejectionTypes).map((type, typeIndex) => (
+                              <Badge key={typeIndex} variant="outline" className="text-xs">
+                                {String(type)}
+                              </Badge>
+                            ))}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Claims: {abbreviateClaimRanges(Array.from(entry.claimsAffected))}
                           </div>
                         </div>
                       </CardContent>
                     </Card>
-                  );
-                })}
-                
-                {filteredRejections.length === 0 && (
-                  <div className="text-center py-6 text-gray-500">
-                    <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">No rejections match your filter</p>
-                  </div>
-                )}
+                  ))}
+                </div>
               </CollapsibleContent>
             </Collapsible>
 
-            {/* Prior Art Section */}
-            <Collapsible
-              open={expandedSections.has('prior-art')}
-              onOpenChange={() => toggleSection('prior-art')}
-            >
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-between p-0 h-auto"
-                >
-                  <span className="font-medium text-gray-900">
-                    Prior Art ({priorArtAnalysis.length})
-                  </span>
-                  {expandedSections.has('prior-art') ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                </Button>
-              </CollapsibleTrigger>
-              
-              <CollapsibleContent className="mt-3 space-y-2">
-                {priorArtAnalysis.map((priorArt) => (
-                  <Card
-                    key={priorArt.patentNumber}
-                    className={cn(
-                      'cursor-pointer transition-all hover:shadow-md hover:bg-gray-50',
-                      hoveredPriorArt === priorArt.patentNumber && 'bg-blue-50'
-                    )}
-                    onMouseEnter={() => setHoveredPriorArt(priorArt.patentNumber)}
-                    onMouseLeave={() => setHoveredPriorArt(null)}
-                    onClick={() => handlePriorArtClick(priorArt.patentNumber)}
-                  >
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <BookOpen className="h-4 w-4 text-gray-600" />
-                            <span className="font-medium text-sm text-gray-900">
-                              {priorArt.patentNumber}
-                            </span>
-                          </div>
-                          
-                          <div className="flex items-center gap-4 text-xs text-gray-600 mb-2">
-                            <span>{priorArt.rejectionCount} rejection{priorArt.rejectionCount !== 1 ? 's' : ''}</span>
-                            <span>Claims {Array.from(priorArt.claimsAffected).join(', ')}</span>
-                          </div>
-                          
-                          <div className="flex flex-wrap gap-1">
-                            {Array.from(priorArt.rejectionTypes).map(type => (
-                              <Badge 
-                                key={type} 
-                                variant="outline" 
-                                className={cn('text-xs', REJECTION_TYPE_CONFIG[type as keyof typeof REJECTION_TYPE_CONFIG]?.color)}
-                              >
-                                {type}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                        
-                        <div className="flex gap-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-6 w-6 p-0"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleViewPriorArt(priorArt.patentNumber);
-                                }}
-                              >
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>View patent document</p>
-                            </TooltipContent>
-                          </Tooltip>
-                          
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                                <ExternalLink className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Open in USPTO database</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-                
-                {priorArtAnalysis.length === 0 && (
-                  <div className="text-center py-6 text-gray-500">
-                    <BookOpen className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">No prior art references found</p>
+            {/* Summary Card */}
+            <Card className="bg-muted/30">
+              <CardContent className="p-3">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="text-center">
+                    <div className="font-semibold text-lg">{officeAction.summary.totalRejections}</div>
+                    <div className="text-muted-foreground">Rejections</div>
                   </div>
-                )}
-              </CollapsibleContent>
-            </Collapsible>
+                  <div className="text-center">
+                    <div className="font-semibold text-lg">{officeAction.summary.totalClaimsRejected}</div>
+                    <div className="text-muted-foreground">Claims</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Enhanced Detailed Analysis */}
+            {officeAction.detailedAnalysis && (
+              <OfficeActionDetailedSummary 
+                detailedAnalysis={officeAction.detailedAnalysis}
+              />
+            )}
           </div>
         </ScrollArea>
 

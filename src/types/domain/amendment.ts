@@ -33,12 +33,19 @@ export const AmendmentStatus = {
 export const ParsedRejectionSchema = z.object({
   id: z.string(),
   type: z.enum(['§102', '§103', '§101', '§112', 'OTHER']),
+  rawType: z.string().optional(), // Preserve GPT's original classification
+  rejectionCategory: z.string().optional(), // e.g. "enablement", "double patenting", "indefiniteness"
+  legalBasis: z.string().optional(), // e.g. "35 U.S.C. § 112(b)", "35 U.S.C. § 103(a)"
   claims: z.array(z.string()),
   priorArtReferences: z.array(z.string()),
   examinerReasoning: z.string(),
+  reasoningInsights: z.array(z.string()).optional(), // GPT's legal insights about examiner reasoning
   rawText: z.string(),
   startIndex: z.number().optional(),
   endIndex: z.number().optional(),
+  // Confidence and human review flags
+  classificationConfidence: z.number().min(0).max(1).optional(),
+  requiresHumanReview: z.boolean().optional(),
 });
 
 export const OfficeActionSchema = z.object({
@@ -51,6 +58,9 @@ export const OfficeActionSchema = z.object({
   examinerName: z.string().optional(),
   applicationNumber: z.string().optional(),
   mailingDate: z.string().optional(),
+  // Enhanced document type handling
+  documentType: z.string().optional(), // Allow GPT's full classification
+  rawDocumentType: z.string().optional(), // Store original if different
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -62,8 +72,20 @@ export const RejectionAnalysisSchema = z.object({
   missingElements: z.array(z.string()),
   weakArguments: z.array(z.string()),
   recommendedStrategy: z.enum(['AMEND_CLAIMS', 'ARGUE_REJECTION', 'COMBINATION']),
+  rawRecommendedStrategy: z.string().optional(), // Preserve GPT's original strategy description
   suggestedAmendments: z.array(z.string()),
   argumentPoints: z.array(z.string()),
+  strategyRationale: z.string().optional(),
+  // Enhanced analysis fields
+  strengthAssessment: z.enum(['STRONG', 'MODERATE', 'WEAK', 'FLAWED']).optional(),
+  rawStrengthAssessment: z.string().optional(), // GPT's original strength description
+  examinerReasoningGaps: z.array(z.string()).optional(),
+  contextualInsights: z.array(z.object({
+    type: z.string(),
+    description: z.string(),
+    confidence: z.number().min(0).max(1),
+    source: z.string(),
+  })).optional(),
 });
 
 export const AmendmentResponseSchema = z.object({

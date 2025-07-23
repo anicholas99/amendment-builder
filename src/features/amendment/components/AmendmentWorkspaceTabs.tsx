@@ -34,6 +34,7 @@ import { SimplifiedClaimsTab } from './SimplifiedClaimsTab';
 import { ArgumentsTab } from './ArgumentsTab';
 import { ClaimsDocumentPreview } from './ClaimsDocumentPreview';
 import { RemarksDocumentPreview } from './RemarksDocumentPreview';
+import { ASMBPreview } from './ASMBPreview';
 import { useDraftDocumentByType } from '@/hooks/api/useDraftDocuments';
 import { useToast } from '@/hooks/useToastWrapper';
 import { useViewHeight } from '@/hooks/useViewHeight';
@@ -79,7 +80,7 @@ export function AmendmentWorkspaceTabs({
   className,
 }: AmendmentWorkspaceTabsProps) {
   const [activeTab, setActiveTab] = useState('analysis');
-  const [previewView, setPreviewView] = useState<'claims' | 'remarks' | 'sidebyside'>('sidebyside'); // Default to side-by-side view
+  const [previewView, setPreviewView] = useState<'asmb' | 'claims' | 'remarks' | 'sidebyside'>('asmb'); // Default to ASMB view
 
   // Calculate proper height for scrollable areas
   // Account for: tabs header (48px) + view selector (72px) + document header (80px) = ~200px total offset
@@ -146,7 +147,7 @@ export function AmendmentWorkspaceTabs({
           claimAmendments: claimsData,
           argumentSections: [], // Empty for CLM-only export
         },
-        options: { format: 'docx' as const, documentType: 'CLM' }
+        options: { format: 'docx' as const, documentType: 'CLM' as const }
       };
 
       await AmendmentExportService.exportAndDownload(exportRequest, {
@@ -187,7 +188,7 @@ export function AmendmentWorkspaceTabs({
           claimAmendments: [], // Empty for REM-only export
           argumentSections: argumentsData,
         },
-        options: { format: 'docx' as const, documentType: 'REM' }
+        options: { format: 'docx' as const, documentType: 'REM' as const }
       };
 
       await AmendmentExportService.exportAndDownload(exportRequest, {
@@ -206,6 +207,47 @@ export function AmendmentWorkspaceTabs({
       });
     }
   }, [projectId, selectedOfficeActionId, argumentsData, toast]);
+
+  // Export ASMB handler
+  const handleExportASMB = useCallback(async () => {
+    if (!selectedOfficeActionId) {
+      toast.error({ 
+        title: 'Export Failed', 
+        description: 'No office action selected for export' 
+      });
+      return;
+    }
+
+    try {
+      toast.info({ title: 'Generating ASMB Document...', description: 'Creating amendment submission boilerplate' });
+      
+      await AmendmentExportService.exportAndDownload({
+        projectId,
+        officeActionId: selectedOfficeActionId,
+        content: {
+          title: 'Amendment Submission Boilerplate',
+          responseType: 'AMENDMENT' as const,
+          claimAmendments: [], // Empty for ASMB-only export
+          argumentSections: [], // Empty for ASMB-only export
+          includeASMB: true,
+        },
+        options: { format: 'docx' as const, documentType: 'ASMB' as const }
+      }, {
+        customFilename: `ASMB_${selectedOfficeActionId}_${new Date().toISOString().split('T')[0]}.docx`,
+        onExportComplete: () => {
+          toast.success({ title: 'ASMB Export Complete', description: 'Amendment submission boilerplate downloaded successfully' });
+        },
+        onExportError: (error) => {
+          toast.error({ title: 'ASMB Export Failed', description: error.message });
+        }
+      });
+    } catch (error) {
+      toast.error({ 
+        title: 'Export Failed', 
+        description: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  }, [projectId, selectedOfficeActionId, toast]);
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
@@ -308,11 +350,23 @@ export function AmendmentWorkspaceTabs({
                   <span className="text-sm text-gray-600">View:</span>
                   <div className="flex rounded-md border border-gray-200 bg-white">
                     <Button
+                      variant={previewView === 'asmb' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setPreviewView('asmb')}
+                      className={cn(
+                        "rounded-r-none border-r",
+                        previewView === 'asmb' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-50'
+                      )}
+                    >
+                      <Layout className="h-4 w-4 mr-2" />
+                      ASMB
+                    </Button>
+                    <Button
                       variant={previewView === 'claims' ? 'default' : 'ghost'}
                       size="sm"
                       onClick={() => setPreviewView('claims')}
                       className={cn(
-                        "rounded-r-none border-r",
+                        "rounded-none border-r",
                         previewView === 'claims' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-50'
                       )}
                     >
@@ -350,6 +404,51 @@ export function AmendmentWorkspaceTabs({
 
             {/* Content Area */}
             <div className="flex-1 overflow-hidden">
+              {/* ASMB Only View */}
+              {previewView === 'asmb' && (
+                <div className="h-full flex flex-col">
+                  <div className="p-4 border-b bg-purple-50 flex-shrink-0">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold flex items-center gap-2">
+                        <Layout className="h-4 w-4" />
+                        Amendment Submission Boilerplate (ASMB)
+                      </h3>
+                      <div className="flex gap-2">
+                                                 <Button 
+                           size="sm" 
+                           variant="outline"
+                           onClick={handleExportASMB}
+                           disabled={!selectedOfficeActionId}
+                         >
+                           <Download className="h-4 w-4 mr-2" />
+                           Export ASMB
+                         </Button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      First page of amendment submission with application details
+                    </p>
+                  </div>
+                  <div 
+                    className="overflow-y-auto overflow-x-hidden custom-scrollbar"
+                    style={{
+                      height: scrollAreaHeight,
+                      scrollbarWidth: 'auto',
+                      msOverflowStyle: 'auto',
+                    }}
+                  >
+                    {selectedOfficeActionId && (
+                      <ASMBPreview 
+                        projectId={projectId}
+                        officeActionId={selectedOfficeActionId}
+                        submissionType="AMENDMENT"
+                        showHeader={false}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Claims Only View */}
               {previewView === 'claims' && (
                 <div className="h-full flex flex-col">

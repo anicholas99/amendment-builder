@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { abbreviateClaimRanges } from '@/utils/claims';
 import { useProsecutionOverview, useOfficeActionUrgency } from '@/hooks/api/useProsecutionOverview';
 
 interface ProsecutionHeaderProps {
@@ -230,7 +231,7 @@ export const ProsecutionHeader: React.FC<ProsecutionHeaderProps> = ({
               {/* Claims Affected */}
               {currentOfficeAction.rejectionSummary.claimsAffected.length > 0 && (
                 <div className="text-gray-600">
-                  Claims {currentOfficeAction.rejectionSummary.claimsAffected.join(', ')}
+                  Claims {abbreviateClaimRanges(currentOfficeAction.rejectionSummary.claimsAffected)}
                 </div>
               )}
             </div>

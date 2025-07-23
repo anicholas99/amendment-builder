@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { abbreviateClaimRanges } from '@/utils/claims';
 import { format } from 'date-fns';
 
 interface CurrentOACardProps {
@@ -118,7 +119,7 @@ export const CurrentOACard: React.FC<CurrentOACardProps> = ({
             <div className="flex items-center space-x-4 text-sm">
               <span className="font-medium">{rejectionTypes}</span>
               <span className="text-gray-600">
-                Claims {officeAction.rejectionSummary.claimsAffected.join(', ')}
+                Claims {abbreviateClaimRanges(officeAction.rejectionSummary.claimsAffected)}
               </span>
             </div>
           </div>

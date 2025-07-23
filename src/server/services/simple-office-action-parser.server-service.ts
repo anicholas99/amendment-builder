@@ -1,6 +1,44 @@
 /**
  * Simple Office Action Parser Service
  * 
+ * ENHANCED VERSION: Now preserves GPT's nuanced legal analysis while maintaining structure
+ * 
+ * Key Improvements:
+ * - Preserves raw GPT classifications alongside standardized types for UI filtering
+ * - Captures specific legal subcategories (e.g., "indefiniteness" vs generic "§112")
+ * - Stores GPT's legal reasoning insights about examiner errors
+ * - Maintains confidence scoring and human review flags
+ * - Allows nuanced document type classification
+ * 
+ * Example Enhanced Output:
+ * {
+ *   "rejections": [{
+ *     "type": "§112",              // Standardized for UI filtering
+ *     "rawType": "§112(b) indefiniteness",  // GPT's specific classification
+ *     "rejectionCategory": "indefiniteness", // Specific subcategory
+ *     "legalBasis": "35 U.S.C. § 112(b)",   // Full legal citation
+ *     "reasoningInsights": [       // GPT's legal analysis
+ *       "Examiner overlooked claim limitation X",
+ *       "Missing antecedent basis argument is weak"
+ *     ],
+ *     "classificationConfidence": 0.95,
+ *     "requiresHumanReview": false
+ *   }],
+ *   "rejectionAnalyses": [{
+ *     "strength": "MODERATE",      // Standardized classification
+ *     "rawStrengthAssessment": "Moderate rejection with questionable claim interpretation",
+ *     "recommendedStrategy": "ARGUE", // Standardized strategy
+ *     "rawRecommendedStrategy": "Focus on antecedent basis arguments while preparing fallback amendments"
+ *   }]
+ * }
+ * 
+ * This approach gives us:
+ * ✅ Rich legal analysis for attorney review
+ * ✅ Standardized types for UI filtering and sorting
+ * ✅ Confidence metrics for quality control
+ * ✅ Nuanced strategic recommendations
+ * ✅ Specific legal subcategorization
+ * 
  * Sends the full OCR text to GPT with one comprehensive prompt that includes:
  * - Rejection parsing and prior art extraction
  * - Rejection strength analysis and strategic recommendations
@@ -60,12 +98,29 @@ const COMPREHENSIVE_OFFICE_ACTION_PROMPT = `You are a USPTO patent examiner and 
 4. Overall response strategy
 5. Prosecution context awareness
 
-**REJECTION TYPE IDENTIFICATION**:
+**REJECTION TYPE CLASSIFICATION**:
+Primary categories for filtering:
 - "35 U.S.C. § 102" or "Section 102" or "anticipated" → type: "§102"
 - "35 U.S.C. § 103" or "Section 103" or "obvious" → type: "§103" 
 - "35 U.S.C. § 101" or "Section 101" or "eligible subject matter" → type: "§101"
 - "35 U.S.C. § 112" or "Section 112" or "written description" or "enablement" or "indefinite" → type: "§112"
 - If unclear → type: "OTHER"
+
+However, ALSO provide:
+- **rawType**: Your exact classification (e.g., "§112(b) indefiniteness", "double patenting", "restriction requirement")
+- **rejectionCategory**: Specific subcategory (e.g., "enablement", "written description", "indefiniteness", "obviousness combination")
+- **legalBasis**: Full legal citation (e.g., "35 U.S.C. § 112(b)", "35 U.S.C. § 103(a)")
+
+**DOCUMENT TYPE CLASSIFICATION**:
+Be specific about document type:
+- "Non-Final Office Action"
+- "Final Office Action" 
+- "Advisory Action"
+- "Restriction Requirement"
+- "Election of Species"
+- "Notice of Allowance"
+- "Examiner's Amendment"
+- Other specific types you identify
 
 **CLAIM PARSING**:
 - "Claims 1-7, 9 and 13-45" → ["1","2","3","4","5","6","7","9","13","14",...,"45"]
@@ -79,31 +134,46 @@ const COMPREHENSIVE_OFFICE_ACTION_PROMPT = `You are a USPTO patent examiner and 
 - Non-patent literature: papers, books, websites
 
 **REJECTION STRENGTH ANALYSIS**:
-For each rejection, assess:
+For each rejection, assess and provide BOTH:
+- **strength**: Standard category (STRONG/MODERATE/WEAK/FLAWED)
+- **rawStrengthAssessment**: Your detailed strength description
+
+Consider:
 - **STRONG**: Clear prior art mapping, solid examiner reasoning, difficult to overcome
 - **MODERATE**: Good prior art basis but some gaps in reasoning or mapping
 - **WEAK**: Significant gaps in examiner reasoning or prior art mapping
 - **FLAWED**: Major legal or factual errors in examiner's position
 
-Consider:
-- Quality of prior art citations
-- Completeness of element mapping
-- Examiner's reasoning strength
-- Legal correctness of rejection
-- Missing claim elements
-- Potential arguments available
+But also explain nuances like:
+- "Strong combination but weak obviousness rationale"
+- "Moderate rejection with questionable claim interpretation"
+- "Weak enablement argument based on outdated precedent"
 
 **STRATEGIC RECOMMENDATIONS**:
-For each rejection determine:
+For each rejection provide BOTH:
+- **recommendedStrategy**: Standard category (ARGUE/AMEND/COMBINATION)
+- **rawRecommendedStrategy**: Your specific strategic description
+
+Consider:
 - **ARGUE**: When examiner has clear errors or weak reasoning
 - **AMEND**: When prior art is strong but amendments can avoid it
 - **COMBINATION**: When both arguments and amendments are needed
 
-Consider:
-- Strength of available arguments
-- Ease of amendment around prior art
-- Risk/reward of different approaches
-- Timeline and cost considerations
+**LEGAL REASONING INSIGHTS**:
+For **reasoningInsights**, identify specific issues like:
+- "Examiner overlooked claim limitation X in prior art analysis"
+- "Cited combination lacks proper motivation"
+- "Missing disclosure of specific technical feature Y"
+- "Examiner misinterpreted specification support for term Z"
+- "Prior art teaches away from claimed invention"
+
+**CONFIDENCE AND HUMAN REVIEW**:
+- Set **classificationConfidence** (0.0-1.0) for each rejection
+- Set **requiresHumanReview** to true if:
+  - Classification is ambiguous
+  - Legal basis is complex or novel
+  - Multiple valid interpretations exist
+  - Document quality issues affect analysis
 
 **PROSECUTION CONTEXT AWARENESS**:
 Analyze within context of:
@@ -122,27 +192,35 @@ Analyze within context of:
     "examinerName": "extract examiner name or null",
     "artUnit": "extract art unit or null",
     "confirmationNumber": "extract confirmation number or null",
-    "documentType": "Non-Final Office Action|Final Office Action|Advisory Action|Notice of Allowance|Other",
+    "documentType": "your specific classification (e.g., 'Non-Final Office Action')",
+    "rawDocumentType": "include if you have additional classification details",
     "analysisConfidence": 0.95
   },
   "rejections": [
     {
       "id": "generate-uuid-here",
       "type": "§102|§103|§101|§112|OTHER",
+      "rawType": "your exact classification",
+      "rejectionCategory": "specific subcategory",
+      "legalBasis": "full legal citation",
       "claims": ["1", "2", "3"],
       "priorArtReferences": ["US1,234,567", "US20200123456A1"],
       "examinerReasoning": "Full examiner reasoning text explaining the rejection",
+      "reasoningInsights": ["Specific legal insight 1", "Specific legal insight 2"],
       "rawText": "Complete raw text of the rejection section",
-      "confidence": 0.95
+      "classificationConfidence": 0.95,
+      "requiresHumanReview": false
     }
   ],
   "rejectionAnalyses": [
     {
       "rejectionId": "same-id-as-rejection-above",
       "strength": "STRONG|MODERATE|WEAK|FLAWED",
+      "rawStrengthAssessment": "your detailed strength description",
       "confidenceScore": 0.85,
       "examinerReasoningGaps": ["Missing element X", "Unclear mapping of Y"],
       "recommendedStrategy": "ARGUE|AMEND|COMBINATION",
+      "rawRecommendedStrategy": "your specific strategic recommendation",
       "strategyRationale": "Detailed explanation of why this strategy is recommended",
       "argumentPoints": ["Point 1: Prior art doesn't teach X", "Point 2: Missing disclosure of Y"],
       "amendmentSuggestions": ["Add limitation Z to claim 1", "Clarify term Y in claim 2"],
@@ -434,20 +512,29 @@ Consider this context when analyzing rejections and formulating strategy. If thi
       const rejectionTypes = new Set<string>();
 
       for (const rejection of rawResponse.rejections) {
-        // Ensure required fields
+        // Ensure required fields with enhanced data preservation
         const processedRejection: ParsedRejection = {
           id: rejection.id || uuidv4(),
           type: this.validateRejectionType(rejection.type),
+          // NEW: Preserve GPT's raw outputs
+          rawType: rejection.rawType || rejection.type, // Fallback to original type if no rawType
+          rejectionCategory: rejection.rejectionCategory,
+          legalBasis: rejection.legalBasis,
           claims: Array.isArray(rejection.claims) ? rejection.claims : [],
           priorArtReferences: Array.isArray(rejection.priorArtReferences) ? rejection.priorArtReferences : [],
           examinerReasoning: rejection.examinerReasoning || '',
+          // NEW: Preserve GPT's legal insights
+          reasoningInsights: Array.isArray(rejection.reasoningInsights) ? rejection.reasoningInsights : undefined,
           rawText: rejection.rawText || '',
+          // NEW: Confidence and human review indicators
+          classificationConfidence: rejection.classificationConfidence || 0.8,
+          requiresHumanReview: rejection.requiresHumanReview || false,
         };
 
         // Count unique claims
         totalClaimsRejected += processedRejection.claims.length;
         
-        // Track rejection types
+        // Track rejection types (use standardized type for counting)
         rejectionTypes.add(processedRejection.type);
         
         // Track unique prior art
@@ -462,7 +549,7 @@ Consider this context when analyzing rejections and formulating strategy. If thi
       analysis.summary.totalClaimsRejected = totalClaimsRejected;
       analysis.summary.uniquePriorArtCount = uniquePriorArt.size;
 
-      // Generate user-friendly summary
+      // Generate user-friendly summary (enhanced with raw type awareness)
       const rejectionTypeNames: { [key: string]: string } = {
         '§102': 'anticipation (§102)',
         '§103': 'obviousness (§103)',
@@ -479,7 +566,10 @@ Consider this context when analyzing rejections and formulating strategy. If thi
       if (analysis.summary.totalRejections === 0) {
         summaryText += 'no rejections.';
       } else if (analysis.summary.totalRejections === 1) {
-        summaryText += `1 rejection based on ${rejectionDescriptions[0]}`;
+        const firstRejection = analysis.rejections[0];
+        // Use more specific description if available
+        const specificType = firstRejection.rejectionCategory || rejectionDescriptions[0];
+        summaryText += `1 rejection based on ${specificType}`;
       } else {
         summaryText += `${analysis.summary.totalRejections} rejections including ${rejectionDescriptions.join(', ')}`;
       }
@@ -494,9 +584,11 @@ Consider this context when analyzing rejections and formulating strategy. If thi
 
       summaryText += '.';
 
-      // Add specific rejection details if available
+      // Add specific rejection details if available (enhanced with raw types)
       if (analysis.rejections.length > 0) {
         const mainRejection = analysis.rejections[0];
+        const specificCategory = mainRejection.rejectionCategory || mainRejection.rawType;
+        
         if (mainRejection.type === '§103' && mainRejection.priorArtReferences.length > 1) {
           summaryText += ` The main issue appears to be the combination of ${mainRejection.priorArtReferences.slice(0, 2).join(' and ')}.`;
         } else if (mainRejection.type === '§102' && mainRejection.priorArtReferences.length > 0) {
@@ -504,7 +596,16 @@ Consider this context when analyzing rejections and formulating strategy. If thi
         } else if (mainRejection.type === '§101') {
           summaryText += ' The examiner questions whether the claims are directed to patent-eligible subject matter.';
         } else if (mainRejection.type === '§112') {
-          summaryText += ' The examiner has concerns about the written description or claim clarity.';
+          if (specificCategory) {
+            summaryText += ` The examiner has concerns about ${specificCategory}.`;
+          } else {
+            summaryText += ' The examiner has concerns about the written description or claim clarity.';
+          }
+        }
+
+        // Add insight about reasoning quality if available
+        if (mainRejection.reasoningInsights && mainRejection.reasoningInsights.length > 0) {
+          summaryText += ` Key issues include: ${mainRejection.reasoningInsights.slice(0, 2).join(', ')}.`;
         }
       }
 
@@ -517,10 +618,10 @@ Consider this context when analyzing rejections and formulating strategy. If thi
         summaryText += ` Mailed: ${analysis.metadata.mailingDate}.`;
       }
 
-      // Use AI-generated summary if available, otherwise use our generated summary
+      // Use AI-generated summary if available, otherwise use our enhanced generated summary
       analysis.summary.userFriendlySummary = rawResponse.summary?.userFriendlySummary || summaryText;
       
-      // Process rejection analyses
+      // Process rejection analyses (enhanced)
       if (Array.isArray(rawResponse.rejectionAnalyses)) {
         const rejectionAnalyses: RejectionAnalysisResult[] = [];
         for (const analysisResult of rawResponse.rejectionAnalyses) {
@@ -535,13 +636,17 @@ Consider this context when analyzing rejections and formulating strategy. If thi
             amendmentSuggestions: Array.isArray(analysisResult.amendmentSuggestions) ? analysisResult.amendmentSuggestions : [],
             analyzedAt: analysisResult.analyzedAt || new Date().toISOString(),
             contextualInsights: Array.isArray(analysisResult.contextualInsights) ? analysisResult.contextualInsights : [],
+            
+            // NEW: Enhanced analysis data preservation
+            rawStrengthAssessment: analysisResult.rawStrengthAssessment,
+            rawRecommendedStrategy: analysisResult.rawRecommendedStrategy,
           };
           rejectionAnalyses.push(rejectionAnalysis);
         }
         analysis.rejectionAnalyses = rejectionAnalyses;
       }
 
-      // Process overall strategy
+      // Process overall strategy (preserve raw data)
       if (rawResponse.overallStrategy) {
         analysis.overallStrategy = {
           primaryStrategy: this.validateRecommendedStrategy(rawResponse.overallStrategy.primaryStrategy),

@@ -40,6 +40,9 @@ export interface RejectionAnalysisResult {
   modelVersion?: string;
   agentVersion?: string;
   contextualInsights?: ContextualInsight[];
+  // NEW: Preserve GPT's raw outputs alongside validated types
+  rawStrengthAssessment?: string; // GPT's original strength description
+  rawRecommendedStrategy?: string; // GPT's specific strategic recommendation
 }
 
 export interface StrategyRecommendation {
