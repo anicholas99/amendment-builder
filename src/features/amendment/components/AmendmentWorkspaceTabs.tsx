@@ -36,6 +36,7 @@ import { ClaimsDocumentPreview } from './ClaimsDocumentPreview';
 import { RemarksDocumentPreview } from './RemarksDocumentPreview';
 import { useDraftDocumentByType } from '@/hooks/api/useDraftDocuments';
 import { useToast } from '@/hooks/useToastWrapper';
+import { useViewHeight } from '@/hooks/useViewHeight';
 import { AmendmentExportService } from '@/services/api/amendmentExportService';
 import { logger } from '@/utils/clientLogger';
 import type { OfficeAction } from '@/types/domain/amendment';
@@ -79,6 +80,11 @@ export function AmendmentWorkspaceTabs({
 }: AmendmentWorkspaceTabsProps) {
   const [activeTab, setActiveTab] = useState('analysis');
   const [previewView, setPreviewView] = useState<'claims' | 'remarks' | 'sidebyside'>('sidebyside'); // Default to side-by-side view
+
+  // Calculate proper height for scrollable areas
+  // Account for: tabs header (48px) + view selector (72px) + document header (80px) = ~200px total offset
+  const viewHeight = useViewHeight(200);
+  const scrollAreaHeight = `calc(${viewHeight} - 200px)`;
 
   const handleTabChange = useCallback((value: string) => {
     setActiveTab(value);
@@ -369,7 +375,14 @@ export function AmendmentWorkspaceTabs({
                       {claimsData.length} claim amendment{claimsData.length !== 1 ? 's' : ''}
                     </p>
                   </div>
-                  <div className="flex-1 overflow-auto">
+                  <div 
+                    className="overflow-y-auto overflow-x-hidden custom-scrollbar"
+                    style={{
+                      height: scrollAreaHeight,
+                      scrollbarWidth: 'auto',
+                      msOverflowStyle: 'auto',
+                    }}
+                  >
                     <ClaimsDocumentPreview 
                       claimAmendments={claimsData}
                       applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
@@ -405,7 +418,14 @@ export function AmendmentWorkspaceTabs({
                       {argumentsData.length} argument section{argumentsData.length !== 1 ? 's' : ''}
                     </p>
                   </div>
-                  <div className="flex-1 overflow-auto">
+                  <div 
+                    className="overflow-y-auto overflow-x-hidden custom-scrollbar"
+                    style={{
+                      height: scrollAreaHeight,
+                      scrollbarWidth: 'auto',
+                      msOverflowStyle: 'auto',
+                    }}
+                  >
                     <RemarksDocumentPreview 
                       argumentSections={argumentsData}
                       responseType="AMENDMENT"
@@ -444,7 +464,14 @@ export function AmendmentWorkspaceTabs({
                         {argumentsData.length} argument section{argumentsData.length !== 1 ? 's' : ''}
                       </p>
                     </div>
-                    <div className="flex-1 overflow-auto">
+                    <div 
+                      className="overflow-y-auto overflow-x-hidden custom-scrollbar"
+                      style={{
+                        height: scrollAreaHeight,
+                        scrollbarWidth: 'auto',
+                        msOverflowStyle: 'auto',
+                      }}
+                    >
                       <RemarksDocumentPreview 
                         argumentSections={argumentsData}
                         responseType="AMENDMENT"
@@ -479,7 +506,14 @@ export function AmendmentWorkspaceTabs({
                         {claimsData.length} claim amendment{claimsData.length !== 1 ? 's' : ''}
                       </p>
                     </div>
-                    <div className="flex-1 overflow-auto">
+                    <div 
+                      className="overflow-y-auto overflow-x-hidden custom-scrollbar"
+                      style={{
+                        height: scrollAreaHeight,
+                        scrollbarWidth: 'auto',
+                        msOverflowStyle: 'auto',
+                      }}
+                    >
                       <ClaimsDocumentPreview 
                         claimAmendments={claimsData}
                         applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
