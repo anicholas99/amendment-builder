@@ -255,6 +255,33 @@ Consider this context when analyzing rejections and formulating strategy. If thi
 
       const systemMessage = 'You are a USPTO patent examiner and experienced patent attorney that analyzes Office Action documents. Provide comprehensive structured JSON analysis including rejection parsing, strength assessment, and strategic recommendations in a single response.';
       
+      // Token pricing constants (GPT-4.1 - April 2025)
+      const TOKEN_PRICING = {
+        INPUT_PER_1K: 0.002,   // $2.00 per million
+        OUTPUT_PER_1K: 0.008,  // $8.00 per million
+      };
+
+      // Calculate input tokens for cost estimation
+      const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
+      const estimatedInputTokens = estimateTokens(enhancedPrompt + systemMessage);
+      const maxOutputTokens = 8000;
+
+      // Calculate estimated cost
+      const estimatedInputCost = (estimatedInputTokens / 1000) * TOKEN_PRICING.INPUT_PER_1K;
+      const estimatedOutputCost = (maxOutputTokens / 1000) * TOKEN_PRICING.OUTPUT_PER_1K;
+      const estimatedTotalCost = estimatedInputCost + estimatedOutputCost;
+
+      logger.info('[SimpleOfficeActionParser] 💰 PRE-ANALYSIS COST ESTIMATE 💰', {
+        model: 'gpt-4.1',
+        estimatedInputTokens,
+        maxOutputTokens,
+        estimatedInputCost: `$${estimatedInputCost.toFixed(4)}`,
+        estimatedOutputCost: `$${estimatedOutputCost.toFixed(4)}`,
+        estimatedTotalCost: `$${estimatedTotalCost.toFixed(4)}`,
+        officeActionTextLength: officeActionText.length,
+        hasContext: !!prosecutionContext,
+      });
+      
       logger.debug('[SimpleOfficeActionParser] Sending enhanced request to AI', {
         textLength: officeActionText.length,
         estimatedTokens: Math.ceil(officeActionText.length / 4),
@@ -266,10 +293,41 @@ Consider this context when analyzing rejections and formulating strategy. If thi
         systemMessage,
         {
           temperature: 0.1, // Low temperature for consistent analysis
-          maxTokens: 8000, // Increased for comprehensive analysis
+          maxTokens: maxOutputTokens,
           response_format: { type: 'json_object' },
+          model: 'gpt-4.1', // Ensure correct model
         }
       );
+
+      // Calculate actual cost based on real usage
+      const actualInputTokens = aiResponse.usage?.prompt_tokens || estimatedInputTokens;
+      const actualOutputTokens = aiResponse.usage?.completion_tokens || maxOutputTokens;
+      
+      const actualInputCost = (actualInputTokens / 1000) * TOKEN_PRICING.INPUT_PER_1K;
+      const actualOutputCost = (actualOutputTokens / 1000) * TOKEN_PRICING.OUTPUT_PER_1K;
+      const actualTotalCost = actualInputCost + actualOutputCost;
+
+      logger.info('[SimpleOfficeActionParser] 💰 ACTUAL "NEW RESPONSE" COST TRACKING 💰', {
+        model: 'gpt-4.1',
+        // === ACTUAL COST BREAKDOWN ===
+        actualCost: `$${actualTotalCost.toFixed(4)}`,
+        inputCost: `$${actualInputCost.toFixed(4)} (${actualInputTokens} tokens)`,
+        outputCost: `$${actualOutputCost.toFixed(4)} (${actualOutputTokens} tokens)`,
+        // === TOKEN USAGE ===
+        totalTokens: actualInputTokens + actualOutputTokens,
+        inputTokens: actualInputTokens,
+        outputTokens: actualOutputTokens,
+        // === ANALYSIS DETAILS ===
+        officeActionTextLength: officeActionText.length,
+        enhancedPromptLength: enhancedPrompt.length,
+        systemMessageLength: systemMessage.length,
+        hasContext: !!prosecutionContext,
+        prosecutionRound: prosecutionContext?.prosecutionRound || 1,
+        // === COST COMPARISON ===
+        estimatedCost: `$${estimatedTotalCost.toFixed(4)}`,
+        costDifference: `$${(actualTotalCost - estimatedTotalCost).toFixed(4)}`,
+        estimationAccuracy: `${((1 - Math.abs(actualTotalCost - estimatedTotalCost) / estimatedTotalCost) * 100).toFixed(1)}%`,
+      });
 
       if (!aiResponse.content) {
         throw new ApplicationError(

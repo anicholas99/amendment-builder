@@ -316,15 +316,73 @@ ${userInstructions ? `ADDITIONAL INSTRUCTIONS: ${userInstructions}` : ''}
 
 Please analyze all claims in the claims text and provide amendments for rejected claims while preserving non-rejected claims. Show ALL claims for completeness.`;
 
+  // Token pricing constants (GPT-4.1 - April 2025)
+  const TOKEN_PRICING = {
+    INPUT_PER_1K: 0.002,   // $2.00 per million
+    OUTPUT_PER_1K: 0.008,  // $8.00 per million
+  };
+
+  // Calculate input tokens for cost estimation
+  const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
+  const estimatedInputTokens = estimateTokens(systemPrompt + userPrompt);
+  const maxOutputTokens = 8000;
+
+  // Calculate estimated cost
+  const estimatedInputCost = (estimatedInputTokens / 1000) * TOKEN_PRICING.INPUT_PER_1K;
+  const estimatedOutputCost = (maxOutputTokens / 1000) * TOKEN_PRICING.OUTPUT_PER_1K;
+  const estimatedTotalCost = estimatedInputCost + estimatedOutputCost;
+
+  logger.info('[GenerateResponse] 💰 PRE-GENERATION COST ESTIMATE 💰', {
+    model: 'gpt-4.1',
+    estimatedInputTokens,
+    maxOutputTokens,
+    estimatedInputCost: `$${estimatedInputCost.toFixed(4)}`,
+    estimatedOutputCost: `$${estimatedOutputCost.toFixed(4)}`,
+    estimatedTotalCost: `$${estimatedTotalCost.toFixed(4)}`,
+    claimsTextLength: claimsText.length,
+    rejectionsCount: rejections.length,
+  });
+
   try {
     const aiResponse = await processWithOpenAI(
       systemPrompt,
       userPrompt,
       {
-        maxTokens: 8000,
+        maxTokens: maxOutputTokens,
         temperature: 0.2,
+        model: 'gpt-4.1', // Ensure correct model
       }
     );
+
+    // Calculate actual cost based on real usage
+    const actualInputTokens = aiResponse.usage?.prompt_tokens || estimatedInputTokens;
+    const actualOutputTokens = aiResponse.usage?.completion_tokens || maxOutputTokens;
+    
+    const actualInputCost = (actualInputTokens / 1000) * TOKEN_PRICING.INPUT_PER_1K;
+    const actualOutputCost = (actualOutputTokens / 1000) * TOKEN_PRICING.OUTPUT_PER_1K;
+    const actualTotalCost = actualInputCost + actualOutputCost;
+
+    logger.info('[GenerateResponse] 💰 ACTUAL "NEW RESPONSE" COST TRACKING 💰', {
+      officeActionId: officeAction.id,
+      model: 'gpt-4.1',
+      // === ACTUAL COST BREAKDOWN ===
+      actualCost: `$${actualTotalCost.toFixed(4)}`,
+      inputCost: `$${actualInputCost.toFixed(4)} (${actualInputTokens} tokens)`,
+      outputCost: `$${actualOutputCost.toFixed(4)} (${actualOutputTokens} tokens)`,
+      // === TOKEN USAGE ===
+      totalTokens: actualInputTokens + actualOutputTokens,
+      inputTokens: actualInputTokens,
+      outputTokens: actualOutputTokens,
+      // === CONTEXT DETAILS ===
+      claimsTextLength: claimsText.length,
+      systemPromptLength: systemPrompt.length,
+      userPromptLength: userPrompt.length,
+      rejectionsProcessed: rejections.length,
+      // === COST COMPARISON ===
+      estimatedCost: `$${estimatedTotalCost.toFixed(4)}`,
+      costDifference: `$${(actualTotalCost - estimatedTotalCost).toFixed(4)}`,
+      estimationAccuracy: `${((1 - Math.abs(actualTotalCost - estimatedTotalCost) / estimatedTotalCost) * 100).toFixed(1)}%`,
+    });
 
     const result = safeJsonParse(aiResponse.content);
     

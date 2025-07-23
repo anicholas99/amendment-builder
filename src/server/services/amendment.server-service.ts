@@ -51,6 +51,7 @@ import {
 } from '@/repositories/rejectionRepository';
 import { ClaimRepository } from '@/repositories/claimRepository';
 import { prisma } from '@/lib/prisma';
+import type { AmendmentContextBundle } from './amendment-context.server-service';
 
 // ============ PROMPT TEMPLATES ============
 
@@ -162,7 +163,30 @@ interface AmendmentGenerationRequest {
   projectId: string;
   strategy: keyof typeof AmendmentStrategy;
   userInstructions?: string;
+  budget?: number; // Optional budget in dollars (default: $0.50)
+     model?: GPTModel; // Optional model selection (default: 'gpt-4.1')
 }
+
+// Token pricing constants (GPT-4.1 - April 2025)
+const TOKEN_PRICING = {
+  'gpt-4.1': {
+    INPUT_PER_1K: 0.002,        // $2.00 per million
+    CACHED_INPUT_PER_1K: 0.0005, // $0.50 per million
+    OUTPUT_PER_1K: 0.008,       // $8.00 per million
+  },
+  'gpt-4.1-mini': {
+    INPUT_PER_1K: 0.0004,       // $0.40 per million
+    CACHED_INPUT_PER_1K: 0.0001, // $0.10 per million
+    OUTPUT_PER_1K: 0.0016,      // $1.60 per million
+  },
+  'gpt-4.1-nano': {
+    INPUT_PER_1K: 0.0001,       // $0.10 per million
+    CACHED_INPUT_PER_1K: 0.000025, // $0.025 per million
+    OUTPUT_PER_1K: 0.0004,      // $0.40 per million
+  },
+} as const;
+
+type GPTModel = keyof typeof TOKEN_PRICING;
 
 // ============ SERVICE CLASS ============
 
@@ -434,13 +458,30 @@ export class AmendmentServerService {
   static async generateAmendmentResponse(
     request: AmendmentGenerationRequest & { tenantId: string }
   ): Promise<AmendmentResponse> {
-    logger.info('[AmendmentService] Starting amendment generation with file history context', {
+    const budget = request.budget || 0.50; // Default 50 cents
+    
+    logger.info('[AmendmentService] Starting amendment generation with budget-based context', {
       officeActionId: request.officeActionId,
       strategy: request.strategy,
       projectId: request.projectId,
+      budget,
     });
 
     try {
+      const model = request.model || 'gpt-4.1';
+      
+      // Calculate token budget
+      const tokenBudget = this.calculateTokenBudget(budget, 8000, model);
+      
+      logger.info('[AmendmentService] Token budget calculated', {
+        model,
+        totalBudget: `$${tokenBudget.totalBudget}`,
+        maxInputTokens: tokenBudget.maxInputTokens,
+        outputTokens: tokenBudget.outputTokens,
+        inputBudget: `$${tokenBudget.inputBudget.toFixed(3)}`,
+        outputBudget: `$${tokenBudget.outputBudget.toFixed(3)}`,
+      });
+
       // Get office action and analysis data from repositories  
       const officeAction = await findOfficeActionById(request.officeActionId, request.tenantId);
       if (!officeAction) {
@@ -468,9 +509,16 @@ export class AmendmentServerService {
         contextOptions
       );
 
-      // Generate amendment using AI with enhanced context
+      // Get amendment context (OCR documents)
+      const { AmendmentContextService } = await import('./amendment-context.server-service');
+      const contextBundle = await AmendmentContextService.getAmendmentDraftingContext(
+        request.projectId,
+        request.tenantId
+      );
+
+      // Generate base prompt components
       const systemPrompt = renderPromptTemplate(AMENDMENT_GENERATION_SYSTEM_PROMPT, {});
-      const userPrompt = this.buildEnhancedAmendmentGenerationPrompt(
+      const baseUserPrompt = this.buildBaseAmendmentPrompt(
         officeAction,
         rejections,
         currentClaim1,
@@ -479,10 +527,58 @@ export class AmendmentServerService {
         request.userInstructions
       );
 
-       const aiResponse = await processWithOpenAI(systemPrompt, userPrompt, {
-         maxTokens: 8000,
-         temperature: 0.3,
-       });
+      // Estimate token usage for fixed components
+      const systemPromptTokens = this.estimateTokens(systemPrompt);
+      const basePromptTokens = this.estimateTokens(baseUserPrompt);
+
+      // Truncate context to fit budget
+      const { truncatedBundle, actualTokens } = this.truncateContextToBudget(
+        contextBundle,
+        tokenBudget.maxInputTokens,
+        systemPromptTokens,
+        basePromptTokens
+      );
+
+      // Generate the AI prompt context from truncated bundle
+      const documentContext = AmendmentContextService.generateAIPromptContext(truncatedBundle);
+      
+      // Combine base prompt with document context
+      const fullUserPrompt = baseUserPrompt + '\n\n' + documentContext;
+
+      // Estimate final cost
+      const finalInputTokens = this.estimateTokens(systemPrompt + fullUserPrompt);
+      const estimatedCost = this.calculateActualCost(finalInputTokens, tokenBudget.outputTokens, model);
+
+      logger.info('[AmendmentService] Final prompt prepared', {
+        systemPromptTokens,
+        basePromptTokens,
+        documentContextTokens: this.estimateTokens(documentContext),
+        finalInputTokens,
+        estimatedCost: `$${estimatedCost.totalCost.toFixed(4)}`,
+        estimatedBreakdown: {
+          inputCost: `$${estimatedCost.inputCost.toFixed(4)}`,
+          outputCost: `$${estimatedCost.outputCost.toFixed(4)}`,
+        },
+        documentsIncluded: {
+          officeAction: !!truncatedBundle.officeAction,
+          claims: !!truncatedBundle.claims,
+          lastResponse: !!truncatedBundle.lastResponse,
+          specification: !!truncatedBundle.specification,
+          extras: Object.keys(truncatedBundle.extras).filter(k => truncatedBundle.extras[k as keyof typeof truncatedBundle.extras]),
+        },
+      });
+
+      // Generate amendment using AI with budget-optimized context
+      const aiResponse = await processWithOpenAI(systemPrompt, fullUserPrompt, {
+        maxTokens: tokenBudget.outputTokens,
+        temperature: 0.3,
+        model: model, // Use selected model
+      });
+
+      // Calculate actual cost based on real token usage
+      const actualInputTokens = finalInputTokens; // We estimated this accurately
+      const actualOutputTokens = aiResponse.usage?.completion_tokens || tokenBudget.outputTokens;
+      const actualCost = this.calculateActualCost(actualInputTokens, actualOutputTokens, model);
 
        const amendmentData = safeJsonParse(aiResponse.content, {}) as {
          claimAmendments?: ClaimAmendment[];
@@ -504,11 +600,24 @@ export class AmendmentServerService {
          updatedAt: new Date(),
        };
 
-      logger.info('[AmendmentService] Successfully generated amendment response with file history context', {
+      logger.info('[AmendmentService] 💰 AMENDMENT RESPONSE COST TRACKING 💰', {
         officeActionId: request.officeActionId,
+        model: model,
+        // === COST BREAKDOWN ===
+        actualCost: `$${actualCost.totalCost.toFixed(4)}`,
+        inputCost: `$${actualCost.inputCost.toFixed(4)} (${actualInputTokens} tokens)`,
+        outputCost: `$${actualCost.outputCost.toFixed(4)} (${actualOutputTokens} tokens)`,
+        budgetLimit: `$${budget}`,
+        budgetRemaining: `$${(budget - actualCost.totalCost).toFixed(4)}`,
+        // === TOKEN USAGE ===
+        totalTokens: actualInputTokens + actualOutputTokens,
+        inputTokens: actualInputTokens,
+        outputTokens: actualOutputTokens,
+        contextTokens: finalInputTokens,
+        // === RESPONSE DETAILS ===
         claimAmendmentCount: amendmentResponse.claimAmendments.length,
         argumentSectionCount: amendmentResponse.argumentSections.length,
-        fileHistoryContextUsed: true,
+        // === PROSECUTION CONTEXT ===
         prosecutionRound: aiContext.fileHistory.metadata.currentRoundNumber,
         riskLevel: aiContext.riskAssessment.overallRiskLevel,
       });
@@ -519,23 +628,202 @@ export class AmendmentServerService {
       return amendmentResponse;
 
     } catch (error) {
-      logger.error('[AmendmentService] Failed to generate amendment', {
+      logger.error('[AmendmentService] Amendment generation failed', {
         officeActionId: request.officeActionId,
         error: error instanceof Error ? error.message : String(error),
       });
-
-      if (error instanceof ApplicationError) {
-        throw error;
-      }
-
-      throw new ApplicationError(
-        ErrorCode.AI_SERVICE_ERROR,
-        `Failed to generate amendment: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      throw error;
     }
   }
 
   // ============ PRIVATE HELPER METHODS ============
+
+    /**
+   * Calculate maximum input tokens based on budget allocation
+   */
+  private static calculateTokenBudget(
+    totalBudget: number = 0.50, 
+    outputTokens: number = 8000, 
+    model: GPTModel = 'gpt-4.1'
+  ): {
+    maxInputTokens: number;
+    outputTokens: number;
+    inputBudget: number;
+    outputBudget: number;
+    totalBudget: number;
+    model: GPTModel;
+  } {
+    const pricing = TOKEN_PRICING[model];
+    
+    // Calculate output cost
+    const outputBudget = (outputTokens / 1000) * pricing.OUTPUT_PER_1K;
+    
+    // Remaining budget for input
+    const inputBudget = totalBudget - outputBudget;
+    
+    if (inputBudget <= 0) {
+      throw new ApplicationError(
+        ErrorCode.VALIDATION_INVALID_FORMAT,
+        `Budget too low. Output tokens alone cost $${outputBudget.toFixed(3)}, but budget is $${totalBudget}`
+      );
+    }
+    
+    // Calculate maximum input tokens
+    const maxInputTokens = Math.floor((inputBudget / pricing.INPUT_PER_1K) * 1000);
+    
+    return {
+      maxInputTokens,
+      outputTokens,
+      inputBudget,
+      outputBudget,
+      totalBudget,
+      model,
+    };
+  }
+
+  /**
+   * Calculate actual cost based on real token usage
+   */
+  private static calculateActualCost(
+    inputTokens: number,
+    outputTokens: number,
+    model: GPTModel = 'gpt-4.1',
+    cachedInputTokens: number = 0
+  ): {
+    inputCost: number;
+    cachedInputCost: number;
+    outputCost: number;
+    totalCost: number;
+  } {
+    const pricing = TOKEN_PRICING[model];
+    
+    const inputCost = (inputTokens / 1000) * pricing.INPUT_PER_1K;
+    const cachedInputCost = (cachedInputTokens / 1000) * pricing.CACHED_INPUT_PER_1K;
+    const outputCost = (outputTokens / 1000) * pricing.OUTPUT_PER_1K;
+    const totalCost = inputCost + cachedInputCost + outputCost;
+    
+    return {
+      inputCost,
+      cachedInputCost,
+      outputCost,
+      totalCost,
+    };
+  }
+
+  /**
+   * Estimate tokens for text (4 chars = 1 token approximation)
+   */
+  private static estimateTokens(text: string): number {
+    return Math.ceil(text.length / 4);
+  }
+
+  /**
+   * Truncate context to fit within token budget while preserving document structure
+   */
+  private static truncateContextToBudget(
+    contextBundle: AmendmentContextBundle,
+    maxInputTokens: number,
+    systemPromptTokens: number,
+    basePromptTokens: number
+  ): { truncatedBundle: AmendmentContextBundle; actualTokens: number } {
+    // Reserve tokens for system prompt and base user prompt
+    const availableTokens = maxInputTokens - systemPromptTokens - basePromptTokens;
+    
+         if (availableTokens <= 0) {
+       throw new ApplicationError(
+         ErrorCode.VALIDATION_INVALID_FORMAT,
+         'Token budget too low for basic prompts'
+       );
+     }
+
+    // Priority order for documents (most important first)
+    const documentPriority = [
+      'officeAction',
+      'claims', 
+      'lastResponse',
+      'specification',
+      'examinerSearch',
+      'searchStrategy', 
+      'interview'
+    ] as const;
+
+    const truncatedBundle: AmendmentContextBundle = {
+      ...contextBundle,
+      officeAction: null,
+      claims: null,
+      lastResponse: null,
+      specification: null,
+      extras: {
+        examinerSearch: null,
+        searchStrategy: null,
+        interview: null,
+      },
+    };
+
+    let usedTokens = 0;
+    const tokenBuffer = 500; // Safety buffer
+
+    for (const docType of documentPriority) {
+      let document: any = null;
+      
+      // Get document based on type
+      if (docType === 'officeAction') document = contextBundle.officeAction;
+      else if (docType === 'claims') document = contextBundle.claims;
+      else if (docType === 'lastResponse') document = contextBundle.lastResponse;
+      else if (docType === 'specification') document = contextBundle.specification;
+      else if (docType === 'examinerSearch') document = contextBundle.extras.examinerSearch;
+      else if (docType === 'searchStrategy') document = contextBundle.extras.searchStrategy;
+      else if (docType === 'interview') document = contextBundle.extras.interview;
+
+      if (!document) continue;
+
+      // Estimate tokens for this document (including headers)
+      const headerTokens = this.estimateTokens(`## ${docType.toUpperCase()}\n**Date:** \n**Content:**\n`);
+      const contentTokens = this.estimateTokens(document.text);
+      const totalDocTokens = headerTokens + contentTokens;
+
+      // Check if we can fit this document
+      if (usedTokens + totalDocTokens + tokenBuffer <= availableTokens) {
+        // Include full document
+        if (docType === 'officeAction') truncatedBundle.officeAction = document;
+        else if (docType === 'claims') truncatedBundle.claims = document;
+        else if (docType === 'lastResponse') truncatedBundle.lastResponse = document;
+        else if (docType === 'specification') truncatedBundle.specification = document;
+        else if (docType === 'examinerSearch') truncatedBundle.extras.examinerSearch = document;
+        else if (docType === 'searchStrategy') truncatedBundle.extras.searchStrategy = document;
+        else if (docType === 'interview') truncatedBundle.extras.interview = document;
+        
+        usedTokens += totalDocTokens;
+      } else {
+        // Try to fit a truncated version of critical documents
+        const remainingTokens = availableTokens - usedTokens - tokenBuffer - headerTokens;
+        
+        if (remainingTokens > 1000 && ['officeAction', 'claims'].includes(docType)) {
+          // Truncate but include most important documents
+          const maxChars = remainingTokens * 4; // Convert back to chars
+          const truncatedText = document.text.substring(0, maxChars) + '\n\n[TRUNCATED - Document too large for budget]';
+          
+          const truncatedDoc = {
+            ...document,
+            text: truncatedText,
+          };
+          
+          if (docType === 'officeAction') truncatedBundle.officeAction = truncatedDoc;
+          else if (docType === 'claims') truncatedBundle.claims = truncatedDoc;
+          
+          usedTokens += headerTokens + this.estimateTokens(truncatedText);
+        }
+        
+        // Stop processing more documents
+        break;
+      }
+    }
+
+    return {
+      truncatedBundle,
+      actualTokens: usedTokens + systemPromptTokens + basePromptTokens,
+    };
+  }
 
   /**
    * Get current Claim 1 text from project
@@ -1067,5 +1355,58 @@ Generate a comprehensive amendment response that demonstrates the deep understan
     };
     
     return strengthMap[strength] || 0.8;
+  }
+
+  /**
+   * Build base amendment prompt without document context (for token estimation)
+   */
+  private static buildBaseAmendmentPrompt(
+    officeAction: any,
+    rejections: any[],
+    currentClaim: string | null,
+    strategy: keyof typeof AmendmentStrategy,
+    aiContext: AIAgentContext,
+    userInstructions?: string
+  ): string {
+    const fileHistory = aiContext.fileHistory;
+    const strategicGuidance = aiContext.strategicGuidance;
+    const riskAssessment = aiContext.riskAssessment;
+
+    return `
+You are an experienced patent attorney drafting an amendment response to an Office Action. You have access to the complete file history and prosecution context for this application.
+
+## CURRENT OFFICE ACTION CONTEXT
+Strategy: ${strategy}
+Current Claim 1: ${currentClaim || 'Not available'}
+
+### Rejections to Address:
+${rejections.map((r, i) => `
+${i + 1}. Type: ${r.type}
+   Claims: ${JSON.parse(r.claimNumbers || '[]').join(', ')}
+   Prior Art: ${JSON.parse(r.citedPriorArt || '[]').join(', ')}
+   Examiner Text: ${r.examinerText}
+`).join('\n')}
+
+## FILE HISTORY CONTEXT
+
+### Prosecution History Summary:
+- Total Office Actions: ${fileHistory.metadata.totalOfficeActions}
+- Total Responses: ${fileHistory.metadata.totalResponses}
+- Current Round: ${fileHistory.metadata.currentRoundNumber}
+- Prosecution Duration: ${fileHistory.metadata.prosecutionDuration} days
+${fileHistory.metadata.lastResponseDate ? `- Last Response: ${fileHistory.metadata.lastResponseDate.toLocaleDateString()}` : ''}
+
+### Strategic Guidance:
+${strategicGuidance.overallStrategy}
+
+### Risk Assessment:
+- Overall Risk Level: ${riskAssessment.overallRiskLevel}
+- Key Risks: ${riskAssessment.riskFactors.map(r => r.description).join(', ')}
+
+${userInstructions ? `\n### User Instructions:\n${userInstructions}\n` : ''}
+
+## DOCUMENT CONTEXT
+[OCR document context will be appended here based on budget allocation]
+`;
   }
 } 
