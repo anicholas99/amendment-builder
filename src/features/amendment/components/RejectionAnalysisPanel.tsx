@@ -197,25 +197,25 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-auto p-6 space-y-8">
+        <div className="flex-1 overflow-auto p-4 space-y-6">
           
           {/* Office Action Summary */}
           {(detailedAnalysis?.overview || examinerRemarks) && (
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Office Action Summary</h3>
+              <h3 className="text-base font-medium text-gray-900 mb-3">Office Action Summary</h3>
               <Card>
-                <CardContent className="pt-6">
+                <CardContent className="pt-4">
                   {detailedAnalysis?.overview && (
-                    <div className="mb-4">
-                      <h4 className="font-medium text-gray-900 mb-2">Document Overview</h4>
-                      <p className="text-gray-700 leading-relaxed">{detailedAnalysis.overview}</p>
+                    <div className="mb-3">
+                      <h4 className="font-medium text-gray-900 mb-1.5">Document Overview</h4>
+                      <p className="text-gray-700 leading-relaxed text-sm">{detailedAnalysis.overview}</p>
                     </div>
                   )}
                   
                   {examinerRemarks && examinerRemarks !== detailedAnalysis?.overview && (
                     <div>
-                      <h4 className="font-medium text-gray-900 mb-2">Examiner's Key Points</h4>
-                      <p className="text-gray-700 leading-relaxed">{examinerRemarks}</p>
+                      <h4 className="font-medium text-gray-900 mb-1.5">Examiner's Key Points</h4>
+                      <p className="text-gray-700 leading-relaxed text-sm">{examinerRemarks}</p>
                     </div>
                   )}
                 </CardContent>
@@ -226,22 +226,22 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
           {/* Rejection Details */}
           {detailedAnalysis?.rejectionBreakdown && detailedAnalysis.rejectionBreakdown.length > 0 && (
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Rejection Details</h3>
+              <h3 className="text-base font-medium text-gray-900 mb-3">Rejection Details</h3>
               <Card>
-                <CardContent className="pt-6 space-y-6">
+                <CardContent className="pt-4 space-y-4">
                   {detailedAnalysis.rejectionBreakdown.map((rejection, index) => (
-                    <div key={index} className="pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
-                      <div className="flex items-start justify-between mb-3">
-                        <h4 className="font-medium text-gray-900">
+                    <div key={index} className="pb-4 border-b border-gray-100 last:border-b-0 last:pb-0">
+                      <div className="flex items-start justify-between mb-2">
+                        <h4 className="font-medium text-gray-900 text-sm">
                           {rejection.type}: {rejection.title}
                         </h4>
                         <Badge variant="outline" className="text-xs">
                           Claims: {rejection.claims.join(', ')}
                         </Badge>
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         {rejection.issues.map((issue, issueIndex) => (
-                          <div key={issueIndex} className="text-gray-700 pl-4 border-l-2 border-gray-200">
+                          <div key={issueIndex} className="text-gray-700 pl-3 border-l-2 border-gray-200 text-sm">
                             {issue}
                           </div>
                         ))}
@@ -256,57 +256,70 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
           {/* Formal Objections */}
           {detailedAnalysis?.objections && detailedAnalysis.objections.length > 0 && (
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Formal Objections</h3>
+              <h3 className="text-base font-medium text-gray-900 mb-3">Formal Objections</h3>
               <Card>
-                <CardContent className="pt-6 space-y-4">
-                  {detailedAnalysis.objections.map((objection, index) => (
-                    <div key={index} className="pb-4 border-b border-gray-100 last:border-b-0 last:pb-0">
-                      <div className="flex items-start justify-between mb-2">
-                        <h4 className="font-medium text-gray-900">{objection.type}</h4>
-                        <Badge variant="outline" className="text-xs">
-                          Claims: {objection.claims.join(', ')}
-                        </Badge>
+                <CardContent className="pt-4">
+                  <div className="space-y-3">
+                    {detailedAnalysis.objections.map((objection, index) => (
+                      <div key={index} className="pb-3 border-b border-gray-100 last:border-b-0 last:pb-0">
+                        <div className="flex items-start justify-between mb-2">
+                          <h4 className="font-medium text-gray-900 text-sm">{objection.type}</h4>
+                          <Badge variant="outline" className="text-xs">
+                            Claims: {objection.claims.join(', ')}
+                          </Badge>
+                        </div>
+                        <div className="space-y-1">
+                          {objection.issues.map((issue: string, issueIndex: number) => (
+                            <div key={issueIndex} className="text-gray-700 pl-3 border-l-2 border-amber-200 text-sm">
+                              {issue}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        {objection.issues.map((issue, issueIndex) => (
-                          <div key={issueIndex} className="text-gray-700 pl-4 border-l-2 border-gray-200">
-                            {issue}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             </div>
           )}
 
-          {/* Good News */}
-          {detailedAnalysis?.withdrawn && detailedAnalysis.withdrawn.length > 0 && (
+          {/* Strategic Implications */}
+          {detailedAnalysis?.strategicImplications && (
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Withdrawn/Allowed Items</h3>
+              <h3 className="text-base font-medium text-gray-900 mb-3">Strategic Implications</h3>
               <Card>
-                <CardContent className="pt-6 space-y-3">
-                  {detailedAnalysis.withdrawn.map((item, index) => (
-                    <div key={index} className="p-3 bg-gray-50 rounded border">
-                      <div className="flex items-start justify-between mb-2">
-                        <h4 className="font-medium text-gray-900">{item.type} Withdrawn</h4>
-                        <Badge variant="outline" className="text-xs">
-                          Claims: {item.claims.join(', ')}
-                        </Badge>
-                      </div>
-                      <p className="text-gray-700">{item.reason}</p>
+                <CardContent className="pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2 text-sm">Positive Aspects</h4>
+                      <ul className="space-y-1.5">
+                        {detailedAnalysis.strategicImplications.positives.map((positive, index) => (
+                          <li key={index} className="text-gray-700 text-sm">
+                            • {positive}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                  ))}
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2 text-sm">Main Concerns</h4>
+                      <ul className="space-y-1.5">
+                        {detailedAnalysis.strategicImplications.concerns.map((concern, index) => (
+                          <li key={index} className="text-gray-700 text-sm">
+                            • {concern}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
           )}
 
-          {/* Strategic Analysis */}
+          {/* Strategic Analysis by Rejection */}
           <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Strategic Analysis by Rejection</h3>
-            <div className="space-y-4">
+            <h3 className="text-base font-medium text-gray-900 mb-3">Strategic Analysis by Rejection</h3>
+            <div className="space-y-3">
               {sortedAnalyses.map((analysis, index) => {
                 const strengthInfo = STRENGTH_CONFIG[analysis.strength];
                 const isSelected = selectedRejectionId === analysis.rejectionId;
@@ -320,13 +333,13 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
                     )}
                     onClick={() => onSelectRejection?.(analysis.rejectionId)}
                   >
-                    <CardHeader className="pb-4">
+                    <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <div>
-                          <CardTitle className="text-base font-medium text-gray-900">
+                          <CardTitle className="text-sm font-medium text-gray-900">
                             Rejection {index + 1} - {strengthInfo.label}
                           </CardTitle>
-                          <div className="flex items-center gap-3 mt-1">
+                          <div className="flex items-center gap-2 mt-1">
                             <Badge variant="outline" className="text-xs">
                               {STRATEGY_LABELS[analysis.recommendedStrategy]}
                             </Badge>
@@ -338,38 +351,38 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
                       </div>
                     </CardHeader>
 
-                    <CardContent className="pt-0 space-y-4">
+                    <CardContent className="pt-0 space-y-3">
                       {/* AI Assessment */}
                       {analysis.rawStrengthAssessment && (
                         <div>
-                          <h4 className="font-medium text-gray-900 mb-2">Assessment</h4>
-                          <p className="text-gray-700">{analysis.rawStrengthAssessment}</p>
+                          <h4 className="font-medium text-gray-900 mb-1.5 text-sm">Assessment</h4>
+                          <p className="text-gray-700 text-sm">{analysis.rawStrengthAssessment}</p>
                         </div>
                       )}
 
                       {/* Strategy */}
                       {analysis.strategyRationale && (
                         <div>
-                          <h4 className="font-medium text-gray-900 mb-2">Strategy</h4>
-                          <p className="text-gray-700">{analysis.strategyRationale}</p>
+                          <h4 className="font-medium text-gray-900 mb-1.5 text-sm">Strategy</h4>
+                          <p className="text-gray-700 text-sm">{analysis.strategyRationale}</p>
                         </div>
                       )}
 
                       {/* Specific Recommendation */}
                       {analysis.rawRecommendedStrategy && (
                         <div>
-                          <h4 className="font-medium text-gray-900 mb-2">Recommendation</h4>
-                          <p className="text-gray-700">{analysis.rawRecommendedStrategy}</p>
+                          <h4 className="font-medium text-gray-900 mb-1.5 text-sm">Recommendation</h4>
+                          <p className="text-gray-700 text-sm">{analysis.rawRecommendedStrategy}</p>
                         </div>
                       )}
 
                       {/* Examiner Issues */}
                       {analysis.examinerReasoningGaps && analysis.examinerReasoningGaps.length > 0 && (
                         <div>
-                          <h4 className="font-medium text-gray-900 mb-2">Examiner Issues</h4>
+                          <h4 className="font-medium text-gray-900 mb-1.5 text-sm">Examiner Issues</h4>
                           <ul className="space-y-1">
                             {analysis.examinerReasoningGaps.map((gap, i) => (
-                              <li key={i} className="text-gray-700 pl-4 border-l-2 border-gray-200">
+                              <li key={i} className="text-gray-700 pl-3 border-l-2 border-gray-200 text-sm">
                                 {gap}
                               </li>
                             ))}
@@ -378,29 +391,39 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
                       )}
 
                       {/* Arguments and Amendments */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {analysis.argumentPoints && analysis.argumentPoints.length > 0 && (
                           <div>
-                            <h4 className="font-medium text-gray-900 mb-2">Key Arguments</h4>
+                            <h4 className="font-medium text-gray-900 mb-1.5 text-sm">Argument Points</h4>
                             <ul className="space-y-1">
-                              {analysis.argumentPoints.map((point, i) => (
-                                <li key={i} className="text-gray-700">
+                              {analysis.argumentPoints.slice(0, 3).map((point, i) => (
+                                <li key={i} className="text-gray-700 text-sm">
                                   • {point}
                                 </li>
                               ))}
+                              {analysis.argumentPoints.length > 3 && (
+                                <li className="text-gray-500 text-xs">
+                                  +{analysis.argumentPoints.length - 3} more...
+                                </li>
+                              )}
                             </ul>
                           </div>
                         )}
 
                         {analysis.amendmentSuggestions && analysis.amendmentSuggestions.length > 0 && (
                           <div>
-                            <h4 className="font-medium text-gray-900 mb-2">Amendment Options</h4>
+                            <h4 className="font-medium text-gray-900 mb-1.5 text-sm">Amendment Ideas</h4>
                             <ul className="space-y-1">
-                              {analysis.amendmentSuggestions.map((suggestion, i) => (
-                                <li key={i} className="text-gray-700">
+                              {analysis.amendmentSuggestions.slice(0, 3).map((suggestion, i) => (
+                                <li key={i} className="text-gray-700 text-sm">
                                   • {suggestion}
                                 </li>
                               ))}
+                              {analysis.amendmentSuggestions.length > 3 && (
+                                <li className="text-gray-500 text-xs">
+                                  +{analysis.amendmentSuggestions.length - 3} more...
+                                </li>
+                              )}
                             </ul>
                           </div>
                         )}
@@ -411,60 +434,6 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
               })}
             </div>
           </div>
-
-          {/* Strategic Implications */}
-          {detailedAnalysis?.strategicImplications && (
-            <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Strategic Implications</h3>
-              <Card>
-                <CardContent className="pt-6 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-                    <div>
-                      <div className="text-sm text-gray-600 mb-2">Difficulty</div>
-                      <div className="font-medium text-gray-900">
-                        {detailedAnalysis.strategicImplications.difficulty} Response
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600 mb-2">Response Time</div>
-                      <div className="font-medium text-gray-900">
-                        {detailedAnalysis.strategicImplications.timeToRespond}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600 mb-2">Approach</div>
-                      <div className="font-medium text-gray-900">
-                        {detailedAnalysis.strategicImplications.recommendedApproach}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-3">Positive Aspects</h4>
-                      <ul className="space-y-2">
-                        {detailedAnalysis.strategicImplications.positives.map((positive, index) => (
-                          <li key={index} className="text-gray-700">
-                            • {positive}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-3">Main Concerns</h4>
-                      <ul className="space-y-2">
-                        {detailedAnalysis.strategicImplications.concerns.map((concern, index) => (
-                          <li key={index} className="text-gray-700">
-                            • {concern}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
         </div>
       </div>
     </div>
