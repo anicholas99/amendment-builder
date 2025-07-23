@@ -294,14 +294,17 @@ export function AmendmentWorkspaceTabs({
               </div>
             </div>
           ) : (
-                         <RejectionAnalysisPanel
-               analyses={analyses ?? null}
-               overallStrategy={overallStrategy ?? null}
-               isLoading={isAnalyzing}
-               selectedRejectionId={selectedRejectionId}
-               onSelectRejection={onSelectRejection}
-               onGenerateAmendment={onGenerateAmendment}
-             />
+            <RejectionAnalysisPanel
+              analyses={analyses ?? null}
+              overallStrategy={overallStrategy ?? null}
+              detailedAnalysis={selectedOfficeAction?.detailedAnalysis ?? null}
+              officeActionMetadata={selectedOfficeAction?.metadata}
+              examinerRemarks={selectedOfficeAction?.examinerRemarks}
+              isLoading={isAnalyzing}
+              selectedRejectionId={selectedRejectionId}
+              onSelectRejection={onSelectRejection}
+              onGenerateAmendment={onGenerateAmendment}
+            />
           )}
         </TabsContent>
 

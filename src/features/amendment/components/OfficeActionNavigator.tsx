@@ -61,7 +61,6 @@ import {
 
 import { cn } from '@/lib/utils';
 import { DocumentViewer } from '@/components/common/DocumentViewer';
-import { OfficeActionDetailedSummary } from './OfficeActionDetailedSummary';
 import { isFeatureEnabled } from '@/config/featureFlags';
 import { abbreviateClaimRanges } from '@/utils/claims';
 import type { DetailedAnalysis } from '@/types/amendment';
@@ -694,13 +693,6 @@ export const OfficeActionNavigator: React.FC<OfficeActionNavigatorProps> = ({
                 </div>
               </CardContent>
             </Card>
-
-            {/* Enhanced Detailed Analysis */}
-            {officeAction.detailedAnalysis && (
-              <OfficeActionDetailedSummary 
-                detailedAnalysis={officeAction.detailedAnalysis}
-              />
-            )}
           </div>
         </ScrollArea>
 
