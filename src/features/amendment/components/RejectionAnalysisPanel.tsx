@@ -89,17 +89,17 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
       <div className={className}>
         <SimpleMainPanel
           header={
-            <div className="p-6 border-b bg-white">
-              <h2 className="text-xl font-semibold text-gray-900">Rejection Analysis</h2>
-              <p className="text-sm text-gray-600 mt-1">Analyzing Office Action content and generating strategic recommendations</p>
+            <div className="p-3 border-b bg-white">
+              <h2 className="text-lg font-semibold text-gray-900">Rejection Analysis</h2>
+              <p className="text-xs text-gray-600 mt-0.5">Analyzing Office Action content and generating strategic recommendations</p>
             </div>
           }
           contentPadding={true}
         >
-          <div className="flex items-center justify-center h-64">
+          <div className="flex items-center justify-center h-48">
             <div className="text-center">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-3 text-gray-400" />
-              <p className="text-gray-600">Analyzing rejections...</p>
+              <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2 text-gray-400" />
+              <p className="text-gray-600 text-sm">Analyzing rejections...</p>
             </div>
           </div>
         </SimpleMainPanel>
@@ -112,17 +112,17 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
       <div className={className}>
         <SimpleMainPanel
           header={
-            <div className="p-6 border-b bg-white">
-              <h2 className="text-xl font-semibold text-gray-900">Rejection Analysis</h2>
-              <p className="text-sm text-gray-600 mt-1">Strategic assessment and recommendations</p>
+            <div className="p-3 border-b bg-white">
+              <h2 className="text-lg font-semibold text-gray-900">Rejection Analysis</h2>
+              <p className="text-xs text-gray-600 mt-0.5">Strategic assessment and recommendations</p>
             </div>
           }
           contentPadding={true}
         >
-          <div className="text-center py-12">
-            <Target className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-lg font-medium mb-2 text-gray-700">No Analysis Available</h3>
-            <p className="text-gray-500">
+          <div className="text-center py-8">
+            <Target className="h-10 w-10 mx-auto mb-3 text-gray-300" />
+            <h3 className="text-base font-medium mb-1 text-gray-700">No Analysis Available</h3>
+            <p className="text-gray-500 text-sm">
               Run rejection analysis to get strategic recommendations and strength assessments.
             </p>
           </div>
