@@ -17,7 +17,9 @@ import {
   Clock,
   FileText,
   Download,
-  MessageSquare
+  MessageSquare,
+  Layout,
+  SplitSquareHorizontal
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -76,6 +78,7 @@ export function AmendmentWorkspaceTabs({
   className,
 }: AmendmentWorkspaceTabsProps) {
   const [activeTab, setActiveTab] = useState('analysis');
+  const [previewView, setPreviewView] = useState<'claims' | 'remarks' | 'sidebyside'>('sidebyside'); // Default to side-by-side view
 
   const handleTabChange = useCallback((value: string) => {
     setActiveTab(value);
@@ -290,74 +293,203 @@ export function AmendmentWorkspaceTabs({
         </TabsContent>
 
         <TabsContent value="preview" className="flex-1 mt-0 overflow-hidden">
-          <div className="flex h-full">
-            {/* REM Preview Panel */}
-            <div className="flex-1 border-r border-gray-200 flex flex-col">
-              <div className="p-4 border-b bg-gray-50 flex-shrink-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4" />
-                    Remarks Document (REM)
-                  </h3>
-                  <div className="flex gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={handleExportRemarks}
-                      disabled={argumentsData.length === 0}
+          <div className="flex flex-col h-full">
+            {/* View Selector */}
+            <div className="p-4 border-b bg-gray-50 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">Document Preview</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">View:</span>
+                  <div className="flex rounded-md border border-gray-200 bg-white">
+                    <Button
+                      variant={previewView === 'claims' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setPreviewView('claims')}
+                      className={cn(
+                        "rounded-r-none border-r",
+                        previewView === 'claims' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-50'
+                      )}
                     >
-                      <Download className="h-4 w-4 mr-2" />
-                      Export REM
+                      <FileText className="h-4 w-4 mr-2" />
+                      Claims
+                    </Button>
+                    <Button
+                      variant={previewView === 'remarks' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setPreviewView('remarks')}
+                      className={cn(
+                        "rounded-none border-r",
+                        previewView === 'remarks' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-50'
+                      )}
+                    >
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Remarks
+                    </Button>
+                    <Button
+                      variant={previewView === 'sidebyside' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setPreviewView('sidebyside')}
+                      className={cn(
+                        "rounded-l-none",
+                        previewView === 'sidebyside' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-50'
+                      )}
+                    >
+                      <SplitSquareHorizontal className="h-4 w-4 mr-2" />
+                      Side by Side
                     </Button>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {argumentsData.length} argument section{argumentsData.length !== 1 ? 's' : ''}
-                </p>
-              </div>
-              <div className="flex-1 overflow-auto">
-                <RemarksDocumentPreview 
-                  argumentSections={argumentsData}
-                  responseType="AMENDMENT"
-                  applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
-                  examinerName={selectedOfficeAction?.metadata?.examinerName}
-                  artUnit={selectedOfficeAction?.metadata?.artUnit}
-                />
               </div>
             </div>
 
-            {/* CLM Preview Panel */}
-            <div className="flex-1 flex flex-col">
-              <div className="p-4 border-b bg-gray-50 flex-shrink-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Claims Document (CLM)
-                  </h3>
-                  <div className="flex gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={handleExportClaims}
-                      disabled={claimsData.length === 0}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Export CLM
-                    </Button>
+            {/* Content Area */}
+            <div className="flex-1 overflow-hidden">
+              {/* Claims Only View */}
+              {previewView === 'claims' && (
+                <div className="h-full flex flex-col">
+                  <div className="p-4 border-b bg-blue-50 flex-shrink-0">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Claims Document (CLM)
+                      </h3>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={handleExportClaims}
+                          disabled={claimsData.length === 0}
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Export CLM
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {claimsData.length} claim amendment{claimsData.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <div className="flex-1 overflow-auto">
+                    <ClaimsDocumentPreview 
+                      claimAmendments={claimsData}
+                      applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
+                      examinerName={selectedOfficeAction?.metadata?.examinerName}
+                      artUnit={selectedOfficeAction?.metadata?.artUnit}
+                    />
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {claimsData.length} claim amendment{claimsData.length !== 1 ? 's' : ''}
-                </p>
-              </div>
-              <div className="flex-1 overflow-auto">
-                <ClaimsDocumentPreview 
-                  claimAmendments={claimsData}
-                  applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
-                  examinerName={selectedOfficeAction?.metadata?.examinerName}
-                  artUnit={selectedOfficeAction?.metadata?.artUnit}
-                />
-              </div>
+              )}
+
+              {/* Remarks Only View */}
+              {previewView === 'remarks' && (
+                <div className="h-full flex flex-col">
+                  <div className="p-4 border-b bg-green-50 flex-shrink-0">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4" />
+                        Remarks Document (REM)
+                      </h3>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={handleExportRemarks}
+                          disabled={argumentsData.length === 0}
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Export REM
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {argumentsData.length} argument section{argumentsData.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <div className="flex-1 overflow-auto">
+                    <RemarksDocumentPreview 
+                      argumentSections={argumentsData}
+                      responseType="AMENDMENT"
+                      applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
+                      examinerName={selectedOfficeAction?.metadata?.examinerName}
+                      artUnit={selectedOfficeAction?.metadata?.artUnit}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Side by Side View */}
+              {previewView === 'sidebyside' && (
+                <div className="flex h-full">
+                  {/* REM Preview Panel */}
+                  <div className="flex-1 border-r border-gray-200 flex flex-col">
+                    <div className="p-4 border-b bg-gray-50 flex-shrink-0">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold flex items-center gap-2">
+                          <MessageSquare className="h-4 w-4" />
+                          Remarks Document (REM)
+                        </h3>
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={handleExportRemarks}
+                            disabled={argumentsData.length === 0}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Export REM
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {argumentsData.length} argument section{argumentsData.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <div className="flex-1 overflow-auto">
+                      <RemarksDocumentPreview 
+                        argumentSections={argumentsData}
+                        responseType="AMENDMENT"
+                        applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
+                        examinerName={selectedOfficeAction?.metadata?.examinerName}
+                        artUnit={selectedOfficeAction?.metadata?.artUnit}
+                      />
+                    </div>
+                  </div>
+
+                  {/* CLM Preview Panel */}
+                  <div className="flex-1 flex flex-col">
+                    <div className="p-4 border-b bg-gray-50 flex-shrink-0">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Claims Document (CLM)
+                        </h3>
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={handleExportClaims}
+                            disabled={claimsData.length === 0}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Export CLM
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {claimsData.length} claim amendment{claimsData.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <div className="flex-1 overflow-auto">
+                      <ClaimsDocumentPreview 
+                        claimAmendments={claimsData}
+                        applicationNumber={selectedOfficeAction?.metadata?.applicationNumber}
+                        examinerName={selectedOfficeAction?.metadata?.examinerName}
+                        artUnit={selectedOfficeAction?.metadata?.artUnit}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </TabsContent>
