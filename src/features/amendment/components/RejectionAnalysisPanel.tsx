@@ -72,6 +72,52 @@ const STRATEGY_LABELS = {
   COMBINATION: 'Argue + Amend',
 };
 
+// Utility function to abbreviate claim ranges
+const abbreviateClaimRanges = (claims: string[]): string => {
+  if (!claims || claims.length === 0) return '';
+  
+  // Convert to numbers and sort
+  const numbers = claims
+    .map(claim => parseInt(claim.toString(), 10))
+    .filter(num => !isNaN(num))
+    .sort((a, b) => a - b);
+  
+  if (numbers.length === 0) return claims.join(', ');
+  
+  const ranges: string[] = [];
+  let start = numbers[0];
+  let end = numbers[0];
+  
+  for (let i = 1; i < numbers.length; i++) {
+    if (numbers[i] === end + 1) {
+      // Consecutive number, extend the range
+      end = numbers[i];
+    } else {
+      // Gap found, close current range and start new one
+      if (start === end) {
+        ranges.push(start.toString());
+      } else if (end === start + 1) {
+        ranges.push(`${start}, ${end}`);
+      } else {
+        ranges.push(`${start}-${end}`);
+      }
+      start = numbers[i];
+      end = numbers[i];
+    }
+  }
+  
+  // Add the final range
+  if (start === end) {
+    ranges.push(start.toString());
+  } else if (end === start + 1) {
+    ranges.push(`${start}, ${end}`);
+  } else {
+    ranges.push(`${start}-${end}`);
+  }
+  
+  return ranges.join(', ');
+};
+
 export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
   analyses,
   overallStrategy,
@@ -236,7 +282,7 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
                           {rejection.type}: {rejection.title}
                         </h4>
                         <Badge variant="outline" className="text-xs">
-                          Claims: {rejection.claims.join(', ')}
+                          Claims: {abbreviateClaimRanges(rejection.claims)}
                         </Badge>
                       </div>
                       <div className="space-y-1.5">
@@ -265,7 +311,7 @@ export const RejectionAnalysisPanel: React.FC<RejectionAnalysisPanelProps> = ({
                         <div className="flex items-start justify-between mb-2">
                           <h4 className="font-medium text-gray-900 text-sm">{objection.type}</h4>
                           <Badge variant="outline" className="text-xs">
-                            Claims: {objection.claims.join(', ')}
+                            Claims: {abbreviateClaimRanges(objection.claims)}
                           </Badge>
                         </div>
                         <div className="space-y-1">
