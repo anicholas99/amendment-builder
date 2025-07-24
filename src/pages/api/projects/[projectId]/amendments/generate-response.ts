@@ -323,6 +323,12 @@ For each claim:
 - If not rejected: Keep the claim unchanged but still show it for completeness
 - Always provide clear reasoning for your decision
 
+**CRITICAL: DO NOT include paragraph numbers in amendmentReason or summary fields**
+- ❌ BAD: "Added feature from [00032] to distinguish..."
+- ❌ BAD: "Based on paragraph [00045] disclosure..."
+- ✅ GOOD: "Added feature from specification to distinguish..."
+- ✅ GOOD: "Based on specification disclosure..."
+
 Return your response as valid JSON only:
 
 {
@@ -492,6 +498,12 @@ For each claim:
 - If not rejected: Keep the claim unchanged but still show it for completeness
 - Use the full specification context to craft detailed amendments with proper antecedent basis
 - Consider previous response strategies to avoid repeating failed arguments
+
+**CRITICAL: DO NOT include paragraph numbers in amendmentReason or summary fields**
+- ❌ BAD: "Added feature from [00032] to distinguish..."
+- ❌ BAD: "Based on paragraph [00045] disclosure..."
+- ✅ GOOD: "Added feature from specification to distinguish..."
+- ✅ GOOD: "Based on specification disclosure..."
 
 Return your response as valid JSON only:
 

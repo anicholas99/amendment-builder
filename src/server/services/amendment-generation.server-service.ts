@@ -217,7 +217,13 @@ IMPORTANT:
 - Preserve exact formatting from original claims
 - Only amend claims that were rejected
 - Ensure all amendments are technically and legally sound
-- Maintain antecedent basis throughout`;
+- Maintain antecedent basis throughout
+
+**CRITICAL: DO NOT include paragraph numbers in changeReason or summary fields**
+- ❌ BAD: "Added feature from [00032] to distinguish..."
+- ❌ BAD: "Based on paragraph [00045] disclosure..."
+- ✅ GOOD: "Added feature from specification to distinguish..."
+- ✅ GOOD: "Based on specification disclosure..."`;
   }
 
   /**

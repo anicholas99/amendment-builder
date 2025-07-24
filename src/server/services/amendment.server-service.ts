@@ -140,6 +140,19 @@ Generate your response as JSON following this exact structure:
   }
 }
 
+## CRITICAL FORMATTING REQUIREMENTS:
+
+**DO NOT include paragraph numbers or citations in your justifications or strategic analysis.**
+- ❌ BAD: "The specification at [00032] describes..."
+- ❌ BAD: "As disclosed in paragraph [00045]..."
+- ✅ GOOD: "The specification describes..."
+- ✅ GOOD: "The invention disclosure includes..."
+
+**Write in clear, professional language without document references.**
+- Focus on substantive legal and technical analysis
+- Avoid citing specific paragraph numbers from documents
+- Use plain English explanations for strategy and reasoning
+
 Your response should read like it was written by a patent attorney who has been prosecuting this specific application from the beginning and has intimate knowledge of every interaction with the USPTO.`,
 };
 
