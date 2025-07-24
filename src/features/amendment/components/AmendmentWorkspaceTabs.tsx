@@ -308,7 +308,7 @@ export function AmendmentWorkspaceTabs({
           )}
         </TabsContent>
 
-        <TabsContent value="claims" className="flex-1 mt-0">
+        <TabsContent value="claims" className="flex-1 mt-0 overflow-hidden">
           {!selectedOfficeActionId ? (
             <div className="h-full flex items-center justify-center text-gray-500">
               <div className="text-center">

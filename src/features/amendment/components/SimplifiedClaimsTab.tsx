@@ -229,7 +229,7 @@ export function SimplifiedClaimsTab({
   }
 
   return (
-    <div className={cn("flex flex-col h-full", className)} style={{ height: 'calc(100vh - 180px)' }}>
+    <div className={cn("flex flex-col h-full min-h-0", className)} style={{ height: 'calc(100vh - 180px)' }}>
       {/* Fixed Header */}
       <div className="flex-shrink-0 p-6 border-b bg-card">
         <div className="flex items-center justify-between">
@@ -268,7 +268,10 @@ export function SimplifiedClaimsTab({
       </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar min-h-0">
+      <div 
+        className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar min-h-0"
+        style={{ scrollbarGutter: 'stable' }}
+      >
         <div className="p-6 space-y-6">
           {/* No data state */}
           {!amendmentData && !isLoading && (
@@ -424,8 +427,7 @@ export function SimplifiedClaimsTab({
             </div>
           )}
           
-          {/* Bottom spacer to ensure content isn't cut off */}
-          <div className="h-8" aria-hidden="true" />
+
         </div>
       </div>
     </div>
