@@ -34,6 +34,8 @@
   scrollbar-color: hsl(var(--border)) transparent;
   -ms-overflow-style: auto;
   -webkit-overflow-scrolling: touch;
+  /* Ensure scrollbar is positioned correctly at the bottom */
+  scrollbar-gutter: stable;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
