@@ -20,7 +20,7 @@ interface DeleteProjectDialogProps {
 }
 
 /**
- * Delete confirmation dialog for projects
+ * Delete confirmation dialog for cases
  * Follows the established AlertDialog pattern used throughout the application
  */
 export const DeleteProjectDialog: React.FC<DeleteProjectDialogProps> = ({
@@ -35,16 +35,16 @@ export const DeleteProjectDialog: React.FC<DeleteProjectDialogProps> = ({
     <AlertDialog open={isOpen} onOpenChange={onClose}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete Project</AlertDialogTitle>
+          <AlertDialogTitle>Delete Case</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete <strong>"{projectName}"</strong>?
+            Are you sure you want to delete case <strong>"{projectName}"</strong>?
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         <div className="py-3">
           <p className="text-sm text-muted-foreground">
-            This action cannot be undone. All project data including technology
-            details, claims, and patent drafts will be permanently deleted.
+            This action cannot be undone. All case data including Office Actions,
+            claim amendments, and response documents will be permanently deleted.
           </p>
         </div>
 

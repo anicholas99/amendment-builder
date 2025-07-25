@@ -44,7 +44,7 @@ export const ProjectSearchFilter: React.FC<ProjectSearchFilterProps> = ({
             size={14}
           />
           <Input
-            placeholder="Search projects by name..."
+            placeholder="Search cases by name, application number..."
             value={searchQuery}
             onChange={e => onSearchChange(e.target.value)}
             className="pl-9 h-8 text-sm border-0 bg-transparent focus:ring-0 focus:border-0"
@@ -54,37 +54,40 @@ export const ProjectSearchFilter: React.FC<ProjectSearchFilterProps> = ({
 
       {/* Minimal controls */}
       <div className="flex items-center gap-2 text-sm">
-        {/* Sort By - Ghost style */}
+        {/* Sort By - Attorney focused */}
         <Select value={sortBy} onValueChange={onSortChange}>
           <SelectTrigger className="w-[140px] h-8 text-sm">
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="recent">Recent</SelectItem>
-            <SelectItem value="name">Name</SelectItem>
-            <SelectItem value="created">Created</SelectItem>
-            <SelectItem value="modified">Modified</SelectItem>
+            <SelectItem value="recent">Recent Activity</SelectItem>
+            <SelectItem value="dueDate">Due Date</SelectItem>
+            <SelectItem value="name">Case Name</SelectItem>
+            <SelectItem value="created">Date Opened</SelectItem>
+            <SelectItem value="appNumber">App Number</SelectItem>
           </SelectContent>
         </Select>
 
-        {/* Filter By Status - Ghost style */}
+        {/* Filter By Status - Attorney focused */}
         <Select value={filterBy} onValueChange={onFilterChange}>
-          <SelectTrigger className="w-[120px] h-8 text-sm">
-            <SelectValue placeholder="Filter by" />
+          <SelectTrigger className="w-[140px] h-8 text-sm">
+            <SelectValue placeholder="Case Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="recent">Recent</SelectItem>
-            <SelectItem value="complete">Complete</SelectItem>
-            <SelectItem value="in-progress">In Progress</SelectItem>
+            <SelectItem value="all">All Cases</SelectItem>
+            <SelectItem value="pending-oa">Awaiting OA</SelectItem>
+            <SelectItem value="oa-received">OA Received</SelectItem>
+            <SelectItem value="response-due">Response Due</SelectItem>
+            <SelectItem value="response-filed">Response Filed</SelectItem>
+            <SelectItem value="allowance">Notice of Allowance</SelectItem>
           </SelectContent>
         </Select>
 
         {/* Results count - subtle */}
         <span className="text-xs text-muted-foreground whitespace-nowrap">
           {filteredCount === projectCount
-            ? `${projectCount} projects`
-            : `${filteredCount}/${projectCount}`}
+            ? `${projectCount} cases`
+            : `${filteredCount}/${projectCount} cases`}
         </span>
 
         {/* Clear search - only show when searching */}

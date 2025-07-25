@@ -38,11 +38,11 @@ export const EmptyProjectState: React.FC<EmptyProjectStateProps> = ({
           {/* Text Content */}
           <div className="space-y-3">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Ready to Respond to Your First Office Action?
+              Ready to Start Your First Case?
             </h2>
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-              Upload an Office Action and generate comprehensive amendment
-              responses with our AI-powered analysis tools.
+              Create a new patent case and manage Office Actions with our AI-powered 
+              amendment generation tools.
             </p>
           </div>
 
@@ -82,12 +82,12 @@ export const EmptyProjectState: React.FC<EmptyProjectStateProps> = ({
             className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transition-all duration-200 px-6 py-2"
           >
             <FiPlus className="mr-2 h-4 w-4" />
-            Create Your First Response
+            Create Your First Case
           </Button>
 
           {/* Simple helpful text */}
           <p className="text-xs text-gray-500 dark:text-gray-500">
-            Upload an Office Action to get started
+            Start by creating a case and adding your application details
           </p>
         </div>
       </div>

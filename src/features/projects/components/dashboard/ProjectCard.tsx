@@ -71,10 +71,9 @@ export const ProjectCard = React.memo<ProjectCardProps>(
     const router = useRouter();
     const { tenant } = extractTenantFromQuery(router.query);
 
-    // Amendment status indicators (using existing data structure for now)
-    const hasOfficeAction = !!project.inventionData?.technologyDetails; // Will be updated when backend supports OA
-    const hasAnalysis = (project.inventionData?.claims?.length ?? 0) > 0; // Will be updated for rejection analysis
-    const hasResponse = !!project.inventionData?.patentDraft; // Will be updated for amendment response
+              // Amendment status indicators (using existing data structure for now)
+     const hasOfficeAction = !!project.inventionData?.technologyDetails; // Will be updated when backend supports OA
+     const hasResponse = !!project.inventionData?.patentDraft; // Will be updated for amendment response
 
     const isRecent =
       project.lastUpdated &&
@@ -109,13 +108,13 @@ export const ProjectCard = React.memo<ProjectCardProps>(
         const success = await renameProject(project.id, editValue.trim());
         if (success) {
           toast.success({
-            title: 'Project Renamed',
-            description: `Project renamed to "${editValue.trim()}"`,
+            title: 'Case Renamed',
+            description: `Case renamed to "${editValue.trim()}"`,
           });
         } else {
           toast.error({
             title: 'Rename Failed',
-            description: 'Failed to rename project. Please try again.',
+            description: 'Failed to rename case. Please try again.',
           });
           setEditValue(project.name); // Reset on failure
         }
@@ -239,7 +238,7 @@ export const ProjectCard = React.memo<ProjectCardProps>(
                     onBlur={handleSaveRename}
                     onMouseDown={e => e.stopPropagation()}
                     className="text-base font-semibold h-8 px-3 border-2 border-blue-500 focus:border-blue-600"
-                    placeholder="Project name..."
+                    placeholder="Case name..."
                   />
                   <Button
                     variant="ghost"
@@ -298,106 +297,97 @@ export const ProjectCard = React.memo<ProjectCardProps>(
 
         <CardContent className="p-4 pt-0">
           <div className="flex flex-col h-full">
-            {/* Application Number (if available) */}
-            {project.applicationNumber && (
-              <div className="mb-2">
-                <Badge
-                  variant="outline"
-                  className="text-xs font-medium border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300"
+            {/* Application Number and Status */}
+            <div className="mb-3 space-y-2">
+              {project.applicationNumber && (
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-medium border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300 font-mono"
+                  >
+                    App. No. {project.applicationNumber}
+                  </Badge>
+                </div>
+              )}
+              
+              {/* Case Status Row */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">Status:</span>
+                <Badge 
+                  variant="secondary" 
+                  className={cn(
+                    "text-xs",
+                    hasOfficeAction && hasResponse 
+                      ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" 
+                      : hasOfficeAction 
+                      ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                      : "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+                  )}
                 >
-                  App. No. {project.applicationNumber}
+                  {hasOfficeAction && hasResponse 
+                    ? "Response Filed" 
+                    : hasOfficeAction 
+                    ? "Awaiting Response"
+                    : "No Office Action"}
                 </Badge>
               </div>
-            )}
+            </div>
 
-            {/* Date info */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3 text-xs text-muted-foreground">
-              <div className="flex items-center">
-                <FiCalendar
-                  className="mr-2 text-gray-500 flex-shrink-0"
-                  size={12}
-                />
-                <span>
-                  Created:{' '}
-                  <span className="text-foreground font-medium">
-                    {project.createdAt
-                      ? new Date(project.createdAt).toLocaleDateString()
-                      : project.lastUpdated
-                        ? new Date(project.lastUpdated).toLocaleDateString()
+            {/* Case Timeline Info */}
+            <div className="space-y-2 mb-3 text-xs">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center text-muted-foreground">
+                  <FiCalendar
+                    className="mr-1.5 text-gray-500 flex-shrink-0"
+                    size={12}
+                  />
+                  <span>
+                    Opened:{' '}
+                    <span className="text-foreground font-medium">
+                      {project.createdAt
+                        ? new Date(project.createdAt).toLocaleDateString()
+                        : project.lastUpdated
+                          ? new Date(project.lastUpdated).toLocaleDateString()
+                          : 'Unknown'}
+                    </span>
+                  </span>
+                </div>
+                <div className="flex items-center text-muted-foreground">
+                  <FiClock
+                    className="mr-1.5 text-gray-500 flex-shrink-0"
+                    size={12}
+                  />
+                  <span>
+                    Last Activity:{' '}
+                    <span className="text-foreground font-medium">
+                      {project.lastUpdated
+                        ? formatRelativeDate(project.lastUpdated)
                         : 'Unknown'}
+                    </span>
                   </span>
-                </span>
+                </div>
               </div>
-              <div className="flex items-center">
-                <FiClock
-                  className="mr-2 text-gray-500 flex-shrink-0"
+              
+              {/* TODO: Add due date when office action data is available */}
+              {/* <div className="flex items-center text-muted-foreground">
+                <FiAlertCircle
+                  className="mr-1.5 text-orange-500 flex-shrink-0"
                   size={12}
                 />
                 <span>
-                  Modified:{' '}
-                  <span className="text-foreground font-medium">
-                    {project.lastUpdated
-                      ? formatRelativeDate(project.lastUpdated)
-                      : 'Unknown'}
+                  Response Due:{' '}
+                  <span className="text-orange-600 font-medium">
+                    Sep 22, 2025
                   </span>
                 </span>
-              </div>
+              </div> */}
             </div>
 
-            {/* Amendment Status badges */}
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {/* Office Action Badge */}
-              <Badge
-                variant={hasOfficeAction ? 'default' : 'outline'}
-                className={cn(
-                  'cursor-pointer transition-all duration-200 text-xs px-2 py-0.5',
-                  !isEditing && 'hover:scale-105',
-                  hasOfficeAction
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : 'border-green-300 text-green-600 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
-                )}
-                onClick={handleTagClick('amendments')}
-                onMouseDown={e => e.stopPropagation()}
-              >
-                Office Action
-              </Badge>
-
-              {/* Analysis Badge */}
-              <Badge
-                variant={hasAnalysis ? 'default' : 'outline'}
-                className={cn(
-                  'cursor-pointer transition-all duration-200 text-xs px-2 py-0.5',
-                  !isEditing && 'hover:scale-105',
-                  hasAnalysis
-                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                    : 'border-blue-300 text-blue-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                )}
-                onClick={handleTagClick('amendments')}
-                onMouseDown={e => e.stopPropagation()}
-              >
-                Analysis
-              </Badge>
-
-              {/* Response Badge */}
-              <Badge
-                variant={hasResponse ? 'default' : 'outline'}
-                className={cn(
-                  'cursor-pointer transition-all duration-200 text-xs px-2 py-0.5',
-                  !isEditing && 'hover:scale-105',
-                  hasResponse
-                    ? 'bg-purple-600 text-white hover:bg-purple-700'
-                    : 'border-purple-300 text-purple-600 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20'
-                )}
-                onClick={handleTagClick('amendments')}
-                onMouseDown={e => e.stopPropagation()}
-              >
-                Response
-              </Badge>
-            </div>
+            
 
             {/* Action buttons */}
             <div className="flex justify-between items-center mt-auto">
-              {/* USPTO Button */}
+              {/* USPTO/Case Info Button */}
               <Button
                 variant="outline"
                 size="sm"
@@ -413,7 +403,7 @@ export const ProjectCard = React.memo<ProjectCardProps>(
               >
                 <FileText className="h-3.5 w-3.5" />
                 <span className="text-xs font-medium">
-                  {project.applicationNumber ? 'USPTO Linked' : 'Link USPTO'}
+                  {project.applicationNumber ? 'Case Details' : 'Add App No.'}
                 </span>
               </Button>
 

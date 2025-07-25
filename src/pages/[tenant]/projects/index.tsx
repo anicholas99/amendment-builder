@@ -135,13 +135,13 @@ export default function Projects() {
                 >
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                     <div className="space-y-3">
-                      <h1
+                                            <h1
                         className={cn(
                           'text-3xl font-semibold tracking-tight',
                           isDarkMode ? 'text-white' : 'text-gray-900'
                         )}
                       >
-                        Amendment Builder
+                        My Cases
                       </h1>
                       <p
                         className={cn(
@@ -149,10 +149,9 @@ export default function Projects() {
                           isDarkMode ? 'text-gray-400' : 'text-gray-600'
                         )}
                       >
-                        Respond to Office Actions with AI-powered amendment
-                        generation
+                        Manage patent cases and respond to Office Actions with AI-powered amendment generation
                       </p>
-                                              <div className="flex items-center gap-6 pt-1">
+                      <div className="flex items-center gap-6 pt-1">
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full bg-blue-600"></div>
                           <span
@@ -161,7 +160,7 @@ export default function Projects() {
                               isDarkMode ? 'text-gray-300' : 'text-gray-700'
                             )}
                           >
-                            {projects?.length || 0} Office Action Responses
+                            {projects?.length || 0} Active Cases
                           </span>
                         </div>
                       </div>
@@ -172,7 +171,7 @@ export default function Projects() {
                         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 font-medium rounded-lg shadow-sm hover:shadow transition-all duration-200"
                       >
                         <FiPlus className="mr-2 h-4 w-4" />
-                        Create New Project
+                        Create New Case
                       </Button>
                     </div>
                   </div>

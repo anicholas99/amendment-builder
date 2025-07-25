@@ -87,7 +87,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
   const handleSubmit = async () => {
     if (!projectName.trim()) {
       if (externalError === undefined) {
-        setLocalError('Response name cannot be empty.');
+        setLocalError('Case name cannot be empty.');
       }
       return;
     }
@@ -163,7 +163,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isSuccess ? 'Project Created!' : 'Create New Project'}
+            {isSuccess ? 'Case Created!' : 'Create New Case'}
           </DialogTitle>
         </DialogHeader>
 
@@ -174,20 +174,20 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
                 <FiCheck className="h-6 w-6" />
               </Box>
               <Text className="text-green-600 dark:text-green-400 font-medium">
-                Amendment response "{projectName}" created successfully!
+                Case "{projectName}" created successfully!
               </Text>
               <Text size="sm" className="text-muted-foreground">
-                Opening amendment studio...
+                Opening case workspace...
               </Text>
             </VStack>
           ) : (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="project-name">Response Name</Label>
+                <Label htmlFor="project-name">Case Name</Label>
                 <Input
                   id="project-name"
                   ref={initialRef}
-                  placeholder="Enter response name (e.g., Response to OA #1)"
+                  placeholder="Enter case name (e.g., Smart Faucet Controller - US17/456,123)"
                   value={projectName}
                   onChange={handleInputChange}
                   onKeyDown={e => {
@@ -221,7 +221,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
               ) : (
                 <>
                   <FiPlus className="h-4 w-4" />
-                  Create Response
+                  Create Case
                 </>
               )}
             </Button>
