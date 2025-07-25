@@ -66,11 +66,26 @@ export const cleanOCRText = (text: string | undefined): string => {
   // Remove strikethrough text marked with [[word]] format
   cleanedText = cleanedText.replace(/\[\[([^\]]*)\]\]/g, '');
 
-  // Remove unwanted quotation marks around specific OCR errors
-  // Target specific patterns that are clearly OCR artifacts
-  cleanedText = cleanedText.replace(/\s*"\s*(delivery\s+entit(?:y|ies)\s+or\s+drivers?)\s*"\s*/gi, ' $1 ');
-  cleanedText = cleanedText.replace(/\s*"\s*(computing\s+devices?)\s*"\s*/gi, ' $1 ');
-  cleanedText = cleanedText.replace(/\s*"\s*(patent\s+application)\s*"\s*/gi, ' $1 ');
+  // Remove unwanted quotation marks that are clearly OCR artifacts
+  // Pattern 1: Remove multiple consecutive quotes (like " " " or " " )
+  cleanedText = cleanedText.replace(/"\s*"\s*"/g, '');
+  cleanedText = cleanedText.replace(/"\s*"/g, '');
+  
+  // Pattern 2: Remove quotes that appear isolated with spaces around them
+  cleanedText = cleanedText.replace(/\s+"\s+/g, ' ');
+  
+  // Pattern 3: Remove quotes at the beginning of words (common OCR error)
+  cleanedText = cleanedText.replace(/\s+"\s*(\w)/g, ' $1');
+  
+  // Pattern 4: Remove quotes at the end of words followed by space
+  cleanedText = cleanedText.replace(/(\w)\s*"\s+/g, '$1 ');
+  
+  // Pattern 5: Remove isolated quotes between words
+  cleanedText = cleanedText.replace(/(\w)\s*"\s*(\w)/g, '$1 $2');
+  
+  // Pattern 6: Remove any remaining stray quotes at word boundaries
+  cleanedText = cleanedText.replace(/(\w)\s*"\s*/g, '$1 ');
+  cleanedText = cleanedText.replace(/\s*"\s*(\w)/g, ' $1');
 
   // Clean up multiple spaces but preserve line structure
   cleanedText = cleanedText.replace(/[ \t]+/g, ' ');
