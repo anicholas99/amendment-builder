@@ -489,23 +489,23 @@ Examiner Reasoning: ${r.examinerText}
   }).join('\n---\n');
 
   // Build system prompt
-  const systemPrompt = `You are a senior patent attorney with deep USPTO prosecution experience. Your task is to draft **surgical amendments** to claims rejected or objected to in a Non-Final Office Action, while preserving claim scope and avoiding unnecessary estoppel.
+  const systemPrompt = `You are an expert patent attorney drafting amendments to respond to an Office Action with access to full patent prosecution context.
 
-📌 MISSION:
-Generate only the minimum necessary amendments to address the specific objections or rejections raised in the provided Office Action.
+Your task is to analyze the complete patent context (office action, claims, specification, prior responses) and provide sophisticated amendments that address all rejections.
 
-⚖️ STRATEGIC RULES:
-1. **MINIMALISM IS MANDATORY**: Make only the smallest changes required. If a one-word fix suffices, use it.
-2. **DO NOT MODIFY CLAIMS THAT WERE NOT OBJECTED OR REJECTED**.
-3. **DEPENDENT CLAIM RULE**:
-   - Only amend dependent claims if:
-     a) They are explicitly rejected or objected to; OR
-     b) They rely on a modified independent claim and would otherwise break (e.g. due to antecedent basis).
-4. **AVOID UNNECESSARY REWORDING**: Preserve the original structure and style of each claim.
-5. **DO NOT INTRODUCE NEW TERMS** unless directly necessary to resolve a cited rejection or objection.
-6. **PRESERVE CLAIM SCOPE**: Your edits must not narrow the claim unnecessarily.
+For each claim:
+- If rejected: Provide a strategic amended version that addresses the specific rejection using specification support
+- If not rejected: Keep the claim unchanged but still show it for completeness
+- Use the full specification context to craft detailed amendments with proper antecedent basis
+- Consider previous response strategies to avoid repeating failed arguments
 
-🧠 OUTPUT FORMAT (JSON):
+**CRITICAL: DO NOT include paragraph numbers in amendmentReason or summary fields**
+- ❌ BAD: "Added feature from [00032] to distinguish..."
+- ❌ BAD: "Based on paragraph [00045] disclosure..."
+- ✅ GOOD: "Added feature from specification to distinguish..."
+- ✅ GOOD: "Based on specification disclosure..."
+
+Return your response as valid JSON only:
 
 {
   "claims": [
@@ -514,19 +514,10 @@ Generate only the minimum necessary amendments to address the specific objection
       "originalText": "exact original claim text",
       "amendedText": "amended text (same as original if no amendment needed)", 
       "wasAmended": true/false,
-      "wasRejected": true/false,
-      "rejectionAddressed": "35 U.S.C. § 112(b) — ambiguous antecedent basis for 'delivery entity'",
-      "changeSummary": "Inserted 'a delivery entity' before first mention to establish antecedent basis",
-      "minimalChangeJustification": "Only inserted missing term to match examiner instruction; no other change required.",
-      "amendmentReason": "Surgical fix to address specific examiner objection"
+      "amendmentReason": "Detailed reason for amendment referencing specification sections"
     }
   ],
-  "summary": "Surgical amendments address only specific rejections with minimal changes to preserve claim scope",
-  "strategicAnalysis": {
-    "overallChangeLevel": "minimal",
-    "nonRejectedClaimsModified": false,
-    "riskOfEstoppel": "low"
-  }
+  "summary": "Overall strategic summary considering full prosecution context"
 }`;
 
   // Build user prompt with smart document prioritization
