@@ -32,6 +32,183 @@ import { logger } from '@/utils/clientLogger';
 import { useDraftDocumentByType, useUpdateDraftDocument } from '@/hooks/api/useDraftDocuments';
 import ClaimDiffViewer from './ClaimDiffViewer';
 
+// USPTO formatting functions (extracted from ClaimDiffViewer for consistency)
+interface DiffPart {
+  type: 'added' | 'removed' | 'unchanged';
+  text: string;
+  usptoBrackets?: boolean;
+}
+
+// Parse existing USPTO-formatted text to identify bracketed deletions
+const parseUstoFormat = (text: string): { cleanText: string; deletions: Array<{ text: string; position: number }> } => {
+  const deletions: Array<{ text: string; position: number }> = [];
+  let cleanText = text;
+  let offset = 0;
+  
+  // Find all [[...]] patterns
+  const bracketPattern = /\[\[([^\]]*)\]\]/g;
+  let match;
+  
+  while ((match = bracketPattern.exec(text)) !== null) {
+    const deletedText = match[1];
+    const position = match.index - offset;
+    
+    deletions.push({
+      text: deletedText,
+      position: position,
+    });
+    
+    // Remove the bracketed text from clean text
+    cleanText = cleanText.replace(match[0], '');
+    offset += match[0].length;
+  }
+  
+  return { cleanText, deletions };
+};
+
+// Apply USPTO formatting rules based on character count
+const shouldUseBrackets = (text: string): boolean => {
+  const trimmedText = text.trim();
+  
+  // Character count rule
+  if (trimmedText.length <= 5) {
+    return true;
+  }
+  
+  // Special cases where brackets are preferred even for longer text
+  const isMainlyPunctuation = /^[^\w\s]*$/i.test(trimmedText);
+  const isMainlyNumbers = /^\d+[^\w]*$/.test(trimmedText);
+  const hasMostlySpaces = (trimmedText.match(/\s/g) || []).length > trimmedText.length / 2;
+  
+  return isMainlyPunctuation || isMainlyNumbers || hasMostlySpaces;
+};
+
+// Helper function to compute Longest Common Subsequence
+const computeLCS = (arr1: string[], arr2: string[]): string[] => {
+  const m = arr1.length;
+  const n = arr2.length;
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+  
+  // Build LCS table
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (arr1[i - 1] === arr2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+  
+  // Reconstruct LCS
+  const lcs: string[] = [];
+  let i = m, j = n;
+  while (i > 0 && j > 0) {
+    if (arr1[i - 1] === arr2[j - 1]) {
+      lcs.unshift(arr1[i - 1]);
+      i--;
+      j--;
+    } else if (dp[i - 1][j] > dp[i][j - 1]) {
+      i--;
+    } else {
+      j--;
+    }
+  }
+  
+  return lcs;
+};
+
+// Enhanced word-based diff algorithm with USPTO formatting rules
+const computeWordDiff = (original: string, amended: string): DiffPart[] => {
+  if (!original && !amended) return [];
+  if (!original) {
+    return [{ type: 'added', text: amended }];
+  }
+  if (!amended) {
+    return [{ type: 'removed', text: original, usptoBrackets: shouldUseBrackets(original) }];
+  }
+
+  // Parse any existing USPTO formatting in the texts
+  const { cleanText: cleanOriginal } = parseUstoFormat(original);
+  const { cleanText: cleanAmended } = parseUstoFormat(amended);
+
+  // Use dynamic programming to find the longest common subsequence
+  const originalWords = cleanOriginal.split(/(\s+)/).filter(Boolean);
+  const amendedWords = cleanAmended.split(/(\s+)/).filter(Boolean);
+  
+  // Find longest common subsequence to identify unchanged blocks
+  const lcs = computeLCS(originalWords, amendedWords);
+  
+  // Build diff by grouping consecutive changes
+  const diff: DiffPart[] = [];
+  let origIndex = 0;
+  let amendIndex = 0;
+  let lcsIndex = 0;
+  
+  while (origIndex < originalWords.length || amendIndex < amendedWords.length) {
+    // Check if we're at a point where text matches LCS
+    if (lcsIndex < lcs.length && 
+        origIndex < originalWords.length && 
+        amendIndex < amendedWords.length &&
+        originalWords[origIndex] === amendedWords[amendIndex] && 
+        originalWords[origIndex] === lcs[lcsIndex]) {
+      
+      // Add unchanged text
+      diff.push({ type: 'unchanged', text: originalWords[origIndex] });
+      origIndex++;
+      amendIndex++;
+      lcsIndex++;
+    } else {
+      // Collect consecutive removed text
+      let removedText = '';
+      while (origIndex < originalWords.length && 
+             (lcsIndex >= lcs.length || originalWords[origIndex] !== lcs[lcsIndex])) {
+        removedText += originalWords[origIndex];
+        origIndex++;
+      }
+      
+      // Collect consecutive added text
+      let addedText = '';
+      while (amendIndex < amendedWords.length && 
+             (lcsIndex >= lcs.length || amendedWords[amendIndex] !== lcs[lcsIndex])) {
+        addedText += amendedWords[amendIndex];
+        amendIndex++;
+      }
+      
+      // Add grouped changes with USPTO formatting rules
+      if (removedText) {
+        const cleanRemovedText = removedText.trim();
+        diff.push({ 
+          type: 'removed', 
+          text: cleanRemovedText,
+          usptoBrackets: shouldUseBrackets(cleanRemovedText)
+        });
+      }
+      if (addedText) {
+        diff.push({ type: 'added', text: addedText.trim() });
+      }
+    }
+  }
+  
+  return diff;
+};
+
+// Generate USPTO-compliant formatted text
+const generateUstoText = (parts: DiffPart[]): string => {
+  return parts.map(part => {
+    switch (part.type) {
+      case 'added':
+        return part.text;
+      case 'removed':
+        return part.usptoBrackets ? `[[${part.text}]]` : part.text;
+      case 'unchanged':
+        return part.text;
+      default:
+        return part.text;
+    }
+  }).join('');
+};
+
 interface ClaimData {
   claimNumber: string;
   originalText: string;
@@ -92,6 +269,24 @@ export function SimplifiedClaimsTab({
 
   // Mutation hook for updating draft document
   const updateDraftMutation = useUpdateDraftDocument();
+
+  // Generate USPTO-formatted text for each claim
+  const getUstoFormattedText = useMemo(() => {
+    if (!amendmentData) return {};
+    
+    const formatted: Record<string, string> = {};
+    
+    amendmentData.claims.forEach(claim => {
+      if (claim.wasAmended && claim.originalText) {
+        const diff = computeWordDiff(claim.originalText, claim.amendedText);
+        formatted[claim.claimNumber] = generateUstoText(diff);
+      } else {
+        formatted[claim.claimNumber] = claim.amendedText;
+      }
+    });
+    
+    return formatted;
+  }, [amendmentData]);
 
   const handleGenerateResponse = async () => {
     try {
@@ -368,7 +563,7 @@ export function SimplifiedClaimsTab({
                       </CardHeader>
 
                       <CardContent className="space-y-4">
-                        {/* Claim text - either diff view or amended text */}
+                        {/* Claim text - either diff view or USPTO formatted text */}
                         <div>
                           {editingClaim === claim.claimNumber ? (
                             <div>
@@ -392,7 +587,7 @@ export function SimplifiedClaimsTab({
                           ) : (
                             <div>
                               <p className="text-sm font-medium mb-2">
-                                {claim.wasAmended ? 'Amended Claim Text:' : 'Claim Text:'}
+                                {claim.wasAmended ? 'USPTO Compliant Format:' : 'Claim Text:'}
                               </p>
                               <div className={cn(
                                 "p-3 rounded border font-mono text-sm leading-relaxed whitespace-pre-wrap",
@@ -400,7 +595,7 @@ export function SimplifiedClaimsTab({
                                   ? "bg-blue-50 border-blue-200" 
                                   : "bg-gray-50 border-gray-200"
                               )}>
-                                {claim.amendedText}
+                                {getUstoFormattedText[claim.claimNumber] || claim.amendedText}
                               </div>
                             </div>
                           )}
@@ -426,8 +621,6 @@ export function SimplifiedClaimsTab({
               </div>
             </div>
           )}
-          
-
         </div>
       </div>
     </div>

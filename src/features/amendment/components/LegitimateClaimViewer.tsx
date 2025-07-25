@@ -2,7 +2,7 @@
  * LegitimateClaimViewer - Professional claim display for final documents
  * 
  * Shows claims in clean, USPTO-compliant format with proper amendment formatting:
- * - Deletions: strikethrough
+ * - Deletions: strikethrough for >5 chars, [[...]] for ≤5 chars per 37 CFR 1.121(c)
  * - Additions: underlined  
  * - Status indicators: (Currently Amended), (Previously Presented), (New), (Cancelled)
  * Suitable for official document previews and exports
@@ -26,11 +26,58 @@ const STATUS_PREFIX = {
   CANCELLED: '(Cancelled)',
 } as const;
 
-// Simple word-based diff algorithm for USPTO formatting
+// Enhanced diff algorithm that supports USPTO formatting
 interface DiffPart {
   type: 'added' | 'removed' | 'unchanged';
   text: string;
+  usptoBrackets?: boolean; // Whether to use [[...]] instead of strikethrough
 }
+
+// Parse existing USPTO-formatted text to identify bracketed deletions
+const parseUstoFormat = (text: string): { cleanText: string; deletions: Array<{ text: string; position: number }> } => {
+  const deletions: Array<{ text: string; position: number }> = [];
+  let cleanText = text;
+  let offset = 0;
+  
+  // Find all [[...]] patterns
+  const bracketPattern = /\[\[([^\]]*)\]\]/g;
+  let match;
+  
+  while ((match = bracketPattern.exec(text)) !== null) {
+    const deletedText = match[1];
+    const position = match.index - offset;
+    
+    deletions.push({
+      text: deletedText,
+      position: position,
+    });
+    
+    // Remove the bracketed text from clean text
+    cleanText = cleanText.replace(match[0], '');
+    offset += match[0].length;
+  }
+  
+  return { cleanText, deletions };
+};
+
+// Apply USPTO formatting rules based on character count
+const shouldUseBrackets = (text: string): boolean => {
+  // USPTO Rule: Use [[...]] for deletions of 5 or fewer characters
+  // or when strikethrough might not be clearly visible
+  const trimmedText = text.trim();
+  
+  // Character count rule
+  if (trimmedText.length <= 5) {
+    return true;
+  }
+  
+  // Special cases where brackets are preferred even for longer text
+  const isMainlyPunctuation = /^[^\w\s]*$/i.test(trimmedText);
+  const isMainlyNumbers = /^\d+[^\w]*$/.test(trimmedText);
+  const hasMostlySpaces = (trimmedText.match(/\s/g) || []).length > trimmedText.length / 2;
+  
+  return isMainlyPunctuation || isMainlyNumbers || hasMostlySpaces;
+};
 
 // Compute longest common subsequence to identify unchanged blocks
 const computeLCS = (arr1: string[], arr2: string[]): string[] => {
@@ -66,19 +113,23 @@ const computeLCS = (arr1: string[], arr2: string[]): string[] => {
   return lcs;
 };
 
-// USPTO-style diff algorithm for legal amendments
+// Enhanced word-based diff algorithm with USPTO formatting rules
 const computeWordDiff = (original: string, amended: string): DiffPart[] => {
   if (!original && !amended) return [];
   if (!original) {
     return [{ type: 'added', text: amended }];
   }
   if (!amended) {
-    return [{ type: 'removed', text: original }];
+    return [{ type: 'removed', text: original, usptoBrackets: shouldUseBrackets(original) }];
   }
 
+  // Parse any existing USPTO formatting in the texts
+  const { cleanText: cleanOriginal } = parseUstoFormat(original);
+  const { cleanText: cleanAmended } = parseUstoFormat(amended);
+
   // Split by words while preserving spaces
-  const originalWords = original.split(/(\s+)/).filter(Boolean);
-  const amendedWords = amended.split(/(\s+)/).filter(Boolean);
+  const originalWords = cleanOriginal.split(/(\s+)/).filter(Boolean);
+  const amendedWords = cleanAmended.split(/(\s+)/).filter(Boolean);
   
   // Find longest common subsequence to identify unchanged blocks
   const lcs = computeLCS(originalWords, amendedWords);
@@ -119,9 +170,14 @@ const computeWordDiff = (original: string, amended: string): DiffPart[] => {
         amendIndex++;
       }
       
-      // Add grouped changes
+      // Add grouped changes with USPTO formatting rules
       if (removedText) {
-        diff.push({ type: 'removed', text: removedText.trim() });
+        const cleanRemovedText = removedText.trim();
+        diff.push({ 
+          type: 'removed', 
+          text: cleanRemovedText,
+          usptoBrackets: shouldUseBrackets(cleanRemovedText)
+        });
       }
       if (addedText) {
         diff.push({ type: 'added', text: addedText.trim() });
@@ -130,6 +186,22 @@ const computeWordDiff = (original: string, amended: string): DiffPart[] => {
   }
   
   return diff;
+};
+
+// Generate USPTO-compliant formatted text for display
+const generateUstoText = (parts: DiffPart[]): string => {
+  return parts.map(part => {
+    switch (part.type) {
+      case 'added':
+        return part.text;
+      case 'removed':
+        return part.usptoBrackets ? `[[${part.text}]]` : part.text;
+      case 'unchanged':
+        return part.text;
+      default:
+        return part.text;
+    }
+  }).join('');
 };
 
 export const LegitimateClaimViewer: React.FC<LegitimateClaimViewerProps> = ({
@@ -149,7 +221,15 @@ export const LegitimateClaimViewer: React.FC<LegitimateClaimViewerProps> = ({
     return null;
   }, [originalText, amendedText, status]);
 
-  // Render diff parts with proper USPTO formatting
+  // Generate USPTO-compliant text for display
+  const ustoFormattedText = useMemo(() => {
+    if (diff) {
+      return generateUstoText(diff);
+    }
+    return amendedText;
+  }, [diff, amendedText]);
+
+  // Render diff parts with proper USPTO formatting (for visual display with styling)
   const renderDiffText = (parts: DiffPart[]) => {
     return parts.map((part, index) => {
       switch (part.type) {
@@ -163,14 +243,24 @@ export const LegitimateClaimViewer: React.FC<LegitimateClaimViewerProps> = ({
             </span>
           );
         case 'removed':
-          return (
-            <span
-              key={index}
-              style={{ textDecoration: 'line-through' }}
-            >
-              {part.text}
-            </span>
-          );
+          if (part.usptoBrackets) {
+            // Show bracketed deletions per USPTO rules
+            return (
+              <span key={index} style={{ fontWeight: 'bold' }}>
+                [[{part.text}]]
+              </span>
+            );
+          } else {
+            // Show strikethrough for longer deletions
+            return (
+              <span
+                key={index}
+                style={{ textDecoration: 'line-through' }}
+              >
+                {part.text}
+              </span>
+            );
+          }
         case 'unchanged':
           return <span key={index}>{part.text}</span>;
         default:
@@ -187,7 +277,7 @@ export const LegitimateClaimViewer: React.FC<LegitimateClaimViewerProps> = ({
           {diff ? (
             <span className="whitespace-pre-wrap">{renderDiffText(diff)}</span>
           ) : (
-            <span className="whitespace-pre-wrap">{amendedText}</span>
+            <span className="whitespace-pre-wrap">{ustoFormattedText}</span>
           )}
         </p>
       </div>
