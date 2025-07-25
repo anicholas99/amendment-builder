@@ -5,7 +5,6 @@
  * - Deletions: strikethrough for >5 chars, [[...]] for ≤5 chars per 37 CFR 1.121(c)
  * - Additions: underlined
  * - Clean side-by-side or inline comparison
- * - USPTO-compliant format toggle
  */
 
 import React, { useMemo, useCallback } from 'react';
@@ -13,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Eye, EyeOff, Copy, FileText, Scale, Palette } from 'lucide-react';
+import { Eye, EyeOff, Copy, Scale } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/useToastWrapper';
 
@@ -238,7 +237,6 @@ const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
 }) => {
   const toast = useToast();
   const [showOriginalOnly, setShowOriginalOnly] = React.useState(false);
-  const [ustoCompliantFormat, setUstoCompliantFormat] = React.useState(true);
   
   const statusConfig = STATUS_CONFIG[status];
   const diff = useMemo(() => computeWordDiff(originalText, amendedText), [originalText, amendedText]);
@@ -246,8 +244,8 @@ const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
   // Generate USPTO-compliant text for display and copying
   const ustoFormattedText = useMemo(() => generateUstoText(diff), [diff]);
   
-  // Render diff parts with proper formatting
-  const renderDiffText = (parts: DiffPart[], useUstoFormat: boolean = false) => {
+  // Render diff parts with USPTO formatting
+  const renderDiffText = (parts: DiffPart[]) => {
     return parts.map((part, index) => {
       switch (part.type) {
         case 'added':
@@ -261,7 +259,7 @@ const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
             </span>
           );
         case 'removed':
-          if (useUstoFormat && part.usptoBrackets) {
+          if (part.usptoBrackets) {
             // Show bracketed deletions per USPTO rules
             return (
               <span
@@ -278,7 +276,7 @@ const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
               <span
                 key={index}
                 className="line-through text-red-600 bg-red-50 px-1 rounded opacity-75"
-                title={useUstoFormat ? "Deleted text (>5 characters)" : "Deleted text"}
+                title="Deleted text (>5 characters)"
               >
                 {part.text}
               </span>
@@ -309,14 +307,10 @@ const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
 
   const handleCopyAmended = async () => {
     try {
-      const textToCopy = ustoCompliantFormat 
-        ? `${claimNumber}. ${ustoFormattedText}`
-        : `${claimNumber}. ${amendedText}`;
-      
-      await navigator.clipboard.writeText(textToCopy);
+      await navigator.clipboard.writeText(`${claimNumber}. ${ustoFormattedText}`);
       toast.success({
-        title: 'Amended claim copied!',
-        description: `${ustoCompliantFormat ? 'USPTO-formatted' : 'Clean'} claim ${claimNumber} copied to clipboard`,
+        title: 'USPTO format copied!',
+        description: `USPTO-formatted claim ${claimNumber} copied to clipboard`,
       });
     } catch (error) {
       toast.error({
@@ -357,15 +351,6 @@ const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setUstoCompliantFormat(!ustoCompliantFormat)}
-                title={ustoCompliantFormat ? 'Show visual diff' : 'Show USPTO format'}
-                className={cn(ustoCompliantFormat && "bg-blue-50 text-blue-700")}
-              >
-                {ustoCompliantFormat ? <Scale className="h-4 w-4" /> : <Palette className="h-4 w-4" />}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
                 onClick={() => setShowOriginalOnly(!showOriginalOnly)}
                 title={showOriginalOnly ? 'Show comparison' : 'Show original only'}
               >
@@ -395,15 +380,11 @@ const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
             {!showOriginalOnly && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-medium text-gray-700">
-                    {ustoCompliantFormat ? 'USPTO Format' : 'Amended Claim'}
-                  </h4>
+                  <h4 className="text-sm font-medium text-gray-700">USPTO Format</h4>
                   <div className="flex gap-1">
-                    {ustoCompliantFormat && (
-                      <Button variant="ghost" size="sm" onClick={handleCopyUstoFormat} title="Copy USPTO format">
-                        <Scale className="h-3 w-3" />
-                      </Button>
-                    )}
+                    <Button variant="ghost" size="sm" onClick={handleCopyUstoFormat} title="Copy USPTO format">
+                      <Scale className="h-3 w-3" />
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={handleCopyAmended}>
                       <Copy className="h-3 w-3" />
                     </Button>
@@ -411,7 +392,7 @@ const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
                 </div>
                 <div className="p-3 bg-blue-50 rounded border text-sm font-mono leading-relaxed">
                   <span className="font-semibold">{claimNumber}. {statusConfig.prefix} </span>
-                  {ustoCompliantFormat ? ustoFormattedText : amendedText}
+                  {ustoFormattedText}
                 </div>
               </div>
             )}
@@ -422,12 +403,10 @@ const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
             <>
               <Separator />
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">
-                  Changes Highlighted {ustoCompliantFormat ? '(USPTO Compliant)' : '(Visual Diff)'}
-                </h4>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Changes Highlighted</h4>
                 <div className="p-3 bg-white rounded border text-sm font-mono leading-relaxed">
                   <div className="font-semibold mb-2">{claimNumber}. {statusConfig.prefix}</div>
-                  <div>{renderDiffText(diff, ustoCompliantFormat)}</div>
+                  <div>{renderDiffText(diff)}</div>
                 </div>
                 
                 {/* Legend */}
@@ -438,14 +417,10 @@ const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="w-3 h-3 bg-red-50 border border-red-200 rounded"></span>
-                    {ustoCompliantFormat ? (
-                      <span>Deleted: <span className="line-through">&gt;5 chars</span> or [[≤5 chars]]</span>
-                    ) : (
-                      <span className="line-through">Deleted text</span>
-                    )}
+                    <span>Deleted: <span className="line-through">&gt;5 chars</span> or [[≤5 chars]]</span>
                   </div>
-                                 </div>
-               </div>
+                </div>
+              </div>
             </>
           )}
         </CardContent>
@@ -466,15 +441,6 @@ const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
           </div>
           
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setUstoCompliantFormat(!ustoCompliantFormat)}
-              title={ustoCompliantFormat ? 'Show visual diff' : 'Show USPTO format'}
-              className={cn(ustoCompliantFormat && "bg-blue-50 text-blue-700")}
-            >
-              {ustoCompliantFormat ? <Scale className="h-4 w-4" /> : <Palette className="h-4 w-4" />}
-            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -502,18 +468,14 @@ const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
         ) : (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-medium text-gray-700">
-                {ustoCompliantFormat ? 'USPTO Compliant Format' : 'Amended Claim with Changes'}
-              </h4>
-              {ustoCompliantFormat && (
-                <Button variant="ghost" size="sm" onClick={handleCopyUstoFormat} title="Copy USPTO format">
-                  <Scale className="h-3 w-3" />
-                </Button>
-              )}
+              <h4 className="text-sm font-medium text-gray-700">USPTO Compliant Format</h4>
+              <Button variant="ghost" size="sm" onClick={handleCopyUstoFormat} title="Copy USPTO format">
+                <Scale className="h-3 w-3" />
+              </Button>
             </div>
             <div className="p-3 bg-white rounded border text-sm font-mono leading-relaxed">
               <div className="font-semibold mb-2">{claimNumber}. {statusConfig.prefix}</div>
-              <div>{renderDiffText(diff, ustoCompliantFormat)}</div>
+              <div>{renderDiffText(diff)}</div>
             </div>
             
             {/* Legend */}
@@ -524,21 +486,9 @@ const ClaimDiffViewer: React.FC<ClaimDiffViewerProps> = ({
               </div>
               <div className="flex items-center gap-1">
                 <span className="w-3 h-3 bg-red-50 border border-red-200 rounded"></span>
-                {ustoCompliantFormat ? (
-                  <span>Deleted: <span className="line-through">&gt;5 chars</span> or [[≤5 chars]]</span>
-                ) : (
-                  <span className="line-through">Deleted text</span>
-                )}
+                <span>Deleted: <span className="line-through">&gt;5 chars</span> or [[≤5 chars]]</span>
               </div>
             </div>
-            
-            {/* USPTO Rules Info */}
-            {ustoCompliantFormat && (
-              <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
-                <strong>USPTO Rules (37 CFR 1.121(c)):</strong> Deletions of 5 or fewer characters use double brackets [[...]], 
-                longer deletions use strikethrough for clear visibility.
-              </div>
-            )}
           </div>
         )}
       </CardContent>
