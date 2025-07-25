@@ -50,3 +50,36 @@ export const extractIndependentClaims = (
   // 4. If no matching line is found after checking all lines, return empty array
   return [];
 };
+
+/**
+ * Cleans OCR text by removing common OCR artifacts before storing in database
+ * - Removes strikethrough text marked with [[word]] format
+ * - Removes unwanted quotation marks around common OCR errors
+ * @param text The raw OCR text to clean
+ * @returns Cleaned text ready for storage and AI processing
+ */
+export const cleanOCRText = (text: string | undefined): string => {
+  if (!text) return '';
+
+  let cleanedText = text;
+
+  // Remove strikethrough text marked with [[word]] format
+  cleanedText = cleanedText.replace(/\[\[([^\]]*)\]\]/g, '');
+
+  // Remove unwanted quotation marks around specific OCR errors
+  // Target specific patterns that are clearly OCR artifacts
+  cleanedText = cleanedText.replace(/\s*"\s*(delivery\s+entit(?:y|ies)\s+or\s+drivers?)\s*"\s*/gi, ' $1 ');
+  cleanedText = cleanedText.replace(/\s*"\s*(computing\s+devices?)\s*"\s*/gi, ' $1 ');
+  cleanedText = cleanedText.replace(/\s*"\s*(patent\s+application)\s*"\s*/gi, ' $1 ');
+
+  // Clean up multiple spaces but preserve line structure
+  cleanedText = cleanedText.replace(/[ \t]+/g, ' ');
+  
+  // Trim whitespace from each line but preserve line breaks
+  cleanedText = cleanedText.split('\n').map(line => line.trim()).join('\n');
+
+  // Remove excessive blank lines (more than 2 consecutive)
+  cleanedText = cleanedText.replace(/\n\s*\n\s*\n+/g, '\n\n');
+
+  return cleanedText.trim();
+};

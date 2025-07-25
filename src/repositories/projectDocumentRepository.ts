@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { ProjectDocument, Prisma } from '@prisma/client';
 import { ApplicationError, ErrorCode } from '@/lib/error';
 import { logger } from '@/server/logger';
+import { cleanOCRText } from '@/utils/textUtils';
 
 /**
  * Repository for managing project documents
@@ -305,10 +306,20 @@ export const projectDocumentRepository = {
         );
       }
 
+      // Clean OCR text before storing in database
+      const cleanedText = cleanOCRText(ocrText);
+
+      logger.info('[ProjectDocumentRepo] OCR text cleaning applied', {
+        documentId,
+        originalLength: ocrText.length,
+        cleanedLength: cleanedText.length,
+        artifactsRemoved: ocrText.length !== cleanedText.length,
+      });
+
       return await prisma.projectDocument.update({
         where: { id: documentId },
         data: {
-          ocrText,
+          ocrText: cleanedText,
           ocrStatus: 'completed',
           ocrProcessedAt: new Date(),
           ocrError: null, // Clear any previous errors
